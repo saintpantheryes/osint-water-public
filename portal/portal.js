@@ -462,9 +462,9 @@
       if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
       return r.json();
     },
-    /* 看一条链接:把用户贴来的网址交给后台(core/link_check.py)读原文、看信源、查库里相关、找旁证、给入库建议;只读不写 */
-    async checkLink(url, note) {
-      const r = await fetch("api/assistant/link", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ url, note }) });
+    /* 看一条链接(或一份上传的文件):把用户贴来的网址交给后台(core/link_check.py)读原文、看信源、查库里相关、找旁证、给入库建议;只读不写 */
+    async checkLink(url, note, file) {  // file:用户上传的 PDF、Word 或截图(base64),网站不让程序读时用
+      const r = await fetch("api/assistant/link", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(file ? { url, note, file } : { url, note }) });
       if (r.status === 401 || r.status === 403) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }
       if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪(后台任务没起来或还没更新到这一版);其余页面照常可用");
       if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
