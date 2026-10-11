@@ -1,0 +1,106 @@
+# Teable(自托管多维表格)+ Caddy(自动申请 HTTPS 证书)。由 install.sh 生成 .env 后 `docker compose up -d`。
+# 只有 Caddy 对外开 80/443;Teable 本身只监听本机 127.0.0.1:3000(install.sh 建管理员账号用),数据库、Redis 不对外。
+services:
+  caddy:
+    image: caddy:2
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - TEABLE_HOST=${TEABLE_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy.d:/etc/caddy/caddy.d:ro  # 附加路由(只读页面 /portal/ 的 portal.caddy 放这里,架构方案第 5 节);空目录时什么也不多引入
+      - /opt/osint-water/portal:/srv/portal:ro  # 只读页面的静态文件(程序检出里的 portal/;每天随程序更新)
+      - /opt/osint-water-private/portal/config.json:/srv/portal/config.json:ro  # 页面配置(库、表、字段编号)来自私有配置仓的检出
+      - /opt/osint-water-private/portal/media:/srv/portal/media:ro  # 首页的视频与封面(hero.mp4、hero.jpg)来自私有配置仓;目录空着时首页只显示底色
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - teable
+
+  teable:
+    # 版本按摘要固定在 .env 的 TEABLE_IMAGE(pin_teable.sh 记下当前运行的版本;没固定时才用 latest)。升级改为手动:
+    # 备份 → 改 TEABLE_IMAGE → docker compose up -d teable → 重跑 scripts/teable_probe.py(能力核验)。
+    image: ${TEABLE_IMAGE:-ghcr.io/teableio/teable:latest}
+    restart: always
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - teable-data:/app/.assets:rw
+    env_file:
+      - .env
+    environment:
+      - NEXT_ENV_IMAGES_ALL_REMOTE=true
+    depends_on:
+      teable-db:
+        condition: service_healthy
+      teable-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      start_period: 5s
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  teable-db:
+    image: postgres:15.4
+    restart: always
+    volumes:
+      - teable-db:/var/lib/postgresql/data:rw
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}'"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  teable-cache:
+    image: redis:7.2.4
+    restart: always
+    expose:
+      - "6379"
+    volumes:
+      - teable-cache:/data:rw
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # 后台任务(worker,架构方案第 4 节):只在 --profile worker 下起(worker_install.sh up);不对外开端口,只经内网连 teable:3000。
+  # 用机器账号的令牌(worker.env,worker_token_from_mac.sh 写入),程序挂载主机上的两个检出:公开核心仓 /opt/osint-water 与私有配置仓
+  # /opt/osint-water-private(挂成 private/),都只读;缓存放卷 worker-cache。
+  worker:
+    profiles: ["worker"]
+    build:
+      context: /opt/osint-water
+      dockerfile: deploy/teable/worker.Dockerfile
+    image: osint-water-worker:local
+    restart: always
+    env_file:
+      - worker.env
+    environment:
+      - OW_CACHE=/cache
+    volumes:
+      - /opt/osint-water:/opt/osint-water:ro
+      - /opt/osint-water-private:/opt/osint-water/private:ro  # 私有配置仓的检出,挂成程序里的 private/(profile、市场分布表、模板…)
+      - worker-cache:/cache
+    depends_on:
+      teable:
+        condition: service_healthy
+
+volumes:
+  teable-db: {}
+  worker-cache: {}
+  teable-data: {}
+  teable-cache: {}
+  caddy-data: {}
+  caddy-config: {}

@@ -1,0 +1,74 @@
+# 自己部署用的 profile 样板。复制到你的**私有配置仓**根目录,改名 profile.yaml,按注释改。
+# 私有配置仓运行时挂成核心仓的 private/,所以下面的相对路径(../global/watch.yaml)指回核心仓。
+# 步骤见 docs/部署指南.md。
+
+name: my-water-osint
+description: 我的水务项目机会跟踪
+version: 0.1
+
+# 行业口径
+sector_scope:
+  water_supply: true
+  wastewater_sanitation: true
+  desalination: true
+  stormwater: true
+  irrigation_drainage: false
+  flood_river_basin: false
+
+# 金额门槛(美元):低于门槛的项目不进报告正文
+thresholds:
+  works_min_usd: 5_000_000
+  invest_min_usd: 20_000_000
+
+# 标题机器翻译、多语种关键词用到的语种
+languages: [en, fr, ru, ar, es]
+
+# 宏观快照等本地数据放哪(相对本文件;主机上是容器里的卷)
+data_dir: ../data/private
+
+# 可选:市场分布表(区域 → 国别),界面的区域筛选与国别概况用。格式见 tests/test_markets.py 里的 MARKETS 示例
+# markets: markets.yaml
+
+sources_enabled:
+  - wb_country_meta
+  - wb_projects_v3
+  - wdi_indicators
+  - imf_datamapper
+
+# 重点国别(至少一个)。全球信源(多边开发银行等)覆盖所有国家,这里只决定哪些国家算重点、出国别报告。
+# 可选每国加 watch: countries/XXX/watch.yaml(本国业主公告栏、当地招标网等信源,写法见 core/watch/collectors.py)
+countries:
+  - { iso2: KE, iso3: KEN, wb_country_code: KE, name_en: Kenya, name_zh: 肯尼亚, tier: focus }
+  - { iso2: VN, iso3: VNM, wb_country_code: VN, name_en: Viet Nam, name_zh: 越南, tier: focus }
+
+known_zero_countries: []
+
+# 投标人国籍(ISO3),用于按出资方采购规则判断能不能投标(reference/procurement_rules.yaml);不填则不判断
+bidder:
+  # nationality: XXX
+  local_entity: {}
+
+# 内部流程周期(天):最晚启动日期 = 下一节点日期 − 周期。按自己单位的流程改
+lead_times:
+  tender_launch: {立项评审: 21}
+  eoi_deadline: {准备: 14, 审批: 7}
+  pq_deadline: {准备: 28, 审批: 14}
+  bid_deadline: {准备: 56, 审批: 21, 保函: 7}
+  rfp_deadline: {准备: 90, 投资决策: 45}
+  local_registration: 120
+
+report:
+  cadence: monthly
+
+watch:
+  global: ../global/watch.yaml   # 全球信源(多边开发银行、联合国机构),条目按国别归类
+  lookback_days: 60
+  inbox_days: 14
+  deadline_days: 30
+  llm:                           # 密钥放主机 worker.env(DEEPSEEK_API_KEY 或 ANTHROPIC_API_KEY);没有密钥只用规则初筛
+    provider: deepseek           # deepseek | anthropic
+    model: deepseek-v4-pro
+    effort: high
+    max_calls: 150
+    workers: 6
+    max_doc_chars: 60000

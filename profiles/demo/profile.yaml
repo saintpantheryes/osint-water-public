@@ -1,0 +1,69 @@
+# OSINT-WATER 演示配置。
+# 这是 core 的唯一测试输入。国别集合按【公开准则】定义:世界银行 IDA 合格(含混合)的东非国家。
+# 任何使用方的真实配置都放在本仓库之外的私有目录,结构与本文件一致。
+
+name: demo-east-africa-ida
+description: 演示——东非 IDA 合格国家(公开准则,非任何机构的目标市场)
+version: 0.1
+
+# 行业口径
+sector_scope:
+  water_supply: true
+  wastewater_sanitation: true
+  desalination: true
+  irrigation_drainage: false   # 含灌排会把世行在执行项目数显著放大,按需开启
+  flood_river_basin: false
+
+# 金额门槛(美元)。低于门槛的记录进附件不进正文。首期报告应写明"暂按此门槛,请校正"。
+thresholds:
+  works_min_usd: 5_000_000
+  invest_min_usd: 20_000_000
+
+# 报告里出现的语种(用于多语关键词过滤与标题机器翻译)
+languages: [en, fr, sw]
+
+# 启用的数据源(键名对应 core 适配器;只列官方开放许可的源)
+sources_enabled:
+  - wb_country_meta
+  - wb_projects_v3
+  - wb_procurement_notices
+  - wb_documents
+  - wb_contract_awards_ds00005
+  - ifc_disclosures_ds00499
+  - iati_dportal
+  - afdb_iati
+  - wdi_indicators
+  - imf_datamapper
+  - un_wup_2025
+
+# 国别集合。tier 由使用方自定(演示里按数据丰度粗分):focus / cultivate / watch
+# wb_country_code:世行系接口用自有国别码,与 ISO2 不同时必须填(如 CD→ZR, TL→TP;采购公告/IFC 里 RS→YF)。
+countries:
+  - { iso2: ET, iso3: ETH, wb_country_code: ET, name_en: Ethiopia,   name_zh: 埃塞俄比亚, tier: focus }
+  - { iso2: KE, iso3: KEN, wb_country_code: KE, name_en: Kenya,      name_zh: 肯尼亚,     tier: focus }
+  - { iso2: TZ, iso3: TZA, wb_country_code: TZ, name_en: Tanzania,   name_zh: 坦桑尼亚,   tier: focus }
+  - { iso2: UG, iso3: UGA, wb_country_code: UG, name_en: Uganda,     name_zh: 乌干达,     tier: cultivate }
+  - { iso2: RW, iso3: RWA, wb_country_code: RW, name_en: Rwanda,     name_zh: 卢旺达,     tier: cultivate }
+  - { iso2: MZ, iso3: MOZ, wb_country_code: MZ, name_en: Mozambique, name_zh: 莫桑比克,   tier: cultivate }
+  - { iso2: ZM, iso3: ZMB, wb_country_code: ZM, name_en: Zambia,     name_zh: 赞比亚,     tier: watch }
+  - { iso2: MW, iso3: MWI, wb_country_code: MW, name_en: Malawi,     name_zh: 马拉维,     tier: watch }
+  - { iso2: BI, iso3: BDI, wb_country_code: BI, name_en: Burundi,    name_zh: 布隆迪,     tier: watch }
+  - { iso2: MG, iso3: MDG, wb_country_code: MG, name_en: Madagascar, name_zh: 马达加斯加, tier: watch }
+
+# 已知零名单:世行对这些国家无贷款业务,采集断言"每国返回数>0"时跳过
+known_zero_countries: []
+
+# 报告
+report:
+  cadence: monthly            # monthly | biweekly
+  max_items_in_body: 8        # 正文入选上限,其余进附件
+  # 每条入选项固定栏目;顺序即报告栏目顺序
+  columns:
+    - funding_source_and_status   # 钱从哪来、落实到哪一步
+    - possible_role               # 我方可能的角色与模式
+    - local_presence              # 使用方在地资源(私有叠加,core 只留空列)
+    - recent_awardees             # 近年同类中标者
+    - time_window                 # 距资审/招标约多久
+    - suggested_action            # 建议动作与责任单位(词表由 profile 定)
+    - verification_level          # 核实等级 A–E
+  confidence_levels_in_body: [A, B]   # 只有官方结构化字段(A)与人工核对过的抽取(B)可进正文

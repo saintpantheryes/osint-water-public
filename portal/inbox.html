@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 线索处理</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("inbox.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>线索处理</h1>
+  <p class="muted" id="intro">机器做完它能做的,剩下要人定的线索都在这里:确认归属,决定 AI 推荐的商机跟不跟。每条一键处理,也可以勾选后批量处理,处理完就消失。商机的「下一步已逾期」「待核更新」在<a href="opps.html?t=over">商机总览</a>。</p>
+  <div class="tabs" id="tabs">
+    <button type="button" data-t="assign" class="on">线索归属待确认<b id="nAssign">…</b></button>
+    <button type="button" data-t="suggest">AI 推荐的商机<b id="nSuggest">…</b></button>
+  </div>
+  <section class="tab on" id="tab-assign">
+    <p class="muted">机器找到了可能的所属商机但没把握,或者觉得像个新项目。归入后线索记为「已处理」;忽略的记为「已忽略」,不再出现。</p>
+    <div class="filters">
+      <div class="frow"><b>国别</b><select id="fC" class="inline"><option value="">全部国别</option></select></div>
+      <div class="frow"><b>类别</b><span id="fK" class="frow" style="padding:0"></span></div>
+      <div class="frow"><b>建议</b><span id="fS" class="frow" style="padding:0"></span><span class="muted" id="fAssignNote" style="margin-left:auto"></span></div>
+    </div>
+    <div class="batch"><label><input type="checkbox" id="allAssign"> 全选当前显示的</label><span class="muted" id="selAssign">未勾选</span>
+      <button type="button" class="primary" id="bSug">批量归入机器建议的商机</button><button type="button" id="bIgn">批量忽略</button></div>
+    <div id="assign" class="panel">读取中…</div>
+  </section>
+  <section class="tab" id="tab-suggest">
+    <p class="muted">机器新建的「建议」商机。「跟踪」把阶段改为跟踪中并把你记为负责人(没负责人时);「不跟进」只改阶段。两者都会自动留一条跟进。</p>
+    <div class="filters">
+      <div class="frow"><b>国别</b><select id="gC" class="inline"><option value="">全部国别</option></select></div>
+      <div class="frow"><b>公开进度</b><span id="gP" class="frow" style="padding:0"></span></div>
+      <div class="frow"><b>核实</b><span id="gV" class="frow" style="padding:0"></span><span class="muted" id="fSuggestNote" style="margin-left:auto"></span></div>
+    </div>
+    <div class="batch"><label><input type="checkbox" id="allSuggest"> 全选当前显示的</label><span class="muted" id="selSuggest">未勾选</span>
+      <button type="button" class="primary" id="bTrack">批量跟踪</button><button type="button" id="bDrop">批量不跟进</button></div>
+    <div id="suggest" class="panel">读取中…</div>
+  </section>
+  <p class="muted" id="pendingLine"></p>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  let me = null, opps = [], cname = {}, ciso = {};
+  const g = (o, p) => P.get("opportunity", o, p);
+  const oppById = {};
+  const trunc = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n) + "…" : s; };
+  const busy = (btn, on) => { btn.disabled = on; btn.closest(".item").classList.toggle("busy", on); };
+
+  async function act(btn, fn, done) {
+    busy(btn, true);
+    try { await fn(); P.toast(done); btn.closest(".item").remove(); refreshCounts(); }
+    catch (e) { P.toast(e.message, true); busy(btn, false); }
+  }
+  function refreshCounts() {
+    [["assign", "nAssign"], ["suggest", "nSuggest"]].forEach(([box, n]) => {
+      const k = $(box).querySelectorAll(".item").length; $(n).textContent = k; if (!k) $(box).innerHTML = '<p class="muted">没有了 ✓</p>';
+    });
+    applyFilter("assign"); applyFilter("suggest");
+  }
+  /* 标签页:地址栏 #suggest 之类直接打开对应页;原来的 #over、#review(下一步已逾期、待核更新)已挪到商机总览 */
+  if (/^#(over|review)$/.test(location.hash)) { location.replace("opps.html?t=" + location.hash.slice(1)); return; }
+  function showTab(t) {
+    if (!$("tab-" + t)) t = "assign";
+    $("tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
+    document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x.id === "tab-" + t));
+    if (location.hash !== "#" + t) history.replaceState(null, "", location.pathname + "#" + t);
+  }
+  $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
+  showTab((location.hash || "#assign").slice(1));
+
+  /* 筛选(两个标签页各一组):国别下拉 + 几排按钮,只影响显示。每个选项后的数字是「其余筛选不变、再选它」能看到的条数,
+     随筛选和处理掉的条目实时变;数到 0 的选项不列(当前选中的除外) */
+  const SUG = { sug: "机器有建议商机", new: "像是新项目", none: "都没有" };
+  const F = {
+    assign: { st: { c: "", k: "", s: "" }, note: "fAssignNote", all: "allAssign", dims: [
+      { key: "c", el: "fC", select: true, of: (it) => it.dataset.cid, name: (v) => cname[v] || v },
+      { key: "k", el: "fK", of: (it) => it.dataset.cat, name: (v) => v },
+      { key: "s", el: "fS", of: (it) => it.dataset.sug, name: (v) => SUG[v] || v, order: Object.keys(SUG) }] },
+    suggest: { st: { c: "", p: "", v: "" }, note: "fSuggestNote", all: "allSuggest", dims: [
+      { key: "c", el: "gC", select: true, of: (it) => it.dataset.cid, name: (v) => cname[v] || v },
+      { key: "p", el: "gP", of: (it) => it.dataset.ps, name: (v) => v, order: () => P.choices("opportunity", "public_stage").concat(["未填"]) },
+      { key: "v", el: "gV", of: (it) => it.dataset.vf, name: (v) => v, order: () => P.choices("opportunity", "verified").concat(["未填"]) }] },
+  };
+  function applyFilter(box) {
+    const f = F[box], items = [...$(box).querySelectorAll(".item")];
+    const ok = (it, skip) => f.dims.every((d) => d === skip || !f.st[d.key] || d.of(it) === f.st[d.key]);
+    let n = 0;
+    items.forEach((it) => { const y = ok(it); it.style.display = y ? "" : "none"; if (y) n++; else { const cb = it.querySelector(".sel"); if (cb) cb.checked = false; } });
+    f.dims.forEach((d) => {
+      const cnt = {}; items.filter((it) => ok(it, d)).forEach((it) => { const v = d.of(it); if (v) cnt[v] = (cnt[v] || 0) + 1; });
+      let vals = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
+      const order = typeof d.order === "function" ? d.order() : d.order;
+      if (order) vals = order.filter((v) => cnt[v]).concat(vals.filter((v) => !order.includes(v)));
+      const cur = f.st[d.key]; if (cur && !vals.includes(cur)) vals.push(cur);
+      if (d.select) {
+        const sel = $(d.el); sel.innerHTML = '<option value="">全部国别</option>';
+        P.fillCountrySelect(sel, vals.map((v) => [v, d.name(v), d.name(v) + "(" + (cnt[v] || 0) + ")"])); sel.value = cur;
+        sel.onchange = () => { f.st[d.key] = sel.value; applyFilter(box); };
+      } else P.chips($(d.el), [["", "全部"]].concat(vals.map((v) => [v, d.name(v) + " " + (cnt[v] || 0)])), f.st, d.key, () => applyFilter(box));
+    });
+    $(f.note).textContent = "显示 " + n + " 条"; $(f.all).checked = false; selCount(box);
+  }
+  /* 勾选与批量:对当前显示且勾中的条目,逐条执行它自己的按钮动作 */
+  const visible = (box) => [...$(box).querySelectorAll(".item")].filter((it) => it.style.display !== "none");
+  const picked = (box) => visible(box).filter((it) => it.querySelector(".sel") && it.querySelector(".sel").checked);
+  function selCount(box) {
+    const n = picked(box).length, cap = box === "assign" ? "Assign" : "Suggest";
+    $("sel" + cap).textContent = n ? "已勾选 " + n + " 条" : "未勾选";
+    $("tab-" + box).querySelectorAll(".batch button").forEach((b) => { b.disabled = !n; });
+  }
+  async function batch(box, action, label) {
+    const items = picked(box).filter((it) => it._do && it._do[action]);
+    if (!items.length) { P.toast("勾选的条目里没有可以「" + label + "」的", true); return; }
+    if (!confirm("对勾选的 " + items.length + " 条执行「" + label + "」?")) return;
+    let ok = 0, bad = 0;
+    for (const it of items) { try { await it._do[action](); it.remove(); ok++; } catch (e) { bad++; it.classList.remove("busy"); } }
+    P.toast(label + ":成功 " + ok + " 条" + (bad ? ",失败 " + bad + " 条" : ""), bad > 0);
+    refreshCounts();
+  }
+  $("allAssign").onchange = (e) => { visible("assign").forEach((it) => { const cb = it.querySelector(".sel"); if (cb) cb.checked = e.target.checked; }); selCount("assign"); };
+  $("allSuggest").onchange = (e) => { visible("suggest").forEach((it) => { const cb = it.querySelector(".sel"); if (cb) cb.checked = e.target.checked; }); selCount("suggest"); };
+  $("bSug").onclick = () => batch("assign", "sug", "归入机器建议的商机");
+  $("bIgn").onclick = () => batch("assign", "ign", "忽略");
+  $("bTrack").onclick = () => batch("suggest", "track", "跟踪");
+  $("bDrop").onclick = () => batch("suggest", "drop", "不跟进");
+  const selBox = (el, box) => { const cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "sel"; cb.title = "勾选后可批量处理"; cb.onchange = () => selCount(box); el.prepend(cb); };
+
+  function leadItem(l) {
+    const q = (p) => P.get("lead", l, p);
+    const cid = P.linkId(q("country")), sid = P.linkId(q("suggested_opp")), sug = sid ? oppById[sid] : null;
+    const el = document.createElement("div"); el.className = "item"; el.dataset.cid = cid || ""; el.dataset.cat = q("category") || ""; el.dataset.sug = sug ? "sug" : q("maybe_new") ? "new" : "none";
+    el._do = { ign: () => P.patch("lead", l.id, { status: "已忽略" }), sug: sug ? () => P.leadToOpp(l.id, sug.id) : null };
+    const same = opps.filter((o) => P.linkId(g(o, "country")) === cid && (g(o, "stage") || "建议") !== "不跟进"), others = opps.filter((o) => P.linkId(g(o, "country")) !== cid);
+    const opts = (arr) => arr.map((o) => '<option value="' + o.id + '">' + P.esc((g(o, "code") || "") + " " + (g(o, "name_zh") || "")) + "</option>").join("");
+    el.innerHTML = '<div class="it-main"><div class="it-title">' + (q("url") ? '<a href="' + P.esc(q("url")) + '" target="_blank" rel="noopener">' + P.esc(q("title") || "(无标题)") + "</a>" : P.esc(q("title") || "(无标题)")) +
+      ' <span class="muted">' + P.esc(q("key") || "") + " · " + P.esc(cname[cid] || "") + " · " + P.esc(q("category") || "") + (q("maybe_new") ? ' · <span class="tag act">像是新项目</span>' : "") + "</span></div>" +
+      '<div class="muted">' + P.esc(trunc(q("summary_zh"), 160)) + "</div>" +
+      (sug ? '<div>机器建议归入:<b>' + P.esc(g(sug, "code") + " " + (g(sug, "name_zh") || "")) + "</b>" + (q("suggest_reliable") ? "" : ' <span class="muted">(没把握)</span>') + ' <a href="' + P.oppUrl(sug.id) + '" target="_blank">看商机</a></div>' : "") +
+      "</div><div class=\"it-act\">" + (sug ? '<button class="primary" data-a="sug">归入 ' + P.esc(g(sug, "code")) + "</button>" : "") +
+      '<span class="pick"><select data-a="pick"><option value="">归入其他商机…</option>' + (same.length ? '<optgroup label="' + P.esc(cname[cid] || "同国") + '">' + opts(same) + "</optgroup>" : "") + (others.length ? '<optgroup label="其他国家">' + opts(others) + "</optgroup>" : "") + "</select></span>" +
+      '<button data-a="new">新建商机并归入</button><button data-a="ign">忽略</button>' + P.open("lead", l.id) + "</div>";
+    selBox(el, "assign");
+    const assign = (oid) => act(el.querySelector('[data-a="sug"]') || el.querySelector('[data-a="new"]'), () => P.leadToOpp(l.id, oid), "已归入 " + (oppById[oid] ? g(oppById[oid], "code") : ""));
+    if (sug) el.querySelector('[data-a="sug"]').onclick = () => assign(sug.id);
+    el.querySelector('[data-a="pick"]').onchange = (e) => { if (e.target.value) assign(e.target.value); };
+    el.querySelector('[data-a="ign"]').onclick = (e) => act(e.target, () => P.patch("lead", l.id, { status: "已忽略" }), "已忽略");
+    el.querySelector('[data-a="new"]').onclick = async (e) => {
+      const iso = ciso[cid]; if (!iso) { P.toast("这条线索没有国别,先在表格里填国别", true); return; }
+      const name = prompt("新商机的名称(可改):", q("project_name") || q("title") || ""); if (name === null || !name.trim()) return;
+      await act(e.target, async () => {
+        const rec = await P.newOppFromLead(l.id, { name: name.trim(), cid, iso, opps });
+        opps.push(rec); oppById[rec.id] = rec;
+      }, "已新建商机并归入,阶段跟踪中、负责人是你");
+    };
+    return el;
+  }
+
+  function oppItem(o) {
+    const el = document.createElement("div"); el.className = "item"; el.dataset.cid = P.linkId(g(o, "country")) || ""; el.dataset.ps = g(o, "public_stage") || "未填"; el.dataset.vf = g(o, "verified") || "未填";
+    el._do = { track: () => P.patch("opportunity", o.id, { stage: "跟踪中", owner: P.linkId(g(o, "owner")) ? undefined : (me && me.id) }), drop: () => P.patch("opportunity", o.id, { stage: "不跟进" }) };
+    el.innerHTML = '<div class="it-main"><div class="it-title"><a href="' + P.oppUrl(o.id) + '" target="_blank"><b>' + P.esc(g(o, "code")) + "</b> " + P.esc(g(o, "name_zh") || "") + "</a>" +
+      ' <span class="muted">' + P.esc(cname[P.linkId(g(o, "country"))] || "") + (g(o, "public_stage") ? " · " + P.esc(g(o, "public_stage")) : "") + (g(o, "lead_count") ? " · 线索 " + g(o, "lead_count") + " 条" : "") + (g(o, "verified") ? " · " + P.esc(g(o, "verified")) : "") + "</span></div>" +
+      '<div class="muted">' + P.esc(trunc(g(o, "ai_reason") || g(o, "scope"), 220)) + "</div></div>" +
+      '<div class="it-act"><button class="primary" data-a="track">跟踪</button><button data-a="drop">不跟进</button>' + P.open("opportunity", o.id) + "</div>";
+    el.querySelector('[data-a="track"]').onclick = (e) => act(e.target, el._do.track, "已改为跟踪中");
+    el.querySelector('[data-a="drop"]').onclick = (e) => act(e.target, el._do.drop, "已改为不跟进");
+    selBox(el, "suggest");
+    return el;
+  }
+
+  try {
+    await P.load();
+    if (!(await P.canWrite())) P.guest();  // 游客帐号(查看者)只能看
+    const [u, os, cs] = await Promise.all([P.me(), P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "public_stage", "lead_count", "verified", "ai_reason", "scope"] }), P.countries()]);
+    me = u; opps = os; opps.forEach((o) => { oppById[o.id] = o; });
+    cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); ciso[c.id] = P.get("country", c, "key"); });
+    const [leads, pending] = await Promise.all([
+      P.records("lead", { viewId: P.view("lead", "待确认归属"), take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "country", "category", "summary_zh", "suggested_opp", "suggest_reliable", "maybe_new", "project_name", "status", "found_at"] }),
+      P.count("lead", P.and(P.cond("lead", "relevant", "is", true), P.cond("lead", "status", "is", "待处理"))),
+    ]);
+    $("assign").innerHTML = ""; leads.forEach((l) => $("assign").appendChild(leadItem(l)));
+    $("suggest").innerHTML = ""; opps.filter((o) => (g(o, "stage") || "建议") === "建议").forEach((o) => $("suggest").appendChild(oppItem(o)));
+    refreshCounts();
+    $("pendingLine").innerHTML = "另有 <b>" + pending + "</b> 条相关线索处理状态还是「待处理」(机器判完就留在那里,看过改成「已处理」即可):" + '<a href="' + P.tableUrl("lead", "待处理") + '" target="_blank" rel="noopener">在表格里看 ↗</a>';
+  } catch (e) { P.fail($("assign"), e); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+# 投标资格规则表:按出资方/采购制度记录"谁能投标"。公开信息,CC BY 4.0。
+# core 用它 × profile.bidder.nationality 推出每个项目的资格结论;项目公告里的明示条款(台账 procurement.eligibility)优先。
+# nationality:open_all 各国均可 | members_only 仅限成员国(看 funders.*.known_members/known_non_members)
+#              | tied 限定来源国(tied_to)| domestic_open 本国采购法、外国企业可参与 | per_tender 以招标文件为准 | unknown
+# local_registration:none | bid 投标前须在当地注册/取得电子签名 | contract 签约前 | unknown
+# grade:A 读到官方文件原文(含官方文件的检索摘要)| B 二手(机构指南、招标公告、成稿转引)| C 未核实/据常识推断
+# 核实日期 2026-09-24:世行、亚行、EBRD 的规则文件与 IsDB、欧佩克基金在阿公告已读原文(via: primary_read);其余 A/B 级多为检索摘要,C 级条目逐条待复核。
+schema: osint-water/procurement-rules@1
+checked_at: 2026-09-24
+
+funders:
+  WB: {short_zh: 世行, name_zh: 世界银行(IBRD/IDA)}
+  ADB:
+    short_zh: 亚行
+    name_zh: 亚洲开发银行
+    # 只列有把握的;未列国籍的资格判为"待核实"
+    known_members: [CHN, AZE, TUR, GEO, KAZ, UZB, PAK, IND, JPN, KOR, USA, DEU, FRA, GBR, ITA, ESP, NLD]
+    known_non_members: [RUS, IRN, SAU, ARE, EGY]
+    members_url: https://www.adb.org/who-we-are/about#members
+  EBRD: {short_zh: EBRD, name_zh: 欧洲复兴开发银行}
+  AIIB: {short_zh: 亚投行, name_zh: 亚洲基础设施投资银行}
+  ISDB:
+    short_zh: 伊斯兰开发银行
+    name_zh: 伊斯兰开发银行
+    # 成员国 = 伊斯兰合作组织成员(57 国);中国不是成员
+    known_members: [AZE, TUR, SAU, ARE, KWT, QAT, EGY, KAZ, UZB, PAK, IRN, MYS, IDN]
+    known_non_members: [CHN, IND, RUS, GEO, JPN, KOR, USA, DEU, FRA, GBR, ITA, ESP]
+  OPECFUND: {short_zh: 欧佩克基金, name_zh: 欧佩克国际发展基金}
+  SFD: {short_zh: 沙特发展基金, name_zh: 沙特发展基金}
+  KFAED: {short_zh: 科威特基金, name_zh: 科威特阿拉伯经济发展基金}
+  ACG: {short_zh: 阿拉伯协调组, name_zh: 阿拉伯协调组(联合融资、非单一出资方)}
+  KFW: {short_zh: 德国复兴信贷银行, name_zh: 德国复兴信贷银行(发展银行)}
+  JICA: {short_zh: JICA, name_zh: 日本国际协力机构}
+  EIB: {short_zh: 欧洲投资银行, name_zh: 欧洲投资银行}
+  EU:
+    short_zh: 欧盟
+    name_zh: 欧盟(对外援助赠款)
+    # NDICI 第 28 条:欧盟成员国、欧洲经济区、入盟候选、睦邻伙伴国、非 G20 的受援发展中国家;G20 国家原则上不合格
+    known_members: [AZE, TUR, GEO, UKR, DEU, FRA, ITA, ESP, NLD]
+    known_non_members: [CHN, IND, RUS, USA, JPN, KOR, SAU, BRA]
+  GOV: {short_zh: 政府, name_zh: 借款国政府(国家预算/国企)}
+  PRIVATE: {short_zh: 私营, name_zh: 私营发起人/总承包商}
+
+regimes:
+  WB_IPF:
+    funder: WB
+    name_zh: 世界银行《投资项目融资借款人采购规则》(第 7 版,2025-09)
+    nationality: open_all
+    local_registration: contract
+    platform: 借款人发布(世行项目采购公告 API/UNDB);投标人无须在世行注册
+    summary: 允许所有国家的合格企业和个人提供货物、工程与服务(第 3.20–3.21 段);例外仅限借款国法律禁止与该国商业往来、执行联合国安理会第七章决定,或企业被世行制裁(第 3.22–3.23 段)。外国投标人投标时无须当地注册,中标后签约前给予注册机会。
+    notes:
+      - 第 5.54 段(当地劳动力参与):凡须用标准招标文件的国际竞争性工程合同,借款人须要求投标人把不低于一定比例的合同人工费用于当地员工,比例由世行在标准招标文件中设定;还可设技能培训类评分项——对依赖自有队伍的中资企业是实质约束。
+      - 国内优惠(第 5.52 段):货物按到岸价加 15%;工程 7.5% 只适用于人均国民收入低于世行门槛的借款国——阿塞拜疆为中高收入国家,推定工程标不适用。
+    grade: A
+    src:
+      - {title: "Procurement Regulations for IPF Borrowers, 7th ed. (Sep 2025)", url: "https://thedocs.worldbank.org/en/doc/c84273d1b230aeb2b0b8134de5dc8cd7-0290012025/original/Procurement-Regulations-7th-Edition-Sep-2025.pdf", via: primary_read}
+      - {title: "Summary of Revisions (Sep 2025)", url: "https://thedocs.worldbank.org/en/doc/e3eabf1f044cca90dd6d1728976e2a4b-0290012025/original/Regulations-Summary-of-Revisions-Sep-2025.pdf", via: search_snippet}
+      - {title: 世行采购计划标准条款(外国投标人无须注册即可投标), url: "https://documents1.worldbank.org/curated/en/099102325203015262/pdf/P166420-c5004dc3-5fa7-47df-bc42-751e7350383b.pdf", via: search_snippet}
+      - {title: 世行制裁/禁入名单(按企业), url: "https://www.worldbank.org/en/projects-operations/procurement/debarred-firms", via: search_snippet}
+
+  ADB_PD2026:
+    funder: ADB
+    name_zh: 亚行《采购政策》(2017)与《借款人采购指令》(2026-01-01 生效)
+    nationality: members_only
+    local_registration: unknown
+    platform: 执行机构发布并在亚行网站公告;工程与货物无须在亚行注册(咨询服务用 CMS)
+    summary: 《借款人采购指令》第 3.12–3.13 段:普通资金与亚行管理资金只能采购亚行成员国生产并供应的货物、工程与服务,所有合格成员国的投标人均可参与;融资协议规定"全球采购"时不限。中国是成员国。
+    notes:
+      - 2026-01-01 起国际公告的公开竞争性招标一律用优点评分(第 6.17 段),高风险高价值合同技术分权重不低于 50%;国际公告的工程合同至少一半劳动力须来自借款国境内(第 6.6 段,亚行书面同意除外);技术分中最多 25% 可给可持续性考量,其中最多 15% 可给当地就业与技能培训措施(第 6.7 段)。
+      - 工程国内优惠(≤7.5%)只适用于按人均收入合格的国家,阿塞拜疆大概率不适用。
+    grade: A
+    src:
+      - {title: ADB FAQ:投标资格(成员国国籍、全球采购、原产地), url: "https://www.adb.org/business/how-to/what-are-main-eligibility-requirements-bidding-contracts-under-adb-financed-projects", via: search_snippet}
+      - {title: "Procurement Directive for ADB Borrowers (Jan 2026)", url: "https://www.adb.org/sites/default/files/institutional-document/1144641/procurement-directive-adb-borrowers.pdf", via: primary_read}
+      - {title: ADB 2026 年起强制优点评分与当地劳动力要求(2025-09-16 新闻), url: "https://www.adb.org/news/adb-require-merit-point-criteria-2026-evolving-its-procurement-approach-enhance-quality", via: primary_read}
+
+  EBRD_PPR:
+    funder: EBRD
+    name_zh: 欧洲复兴开发银行《采购政策与规则》(2026 版 2026-09-01 生效;此前立项的项目沿用 2022 版)
+    nationality: open_all
+    local_registration: contract
+    platform: ECEPP(ecepp.ebrd.com)——下载标书、澄清、递交均须注册
+    summary: 允许所有国家的企业和个人提供货物、工程与服务,无论是否为成员国;2026 版引《EBRD 成立协定》第 13 条——银行不限制用其资金从任何国家采购。
+    notes:
+      - 2026 版 2026-09-01 生效,取代 2022 版;只适用于此后通过概念审查的项目,此前通过的沿用 2022 版(客户与银行另行约定除外)。
+      - 投标阶段是否要求当地注册未见规定;在借款国施工须按当地法律注册并取得许可(见各国台账的准入门槛)。
+    grade: A
+    src:
+      - {title: "EBRD PPR 2022(\"regardless of whether the country is a member\")", url: "https://www.ebrd.com/content/dam/ebrd_dxp/assets/pdfs/project-procurement/procurement-policies-and-rules/ppr-2022/PPR-2022-English.pdf", via: search_snippet}
+      - {title: EBRD PPR 2026, url: "https://www.ebrd.com/content/dam/ebrd_dxp/assets/pdfs/project-procurement/directives-and-guidances/20260901_PPR%202026_ENG_Final.pdf", via: primary_read}
+      - {title: ECEPP 门户, url: "https://ecepp.ebrd.com/", via: search_snippet}
+
+  AIIB_PP:
+    funder: AIIB
+    name_zh: 亚投行《采购政策》
+    nationality: open_all
+    local_registration: unknown
+    platform: 亚投行官网项目采购公告
+    summary: 据《亚投行协定》不限制从任何国家采购(待复核原文);与世行、亚行、EBRD 联合融资时通常适用牵头方规则。
+    grade: C
+    src: []
+
+  ISDB_PG:
+    funder: ISDB
+    name_zh: 伊斯兰开发银行《货物、工程及相关服务采购指南》与《咨询服务采购指南》(2019-04 版,2023-02 修订)
+    nationality: members_only
+    local_registration: unknown
+    platform: IsDB 官网采购公告(Tenders)与执行机构网站
+    summary: 工程与货物用"仅限成员国的国际竞争性招标"(ICB/MC),咨询用"仅限成员国的质量与费用评选"(QCBS-MC)或最低费用选择(LCS)。中国不是成员国,不能作为投标人或联合体成员。
+    notes:
+      - 可能的例外(联合融资放开、非成员国企业作分包或供货的比例上限、在成员国注册的子公司是否按注册地认定)均未核实——以具体招标文件的合格性条款为准。
+      - 阿塞拜疆实例(均读原文):卡拉巴赫灌溉渠(AZE 1028)总采购公告与咨询意向书;少女塔水库主灌溉渠(AZE 1024)特定采购公告——单阶段 ICB/MC、不做资格预审、投标保证金 100 万美元。见 countries/AZE 台账 AZE-020、AZE-024。
+    grade: A
+    src:
+      - {title: "Reconstruction of the Karabakh Irrigation Canal Project – GPN (AZE 1028)", url: "https://www.isdb.org/project-procurement/tenders/2026/gpn/reconstruction-karabakh-irrigation-canal-project-gpn", via: primary_read}
+      - {title: "Main Irrigation Canal from the Maiden Tower Reservoir – SPN (AZE 1024)", url: "https://adsea.gov.az/events/0409202644", via: primary_read}
+
+  OPECFUND_PG:
+    funder: OPECFUND
+    name_zh: 欧佩克基金《货物、工程与服务采购原则》及两份采购程序(2024-07)
+    nationality: open_all
+    local_registration: unknown
+    platform: 借款人发布;欧佩克基金官网"当前采购机会"
+    summary: 2024-07 起的采购框架为《采购原则》加《咨询服务采购程序》与《货物、工程与非咨询服务采购程序》。苏姆盖特污水厂咨询意向书(2026-08,读原文)写明主体工程按其程序国际竞争性招标(ICB)、用欧佩克基金标准招标文件与协调版 FIDIC,公告未设国别限制;公共部门贷款据了解为非捆绑。《采购原则》原文为在线翻页版,下载 403,国别合格性条款未读到——以招标文件为准。
+    notes:
+      - 联合融资时通常沿用牵头方规则;与 IsDB 联合出资的标段可能改用"仅限成员国"。
+    grade: B
+    src:
+      - {title: OPEC Fund 当前采购机会, url: "https://opecfund.org/work-with-us/project-procurement/current-opportunities", via: primary_read}
+      - {title: OPEC Fund 项目采购框架(原则与程序), url: "https://opecfund.org/work-with-us/project-procurement", via: primary_read}
+      - {title: "Sumgayit WWTP Project – REOI 与任务书(贷款 17052PA)", url: "https://adsea.gov.az/events/2408202634", via: primary_read}
+
+  SFD:
+    funder: SFD
+    name_zh: 沙特发展基金贷款采购规定
+    nationality: open_all
+    local_registration: unknown
+    platform: 借款人发布
+    summary: 据了解为非捆绑贷款、国际招标并经基金审查——未取得原文,待核实。
+    grade: C
+    src: []
+
+  KFAED:
+    funder: KFAED
+    name_zh: 科威特阿拉伯经济发展基金贷款采购规定
+    nationality: open_all
+    local_registration: unknown
+    platform: 借款人发布
+    summary: 据了解为非捆绑贷款、国际竞争性招标、不要求从科威特采购——未取得原文,待核实。
+    grade: C
+    src: []
+
+  ACG_COFIN:
+    funder: ACG
+    name_zh: 阿拉伯协调组联合融资
+    nationality: unknown
+    local_registration: unknown
+    platform: 借款人发布
+    summary: 协调组没有统一采购规则:平行融资时各出资方规则适用于其出资的标段,联合出资时由融资协议指定牵头方规则。含 IsDB 资金的标段默认仅限成员国,非捆绑成员(欧佩克基金、沙特基金、科威特基金)出资的标段才是中资的目标。
+    grade: C
+    src: []
+
+  KFW_PG:
+    funder: KFW
+    name_zh: 德国复兴信贷银行《采购指南》
+    nationality: open_all
+    local_registration: unknown
+    platform: 业主自行发布,无集中公告库
+    summary: 德国财政合作资金非捆绑,各国企业均可投标;除外情形为欧盟/联合国制裁、多边开发银行禁入与利益冲突。国企"法律与财务自主"条款的适用范围待核实。
+    grade: C
+    src: []
+
+  JICA_UNTIED:
+    funder: JICA
+    name_zh: 日元贷款(一般非捆绑)
+    nationality: open_all
+    local_registration: unknown
+    platform: 执行机构发布
+    summary: 一般非捆绑日元贷款各国企业均可投标。
+    grade: C
+    src: []
+
+  JICA_STEP:
+    funder: JICA
+    name_zh: 日元贷款(STEP 本邦技术活用条件)
+    nationality: tied
+    tied_to: [JPN]
+    local_registration: unknown
+    platform: 执行机构发布
+    summary: 主承包商须为日本企业或其牵头的联合体,日本原产货物与服务约占 30% 以上;中国企业不能作主承包商,可按招标文件允许作分包或供货。
+    grade: C
+    src: []
+
+  EIB_GP:
+    funder: EIB
+    name_zh: 欧洲投资银行《采购指南》
+    nationality: open_all
+    local_registration: unknown
+    platform: 业主发布(欧盟官方公报或业主网站)
+    summary: 欧盟以外项目据了解对所有国家开放,适用欧盟限制性措施与 EIB 排除政策——待核实。
+    grade: C
+    src: []
+
+  EU_PRAG:
+    funder: EU
+    name_zh: 欧盟对外援助赠款采购(PRAG / NDICI 第 28 条)
+    nationality: members_only
+    local_registration: unknown
+    platform: 欧盟对外援助招标公告
+    summary: 合格国籍为欧盟成员国、欧洲经济区、入盟候选、睦邻伙伴国及非 G20 受援发展中国家;中国(G20)原则上不合格。欧盟赠款经 EBRD 等机构混合融资、按该机构规则采购时,该机构规则下合格的企业也合格——看每个招标公告的资格条款。
+    grade: C
+    src:
+      - {title: "NDICI 条例(EU)2021/947 第 28 条", url: "https://eur-lex.europa.eu/eli/reg/2021/947/oj", via: search_snippet}
+
+  AZ_PPL:
+    funder: GOV
+    name_zh: 阿塞拜疆《公共采购法》(第 988-VIQ 号,2023-07-14 通过,2024-01-01 生效)
+    nationality: domestic_open
+    local_registration: bid
+    platform: 国家电子采购门户 etender.gov.az(须阿方认可的合格电子签名)
+    summary: 居民与非居民均可参与,不得以国籍排除;只能经统一电子门户采购,工程以公开招标为主;投标文件须用阿塞拜疆语(允许附通用语言译本);设有本国货物优先(幅度未核实)。外国企业须取得合格电子签名,实际通常需先在当地注册——按"投标前须注册"保守处理。
+    notes:
+      - 成稿列投标保证金 1%–3%、履约保证金 10%;另有二手资料称履约保证金 5%–10%,以法律条文为准。
+      - 由总统批准监事会的商业实体使用非预算资金时不适用本法——两家新设水务股份公司的采购适用性待核实。
+    grade: B
+    src:
+      - {title: 法律原文(未能打开), url: "https://e-qanun.az/framework/54966", via: report_baseline}
+      - {title: 阿塞拜疆水务市场分析报告(成稿)5.2、13.1 节, via: report_baseline}
+
+  AZ_PPP:
+    funder: GOV
+    name_zh: 阿塞拜疆《公私合作伙伴关系法》(第 691-VIQ 号,2022-12)
+    nationality: per_tender
+    local_registration: contract
+    platform: 经济部(PPP 主管),以资格预审/招标文件为准
+    summary: 经济部组织竞争性程序或直接谈判,也可由申请人以私人倡议发起;项目最长 49 年;政府支持可含收入担保、购买承诺、补贴、贷款、价格监管保证;外国投资人通常经当地项目公司参与。实施细则进展待核实。
+    grade: B
+    src:
+      - {title: 阿塞拜疆水务市场分析报告(成稿)5.2、10.4 节, via: report_baseline}
+
+  MA_MP:
+    funder: GOV
+    name_zh: 摩洛哥《公共采购法令》(第 2-22-431 号法令,2023-03-08 颁布,2023-09-01 生效)
+    nationality: domestic_open
+    local_registration: none
+    platform: 国家公共采购门户 marchespublics.gov.ma(检索、下载招标文件免费;电子投标须注册企业账号并用电子签名证书)
+    summary: 外国企业可投。第 147 条本国优惠:非在摩洛哥设立的投标人参加工程、货物、服务招标时,财务评审中其报价与基准价比较后上调或下调 15%(以摩洛哥批准的国际协定为限),2023 年起为强制适用。第 150 条:可组连带或联合联合体,业主不得强制组联合体;受资质分级制度约束的工程,联合体每个成员都须持资质与分级证书。外国企业可用本国资质与业绩证明代替摩洛哥资质证书,以咨询规则为准。
+    notes:
+      - 第 149 条当地用工:工程与服务(研究除外)合同须含使用当地劳动力条款,比例由专用条款规定,最高为所需人员的 20%;"当地"指项目所在市镇,或省、大区。
+      - 塔拉灌区项目咨询规则(转引使用方分析报告):本国成员占比不低于 30% 的联合体视同本国企业,不受 15% 调价;财务标按基准价法(基准价 = (业主预估 + 平均报价)/2,取低于且最接近基准价者)——15% 调价在这种算法下影响很大。
+    grade: A
+    src:
+      - {title: "Décret n° 2-22-431 du 15 chaabane 1444 (8 mars 2023) relatif aux marchés publics(BO n° 7184,2023-04-06;第 147、149、150 条)", url: "https://www.ofppt.ma/sites/default/files/Decret_marches_publics_n_2_22_431_du_09_03_2023_Fr.pdf", via: primary_read}
+      - {title: "Marchés publics : les points importants du décret n°2-22-431(2023-09-01 生效)", url: "https://www.leconomiste.com/flash-infos/marches-publics-les-points-importants-du-decret-ndeg2-22-431/", via: search_snippet}
+      - {title: 塔拉灌区贝尼穆萨主干渠调节系统现代化工程投标文件深度分析报告(使用方,2026-08-29;依据 AO 35/2026/DGRID 咨询规则), via: report_baseline}
+
+  PRIVATE_EPC:
+    funder: PRIVATE
+    name_zh: 私营发起人/总承包商自行采购(分包、供货)
+    nationality: per_tender
+    local_registration: contract
+    platform: 发起人或总承包商的供应商库与询价
+    summary: 不适用公共采购规则,由发起人/总承包商自定;贷款方的环境社会与合规要求会传导到分包与供货。
+    grade: B
+    src: []
+
+  SOCAR_PROC:
+    funder: GOV
+    name_zh: 阿塞拜疆国家石油公司(SOCAR)企业采购
+    nationality: per_tender
+    local_registration: unknown
+    platform: SOCAR 采购门户与供应商注册(未核实)
+    summary: 按公司自有规则,据了解外国供应商注册后可参与;不受国际金融机构成员国限制——待核实。
+    grade: C
+    src: []

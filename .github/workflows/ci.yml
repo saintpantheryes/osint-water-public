@@ -1,0 +1,31 @@
+# 改动代码、台账或监测配置时:校验台账与监测配置、跑离线测试。不联网抓取,不调用模型。
+name: ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["core/**", "tests/**", "countries/**", "global/**", "reference/**", "portal/**", "scripts/**",
+            "requirements*.txt", ".github/workflows/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements.txt
+      - name: 校验台账(演示 profile;真实 profile 在私有配置仓)
+        run: python -m core.cli ledger --profile profiles/demo/profile.yaml
+      - name: 隐私扫描(公开仓不该有 IP、邮箱、令牌、密钥)
+        run: python scripts/privacy_scan.py
+      - name: 离线测试
+        run: python -m pytest -q tests

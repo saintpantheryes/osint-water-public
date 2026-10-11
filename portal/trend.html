@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 趋势机会</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="echarts.min.js"></script>
+<script src="portal.js"></script>
+<style>
+  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 10px; vertical-align: middle; }
+  .tag { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 12px; color: #fff; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("trend.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>趋势机会</h1>
+  <p class="muted" id="intro">按公开数据推算哪里<b>缺水</b>又<b>有钱建</b>:是方向参考,不是具体项目,数字不计入线索、商机;只看中国以外。
+    <span class="legend-dot" style="background:#0d9488"></span>自付型:水风险高、人均 GDP 也高,多半自筹或 PPP
+    <span class="legend-dot" style="background:#7c3aed"></span>贷款型:水风险高、所在国近年有开发性贷款进水务
+    <span class="legend-dot" style="background:#dc2626"></span>两类都是</p>
+  <div class="filters" id="filters">
+    <div class="frow"><b>国别</b><select id="fCountry" aria-label="国别"><option value="">全部国别</option></select></div>
+    <div class="frow"><b>水风险按</b><span id="fRisk" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>水风险 ≥</b><span id="fMin" class="frow" style="padding:0"></span><span class="muted small">分(0–5;3 = 高,4 = 极高)</span></div>
+    <div class="frow"><b>人均 GDP ≥</b><span id="fGdp" class="frow" style="padding:0"></span><span class="muted small">PPP 美元,自付型用</span></div>
+    <div class="frow"><b>贷款判定</b><span class="muted small">所在国世行涉水项目 ≥ 1,或近一年开发性金融线索 ≥</span><span id="fLoan" class="frow" style="padding:0"></span><span class="muted small">条</span></div>
+    <div class="frow"><b>显示</b><span id="fShow" class="frow" style="padding:0"></span><span class="muted" id="fNote" style="margin-left:auto"></span></div>
+  </div>
+  <div class="backbar" id="rel"></div>
+  <div class="cards" id="cards"><div class="card"><div class="n">…</div><div class="l">读取中</div></div></div>
+  <h2>分布(圆点大小是人口;灰色小点是两类都不是的城市;点圆点看这座城市,点国家只看这个国家;滚轮缩放)</h2>
+  <div class="panel"><div id="map" class="chart tall"></div></div>
+  <h2 id="listTitle">城市</h2>
+  <div class="panel" id="rows">读取中…</div>
+  <h2>国别对照</h2>
+  <div class="panel" id="crows">读取中…</div>
+  <p class="muted small">数据:水风险来自 WRI Aqueduct 4.0(2023,模型估计);人均 GDP 来自 Kummu 等(2025)格网数据,2024 年值,2021 年国际美元;世行涉水项目来自世行项目库(2020-10 至 2024 年批准,部分项目没标行业,会漏);开发性金融线索是本库最近 365 天的线索里出资方属世行、亚行、亚投行、非开行、欧复行、欧投行、伊开行、美开行、欧佩克基金、法开署、德复兴银行的条数。口径见本体 glossary.trend_self_funded / trend_loan_driven。</p>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const q0 = new URLSearchParams(location.search);
+  const RISK = [["water_risk", "总体水风险"], ["water_stress", "用水压力"], ["water_stress_2030", "2030 年用水压力"]];
+  const MINS = [["2", "2"], ["3", "3"], ["4", "4"]];
+  const GDPS = [["10000", "1 万"], ["20000", "2 万"], ["40000", "4 万"]];
+  const LOANS = [["1", "1"], ["3", "3"], ["10", "10"]];
+  const SHOWS = [["", "有机会的"], ["self", "自付型"], ["loan", "贷款型"], ["both", "两类都是"], ["all", "全部城市"]];
+  const pick = (v, opts, d) => (opts.some(([k]) => k === v) ? v : d);
+  const state = { c: q0.get("c") || "", r: pick(q0.get("r"), RISK, "water_risk"), m: pick(q0.get("m"), MINS, "4"), g: pick(q0.get("g"), GDPS, "20000"),
+    l: pick(q0.get("l"), LOANS, "3"), s: pick(q0.get("s") || "", SHOWS, "") };
+  const DEFAULT = { r: "water_risk", m: "4", g: "20000", l: "3" };
+  const EXCLUDE = new Set(["CHN"]);  // 使用方 2026-10-09:中国境内不分析,只看中国以外
+  const DEV = ["wb", "adb", "aiib", "afdb", "ebrd", "eib", "isdb", "idb", "opec", "afd", "kfw"];  // 开发性金融(glossary.trend_loan_driven)
+  const COLOR = { self: "#0d9488", loan: "#7c3aed", both: "#dc2626", none: "#cbd5e1" };
+  const LABEL = { self: "自付型", loan: "贷款型", both: "两类都是", none: "" };
+  const num = (v, d) => (v === undefined || v === null || v === "" ? "" : Number(v).toLocaleString("zh-CN", { maximumFractionDigits: d === undefined ? 0 : d }));
+  const people = (n) => (n >= 1e8 ? (n / 1e8).toFixed(2) + " 亿" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString("zh-CN") + " 万" : String(n || 0));
+  const latlon = (v) => { const m = String(v || "").match(/(-?\d+(?:\.\d+)?)\s*[,,]\s*(-?\d+(?:\.\d+)?)/); return m ? [Number(m[2]), Number(m[1])] : null; };
+  const val = (oid, r, p) => { const v = P.get(oid, r, p); return v === undefined || v === null || v === "" ? null : Number(v); };
+
+  try {
+    await P.load();
+    if (!(P.cfg.tables && P.cfg.tables.city) || !P.has("city", "water_risk")) {
+      $("cards").innerHTML = ""; $("map").parentNode.style.display = "none"; $("crows").innerHTML = "";
+      $("rows").innerHTML = '<p class="muted">城市的水风险、人均 GDP 字段还没建(跑一次建表命令后这里就有)。</p>';
+      return;
+    }
+    const devGroups = new Set(P.grouping("funders").groups.filter((g) => DEV.includes(g.code)).map((g) => g.v));
+    const since = Date.now() - 365 * 864e5;
+    const has = (oid, ps) => ps.filter((p) => P.has(oid, p));
+    const [countries, cities, leads] = await Promise.all([
+      P.records("country", { props: has("country", ["name_zh", "key", "income_group", "water_stress", "water_stress_2030", "drought", "flood", "gdp_pc", "wb_water_n", "wb_water_musd"]) }),
+      P.records("city", { props: has("city", ["name_zh", "name_en", "country", "coords", "population", "lead_count", "opp_count", "water_risk", "water_stress", "water_stress_2030", "gdp_pc"]) }),
+      P.records("lead", { props: ["country", "funder", "found_at"] })]);
+    const byId = {}; countries.forEach((c) => { byId[c.id] = c; });
+    const keep = (ct) => { const c = byId[P.linkId(P.get("city", ct, "country"))]; return !(c && EXCLUDE.has(P.get("country", c, "key"))); };
+    cities.splice(0, cities.length, ...cities.filter(keep));
+    countries.splice(0, countries.length, ...countries.filter((c) => !EXCLUDE.has(P.get("country", c, "key"))));
+    /* 每个国别近一年的开发性金融线索 */
+    const devLeads = {};
+    leads.forEach((l) => {
+      const t = Date.parse(P.get("lead", l, "found_at") || ""); if (!(t >= since)) return;
+      if (!P.funderGroups(P.get("lead", l, "funder")).some((g) => devGroups.has(g))) return;
+      const cid = P.linkId(P.get("lead", l, "country")); if (cid) devLeads[cid] = (devLeads[cid] || 0) + 1;
+    });
+    const cg = (c, p) => (c ? val("country", c, p) : null);
+    const loanCountry = (c) => !!c && ((cg(c, "wb_water_n") || 0) >= 1 || (devLeads[c.id] || 0) >= Number(state.l));
+    const kindOf = (ct) => {
+      const risk = val("city", ct, state.r); if (risk === null || risk < Number(state.m)) return "none";
+      const c = byId[P.linkId(P.get("city", ct, "country"))];
+      const self = (val("city", ct, "gdp_pc") || 0) >= Number(state.g), loan = loanCountry(c);
+      return self && loan ? "both" : self ? "self" : loan ? "loan" : "none";
+    };
+    const used = new Set(cities.map((ct) => P.linkId(P.get("city", ct, "country"))));
+    P.fillCountrySelect($("fCountry"), countries.filter((c) => used.has(c.id)).map((c) => [P.get("country", c, "key"), P.get("country", c, "name_zh") || P.get("country", c, "key")]));
+    $("fCountry").value = state.c;
+    const rname = () => RISK.find(([k]) => k === state.r)[1];
+    /* 点国家:留在趋势机会里只看这个国家(上方给出去国别概况、城市概况的链接);点城市才离开本页 */
+    const cLink = (c) => '<a href="trend.html?' + new URLSearchParams({ c: P.get("country", c, "key") }) + '" data-iso="' + P.esc(P.get("country", c, "key")) + '">' + P.esc(P.get("country", c, "name_zh") || P.get("country", c, "key")) + "</a>";
+    const pickCountry = (iso) => { state.c = iso; $("fCountry").value = iso; draw(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    ["rows", "crows"].forEach((id) => $(id).addEventListener("click", (e) => { const a = e.target.closest("a[data-iso]"); if (a) { e.preventDefault(); pickCountry(a.dataset.iso); } }));
+    $("rel").addEventListener("click", (e) => { if (e.target.id === "allC") { e.preventDefault(); pickCountry(""); } });
+    const isoSet = new Set(countries.filter((c) => used.has(c.id)).map((c) => P.get("country", c, "key")));
+    const zhOf = {};
+    let mc = null, bl = new Set();  // bl:登录人忽略的国别,地图上画斜线
+    const draw = () => {
+      const qs = new URLSearchParams(Object.entries(state).filter(([k, v]) => v && v !== DEFAULT[k])).toString();
+      history.replaceState(null, "", "trend.html" + (qs ? "?" + qs : ""));
+      const one = state.c && countries.find((c) => P.get("country", c, "key") === state.c);
+      $("rel").innerHTML = one ? P.marketLinks(state.c, P.get("country", one, "name_zh") || state.c, "trend.html") + ' <a href="trend.html" id="allC">✕ 看全部国别</a>' : "";
+      const base = cities.filter((ct) => !one || P.linkId(P.get("city", ct, "country")) === one.id).map((ct) => ({ ct, k: kindOf(ct) }));
+      const n = (k) => base.filter((x) => x.k === k).length;
+      const loanCs = countries.filter((c) => used.has(c.id) && (!one || c.id === one.id) && loanCountry(c));
+      $("cards").innerHTML = [[n("self") + n("both"), "自付型城市"], [n("loan") + n("both"), "贷款型城市"], [n("both"), "两类都是"], [loanCs.length, "有开发性贷款进水务的国别"],
+        [base.filter((x) => val("city", x.ct, state.r) !== null).length.toLocaleString("zh-CN") + " / " + base.length.toLocaleString("zh-CN"), "有水风险数据的城市"]]
+        .map(([v, l]) => '<div class="card"><div class="n">' + v + '</div><div class="l">' + l + "</div></div>").join("");
+      /* 地图:两类都不是的灰色小点垫底,有机会的按类着色 */
+      const maxPop = Math.max(1, ...base.map((x) => Number(P.get("city", x.ct, "population")) || 0));
+      const series = ["none", "loan", "self", "both"].map((k) => ({ name: LABEL[k] || "其他", type: "scatter", coordinateSystem: "geo", z: k === "none" ? 1 : 3,
+        data: base.filter((x) => x.k === k).map((x) => { const xy = latlon(P.get("city", x.ct, "coords")); return xy && { name: P.get("city", x.ct, "name_zh") || P.get("city", x.ct, "name_en") || "", id: x.ct.id, kind: k,
+          value: xy.concat([Number(P.get("city", x.ct, "population")) || 0, val("city", x.ct, state.r), val("city", x.ct, "gdp_pc")]) }; }).filter(Boolean),
+        symbolSize: (v) => (k === "none" ? 3 : 5 + 16 * Math.sqrt(v[2] / maxPop)), itemStyle: { color: COLOR[k], opacity: k === "none" ? 0.5 : 0.85 } }));
+      const pts = base.map((x) => latlon(P.get("city", x.ct, "coords"))).filter(Boolean);
+      const center = one && pts.length ? [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length] : undefined;
+      if (!mc) {
+        mc = echarts.init($("map"));
+        mc.on("click", (p) => {
+          if (p.data && p.data.id) location.href = "city.html?id=" + encodeURIComponent(p.data.id);
+          else if (P.onGeo(p) && isoSet.has(p.name)) pickCountry(p.name === state.c ? "" : p.name);
+        });
+        let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => mc.resize(), 150); });
+      }
+      const regions = one ? [{ name: state.c, itemStyle: { areaColor: "#e0f2fe", borderColor: "#0f4c81", borderWidth: 1.5 } }] : [];
+      mc.setOption({ animation: false,
+        tooltip: { trigger: "item", formatter: (p) => P.onGeo(p) ? "<b>" + P.esc(zhOf[p.name] || p.name) + "</b><br>" + (p.name === "CHN" ? "中国境内不做趋势分析" : !isoSet.has(p.name) ? "没有城市数据" : p.name === state.c ? "再点一下看全部国别" : "点一下只看这个国家") + P.hatchTip(p.name, bl) : p.data ? "<b>" + P.esc(p.data.name) + "</b>" + (LABEL[p.data.kind] ? " · " + LABEL[p.data.kind] : "") + "<br>人口 " + people(p.data.value[2]) +
+          " · " + rname() + " " + (p.data.value[3] === null ? "无数据" : p.data.value[3].toFixed(1)) + " · 人均 GDP " + (p.data.value[4] ? num(p.data.value[4]) + " 美元" : "无数据") : "" },
+        geo: { map: "world", roam: true, center, zoom: center ? 4 : 1.1, triggerEvent: true, tooltip: { show: true }, itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" },
+          emphasis: { itemStyle: { areaColor: "#e2e8f0" }, label: { show: false } }, label: { show: false },
+          regions },
+        series: series.concat(P.hatchSeries(bl, null, true)) }, true);
+      P.hatchFit(mc, bl, { geo: true });  // 斜线按缩放换算成细线
+      /* 城市清单:按水风险从高到低,再按人口 */
+      const want = { "": ["self", "loan", "both"], self: ["self", "both"], loan: ["loan", "both"], both: ["both"], all: ["self", "loan", "both", "none"] }[state.s];
+      const rows = base.filter((x) => want.includes(x.k)).sort((a, b) => (val("city", b.ct, state.r) || -1) - (val("city", a.ct, state.r) || -1) ||
+        (Number(P.get("city", b.ct, "population")) || 0) - (Number(P.get("city", a.ct, "population")) || 0));
+      const SHOW = 300;
+      $("fNote").textContent = "共 " + cities.length.toLocaleString("zh-CN") + " 座城市";
+      $("listTitle").textContent = "城市(" + (SHOWS.find(([k]) => k === state.s)[1]) + "," + rname() + "从高到低" + (rows.length > SHOW ? ",列出前 " + SHOW + " 座" : "") + ")";
+      $("rows").innerHTML = !rows.length ? '<p class="muted">没有符合条件的城市;把门槛调低试试。</p>' :
+        P.tableHtml(["城市", "国别", "类型", rname(), "用水压力", "2030 年", "人均 GDP(美元)", "人口", "线索", "商机"], rows.slice(0, SHOW).map(({ ct, k }) => {
+          const c = byId[P.linkId(P.get("city", ct, "country"))], f = (p, d) => num(val("city", ct, p), d);
+          return [P.raw('<a href="city.html?id=' + encodeURIComponent(ct.id) + '"><b>' + P.esc(P.get("city", ct, "name_zh") || P.get("city", ct, "name_en") || "") + "</b></a>"),
+            c ? P.raw(cLink(c)) : "",
+            k === "none" ? "" : P.raw('<span class="tag" style="background:' + COLOR[k] + '">' + LABEL[k] + "</span>"),
+            f(state.r, 1), f("water_stress", 1), f("water_stress_2030", 1), f("gdp_pc"), people(Number(P.get("city", ct, "population")) || 0),
+            String(P.get("city", ct, "lead_count") || 0), String(P.get("city", ct, "opp_count") || 0)]; }));
+      /* 国别对照 */
+      const cs = countries.filter((c) => used.has(c.id) && (!one || c.id === one.id)).sort((a, b) => (cg(b, "water_stress") || -1) - (cg(a, "water_stress") || -1));
+      $("crows").innerHTML = !cs.length ? '<p class="muted">没有国别。</p>' : P.tableHtml(["国别", "用水压力", "2030 年", "干旱", "洪水", "人均 GDP(美元)", "世行涉水项目", "承诺额(百万美元)", "近一年开发性金融线索", "收入组与贷款类别", "贷款型"],
+        cs.map((c) => [P.raw(cLink(c)),
+          num(cg(c, "water_stress"), 1), num(cg(c, "water_stress_2030"), 1), num(cg(c, "drought"), 1), num(cg(c, "flood"), 1), num(cg(c, "gdp_pc")),
+          num(cg(c, "wb_water_n")), num(cg(c, "wb_water_musd")), String(devLeads[c.id] || 0), P.get("country", c, "income_group") || "", loanCountry(c) ? "是" : ""]));
+    };
+    P.chips($("fRisk"), RISK, state, "r", draw);
+    P.chips($("fMin"), MINS, state, "m", draw);
+    P.chips($("fGdp"), GDPS, state, "g", draw);
+    P.chips($("fLoan"), LOANS, state, "l", draw);
+    P.chips($("fShow"), SHOWS, state, "s", draw);
+    $("fCountry").onchange = () => { state.c = $("fCountry").value; draw(); };
+    bl = await P.ignored();
+    P.hatchNote($("map"), bl);
+    await fetch("world.geo.json").then((r) => r.json()).then((geo) => { geo.features.forEach((f) => { zhOf[f.properties.name] = f.properties.zh || f.properties.name; }); echarts.registerMap("world", geo); });
+    draw();
+  } catch (e) { P.fail($("rows"), e); }
+})();
+</script>
+</body>
+</html>

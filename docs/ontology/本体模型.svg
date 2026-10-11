@@ -1,0 +1,424 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2363" viewBox="0 0 1800 2363" font-family="'PingFang SC','Microsoft YaHei','Noto Sans CJK SC','WenQuanYi Zen Hei',sans-serif">
+<defs>
+<marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D32F2F"/></marker>
+<marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1976D2"/></marker>
+<marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#388E3C"/></marker>
+<marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#F57C00"/></marker>
+<marker id="aY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#757575"/></marker>
+<marker id="aK" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#212121"/></marker>
+<marker id="aP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B85450"/></marker>
+<marker id="aV" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7B1FA2"/></marker>
+<marker id="dK" viewBox="0 0 16 10" refX="1" refY="5" markerWidth="14" markerHeight="9" orient="auto-start-reverse"><path d="M0,5 L8,0 L16,5 L8,10 z" fill="#212121"/></marker>
+</defs>
+<rect x="0.0" y="0.0" width="1800.0" height="2363.0" rx="0" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<text x="40.0" y="50.0" font-size="28" fill="#212121" font-weight="bold" text-anchor="start">osint-water 本体模型 v2.0 · 对象 — 行为 — 规则</text>
+<text x="40.0" y="80.0" font-size="14" fill="#555555" font-weight="normal" text-anchor="start">SAM/SCBRD 五维建模 × OBR(对象本体 · 行为本体 · 规则本体),参考 visual-model  |  4 个核心对象 + 5 个支撑对象  |  判定是行为、日历是查询  |  每个对象只存一处  |  每个选项值有定义、每个口径只定一次</text>
+<text x="1760.0" y="50.0" font-size="15" fill="#1976D2" font-weight="bold" text-anchor="end">«system» Ontology · osint-water v2.0</text>
+<text x="1760.0" y="78.0" font-size="12.5" fill="#888888" font-weight="normal" text-anchor="end">2026-10-04 · 唯一业务库 Teable · 机器可读版 docs/ontology/ontology.yaml(分类体系与口径见 本体.md)</text>
+<line x1="40" y1="96" x2="1760" y2="96" stroke="#E0E0E0" stroke-width="1.5"/>
+<text x="40.0" y="124.0" font-size="14" fill="#D32F2F" font-weight="bold" text-anchor="start">关键路径 «keypath»:</text>
+<polygon points="210,106 410,106 424,123.0 410,140 210,140 222,123.0" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+<text x="320.0" y="128.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">① 采集线索(机器)</text>
+<polygon points="432,106 632,106 646,123.0 632,140 432,140 444,123.0" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+<text x="542.0" y="128.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">② 判定(机器)</text>
+<polygon points="654,106 854,106 868,123.0 854,140 654,140 666,123.0" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+<text x="764.0" y="128.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">③ 归属 / 建议商机(机器)</text>
+<polygon points="876,106 1076,106 1090,123.0 1076,140 876,140 888,123.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+<text x="986.0" y="128.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">④ 立项跟踪(人)</text>
+<polygon points="1098,106 1298,106 1312,123.0 1298,140 1098,140 1110,123.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+<text x="1208.0" y="128.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">⑤ 记跟进(人)</text>
+<polygon points="1320,106 1520,106 1534,123.0 1520,140 1320,140 1332,123.0" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+<text x="1430.0" y="128.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">⑥ 生成报告(机器)</text>
+<polygon points="1542,106 1742,106 1756,123.0 1742,140 1542,140 1554,123.0" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.5"/>
+<text x="1652.0" y="128.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">⑦ 日历与提醒(查询)</text>
+<rect x="40.0" y="158.0" width="1500.0" height="1213.0" rx="8" fill="#F7F7F7" stroke="#BDBDBD" stroke-width="1.5" fill-opacity="0.55"/>
+<circle cx="110" cy="292" r="46" fill="#9E9E9E"/>
+<circle cx="162" cy="264" r="52" fill="#9E9E9E"/>
+<circle cx="212" cy="290" r="46" fill="#9E9E9E"/>
+<circle cx="160" cy="312" r="40" fill="#9E9E9E"/>
+<circle cx="110" cy="292" r="44.2" fill="#F5F5F5"/>
+<circle cx="162" cy="264" r="50.2" fill="#F5F5F5"/>
+<circle cx="212" cy="290" r="44.2" fill="#F5F5F5"/>
+<circle cx="160" cy="312" r="38.2" fill="#F5F5F5"/>
+<text x="160.0" y="240.0" font-size="11" fill="#666666" font-weight="normal" text-anchor="middle" font-style="italic">«external»</text>
+<text x="160.0" y="262.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="middle">信源</text>
+<text x="160.0" y="282.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">网站 · RSS · 接口 · 门户</text>
+<text x="160.0" y="304.0" font-size="11.5" fill="#B85450" font-weight="normal" text-anchor="middle">人写:名称 网址 类型 范围 启用</text>
+<text x="160.0" y="322.0" font-size="11.5" fill="#82B366" font-weight="normal" text-anchor="middle">机器写:最近采集 · 状态</text>
+<text x="160.0" y="190.0" font-size="12.5" fill="#D32F2F" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">A01 采集 · 机器 · 每天</text>
+<rect x="296.0" y="196.0" width="310.0" height="332.0" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="2.5"/>
+<rect x="297.5" y="197.5" width="307.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="308.0" y="214.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="308.0" y="233.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">线索</text>
+<text x="594.0" y="214.0" font-size="11.5" fill="#D32F2F" font-weight="bold" text-anchor="end">核心对象</text>
+<rect x="302.0" y="246.0" width="298.0" height="64.0" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="310.0" y="262.0" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写 · 采集</text>
+<text x="310.0" y="280.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">标题 · 原文网址 · 信源 · 来源方式 · 发布日期 ·</text>
+<text x="310.0" y="299.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">发现时间 · 原文摘录</text>
+<rect x="302.0" y="318.0" width="298.0" height="101.0" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="310.0" y="334.0" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写 · 判定(只判一次,判过不回头)</text>
+<text x="310.0" y="352.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">判定方式 · 是否相关 · 类别 · 领域 · 国别 ·</text>
+<text x="310.0" y="371.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">中文摘要 · 出资方 · 项目名称 · 金额 ·</text>
+<text x="310.0" y="389.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">建议所属商机 · 可能是新项目</text>
+<text x="310.0" y="408.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">所属商机:可靠且为空时机器代填,人确认或改定</text>
+<rect x="302.0" y="427.0" width="298.0" height="45.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="310.0" y="443.0" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写</text>
+<text x="310.0" y="461.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">处理状态(待处理 / 已处理 / 已忽略) · 处理备注</text>
+<rect x="302.0" y="480.5" width="298.0" height="45.5" rx="4" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1"/>
+<text x="310.0" y="496.5" font-size="11.5" fill="#BDBDBD" font-weight="bold" text-anchor="start">派生(不存)</text>
+<text x="310.0" y="515.0" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">最近截止 · 写进的报告</text>
+<rect x="62.0" y="392.0" width="182.0" height="54.0" rx="6" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="153.0" y="414.0" font-size="13.5" fill="#212121" font-weight="bold" text-anchor="middle">A02 同事上传链接</text>
+<text x="153.0" y="434.0" font-size="12" fill="#555555" font-weight="normal" text-anchor="middle">人 · 不做相关性判定</text>
+<rect x="296.0" y="582.0" width="310.0" height="210.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="297.5" y="583.5" width="307.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="308.0" y="600.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="308.0" y="619.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">时间节点</text>
+<rect x="302.0" y="632.0" width="298.0" height="101.0" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="310.0" y="648.0" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写(人可改) · 每条带出处</text>
+<text x="310.0" y="666.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">类型:截止 / 发布 / 开标 / 授标 / 签约 / 开工 / </text>
+<text x="310.0" y="685.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">完工… · 日期(可只到月、季) ·</text>
+<text x="310.0" y="703.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">状态:已发生 / 官方计划 / 推断 · 说明 ·</text>
+<text x="310.0" y="722.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">出处线索</text>
+<rect x="302.0" y="741.0" width="298.0" height="45.5" rx="4" fill="#FFFFFF" stroke="#90A4AE" stroke-width="1"/>
+<text x="310.0" y="757.0" font-size="11.5" fill="#90A4AE" font-weight="bold" text-anchor="start">属于</text>
+<text x="310.0" y="775.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">一个商机(组合),或一条还没归属的线索</text>
+<rect x="296.0" y="840.5" width="310.0" height="243.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="2.5"/>
+<rect x="297.5" y="842.0" width="307.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="308.0" y="858.5" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="308.0" y="877.5" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">国别</text>
+<text x="594.0" y="858.5" font-size="11.5" fill="#D32F2F" font-weight="bold" text-anchor="end">核心对象</text>
+<rect x="302.0" y="890.5" width="298.0" height="82.5" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="310.0" y="906.5" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写(每项带年份与来源)</text>
+<text x="310.0" y="925.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">国名 · 区域 · 基础信息 · 宏观与水务指标 ·</text>
+<text x="310.0" y="943.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">收入组 · 水务管理机构 · 水务国企 ·</text>
+<text x="310.0" y="962.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">相关法律法规</text>
+<rect x="302.0" y="981.0" width="298.0" height="45.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="310.0" y="997.0" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写</text>
+<text x="310.0" y="1015.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">经营区域 · 市场分级 · 我方在当地 · 国别备注</text>
+<rect x="302.0" y="1034.5" width="298.0" height="45.5" rx="4" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1"/>
+<text x="310.0" y="1050.5" font-size="11.5" fill="#BDBDBD" font-weight="bold" text-anchor="start">派生(不存)</text>
+<text x="310.0" y="1069.0" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">线索数 · 商机数</text>
+<rect x="296.0" y="1106.0" width="310.0" height="225.0" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="297.5" y="1107.5" width="307.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="308.0" y="1124.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="308.0" y="1143.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">城市</text>
+<rect x="302.0" y="1156.0" width="298.0" height="64.0" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="310.0" y="1172.0" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写(GeoNames,每月)</text>
+<text x="310.0" y="1190.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">中文名 · 英文名 · 所属国别 · 行政区 · 坐标 ·</text>
+<text x="310.0" y="1209.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">人口 · 密度</text>
+<rect x="302.0" y="1228.0" width="298.0" height="45.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="310.0" y="1244.0" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人补</text>
+<text x="310.0" y="1262.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">面积 · 地区生产总值 · 备注</text>
+<rect x="302.0" y="1281.5" width="298.0" height="45.5" rx="4" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1"/>
+<text x="310.0" y="1297.5" font-size="11.5" fill="#BDBDBD" font-weight="bold" text-anchor="start">派生(不存)</text>
+<text x="310.0" y="1316.0" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">线索数 · 商机数</text>
+<polygon points="743,242 801,300 743,358 685,300" fill="#FFE0B2" stroke="#F57C00" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="743.0" y="284.0" font-size="10.5" fill="#666666" font-weight="normal" text-anchor="middle" font-style="italic">«behavior» A03</text>
+<text x="743.0" y="305.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="middle">判定</text>
+<text x="743.0" y="323.0" font-size="11" fill="#F57C00" font-weight="bold" text-anchor="middle">行为,不是表</text>
+<rect x="880.0" y="196.0" width="350.0" height="317.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="2.5"/>
+<rect x="881.5" y="197.5" width="347.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="892.0" y="214.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="892.0" y="233.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">商机</text>
+<text x="1218.0" y="214.0" font-size="11.5" fill="#D32F2F" font-weight="bold" text-anchor="end">核心对象</text>
+<rect x="886.0" y="246.0" width="338.0" height="101.0" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="894.0" y="262.0" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写 · 公开事实(只填空、列表只追加,每条带出处)</text>
+<text x="894.0" y="280.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">商机编号 · 名称 · 别名 · 外部编号 · 国别 · 地点 ·</text>
+<text x="894.0" y="299.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">领域 · 业主与执行机构 · 资金 · 规模 · 公开进度 ·</text>
+<text x="894.0" y="317.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">建设内容 · 标段 · 投标资格与依据 · 参与方 · 待核实 ·</text>
+<text x="894.0" y="336.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">核实状态 · 建议理由 · 出处线索 · 待核更新</text>
+<rect x="886.0" y="355.0" width="338.0" height="82.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="894.0" y="371.0" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写 · 我方</text>
+<text x="894.0" y="389.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">我方阶段:建议 → 跟踪中 → 准备投标 → 已投标</text>
+<text x="894.0" y="408.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">→ 中标 / 未中标;或 不跟进 / 放弃</text>
+<text x="894.0" y="426.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">优先级 · 负责人 · 内部备注</text>
+<rect x="886.0" y="445.5" width="338.0" height="64.0" rx="4" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1"/>
+<text x="894.0" y="461.5" font-size="11.5" fill="#BDBDBD" font-weight="bold" text-anchor="start">派生(不存)</text>
+<text x="894.0" y="480.0" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">所属线索数 · 下一时间节点 · 最晚启动 · 最近跟进 ·</text>
+<text x="894.0" y="498.5" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">当前判断 · 下一步 · 下一步到期</text>
+<rect x="1290.0" y="196.0" width="250.0" height="299.0" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="1291.5" y="197.5" width="247.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="1302.0" y="214.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="1302.0" y="233.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">报告</text>
+<rect x="1296.0" y="246.0" width="238.0" height="101.0" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="1304.0" y="262.0" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写 · 生成后不改</text>
+<text x="1304.0" y="280.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">类型 · 日期 / 期间 ·</text>
+<text x="1304.0" y="299.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">范围(国别 / 商机) ·</text>
+<text x="1304.0" y="317.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">版本(公开 / 内部) · 文件 ·</text>
+<text x="1304.0" y="336.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">引用的线索与商机 · 生成状态 · 模板</text>
+<rect x="1296.0" y="355.0" width="238.0" height="82.5" rx="4" fill="#FFFFFF" stroke="#90A4AE" stroke-width="1"/>
+<text x="1304.0" y="371.0" font-size="11.5" fill="#90A4AE" font-weight="bold" text-anchor="start">四类</text>
+<text x="1304.0" y="389.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">国别报告、项目报告:一次性,</text>
+<text x="1304.0" y="408.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">人在报告表新建一行发起(A13)</text>
+<text x="1304.0" y="426.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">周报每周一 · 月报每月 1 日</text>
+<rect x="1296.0" y="445.5" width="238.0" height="45.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="1304.0" y="461.5" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写</text>
+<text x="1304.0" y="480.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">发起人</text>
+<text x="790.0" y="182.0" font-size="15" fill="#455A64" font-weight="bold" text-anchor="middle">AI · 公开数据(机器采集、判定、建议;人可增删改)</text>
+<rect x="40.0" y="1387.0" width="1500.0" height="574.0" rx="8" fill="#FFF6F5" stroke="#BDBDBD" stroke-width="1.5"/>
+<rect x="296.0" y="1451.0" width="310.0" height="103.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="297.5" y="1452.5" width="307.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="308.0" y="1469.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="308.0" y="1488.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">成员</text>
+<rect x="302.0" y="1501.0" width="298.0" height="45.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="310.0" y="1517.0" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写(管理员)</text>
+<text x="310.0" y="1535.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">显示名 · 代号 · 角色(管理员 / 跟进人 / 只读)</text>
+<rect x="880.0" y="1441.0" width="350.0" height="210.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="2.5"/>
+<rect x="881.5" y="1442.5" width="347.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="892.0" y="1459.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="892.0" y="1478.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">跟进记录</text>
+<text x="1218.0" y="1459.0" font-size="11.5" fill="#D32F2F" font-weight="bold" text-anchor="end">核心对象</text>
+<rect x="886.0" y="1491.0" width="338.0" height="101.0" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="894.0" y="1507.0" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写 · 一次跟进一行</text>
+<text x="894.0" y="1525.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">商机(必填) · 日期 · 记录人 ·</text>
+<text x="894.0" y="1544.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">内容(做了什么、了解到什么) ·</text>
+<text x="894.0" y="1562.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">判断(继续跟进 / 重点推进 / 观望 / 放弃)与依据 ·</text>
+<text x="894.0" y="1581.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">下一步 · 下一步到期 · 附件</text>
+<rect x="886.0" y="1600.0" width="338.0" height="45.5" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="894.0" y="1616.0" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写</text>
+<text x="894.0" y="1634.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">阶段变更:人在商机上改阶段,机器自动补这一条(A18)</text>
+<rect x="1290.0" y="1505.0" width="250.0" height="140.5" rx="6" fill="#FBF7FC" stroke="#7B1FA2" stroke-width="1.8" stroke-dasharray="7 5"/>
+<rect x="1291.5" y="1506.5" width="247.0" height="43.0" rx="5" fill="#F3E5F5" stroke="none" stroke-width="1.5"/>
+<text x="1302.0" y="1523.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«view» 查询,不存</text>
+<text x="1302.0" y="1542.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">日历</text>
+<rect x="1296.0" y="1555.0" width="238.0" height="82.5" rx="4" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1"/>
+<text x="1304.0" y="1571.0" font-size="11.5" fill="#BDBDBD" font-weight="bold" text-anchor="start">= 三者合并</text>
+<text x="1304.0" y="1589.5" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">跟踪商机的时间节点</text>
+<text x="1304.0" y="1608.0" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">∪ 跟进记录(日期、下一步到期)</text>
+<text x="1304.0" y="1626.5" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">∪ 报告(日期)</text>
+<rect x="1290.0" y="1671.5" width="250.0" height="192.0" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="1291.5" y="1673.0" width="247.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="1302.0" y="1689.5" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="1302.0" y="1708.5" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">报告模板</text>
+<rect x="1296.0" y="1721.5" width="238.0" height="64.0" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="1304.0" y="1737.5" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写(页面或表格,A21)</text>
+<text x="1304.0" y="1756.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">名称 · 适用类型 · 模板文件(.docx) ·</text>
+<text x="1304.0" y="1774.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">缺省 · 说明</text>
+<rect x="1296.0" y="1793.5" width="238.0" height="64.0" rx="4" fill="#FFFFFF" stroke="#90A4AE" stroke-width="1"/>
+<text x="1304.0" y="1809.5" font-size="11.5" fill="#90A4AE" font-weight="bold" text-anchor="start">只管版式</text>
+<text x="1304.0" y="1828.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">页面、字体、页眉页脚;章节结构仍由 </text>
+<text x="1304.0" y="1846.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">A14 按类型固定</text>
+<rect x="296.0" y="1576.5" width="310.0" height="210.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="297.5" y="1578.0" width="307.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="308.0" y="1594.5" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="308.0" y="1613.5" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">公司资料</text>
+<rect x="302.0" y="1626.5" width="298.0" height="82.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="310.0" y="1642.5" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写(页面或表格,A23)</text>
+<text x="310.0" y="1661.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">类别(资质 / 业绩 / 其他) · 名称 · 内容 ·</text>
+<text x="310.0" y="1679.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">适用领域 · 适用国别 · 年份 · 金额 · 附件 ·</text>
+<text x="310.0" y="1698.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">写进报告 · 备注</text>
+<rect x="302.0" y="1717.0" width="298.0" height="64.0" rx="4" fill="#FFFFFF" stroke="#90A4AE" stroke-width="1"/>
+<text x="310.0" y="1733.0" font-size="11.5" fill="#90A4AE" font-weight="bold" text-anchor="start">进报告</text>
+<text x="310.0" y="1751.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">勾了「写进报告」的行附在国别 / 项目报告的内</text>
+<text x="310.0" y="1770.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">部版后</text>
+<rect x="296.0" y="1809.0" width="310.0" height="122.0" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="297.5" y="1810.5" width="307.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="308.0" y="1827.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="308.0" y="1846.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">个人设置</text>
+<rect x="302.0" y="1859.0" width="298.0" height="64.0" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="310.0" y="1875.0" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写(「我的」页,A24)</text>
+<text x="310.0" y="1893.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">名称 · 账号 · 关注国别 ·</text>
+<text x="310.0" y="1912.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">日历订阅(名称 | 链接) · 备注</text>
+<text x="56.0" y="1413.0" font-size="15" fill="#455A64" font-weight="bold" text-anchor="start">人 · 业务数据(公司内部的跟进与判断)</text>
+<rect x="1562.0" y="158.0" width="210.0" height="1803.0" rx="8" fill="#FBF7FC" stroke="#7B1FA2" stroke-width="1.6" stroke-dasharray="7 5"/>
+<text x="1667.0" y="184.0" font-size="15" fill="#7B1FA2" font-weight="bold" text-anchor="middle">视图 «view»</text>
+<text x="1667.0" y="204.0" font-size="12" fill="#666666" font-weight="normal" text-anchor="middle">查询,不存(R10)</text>
+<rect x="1572.0" y="222.0" width="190.0" height="70.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="243.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V1 待处理线索</text>
+<text x="1582.0" y="262.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">相关且待处理 ·</text>
+<text x="1582.0" y="278.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">按最近截止排序</text>
+<rect x="1572.0" y="304.0" width="190.0" height="70.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="325.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V2 待确认归属</text>
+<text x="1582.0" y="344.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">有建议所属商机或可能是新项目 ·</text>
+<text x="1582.0" y="360.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">所属商机为空</text>
+<rect x="1572.0" y="386.0" width="190.0" height="70.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="407.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V3 AI 推荐的商机</text>
+<text x="1582.0" y="426.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">我方阶段 = 建议 ·</text>
+<text x="1582.0" y="442.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">即国别报告的项目机会清单</text>
+<rect x="1572.0" y="468.0" width="190.0" height="70.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="489.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V4 跟踪看板</text>
+<text x="1582.0" y="508.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">跟踪中、准备投标、已投标 ·</text>
+<text x="1582.0" y="524.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">按阶段分列</text>
+<rect x="1572.0" y="550.0" width="190.0" height="70.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="571.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V5 日历</text>
+<text x="1582.0" y="590.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">跟踪中商机的节点 · 跟进 ·</text>
+<text x="1582.0" y="606.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">报告(见左下)</text>
+<rect x="1572.0" y="632.0" width="190.0" height="86.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="653.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V6 线索总览漏斗</text>
+<text x="1582.0" y="672.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">采集 → 相关 → 归入商机 → 归</text>
+<text x="1582.0" y="688.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">入跟踪中的商机 → 写进报告 ·</text>
+<text x="1582.0" y="704.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">五级严格子集</text>
+<rect x="1572.0" y="730.0" width="190.0" height="70.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="751.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V7 国别概况</text>
+<text x="1582.0" y="770.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">国别信息 · 该国商机 ·</text>
+<text x="1582.0" y="786.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">线索统计</text>
+<rect x="1572.0" y="812.0" width="190.0" height="86.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="833.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V8 线索处理</text>
+<text x="1582.0" y="852.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">待确认归属 · AI 推荐 ·</text>
+<text x="1582.0" y="868.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">批量归入 / 忽略 / 跟踪 / 不跟</text>
+<text x="1582.0" y="884.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">进</text>
+<rect x="1572.0" y="910.0" width="190.0" height="70.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="931.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V9 商机总览</text>
+<text x="1582.0" y="950.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">商机列表(缺省只列跟踪中的)· </text>
+<text x="1582.0" y="966.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">下一步已逾期 · 待核更新</text>
+<rect x="1572.0" y="992.0" width="190.0" height="70.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="1013.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V10 商机工作台</text>
+<text x="1582.0" y="1032.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">一个商机一页 · 记跟进 ·</text>
+<text x="1582.0" y="1048.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">要报告 · 改负责人</text>
+<rect x="1572.0" y="1074.0" width="190.0" height="54.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
+<text x="1582.0" y="1095.0" font-size="13.5" fill="#4A148C" font-weight="bold" text-anchor="start">V11 报告页</text>
+<text x="1582.0" y="1114.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="start">历史报告 · 要报告 · 管理模板</text>
+<text x="1667.0" y="1158.0" font-size="12" fill="#666666" font-weight="normal" text-anchor="middle">页面与表格视图都从这里取数,</text>
+<text x="1667.0" y="1176.0" font-size="12" fill="#666666" font-weight="normal" text-anchor="middle">没有哪张表单独存它们</text>
+<path d="M258,270 L296,270" fill="none" stroke="#D32F2F" stroke-width="4" marker-end="url(#aR)" stroke-linecap="round"/>
+<path d="M606,300 L685,300" fill="none" stroke="#D32F2F" stroke-width="4" marker-end="url(#aR)" stroke-linecap="round"/>
+<path d="M801,300 L880,300" fill="none" stroke="#D32F2F" stroke-width="4" marker-end="url(#aR)" stroke-linecap="round"/>
+<text x="840.5" y="288.0" font-size="12.5" fill="#D32F2F" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">A05 归属</text>
+<text x="840.5" y="324.0" font-size="12.5" fill="#D32F2F" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">A06 建议商机</text>
+<path d="M1230,300 L1290,300" fill="none" stroke="#D32F2F" stroke-width="4" marker-end="url(#aR)" stroke-linecap="round"/>
+<text x="1260.0" y="270.0" font-size="12" fill="#D32F2F" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">A13 发起</text>
+<text x="1260.0" y="288.0" font-size="12" fill="#D32F2F" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">A14 生成</text>
+<text x="1260.0" y="324.0" font-size="12" fill="#D32F2F" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">一次性</text>
+<path d="M743,358 C743,382 646,366 606,366" fill="none" stroke="#F57C00" stroke-width="2" stroke-dasharray="3 5" marker-end="url(#aO)" stroke-linecap="round"/>
+<text x="741.0" y="398.0" font-size="12.5" fill="#F57C00" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">写回判定属性</text>
+<path d="M244,419 L296,419" fill="none" stroke="#B85450" stroke-width="2.2" stroke-dasharray="7 5" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M606,441.5 L880,441.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="743.0" y="433.5" font-size="12.5" fill="#212121" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">属于 *..0..1</text>
+<text x="743.0" y="461.5" font-size="12" fill="#757575" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">可靠时机器代填 / 人确认</text>
+<path d="M526,528.0 L526,582.0" fill="none" stroke="#1976D2" stroke-width="2" marker-end="url(#aB)" stroke-linecap="round"/>
+<text x="534.0" y="559.0" font-size="12" fill="#1976D2" font-weight="normal" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">截止日(A03)</text>
+<path d="M296,504.0 L286.0,504.0 Q276,504.0 276.0,514.0 L276.0,866.5 Q276,876.5 286.0,876.5 L296,876.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="270.0" y="724.2" font-size="12" fill="#212121" font-weight="normal" text-anchor="end" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">涉及 *..0..1</text>
+<path d="M880,483.5 C760,483.5 726,628.0 606,628.0" fill="none" stroke="#212121" stroke-width="1.8" marker-start="url(#dK)" stroke-linecap="round"/>
+<text x="751.0" y="577.8" font-size="12" fill="#212121" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">包含 1..*(组合)</text>
+<path d="M880,503.5 C740,503.5 746,886.5 606,886.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="614.0" y="862.5" font-size="12" fill="#212121" font-weight="bold" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">位于 *..1</text>
+<path d="M960,1441.0 L960,513.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="966.0" y="791.8" font-size="12" fill="#212121" font-weight="bold" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">关于 *..1</text>
+<path d="M1070,513.5 L1070,1441.0" fill="none" stroke="#1976D2" stroke-width="2" marker-end="url(#aB)" stroke-linecap="round"/>
+<text x="1076.0" y="1051.4" font-size="12" fill="#1976D2" font-weight="bold" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">A18 改阶段即自动补一条跟进</text>
+<text x="1076.0" y="1069.4" font-size="12" fill="#1976D2" font-weight="normal" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">机器 · 谁改的、何时、从什么改成什么</text>
+<path d="M1290,1695.5 L1272.0,1695.5 Q1262,1695.5 1262.0,1685.5 L1262.0,491.0 Q1262,481.0 1272.0,481.0 L1290,481.0" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="1254.0" y="1083.2" font-size="12" fill="#212121" font-weight="normal" text-anchor="end" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">套用 *..0..1</text>
+<path d="M906,513.5 L906.0,1411.0 Q906,1421.0 896.0,1421.0 L556.0,1421.0 Q546,1421.0 546.0,1431.0 L546,1451.0" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="898.0" y="1345.0" font-size="12" fill="#212121" font-weight="bold" text-anchor="end" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">负责人 *..0..1</text>
+<path d="M336,1809.0 L336,1787.0" fill="none" stroke="#212121" stroke-width="1.2" stroke-dasharray="4 3" stroke-linecap="round"/>
+<path d="M336,1576.5 L336,1554.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="344.0" y="1570.5" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">属于 *..1(账号)</text>
+<path d="M880,1507.0 L606,1507.0" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="743.0" y="1499.0" font-size="12" fill="#212121" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">记录人 *..1</text>
+<path d="M356,1106.0 L356,1084.0" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="364.0" y="1100.0" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">属于 *..1</text>
+<path d="M606,960.5 L1320.0,960.5 Q1330,960.5 1330.0,950.5 L1330,495.0" fill="none" stroke="#1976D2" stroke-width="2" marker-end="url(#aB)" stroke-linecap="round"/>
+<text x="1170.0" y="952.5" font-size="12" fill="#1976D2" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">国别信息写进报告</text>
+<path d="M1230,1471.0 L1400.0,1471.0 Q1410,1471.0 1410.0,1461.0 L1410,495.0" fill="none" stroke="#1976D2" stroke-width="2" marker-end="url(#aB)" stroke-linecap="round"/>
+<text x="1418.0" y="615.0" font-size="12" fill="#1976D2" font-weight="bold" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">A14 周报 / 月报</text>
+<text x="1418.0" y="633.0" font-size="12" fill="#1976D2" font-weight="normal" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">机器 · 定期</text>
+<path d="M1522,495.0 L1522,1505.0" fill="none" stroke="#757575" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#aY)" stroke-linecap="round"/>
+<path d="M1230,1575.25 L1290,1575.25" fill="none" stroke="#757575" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#aY)" stroke-linecap="round"/>
+<text x="1514.0" y="1493.0" font-size="12" fill="#757575" font-weight="normal" text-anchor="end" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">派生</text>
+<text x="40.0" y="2013.0" font-size="15" fill="#455A64" font-weight="bold" text-anchor="start">状态 «state»</text>
+<text x="150.0" y="2013.0" font-size="13.5" fill="#B85450" font-weight="bold" text-anchor="start">线索·处理状态(人)</text>
+<rect x="60.0" y="2031.0" width="110.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="115.0" y="2054.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">待处理</text>
+<rect x="240.0" y="2015.0" width="110.0" height="32.0" rx="16.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="295.0" y="2036.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">已处理</text>
+<rect x="240.0" y="2057.0" width="110.0" height="32.0" rx="16.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="295.0" y="2078.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">已忽略</text>
+<path d="M170,2043.0 L240,2031.0" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M170,2057.0 L240,2073.0" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<text x="400.0" y="2041.0" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">可撤回到待处理;</text>
+<text x="400.0" y="2059.0" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">线索上没有进展、</text>
+<text x="400.0" y="2077.0" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">负责人、下一步(R7)</text>
+<text x="560.0" y="2013.0" font-size="13.5" fill="#B85450" font-weight="bold" text-anchor="start">商机·我方阶段(机器只能新建为「建议」;其余转换都由人在商机上改,机器自动补一条跟进 R5 R6)</text>
+<rect x="560.0" y="2031.0" width="104.0" height="36.0" rx="18.0" fill="#D5E8D4" stroke="#82B366" stroke-width="1.6"/>
+<text x="612.0" y="2054.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">建议</text>
+<rect x="710.0" y="2031.0" width="104.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="762.0" y="2054.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">跟踪中</text>
+<rect x="860.0" y="2031.0" width="104.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="912.0" y="2054.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">准备投标</text>
+<rect x="1010.0" y="2031.0" width="104.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="1062.0" y="2054.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">已投标</text>
+<path d="M664,2049.0 L710,2049.0" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M814,2049.0 L860,2049.0" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M964,2049.0 L1010,2049.0" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<text x="687.0" y="2041.0" font-size="11.5" fill="#B85450" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">立项</text>
+<rect x="1160.0" y="2013.0" width="96.0" height="30.0" rx="15.0" fill="#C8E6C9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="1208.0" y="2033.0" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">中标</text>
+<rect x="1160.0" y="2053.0" width="96.0" height="30.0" rx="15.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="1208.0" y="2073.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">未中标</text>
+<path d="M1114,2043.0 L1160,2028.0" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M1114,2055.0 L1160,2068.0" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<rect x="560.0" y="2089.0" width="104.0" height="30.0" rx="15.0" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.6"/>
+<text x="612.0" y="2109.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">不跟进</text>
+<path d="M612,2067.0 L612,2089.0" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<rect x="860.0" y="2089.0" width="104.0" height="30.0" rx="15.0" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.6"/>
+<text x="912.0" y="2109.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">放弃</text>
+<path d="M762,2067.0 L912,2089.0" fill="none" stroke="#B85450" stroke-width="1.2" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M912,2067.0 L912,2089.0" fill="none" stroke="#B85450" stroke-width="1.2" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M1062,2067.0 L912,2089.0" fill="none" stroke="#B85450" stroke-width="1.2" marker-end="url(#aP)" stroke-linecap="round"/>
+<text x="1280.0" y="2035.0" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">建议 = AI 推荐的商机</text>
+<text x="1280.0" y="2053.0" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">跟踪中、准备投标、已投标</text>
+<text x="1280.0" y="2071.0" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">= 正在跟踪的商机</text>
+<text x="1280.0" y="2089.0" font-size="12.5" fill="#D32F2F" font-weight="bold" text-anchor="start">两者同一张表,只差这一列</text>
+<text x="40.0" y="2151.0" font-size="15" fill="#C62828" font-weight="bold" text-anchor="start">规则 «principle»(不变式,详见 本体.md R1–R11)</text>
+<polygon points="54.0,2179.0 230.0,2179.0 244.0,2193.0 244.0,2237.0 230.0,2251.0 54.0,2251.0 40.0,2237.0 40.0,2193.0" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="142.0" y="2201.0" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R1 一个对象只存一处</text>
+<text x="142.0" y="2221.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">全在 Teable;页面只读,不存副本</text>
+<polygon points="267.0,2179.0 443.0,2179.0 457.0,2193.0 457.0,2237.0 443.0,2251.0 267.0,2251.0 253.0,2237.0 253.0,2193.0" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="355.0" y="2201.0" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R2 人写的不被机器覆盖</text>
+<text x="355.0" y="2221.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">只填空、只新建、列表只追加;改</text>
+<text x="355.0" y="2237.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">值写待核更新</text>
+<polygon points="480.0,2179.0 656.0,2179.0 670.0,2193.0 670.0,2237.0 656.0,2251.0 480.0,2251.0 466.0,2237.0 466.0,2193.0" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="568.0" y="2201.0" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R3 公开事实带出处</text>
+<text x="568.0" y="2221.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">每条引用一条线索,推断写明依据</text>
+<polygon points="693.0,2179.0 869.0,2179.0 883.0,2193.0 883.0,2237.0 869.0,2251.0 693.0,2251.0 679.0,2237.0 679.0,2193.0" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="781.0" y="2201.0" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R4 线索至多属一个商机</text>
+<text x="781.0" y="2221.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">可靠才自动归属,其余人确认</text>
+<polygon points="906.0,2179.0 1082.0,2179.0 1096.0,2193.0 1096.0,2237.0 1082.0,2251.0 906.0,2251.0 892.0,2237.0 892.0,2193.0" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="994.0" y="2201.0" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R5 阶段只由人推进</text>
+<text x="994.0" y="2221.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">机器只能新建「建议」商机</text>
+<polygon points="1119.0,2179.0 1295.0,2179.0 1309.0,2193.0 1309.0,2237.0 1295.0,2251.0 1119.0,2251.0 1105.0,2237.0 1105.0,2193.0" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="1207.0" y="2201.0" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R6 改阶段留一条跟进</text>
+<text x="1207.0" y="2221.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">机器自动补记,人补原因</text>
+<polygon points="1332.0,2179.0 1508.0,2179.0 1522.0,2193.0 1522.0,2237.0 1508.0,2251.0 1332.0,2251.0 1318.0,2237.0 1318.0,2193.0" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="1420.0" y="2201.0" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R9 报告是快照</text>
+<text x="1420.0" y="2221.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">生成后不改;公开版不含内部信息</text>
+<polygon points="1545.0,2179.0 1721.0,2179.0 1735.0,2193.0 1735.0,2237.0 1721.0,2251.0 1545.0,2251.0 1531.0,2237.0 1531.0,2193.0" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="1633.0" y="2201.0" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R10 派生不存</text>
+<text x="1633.0" y="2221.0" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">日历、漏斗、下一步都现算</text>
+<line x1="40" y1="2265.0" x2="1760" y2="2265.0" stroke="#E0E0E0" stroke-width="1.5"/>
+<text x="40.0" y="2287.0" font-size="13.5" fill="#212121" font-weight="bold" text-anchor="start">图例 «legend»</text>
+<rect x="150.0" y="2273.0" width="26.0" height="18.0" rx="3" fill="#D5E8D4" stroke="#82B366" stroke-width="1.2"/>
+<text x="184.0" y="2287.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">机器写(只填空、列表只追加;人可改)</text>
+<rect x="418.5" y="2273.0" width="26.0" height="18.0" rx="3" fill="#F8CECC" stroke="#B85450" stroke-width="1.2"/>
+<text x="452.5" y="2287.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">人写(机器不写)</text>
+<rect x="567.5" y="2273.0" width="26.0" height="18.0" rx="3" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.2"/>
+<text x="601.5" y="2287.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">派生(查询,不存)</text>
+<rect x="723.5" y="2271.0" width="30.0" height="22.0" rx="4" fill="#E3F2FD" stroke="#37474F" stroke-width="1.6"/>
+<text x="761.5" y="2287.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">矩形 = 对象 «object»</text>
+<polygon points="935.5,2269.0 949.5,2282.0 935.5,2295.0 921.5,2282.0" fill="#FFE0B2" stroke="#F57C00" stroke-width="1.4"/>
+<text x="957.5" y="2287.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">菱形 = 判定(行为)</text>
+<rect x="1085.5" y="2271.0" width="30.0" height="22.0" rx="4" fill="#FBF7FC" stroke="#7B1FA2" stroke-width="1.4" stroke-dasharray="5 3"/>
+<text x="1123.5" y="2287.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">虚线框 = 视图</text>
+<polygon points="1231.0,2271.0 1249.0,2271.0 1255.0,2277.0 1255.0,2287.0 1249.0,2293.0 1231.0,2293.0 1225.0,2287.0 1225.0,2277.0" fill="#FFCDD2" stroke="#C62828" stroke-width="1.4"/>
+<text x="1263.0" y="2287.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">八边形 = 规则</text>
+<path d="M40,2311.0 L92,2311.0" fill="none" stroke="#D32F2F" stroke-width="4" marker-end="url(#aR)" stroke-linecap="round"/>
+<text x="100.0" y="2316.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">关键路径</text>
+<path d="M180.0,2311.0 L232.0,2311.0" fill="none" stroke="#1976D2" stroke-width="2" marker-end="url(#aB)" stroke-linecap="round"/>
+<text x="240.0" y="2316.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">信息流(读进报告等)</text>
+<path d="M384.0,2311.0 L436.0,2311.0" fill="none" stroke="#388E3C" stroke-width="2.2" stroke-dasharray="8 5" marker-end="url(#aG)" stroke-linecap="round"/>
+<text x="444.0" y="2316.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">人的动作改状态</text>
+<path d="M561.5,2311.0 L613.5,2311.0" fill="none" stroke="#B85450" stroke-width="2.2" stroke-dasharray="7 5" marker-end="url(#aP)" stroke-linecap="round"/>
+<text x="621.5" y="2316.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">人工录入 / 状态转换</text>
+<path d="M766.5,2311.0 L818.5,2311.0" fill="none" stroke="#F57C00" stroke-width="2" stroke-dasharray="3 5" marker-end="url(#aO)" stroke-linecap="round"/>
+<text x="826.5" y="2316.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">写回(反馈)</text>
+<path d="M920.5,2311.0 L972.5,2311.0" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="980.5" y="2316.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">关联(带基数)</text>
+<path d="M1101.0,2311.0 L1139.0,2311.0" fill="none" stroke="#212121" stroke-width="1.8" marker-start="url(#dK)" stroke-linecap="round"/>
+<text x="1147.0" y="2316.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">组合(实心菱形)</text>
+<path d="M1266.0,2311.0 L1318.0,2311.0" fill="none" stroke="#757575" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#aY)" stroke-linecap="round"/>
+<text x="1326.0" y="2316.0" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">派生依赖</text>
+<text x="1760.0" y="2349.0" font-size="11.5" fill="#999999" font-weight="normal" text-anchor="end">SAM/SCBRD 系统架构可视化建模 · OBR 本体  |  参考 github.com/sharptoolbox/visual-model(CC BY 4.0)</text>
+</svg>

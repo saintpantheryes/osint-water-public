@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 商机工作台</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("opps.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <div id="head"><p class="muted">读取中…</p></div>
+  <div class="two">
+    <div class="col">
+      <div class="panel form" id="fuForm">
+        <h3>记一笔跟进</h3>
+        <div class="row"><label>日期</label><input type="date" id="fuDay"></div>
+        <div class="row"><label>内容 *</label><textarea id="fuContent" rows="3" placeholder="做了什么、了解到什么"></textarea></div>
+        <div class="row"><label>判断</label><select id="fuJudg"><option value="">(不填)</option></select></div>
+        <div class="row"><label>判断依据</label><input id="fuReason"></div>
+        <div class="row"><label>下一步</label><input id="fuNext" placeholder="下一步做什么"></div>
+        <div class="row"><label>到期</label><input type="date" id="fuDue"></div>
+        <div class="row"><label>阶段改为</label><select id="fuStage"><option value="">(不改)</option></select></div>
+        <div class="row"><label></label><button id="fuSave" class="primary">保存跟进</button><span class="muted" id="fuMsg"></span></div>
+      </div>
+      <div class="panel form" id="rpForm">
+        <h3>要一份报告</h3>
+        <div class="row"><label>类型</label><select id="rpKind"><option value="项目报告">项目报告(这个商机)</option><option value="国别报告">国别报告(所在国)</option></select></div>
+        <div class="row"><label>版本</label><select id="rpEd"><option value="内部版">内部版</option><option value="公开版">公开版</option></select></div>
+        <div class="row"><label></label><button id="rpSave">排队生成</button><span class="muted" id="rpMsg"></span></div>
+        <p class="muted">后台 2 分钟内生成 Word,出现在下方「报告」里。</p>
+      </div>
+      <div class="panel form" id="quick">
+        <h3>负责与优先级</h3>
+        <div class="row"><label>负责人</label><span id="ownerNow"></span><button id="mine">我来负责</button></div>
+        <div class="row"><label>优先级</label><select id="prio"><option value="">(未定)</option><option>A</option><option>B</option><option>C</option></select></div>
+        <div class="row"><label>内部备注</label><textarea id="note" rows="2"></textarea></div>
+        <div class="row"><label></label><button id="quickSave">保存</button><span class="muted" id="quickMsg"></span></div>
+      </div>
+    </div>
+    <div class="col wide">
+      <div id="review"></div>
+      <h2>跟进时间线</h2>
+      <div id="timeline" class="panel">读取中…</div>
+      <h2>时间节点</h2>
+      <div id="ms" class="panel"></div>
+      <h2>项目情况(机器整理,人可在表格里改)</h2>
+      <div id="facts"></div>
+      <h2>所属线索</h2>
+      <div id="leads" class="panel"></div>
+      <h2>报告</h2>
+      <div id="reports" class="panel"></div>
+    </div>
+  </div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const rid = new URLSearchParams(location.search).get("id");
+  let opp = null, me = null, countryName = "";
+  const g = (p) => P.get("opportunity", opp, p);
+  const lines = (v) => String(v || "").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  let numOf = {}, cinfo = {};  // 出处角标:[8位线索号] → 序号 + 可点开的线索
+  const cites = (txt) => P.cites(txt, numOf, cinfo);
+  async function resolveCites() {
+    const keys = P.citeKeys(["scope", "financing", "packages", "owner_org", "parties", "ai_reason", "pending", "review_updates"].map(g));
+    numOf = {}; keys.forEach((k, i) => { numOf[k] = i + 1; });
+    try { cinfo = keys.length ? await P.leadsByKeys(keys) : {}; } catch (e) { cinfo = {}; }
+  }
+  const list = (v) => { const ls = lines(v); return ls.length ? '<ul class="notes">' + ls.map((l) => "<li>" + cites(l) + "</li>").join("") + "</ul>" : ""; };
+  const sec = (label, html, open) => html ? '<details class="sec"' + (open ? " open" : "") + "><summary>" + label + '</summary><div class="panel">' + html + "</div></details>" : "";
+
+  async function loadOpp() {
+    const r = await P.api("/table/" + P.t("opportunity").id + "/record/" + rid, { fieldKeyType: "id" });
+    if (!r) return;
+    opp = r;
+    const stage = g("stage") || "建议";
+    document.title = "全球水务开源情报 · " + (g("code") || "") + " " + (g("name_zh") || "");
+    $("head").innerHTML = '<div class="opphead"><div><a href="opps.html" class="muted">‹ 商机总览</a><h1>' + P.esc(g("code") || "") + " " + P.esc(g("name_zh") || "") +
+      ' <span class="stage s-' + P.esc(stage) + '">' + P.esc(stage) + "</span></h1>" +
+      '<p class="muted">' + [g("name_local"), countryName ? '<a href="country.html?iso=' + encodeURIComponent(countryName.iso) + '">' + P.esc(countryName.zh) + "</a>" : "", P.text(g("city")) ? P.esc(P.text(g("city"))) : "", g("location"), g("priority") ? "优先级 " + P.esc(g("priority")) : "", P.text(g("owner")) ? "负责人 " + P.esc(P.text(g("owner"))) : "未定负责人"].filter(Boolean).join(" · ") + "</p></div>" +
+      '<div class="kv"><div><b>公开进度</b><span>' + P.esc(g("public_stage") || "—") + (g("public_stage_note") ? '<small class="muted"> ' + P.esc(g("public_stage_note")) + "</small>" : "") + "</span></div>" +
+      "<div><b>下一节点</b><span>" + P.esc(g("next_milestone") || "—") + "</span></div>" +
+      "<div><b>下一步</b><span>" + P.esc(g("next_step") || "—") + (g("next_due") ? " · 到期 " + P.day(g("next_due")) : "") + "</span></div>" +
+      "<div><b>当前判断</b><span>" + P.esc(g("judgment") || "—") + "</span></div>" +
+      "<div><b>投资规模</b><span>" + P.esc(P.sizeText("opportunity", r) || (g("size_usd") ? "≈ " + Number(g("size_usd")).toLocaleString() + " 美元" : "—")) + "</span></div>" +
+      "<div><b>投标资格</b><span>" + P.esc(g("eligibility") || "—") + (g("eligibility_basis") ? '<small class="muted"> ' + P.esc(g("eligibility_basis")) + "</small>" : "") + "</span></div>" +
+      "<div><b>最晚启动</b><span>" + (P.day(g("latest_start")) || "—") + "</span></div></div>" +
+      '<p class="muted">' + P.open("opportunity", rid, "在表格里打开这个商机 ↗") + "</p></div>";
+    $("ownerNow").textContent = P.text(g("owner")) || "(未定)";
+    $("prio").value = g("priority") || "";
+    $("note").value = g("internal_note") || "";
+    await resolveCites();
+    $("review").innerHTML = g("review_updates") ? '<div class="warn"><b>机器发现的待核更新</b>(与表里已有值不同,请核后在表格里改)' + list(g("review_updates")) + "</div>" : "";
+    $("facts").innerHTML = sec("建设内容与规模", g("scope") ? "<p>" + cites(g("scope")) + "</p>" : "", true) + sec("资金", list(g("financing")), true) + sec("标段", list(g("packages")), false) +
+      sec("业主与执行机构", g("owner_org") ? "<p>" + cites(g("owner_org")) + "</p>" : "", false) + sec("参与方", list(g("parties")), false) + sec("建议理由(机器)", g("ai_reason") ? "<p>" + cites(g("ai_reason")) + "</p>" : "", false) +
+      sec("待核实", list(g("pending")), false) + sec("别名与外部编号", list(g("aliases")) + list(g("external_ids")), false) + P.citeNote(numOf, cinfo);
+  }
+
+  async function loadLists() {
+    const today = P.today();
+    const [fus, ms, leads, rps] = await Promise.all([
+      P.records("followup", { filter: P.and(P.cond("followup", "opportunity", "is", rid)), orderBy: [{ fieldId: P.f("followup", "day"), order: "desc" }],
+        props: ["day", "author", "content", "judgment", "reason", "stage_change", "next_step", "next_due", "attachments"] }),
+      P.records("milestone", { filter: P.and(P.cond("milestone", "opportunity", "is", rid)), orderBy: [{ fieldId: P.f("milestone", "day"), order: "asc" }], props: ["kind", "day", "status", "label", "lead"] }),
+      P.records("lead", { filter: P.and(P.cond("lead", "opportunity", "is", rid)), take: 100, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "category", "published", "found_at", "nearest_deadline", "status", "url"] }),
+      P.records("report", { filter: P.and(P.cond("report", "opportunity", "is", rid)), orderBy: [{ fieldId: P.f("report", "day"), order: "desc" }], props: ["kind", "day", "edition", "gen_status", "file", "requested_by"] }),
+    ]);
+    const f = (r, p) => P.get("followup", r, p);
+    $("timeline").innerHTML = fus.length ? '<ul class="tl">' + fus.map((r) => "<li><div class=\"when\">" + P.day(f(r, "day")) + " · " + P.esc(P.text(f(r, "author")) || "—") + "</div>" +
+      (f(r, "stage_change") ? '<span class="tag">阶段 → ' + P.esc(f(r, "stage_change")) + "</span>" : "") + (f(r, "judgment") ? '<span class="tag intel">' + P.esc(f(r, "judgment")) + "</span>" : "") +
+      "<div>" + P.esc(f(r, "content") || "") + "</div>" + (f(r, "reason") ? '<div class="muted">依据:' + P.esc(f(r, "reason")) + "</div>" : "") +
+      (f(r, "next_step") ? '<div class="muted">下一步:' + P.esc(f(r, "next_step")) + (f(r, "next_due") ? "(到期 " + P.day(f(r, "next_due")) + ")" : "") + "</div>" : "") +
+      ((f(r, "attachments") || []).length ? "<div>" + (f(r, "attachments") || []).map((a) => '<a href="' + P.esc(P.fileUrl(a)) + '" target="_blank" rel="noopener">' + P.esc(a.name) + "</a>").join(" · ") + "</div>" : "") +
+      "<div>" + P.open("followup", r.id, "在表格里打开(补附件)") + "</div></li>").join("") + "</ul>" : '<p class="muted">还没有跟进。左边记第一笔。</p>';
+    const m = (r, p) => P.get("milestone", r, p);
+    const up = ms.filter((r) => P.day(m(r, "day")) >= today), past = ms.filter((r) => P.day(m(r, "day")) < today);
+    const mrow = (r) => [P.day(m(r, "day")), m(r, "kind"), m(r, "status"), m(r, "label"), P.text(m(r, "lead")), P.raw(P.open("milestone", r.id))];
+    $("ms").innerHTML = "<b>未来</b>" + P.tableHtml(["日期", "类型", "状态", "说明", "出处线索", ""], up.map(mrow)) + (past.length ? '<details class="sec"><summary>已过去的 ' + past.length + " 个</summary>" + P.tableHtml(["日期", "类型", "状态", "说明", "出处线索", ""], past.reverse().map(mrow)) + "</details>" : "");
+    const l = (r, p) => P.get("lead", r, p);
+    $("leads").innerHTML = P.tableHtml(["线索号", "类别", "标题", "发布", "最近截止", "处理状态", ""], leads.map((r) => [l(r, "key"), l(r, "category"),
+      P.raw(l(r, "url") ? '<a href="' + P.esc(l(r, "url")) + '" target="_blank" rel="noopener">' + P.esc((l(r, "title") || "").slice(0, 80)) + "</a>" : P.esc((l(r, "title") || "").slice(0, 80))),
+      P.day(l(r, "published")) || P.day(l(r, "found_at")), l(r, "nearest_deadline"), l(r, "status"), P.raw(P.open("lead", r.id))]));
+    const p = (r, k) => P.get("report", r, k);
+    $("reports").innerHTML = P.tableHtml(["日期", "类型", "版本", "状态", "发起人", "文件", ""], rps.map((r) => [P.day(p(r, "day")), p(r, "kind"), p(r, "edition"), p(r, "gen_status"), P.text(p(r, "requested_by")),
+      P.raw((p(r, "file") || []).map((a) => '<a href="' + P.esc(P.fileUrl(a)) + '" target="_blank" rel="noopener">' + P.esc(a.name) + "</a>").join("<br>")), P.raw(P.open("report", r.id))]));
+  }
+
+  async function saveFollowup() {
+    const content = $("fuContent").value.trim();
+    if (!content) { P.toast("内容不能为空", true); $("fuContent").focus(); return; }
+    const btn = $("fuSave"); btn.disabled = true; $("fuMsg").textContent = "保存中…";
+    try {
+      const stage = $("fuStage").value;
+      await P.create("followup", { opportunity: rid, day: $("fuDay").value || P.today(), author: me && me.id, content, judgment: $("fuJudg").value, reason: $("fuReason").value.trim(),
+        next_step: $("fuNext").value.trim(), next_due: $("fuDue").value, stage_change: stage });
+      if (stage && stage !== (g("stage") || "建议")) await P.patch("opportunity", rid, { stage });
+      ["fuContent", "fuReason", "fuNext", "fuDue"].forEach((id) => { $(id).value = ""; }); $("fuJudg").value = ""; $("fuStage").value = "";
+      P.toast("跟进已记下" + (stage ? ",阶段改为「" + stage + "」" : ""));
+      await Promise.all([loadOpp(), loadLists()]);
+    } catch (e) { P.toast(e.message, true); } finally { btn.disabled = false; $("fuMsg").textContent = ""; }
+  }
+
+  async function requestReport() {
+    const btn = $("rpSave"); btn.disabled = true; $("rpMsg").textContent = "排队中…";
+    try {
+      const kind = $("rpKind").value;
+      await P.create("report", { kind, edition: $("rpEd").value, day: P.today(), gen_status: "待生成", requested_by: me && me.id,
+        opportunity: kind === "项目报告" ? rid : null, country: P.linkId(g("country")) });
+      P.toast("已排队,2 分钟内生成");
+      await loadLists();
+    } catch (e) { P.toast(e.message, true); } finally { btn.disabled = false; $("rpMsg").textContent = ""; }
+  }
+
+  async function saveQuick(values) {
+    const btn = $("quickSave"); btn.disabled = true; $("quickMsg").textContent = "保存中…";
+    try { await P.patch("opportunity", rid, values); P.toast("已保存"); await loadOpp(); }
+    catch (e) { P.toast(e.message, true); } finally { btn.disabled = false; $("quickMsg").textContent = ""; }
+  }
+
+  try {
+    await P.load();
+    if (!(await P.canWrite())) P.guest();  // 游客帐号(查看者)只能看
+    if (!rid) { $("head").innerHTML = '<div class="err">网址里没有商机编号,从 <a href="opps.html">商机总览</a> 点进来。</div>'; return; }
+    P.choices("followup", "judgment").forEach((s) => { const op = document.createElement("option"); op.textContent = s; $("fuJudg").appendChild(op); });
+    P.choices("opportunity", "stage").forEach((s) => { const op = document.createElement("option"); op.textContent = s; $("fuStage").appendChild(op); });
+    $("fuDay").value = P.today();
+    const [, u] = await Promise.all([loadOpp(), P.me()]);
+    me = u;
+    const cid = P.linkId(g("country"));
+    if (cid) { const c = await P.api("/table/" + P.t("country").id + "/record/" + cid, { fieldKeyType: "id" }); if (c) { countryName = { iso: P.get("country", c, "key"), zh: P.get("country", c, "name_zh") || P.get("country", c, "key") }; await loadOpp(); } }
+    await loadLists();
+    $("fuSave").onclick = saveFollowup;
+    $("rpSave").onclick = requestReport;
+    $("mine").onclick = () => saveQuick({ owner: me && me.id });
+    $("quickSave").onclick = () => saveQuick({ priority: $("prio").value || null, internal_note: $("note").value });
+  } catch (e) { P.fail($("head"), e); }
+})();
+</script>
+</body>
+</html>

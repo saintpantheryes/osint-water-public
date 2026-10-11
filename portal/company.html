@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 我方资料</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("me.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>我方资料 <span class="muted" style="font-size:14px;font-weight:400">(<a href="me.html">我的</a> › 我方资料)</span></h1>
+  <p class="muted">我们公司自己的资质证书、历史业绩与其他公司资料,一行一项。勾了「写进报告」的,生成国别报告、项目报告的<b>内部版</b>时按适用国别与领域挑出来附在正文后(公开版不附,游客看不到)。适用国别留空 = 全球通用;适用领域留空 = 各领域都适用。</p>
+  <div class="two">
+    <div class="col">
+      <div class="form" id="form"><h3 id="formTitle">新增一项</h3>
+        <div class="row"><label>类别</label><select id="cKind"></select></div>
+        <div class="row"><label>名称</label><input id="cName" placeholder="如:市政公用工程施工总承包特级 / 某国净水厂 EPC"></div>
+        <div class="row"><label>内容</label><textarea id="cContent" rows="4" placeholder="资质:发证机关、等级、有效期;业绩:项目概况、合同额、工期、业主、我方角色"></textarea></div>
+        <div class="row"><label>适用领域</label><span id="cSectors" class="frow" style="padding:0;flex:1"></span></div>
+        <div class="row"><label>适用国别</label><span id="cCountries" class="frow" style="padding:0;flex:1"></span></div>
+        <div class="row"><label></label><select id="cCountryPick" class="inline"><option value="">+ 加一个国别</option></select></div>
+        <div class="row"><label>年份</label><input id="cYear" type="number" placeholder="业绩的完工年 / 资质的发证年" min="1900" max="2100"></div>
+        <div class="row"><label>金额</label><input id="cAmount" placeholder="原文怎么写就怎么记,如 1.2 亿美元"></div>
+        <div class="row"><label>附件</label><input id="cFile" type="file"></div>
+        <div class="row"><label>写进报告</label><label style="flex:1;color:inherit"><input id="cFor" type="checkbox" checked> 国别 / 项目报告的内部版附上它</label></div>
+        <div class="row"><label>备注</label><input id="cNote" placeholder="(可不填)"></div>
+        <div class="row"><label></label><button class="primary" id="cSave">保存</button><button id="cCancel" style="display:none">取消</button><span class="muted" id="cMsg"></span></div>
+      </div>
+    </div>
+    <div class="col wide">
+      <div class="filters">
+        <div class="frow"><b>类别</b><span id="fKind" class="frow" style="padding:0"></span></div>
+        <div class="frow"><b>领域</b><span id="fSector" class="frow" style="padding:0"></span></div>
+        <div class="frow"><b>国别</b><select id="fCountry" class="inline"><option value="">全部国别</option></select></div>
+        <div class="frow"><b>搜索</b><input id="fText" placeholder="搜名称、内容" size="18"><span class="muted" id="count" style="margin-left:auto"></span></div>
+      </div>
+      <div class="panel" id="list">读取中…</div>
+      <p class="muted">要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开公司资料表 ↗</a></p>
+    </div>
+  </div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  let rows = [], countries = [], cname = {}, editing = null;
+  const g = (r, p) => P.get("company", r, p);
+  const flt = { k: "", s: "", c: "", q: "" };
+  const form = { sectors: [], countries: [] };
+  const hasTable = () => !!(P.cfg.tables || {}).company;
+  const files = (r) => (g(r, "file") || []).map((a) => '<a href="' + P.esc(P.fileUrl(a)) + '" target="_blank" rel="noopener">' + P.esc(a.name) + "</a>").join("<br>");
+
+  function renderCountryChips() {
+    $("cCountries").innerHTML = form.countries.map((id) => '<button type="button" class="chip-btn on" data-id="' + P.esc(id) + '" title="点一下去掉">' + P.esc(cname[id] || id) + " ×</button>").join("") || '<span class="muted small">(空 = 全球通用)</span>';
+    $("cCountries").querySelectorAll("button").forEach((b) => { b.onclick = () => { form.countries = form.countries.filter((x) => x !== b.dataset.id); renderCountryChips(); }; });
+  }
+  function fillForm(r) {
+    editing = r || null;
+    $("formTitle").textContent = r ? "改这一项" : "新增一项";
+    $("cCancel").style.display = r ? "" : "none";
+    $("cKind").value = r ? (g(r, "kind") || P.values("company_kind")[0]) : P.values("company_kind")[0];
+    $("cName").value = r ? (g(r, "name") || "") : "";
+    $("cContent").value = r ? (g(r, "content") || "") : "";
+    $("cYear").value = r && g(r, "year") ? g(r, "year") : "";
+    $("cAmount").value = r ? (g(r, "amount") || "") : "";
+    $("cNote").value = r ? (g(r, "note") || "") : "";
+    $("cFor").checked = r ? !!g(r, "for_report") : true;
+    $("cFile").value = "";
+    form.sectors = r ? [...(g(r, "sectors") || [])] : [];
+    form.countries = r ? (g(r, "countries") || []).map((x) => x.id) : [];
+    P.chips($("cSectors"), P.values("lead_sectors").map((v) => [v, v]), form, "sectors", () => {}, true);
+    renderCountryChips();
+  }
+  function render() {
+    const q = flt.q.trim().toLowerCase();
+    const shown = rows.filter((r) => (!flt.k || g(r, "kind") === flt.k) && (!flt.s || (g(r, "sectors") || []).includes(flt.s) || !(g(r, "sectors") || []).length)
+      && (!flt.c || (g(r, "countries") || []).some((x) => x.id === flt.c) || !(g(r, "countries") || []).length)
+      && (!q || ((g(r, "name") || "") + " " + (g(r, "content") || "")).toLowerCase().includes(q)));
+    $("count").textContent = shown.length + " / " + rows.length + " 项";
+    $("list").innerHTML = shown.length ? P.tableHtml(["类别", "名称", "适用领域", "适用国别", "年份", "金额", "附件", "写进报告", ""], shown.map((r) => [
+      g(r, "kind") || "", P.raw("<b>" + P.esc(g(r, "name") || "") + "</b>" + (g(r, "content") ? '<br><span class="muted small">' + P.esc(String(g(r, "content")).slice(0, 120)) + "</span>" : "")),
+      (g(r, "sectors") || []).join("、") || P.raw('<span class="muted">各领域</span>'), (g(r, "countries") || []).map((x) => cname[x.id] || x.title).join("、") || P.raw('<span class="muted">全球</span>'),
+      g(r, "year") ? String(g(r, "year")) : "", g(r, "amount") || "", P.raw(files(r) || '<span class="muted">—</span>'),
+      P.raw('<span class="it-act"><button type="button" data-a="for" data-id="' + r.id + '" class="chip-btn' + (g(r, "for_report") ? " on" : "") + '">' + (g(r, "for_report") ? "✓ 附进报告" : "不附") + "</button></span>"),
+      P.raw('<span class="it-act"><button type="button" data-a="edit" data-id="' + r.id + '" class="chip-btn">改</button> <label class="chip-btn" title="再传一个附件">传附件<input type="file" data-a="file" data-id="' + r.id + '" style="display:none"></label></span> ' + P.open("company", r.id)),
+    ])) : '<p class="muted">' + (rows.length ? "没有符合筛选的。" : "还没有我方资料,在左边加第一项。") + "</p>";
+    $("list").querySelectorAll('button[data-a="for"]').forEach((b) => { b.onclick = () => toggleFor(b.dataset.id, b); });
+    $("list").querySelectorAll('button[data-a="edit"]').forEach((b) => { b.onclick = () => { fillForm(rows.find((x) => x.id === b.dataset.id)); $("form").scrollIntoView({ behavior: "smooth", block: "start" }); }; });
+    $("list").querySelectorAll('input[data-a="file"]').forEach((i) => { i.onchange = () => addFile(i.dataset.id, i); });
+  }
+  async function load() {
+    if (!hasTable()) { $("list").innerHTML = '<p class="muted">库里还没有「公司资料」表(管理员跑一次建表命令就有)。</p>'; $("count").textContent = ""; return; }
+    rows = await P.records("company", { props: ["kind", "name", "content", "sectors", "countries", "year", "amount", "file", "for_report", "note"] });
+    const ko = {}; P.values("company_kind").forEach((v, i) => { ko[v] = i; });
+    rows.sort((a, b) => (ko[g(a, "kind")] ?? 9) - (ko[g(b, "kind")] ?? 9) || (Number(g(b, "year")) || 0) - (Number(g(a, "year")) || 0) || String(g(a, "name") || "").localeCompare(String(g(b, "name") || "")));
+    render();
+  }
+  async function toggleFor(rid, btn) {
+    const r = rows.find((x) => x.id === rid); if (!r) return;
+    btn.disabled = true;
+    try { await P.patch("company", rid, { for_report: !g(r, "for_report") }); P.toast(g(r, "for_report") ? "以后报告不附这一项" : "以后报告会附这一项"); await load(); }
+    catch (e) { P.toast(e.message, true); btn.disabled = false; }
+  }
+  async function addFile(rid, input) {
+    const file = (input.files || [])[0]; if (!file) return;
+    try { await P.upload("company", rid, "file", file); P.toast("附件已传上"); await load(); } catch (e) { P.toast(e.message, true); }
+  }
+  async function save() {
+    const name = $("cName").value.trim();
+    if (!name) { P.toast("要有名称", true); return; }
+    const values = { kind: $("cKind").value, name, content: $("cContent").value.trim(), sectors: form.sectors, countries: form.countries,
+      year: $("cYear").value ? Number($("cYear").value) : undefined, amount: $("cAmount").value.trim(), for_report: $("cFor").checked, note: $("cNote").value.trim() };
+    const btn = $("cSave"); btn.disabled = true; $("cMsg").textContent = "保存中…";
+    try {
+      let rid = editing ? editing.id : null;
+      if (editing) {
+        /* 改:清空的多选也要写过去(P.val 对空数组不发),所以这里按字段编号直接写 */
+        const fields = P.fieldsOf("company", values);
+        fields[P.f("company", "sectors")] = form.sectors; fields[P.f("company", "countries")] = form.countries.map((id) => ({ id }));
+        if (!values.year) fields[P.f("company", "year")] = null;
+        await P.send("PATCH", "/table/" + P.t("company").id + "/record", { fieldKeyType: "id", typecast: true, records: [{ id: rid, fields }] });
+      } else { const rec = await P.create("company", values); rid = rec && rec.id; }
+      const file = ($("cFile").files || [])[0];
+      if (file && rid) await P.upload("company", rid, "file", file);
+      P.toast(editing ? "已改好" : "已加上");
+      fillForm(null);
+      await load();
+    } catch (e) { P.toast(e.message, true); } finally { btn.disabled = false; $("cMsg").textContent = ""; }
+  }
+  try {
+    await P.load();
+    if (P.isGuest) { P.guest("我方资料是内部资料,游客帐号看不到。"); $("list").innerHTML = '<p class="muted">游客帐号看不到我方资料。</p>'; $("form").style.display = "none"; return; }
+    if (!(await P.canWrite())) P.guest();
+    if (hasTable()) $("tbl").href = P.tableUrl("company"); else $("tbl").parentElement.style.display = "none";
+    $("cKind").innerHTML = P.values("company_kind").map((v) => '<option value="' + P.esc(v) + '">' + P.esc(v) + "</option>").join("");
+    countries = await P.records("country", { props: ["name_zh", "key"] });
+    countries.sort((a, b) => P.zhCmp(P.get("country", a, "name_zh"), P.get("country", b, "name_zh")));
+    countries.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || c.id; });
+    for (const id of ["fCountry", "cCountryPick"]) P.fillCountrySelect($(id), countries.map((c) => [c.id, cname[c.id]]));
+    P.chips($("fKind"), [["", "全部"]].concat(P.values("company_kind").map((v) => [v, v])), flt, "k", render);
+    P.chips($("fSector"), [["", "全部"]].concat(P.values("lead_sectors").map((v) => [v, v])), flt, "s", render);
+    $("fCountry").onchange = () => { flt.c = $("fCountry").value; render(); };
+    $("fText").oninput = () => { flt.q = $("fText").value; render(); };
+    $("cCountryPick").onchange = () => { const v = $("cCountryPick").value; if (v && !form.countries.includes(v)) form.countries.push(v); $("cCountryPick").value = ""; renderCountryChips(); };
+    $("cSave").onclick = save;
+    $("cCancel").onclick = () => fillForm(null);
+    fillForm(null);
+    await load();
+  } catch (e) { P.fail($("list"), e); }
+})();
+</script>
+</body>
+</html>

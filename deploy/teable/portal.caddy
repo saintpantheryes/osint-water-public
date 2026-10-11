@@ -1,0 +1,84 @@
+# 只读页面(架构方案第 5 节):worker_install.sh 把本文件放到 /opt/teable/caddy.d/,Caddyfile 引入它。页面是主机检出 /opt/osint-water/portal
+# 里的静态文件(compose 把它只读挂到 Caddy 的 /srv/portal),浏览器里的脚本带着登录表格的同一个 cookie 直接读表格接口,没有令牌、没有服务器程序。
+# 回退:删掉 /opt/teable/caddy.d/portal.caddy,重载 Caddy(docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile)。
+# 日历订阅(.ics):苹果日历这类程序没法登录,这条路不做登录检查,凭链接里的令牌(core/calendar_feed.py 核对;不对就 403)。
+# 只转这一个文件名;去掉外来的 X-Portal-Auth 标头,后台据此分辨"登录后来的"还是"凭令牌来的"。
+@ow_feed path /portal/feed/calendar.ics
+handle @ow_feed {
+	uri strip_prefix /portal/feed
+	reverse_proxy worker:8765 {
+		header_up -X-Portal-Auth
+	}
+}
+
+# 自己的登录页(portal/login.html):替换表格默认登录页,左边是系统标志、站名和首页视频,右边是登录框。
+# /auth/login 直接给这个文件,不经过表格的页面;页面用表格自己的登录接口 POST /api/auth/signin(同一个 cookie),登录后回到 redirect 指的页面。
+# 注册(邀请链接)、忘记密码仍是表格自己的页面。回退:删掉 @ow_login 与 @ow_login_data 两段,重载 Caddy,就回到表格原来的登录页。
+@ow_login path /auth/login
+handle @ow_login {
+	root * /srv/portal
+	rewrite * /login.html
+	header {
+		Cache-Control "no-cache"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+	}
+	file_server
+}
+# 表格页面里的站内跳转(注册页上点「登录」、在表格里点退出)会先取 /_next/data/<版本>/auth/login.json;让它 404,
+# 浏览器就整页打开 /auth/login,落到上面这一页,不会再露出表格原来的登录页
+@ow_login_data path_regexp ^/_next/data/[^/]+/auth/login\.json$
+handle @ow_login_data {
+	respond 404
+}
+
+# /portal(没有末尾斜杠)转到 /portal/:不转的话页面里相对路径的样式、脚本会去找 /portal.css,页面光秃秃的(游客第一次登录后就遇到过)
+@ow_noslash path /portal
+handle @ow_noslash {
+	redir * /portal/ 301
+}
+
+@ow_portal path /portal /portal/*
+handle @ow_portal {
+	uri strip_prefix /portal
+	root * /srv/portal
+	# 登录页要用的站名字体、标志、首页视频与封面:没登录也能取(只这几个文件;页面、配置、接口照旧要先登录)
+	@ow_open path /fonts/huiwen-title.woff2 /fonts/truetypewriter-latin.woff2 /media/hero.mp4 /media/hero.webm /media/hero.jpg /logo.png /favicon.png
+	handle @ow_open {
+		file_server
+	}
+	handle {
+		# 先问表格"这是谁"(带着浏览器的登录 cookie);没登录转到登录页,登录后回到页面。
+		forward_auth teable:3000 {
+			uri /api/auth/user
+			header_up -Upgrade
+			header_up -Connection
+			@ow_unauth status 401 403
+			handle_response @ow_unauth {
+				header Cache-Control "no-store"
+				redir * /auth/login?redirect=%2Fportal%2F 302
+			}
+		}
+		# 程序文件让浏览器缓存:每个文件都要先过上面的登录检查(那一问 0.4–0.8 秒),不缓存的话点一页就要再问十来遍,页面慢两三秒。
+		# 常改的(脚本、样式、本体、词表)5 分钟内直接用缓存,过了带 ETag 再问;图表库、世界地图、字体一天。只在登录检查通过后才加,
+		# 没登录时的转登录页另设 no-store(上面),不会把跳转缓存下来;页面本身、config.json、助手接口不加
+		@ow_code path /portal.js /portal.css /ontology.json /zh_terms.json
+		header @ow_code Cache-Control "private, max-age=300"
+		@ow_lib path /echarts.min.js /world.geo.json /fonts/*
+		header @ow_lib Cache-Control "private, max-age=86400"
+		# 「助手」页的提问解析:转给后台任务进程里的助手接口(core/assistant_server.py,容器内网 worker:8765,不对外开端口)。
+		# 走到这里的请求已经过了上面的登录检查;后台任务没起时这里是 502,页面会提示「助手服务未就绪」,其余页面不受影响。
+		handle_path /api/assistant/* {
+			reverse_proxy worker:8765 {
+				header_up X-Portal-Auth 1
+			}
+		}
+		file_server
+	}
+}
+
+# 根网址进只读页面;表格的首页在 /space
+handle / {
+	redir * /portal/ 302
+}

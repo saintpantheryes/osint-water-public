@@ -1,0 +1,14 @@
+# 测试用规则表(虚构,仅覆盖测试所需字段)
+schema: osint-water/procurement-rules@1
+funders:
+  WB: {name_zh: 世界银行}
+  EBRD: {name_zh: 欧洲复兴开发银行}
+  ISDB: {name_zh: 伊斯兰开发银行, known_members: [TUR, SAU], known_non_members: [CHN]}
+  GOV: {name_zh: 本国政府}
+regimes:
+  WB_IPF: {funder: WB, name_zh: 世行采购规则, nationality: open_all, local_registration: contract, summary: 各国企业均可投标}
+  EBRD_PPR: {funder: EBRD, name_zh: EBRD 采购规则, nationality: open_all, local_registration: contract, summary: 各国企业均可投标}
+  ISDB_PG: {funder: ISDB, name_zh: IsDB 采购规则, nationality: members_only, local_registration: contract, summary: 仅限成员国}
+  ZZ_PPL: {funder: GOV, name_zh: 本国采购法, nationality: domestic_open, local_registration: bid, summary: 本国电子采购,外国企业可参与}
+  ZZ_REG: {funder: GOV, name_zh: 需注册的开放招标, nationality: open_all, local_registration: bid, summary: 开放但投标前须注册}
+  ZZ_UNV: {funder: GOV, name_zh: 未核实的开放规则, nationality: open_all, local_registration: contract, grade: C, summary: 据说各国均可}

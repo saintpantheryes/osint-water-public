@@ -1,0 +1,3676 @@
+# 自动生成:python scripts/build_countries.py。国别代码、中英文名、大洲与区域、识别用别名。
+schema: osint-water/countries@1
+source: 联合国统计司 M49 标准(https://unstats.un.org/unsd/methodology/m49/overview/);简称、别名与科索沃为本库补充
+wb_codes:
+  ZR: COD
+  TP: TLS
+  YF: SRB
+  XK: XKX
+  KV: XKX
+  WG: PSE
+  GZ: PSE
+  RY: YEM
+countries:
+- iso3: ABW
+  iso2: AW
+  m49: '533'
+  name_zh: 阿鲁巴
+  name_en: Aruba
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Aruba
+  - Аруба
+  - 阿鲁巴
+- iso3: AFG
+  iso2: AF
+  m49: '004'
+  name_zh: 阿富汗
+  name_en: Afghanistan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 南亚
+  region_en: Southern Asia
+  aliases:
+  - Afganistán
+  - Afghanistan
+  - Афганистан
+  - 阿富汗
+- iso3: AGO
+  iso2: AO
+  m49: '024'
+  name_zh: 安哥拉
+  name_en: Angola
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 中非
+  region_en: Middle Africa
+  aliases:
+  - Angola
+  - Ангола
+  - 安哥拉
+- iso3: AIA
+  iso2: AI
+  m49: '660'
+  name_zh: 安圭拉
+  name_en: Anguilla
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Anguila
+  - Anguilla
+  - Ангилья
+  - 安圭拉
+- iso3: ALA
+  iso2: AX
+  m49: '248'
+  name_zh: 奥兰群岛
+  name_en: Åland Islands
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Islas Åland
+  - Åland Islands
+  - Îles d’Åland
+  - Аландских островов
+  - 奥兰群岛
+- iso3: ALB
+  iso2: AL
+  m49: 008
+  name_zh: 阿尔巴尼亚
+  name_en: Albania
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Albania
+  - Albanie
+  - Албания
+  - 阿尔巴尼亚
+- iso3: AND
+  iso2: AD
+  m49: '020'
+  name_zh: 安道尔
+  name_en: Andorra
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Andorra
+  - Andorre
+  - Андорра
+  - 安道尔
+- iso3: ARE
+  iso2: AE
+  m49: '784'
+  name_zh: 阿拉伯联合酋长国
+  name_en: United Arab Emirates
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Emiratos Árabes Unidos
+  - United Arab Emirates
+  - Émirats arabes unis
+  - Объединенные Арабские Эмираты
+  - 阿拉伯联合酋长国
+  - 阿联酋
+- iso3: ARG
+  iso2: AR
+  m49: '032'
+  name_zh: 阿根廷
+  name_en: Argentina
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Argentina
+  - Argentine
+  - Аргентина
+  - 阿根廷
+- iso3: ARM
+  iso2: AM
+  m49: '051'
+  name_zh: 亚美尼亚
+  name_en: Armenia
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Armenia
+  - Arménie
+  - Армения
+  - 亚美尼亚
+- iso3: ASM
+  iso2: AS
+  m49: '016'
+  name_zh: 美属萨摩亚
+  name_en: American Samoa
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - American Samoa
+  - Samoa Americana
+  - Samoa américaines
+  - Американское Самоа
+  - 美属萨摩亚
+- iso3: ATA
+  iso2: AQ
+  m49: '010'
+  name_zh: 南极洲
+  name_en: Antarctica
+  continent_zh: 其他
+  continent_en: Other
+  region_zh: 其他
+  region_en: Other
+  aliases:
+  - Antarctica
+  - Antarctique
+  - Antártida
+  - Антарктике
+  - 南极洲
+- iso3: ATF
+  iso2: TF
+  m49: '260'
+  name_zh: 法属南方领地
+  name_en: French Southern Territories
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - French Southern Territories
+  - Terres australes françaises
+  - Territorio de las Tierras Australes Francesas
+  - Южные земли (французская заморская территория)
+  - 法属南方领地
+- iso3: ATG
+  iso2: AG
+  m49: 028
+  name_zh: 安提瓜和巴布达
+  name_en: Antigua and Barbuda
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Antigua and Barbuda
+  - Antigua y Barbuda
+  - Antigua-et-Barbuda
+  - Антигуа и Барбуда
+  - 安提瓜和巴布达
+- iso3: AUS
+  iso2: AU
+  m49: '036'
+  name_zh: 澳大利亚
+  name_en: Australia
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 澳大利亚和新西兰
+  region_en: Australia and New Zealand
+  aliases:
+  - Australia
+  - Australie
+  - Австралия
+  - 澳大利亚
+- iso3: AUT
+  iso2: AT
+  m49: '040'
+  name_zh: 奥地利
+  name_en: Austria
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 西欧
+  region_en: Western Europe
+  aliases:
+  - Austria
+  - Autriche
+  - Австрия
+  - 奥地利
+- iso3: AZE
+  iso2: AZ
+  m49: '031'
+  name_zh: 阿塞拜疆
+  name_en: Azerbaijan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Azerbaijan
+  - Azerbaiyán
+  - Azerbaïdjan
+  - Azərbaycan
+  - Азербайджан
+  - Азербайджанская Республика
+  - 阿塞拜疆
+- iso3: BDI
+  iso2: BI
+  m49: '108'
+  name_zh: 布隆迪
+  name_en: Burundi
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Burundi
+  - Бурунди
+  - 布隆迪
+- iso3: BEL
+  iso2: BE
+  m49: '056'
+  name_zh: 比利时
+  name_en: Belgium
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 西欧
+  region_en: Western Europe
+  aliases:
+  - Belgique
+  - Belgium
+  - Bélgica
+  - Бельгия
+  - 比利时
+- iso3: BEN
+  iso2: BJ
+  m49: '204'
+  name_zh: 贝宁
+  name_en: Benin
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Benin
+  - Bénin
+  - Бенин
+  - 贝宁
+- iso3: BES
+  iso2: BQ
+  m49: '535'
+  name_zh: 博纳尔，圣俄斯塔休斯和萨巴
+  name_en: Bonaire, Sint Eustatius and Saba
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Bonaire, Saint-Eustache et Saba
+  - Bonaire, San Eustaquio y Saba
+  - Bonaire, Sint Eustatius and Saba
+  - Бонайре, Синт-Эстатиус и Саба
+  - 博纳尔，圣俄斯塔休斯和萨巴
+- iso3: BFA
+  iso2: BF
+  m49: '854'
+  name_zh: 布基纳法索
+  name_en: Burkina Faso
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Burkina Faso
+  - Буркина-Фасо
+  - 布基纳法索
+- iso3: BGD
+  iso2: BD
+  m49: '050'
+  name_zh: 孟加拉国
+  name_en: Bangladesh
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 南亚
+  region_en: Southern Asia
+  aliases:
+  - Bangladesh
+  - Бангладеш
+  - 孟加拉国
+- iso3: BGR
+  iso2: BG
+  m49: '100'
+  name_zh: 保加利亚
+  name_en: Bulgaria
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Bulgaria
+  - Bulgarie
+  - Болгария
+  - 保加利亚
+- iso3: BHR
+  iso2: BH
+  m49: 048
+  name_zh: 巴林
+  name_en: Bahrain
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Bahrain
+  - Bahrein
+  - Bahreïn
+  - Бахрейн
+  - 巴林
+- iso3: BHS
+  iso2: BS
+  m49: '044'
+  name_zh: 巴哈马
+  name_en: Bahamas
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Bahamas
+  - Bahamas, The
+  - Багамские Острова
+  - 巴哈马
+- iso3: BIH
+  iso2: BA
+  m49: '070'
+  name_zh: 波斯尼亚和黑塞哥维那
+  name_en: Bosnia and Herzegovina
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Bosnia and Herzegovina
+  - Bosnia y Herzegovina
+  - Bosnie-Herzégovine
+  - Босния и Герцеговина
+  - 波斯尼亚和黑塞哥维那
+  - 波黑
+  - 波斯尼亚
+- iso3: BLM
+  iso2: BL
+  m49: '652'
+  name_zh: 圣巴泰勒米
+  name_en: Saint Barthélemy
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Saint Barthélemy
+  - Saint-Barthélemy
+  - San Barthélemy
+  - Сен-Бартелеми
+  - 圣巴泰勒米
+- iso3: BLR
+  iso2: BY
+  m49: '112'
+  name_zh: 白俄罗斯
+  name_en: Belarus
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Belarus
+  - Belarús
+  - Bélarus
+  - Беларусь
+  - 白俄罗斯
+- iso3: BLZ
+  iso2: BZ
+  m49: 084
+  name_zh: 伯利兹
+  name_en: Belize
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 中美洲
+  region_en: Central America
+  aliases:
+  - Belice
+  - Belize
+  - Белиз
+  - 伯利兹
+- iso3: BMU
+  iso2: BM
+  m49: '060'
+  name_zh: 百慕大
+  name_en: Bermuda
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 北美
+  region_en: Northern America
+  aliases:
+  - Bermuda
+  - Bermudes
+  - Бермудские острова
+  - 百慕大
+- iso3: BOL
+  iso2: BO
+  m49: 068
+  name_zh: 玻利维亚
+  name_en: Bolivia
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Bolivia
+  - Bolivia (Estado Plurinacional de)
+  - Bolivia (Plurinational State of)
+  - Bolivie (État plurinational de)
+  - Боливия (Многонациональное Государство)
+  - 多民族玻利维亚国
+  - 玻利维亚
+- iso3: BRA
+  iso2: BR
+  m49: '076'
+  name_zh: 巴西
+  name_en: Brazil
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Brasil
+  - Brazil
+  - Brésil
+  - Бразилия
+  - 巴西
+- iso3: BRB
+  iso2: BB
+  m49: '052'
+  name_zh: 巴巴多斯
+  name_en: Barbados
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Barbade
+  - Barbados
+  - Барбадос
+  - 巴巴多斯
+- iso3: BRN
+  iso2: BN
+  m49: 096
+  name_zh: 文莱
+  name_en: Brunei
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Brunei
+  - Brunei Darussalam
+  - Brunéi Darussalam
+  - Бруней-Даруссалам
+  - 文莱
+  - 文莱达鲁萨兰国
+- iso3: BTN
+  iso2: BT
+  m49: '064'
+  name_zh: 不丹
+  name_en: Bhutan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 南亚
+  region_en: Southern Asia
+  aliases:
+  - Bhoutan
+  - Bhutan
+  - Bhután
+  - Бутан
+  - 不丹
+- iso3: BVT
+  iso2: BV
+  m49: '074'
+  name_zh: 布维岛
+  name_en: Bouvet Island
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Bouvet Island
+  - Isla Bouvet
+  - Île Bouvet
+  - Остров Буве
+  - 布维岛
+- iso3: BWA
+  iso2: BW
+  m49: '072'
+  name_zh: 博茨瓦纳
+  name_en: Botswana
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 南部非洲
+  region_en: Southern Africa
+  aliases:
+  - Botswana
+  - Ботсвана
+  - 博茨瓦纳
+- iso3: CAF
+  iso2: CF
+  m49: '140'
+  name_zh: 中非共和国
+  name_en: Central African Republic
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 中非
+  region_en: Middle Africa
+  aliases:
+  - Central African Republic
+  - República Centroafricana
+  - République centrafricaine
+  - Центральноафриканская Республика
+  - 中非共和国
+- iso3: CAN
+  iso2: CA
+  m49: '124'
+  name_zh: 加拿大
+  name_en: Canada
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 北美
+  region_en: Northern America
+  aliases:
+  - Canada
+  - Canadá
+  - Канада
+  - 加拿大
+- iso3: CCK
+  iso2: CC
+  m49: '166'
+  name_zh: 科科斯（基林）群岛
+  name_en: Cocos (Keeling) Islands
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 澳大利亚和新西兰
+  region_en: Australia and New Zealand
+  aliases:
+  - Cocos (Keeling) Islands
+  - Islas Cocos (Keeling)
+  - Îles des Cocos (Keeling)
+  - Кокосовых (Килинг) островов
+  - 科科斯（基林）群岛
+- iso3: CHE
+  iso2: CH
+  m49: '756'
+  name_zh: 瑞士
+  name_en: Switzerland
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 西欧
+  region_en: Western Europe
+  aliases:
+  - Suisse
+  - Suiza
+  - Switzerland
+  - Швейцария
+  - 瑞士
+- iso3: CHL
+  iso2: CL
+  m49: '152'
+  name_zh: 智利
+  name_en: Chile
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Chile
+  - Chili
+  - Чили
+  - 智利
+- iso3: CHN
+  iso2: CN
+  m49: '156'
+  name_zh: 中国
+  name_en: China
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东亚
+  region_en: Eastern Asia
+  aliases:
+  - China
+  - Chine
+  - Китай
+  - 中国
+- iso3: CIV
+  iso2: CI
+  m49: '384'
+  name_zh: 科特迪瓦
+  name_en: Côte d'Ivoire
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Cote d'Ivoire
+  - Côte d'Ivoire
+  - Côte d’Ivoire
+  - Ivory Coast
+  - Кот-д'Ивуар
+  - 科特迪瓦
+- iso3: CMR
+  iso2: CM
+  m49: '120'
+  name_zh: 喀麦隆
+  name_en: Cameroon
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 中非
+  region_en: Middle Africa
+  aliases:
+  - Cameroon
+  - Cameroun
+  - Camerún
+  - Камерун
+  - 喀麦隆
+- iso3: COD
+  iso2: CD
+  m49: '180'
+  name_zh: 刚果(金)
+  name_en: DR Congo
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 中非
+  region_en: Middle Africa
+  aliases:
+  - Congo (Kinshasa)
+  - Congo, Dem. Rep.
+  - Congo, Democratic Republic of
+  - Congo, Democratic Republic of the
+  - DR Congo
+  - DRC
+  - Democratic Republic of Congo
+  - Democratic Republic of the Congo
+  - RDC
+  - República Democrática del Congo
+  - République démocratique du Congo
+  - Демократическая Республика Конго
+  - 刚果(金)
+  - 刚果民主共和国
+  - 刚果金
+  - 刚果（金）
+  - 民主刚果
+- iso3: COG
+  iso2: CG
+  m49: '178'
+  name_zh: 刚果(布)
+  name_en: Congo
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 中非
+  region_en: Middle Africa
+  aliases:
+  - Congo
+  - Congo (Brazzaville)
+  - Congo, Rep.
+  - Congo, Republic of
+  - Congo-Brazzaville
+  - Republic of Congo
+  - Конго
+  - 刚果
+  - 刚果(布)
+  - 刚果布
+  - 刚果（布）
+- iso3: COK
+  iso2: CK
+  m49: '184'
+  name_zh: 库克群岛
+  name_en: Cook Islands
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - Cook Islands
+  - Islas Cook
+  - Îles Cook
+  - Острова Кука
+  - 库克群岛
+- iso3: COL
+  iso2: CO
+  m49: '170'
+  name_zh: 哥伦比亚
+  name_en: Colombia
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Colombia
+  - Colombie
+  - Колумбия
+  - 哥伦比亚
+- iso3: COM
+  iso2: KM
+  m49: '174'
+  name_zh: 科摩罗
+  name_en: Comoros
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Comoras
+  - Comores
+  - Comoros
+  - Коморские Острова
+  - 科摩罗
+- iso3: CPV
+  iso2: CV
+  m49: '132'
+  name_zh: 佛得角
+  name_en: Cabo Verde
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Cabo Verde
+  - Cape Verde
+  - Кабо-Верде
+  - 佛得角
+- iso3: CRI
+  iso2: CR
+  m49: '188'
+  name_zh: 哥斯达黎加
+  name_en: Costa Rica
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 中美洲
+  region_en: Central America
+  aliases:
+  - Costa Rica
+  - Коста-Рика
+  - 哥斯达黎加
+- iso3: CUB
+  iso2: CU
+  m49: '192'
+  name_zh: 古巴
+  name_en: Cuba
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Cuba
+  - Куба
+  - 古巴
+- iso3: CUW
+  iso2: CW
+  m49: '531'
+  name_zh: 库拉索
+  name_en: Curaçao
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Curazao
+  - Curaçao
+  - Кюрасао
+  - 库拉索
+- iso3: CXR
+  iso2: CX
+  m49: '162'
+  name_zh: 圣诞岛
+  name_en: Christmas Island
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 澳大利亚和新西兰
+  region_en: Australia and New Zealand
+  aliases:
+  - Christmas Island
+  - Isla Christmas
+  - Île Christmas
+  - остров Рождества
+  - 圣诞岛
+- iso3: CYM
+  iso2: KY
+  m49: '136'
+  name_zh: 开曼群岛
+  name_en: Cayman Islands
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Cayman Islands
+  - Islas Caimán
+  - Îles Caïmanes
+  - Кайман острова
+  - 开曼群岛
+- iso3: CYP
+  iso2: CY
+  m49: '196'
+  name_zh: 塞浦路斯
+  name_en: Cyprus
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Chipre
+  - Chypre
+  - Cyprus
+  - Кипр
+  - 塞浦路斯
+- iso3: CZE
+  iso2: CZ
+  m49: '203'
+  name_zh: 捷克
+  name_en: Czechia
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Chequia
+  - Czech Republic
+  - Czechia
+  - Tchéquie
+  - Чехия
+  - 捷克
+- iso3: DEU
+  iso2: DE
+  m49: '276'
+  name_zh: 德国
+  name_en: Germany
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 西欧
+  region_en: Western Europe
+  aliases:
+  - Alemania
+  - Allemagne
+  - Germany
+  - Германия
+  - 德国
+- iso3: DJI
+  iso2: DJ
+  m49: '262'
+  name_zh: 吉布提
+  name_en: Djibouti
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Djibouti
+  - Джибути
+  - 吉布提
+- iso3: DMA
+  iso2: DM
+  m49: '212'
+  name_zh: 多米尼克
+  name_en: Dominica
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Dominica
+  - Dominique
+  - Доминика
+  - 多米尼克
+- iso3: DNK
+  iso2: DK
+  m49: '208'
+  name_zh: 丹麦
+  name_en: Denmark
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Danemark
+  - Denmark
+  - Dinamarca
+  - Дания
+  - 丹麦
+- iso3: DOM
+  iso2: DO
+  m49: '214'
+  name_zh: 多米尼加
+  name_en: Dominican Republic
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Dominican Republic
+  - República Dominicana
+  - République dominicaine
+  - Доминиканская Республика
+  - 多米尼加
+- iso3: DZA
+  iso2: DZ
+  m49: '012'
+  name_zh: 阿尔及利亚
+  name_en: Algeria
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 北非
+  region_en: Northern Africa
+  aliases:
+  - Algeria
+  - Algérie
+  - Argelia
+  - Алжир
+  - 阿尔及利亚
+- iso3: ECU
+  iso2: EC
+  m49: '218'
+  name_zh: 厄瓜多尔
+  name_en: Ecuador
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Ecuador
+  - Équateur
+  - Эквадор
+  - 厄瓜多尔
+- iso3: EGY
+  iso2: EG
+  m49: '818'
+  name_zh: 埃及
+  name_en: Egypt
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 北非
+  region_en: Northern Africa
+  aliases:
+  - Egipto
+  - Egypt
+  - Egypt, Arab Rep.
+  - Égypte
+  - Египет
+  - 埃及
+- iso3: ERI
+  iso2: ER
+  m49: '232'
+  name_zh: 厄立特里亚
+  name_en: Eritrea
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Eritrea
+  - Érythrée
+  - Эритрея
+  - 厄立特里亚
+- iso3: ESH
+  iso2: EH
+  m49: '732'
+  name_zh: 西撒哈拉
+  name_en: Western Sahara
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 北非
+  region_en: Northern Africa
+  aliases:
+  - Sahara occidental
+  - Sáhara Occidental
+  - Western Sahara
+  - Западная Сахара
+  - 西撒哈拉
+- iso3: ESP
+  iso2: ES
+  m49: '724'
+  name_zh: 西班牙
+  name_en: Spain
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Espagne
+  - España
+  - Spain
+  - Испания
+  - 西班牙
+- iso3: EST
+  iso2: EE
+  m49: '233'
+  name_zh: 爱沙尼亚
+  name_en: Estonia
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Estonia
+  - Estonie
+  - Эстония
+  - 爱沙尼亚
+- iso3: ETH
+  iso2: ET
+  m49: '231'
+  name_zh: 埃塞俄比亚
+  name_en: Ethiopia
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Ethiopia
+  - Etiopía
+  - Éthiopie
+  - Эфиопия
+  - 埃塞俄比亚
+- iso3: FIN
+  iso2: FI
+  m49: '246'
+  name_zh: 芬兰
+  name_en: Finland
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Finland
+  - Finlande
+  - Finlandia
+  - Финляндия
+  - 芬兰
+- iso3: FJI
+  iso2: FJ
+  m49: '242'
+  name_zh: 斐济
+  name_en: Fiji
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 美拉尼西亚
+  region_en: Melanesia
+  aliases:
+  - Fidji
+  - Fiji
+  - Фиджи
+  - 斐济
+- iso3: FLK
+  iso2: FK
+  m49: '238'
+  name_zh: 福克兰群岛（马尔维纳斯）
+  name_en: Falkland Islands (Malvinas)
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Falkland Islands (Malvinas)
+  - Islas Malvinas (Falkland)
+  - Îles Falkland (Malvinas)
+  - Фолклендские (Мальвинские) острова
+  - 福克兰群岛（马尔维纳斯）
+- iso3: FRA
+  iso2: FR
+  m49: '250'
+  name_zh: 法国
+  name_en: France
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 西欧
+  region_en: Western Europe
+  aliases:
+  - France
+  - Francia
+  - Франция
+  - 法国
+- iso3: FRO
+  iso2: FO
+  m49: '234'
+  name_zh: 法罗群岛
+  name_en: Faroe Islands
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Faroe Islands
+  - Islas Feroe
+  - Îles Féroé
+  - Фарерские острова
+  - 法罗群岛
+- iso3: FSM
+  iso2: FM
+  m49: '583'
+  name_zh: 密克罗尼西亚
+  name_en: Micronesia
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 密克罗尼西亚
+  region_en: Micronesia
+  aliases:
+  - Micronesia
+  - Micronesia (Estados Federados de)
+  - Micronesia (Federated States of)
+  - Micronesia, Fed. Sts.
+  - Micronesia, Federated States of
+  - Micronésie (États fédérés de)
+  - Микронезия (Федеративные Штаты)
+  - 密克罗尼西亚
+  - 密克罗尼西亚联邦
+- iso3: GAB
+  iso2: GA
+  m49: '266'
+  name_zh: 加蓬
+  name_en: Gabon
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 中非
+  region_en: Middle Africa
+  aliases:
+  - Gabon
+  - Gabón
+  - Габон
+  - 加蓬
+- iso3: GBR
+  iso2: GB
+  m49: '826'
+  name_zh: 英国
+  name_en: United Kingdom
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Britain
+  - Reino Unido de Gran Bretaña e Irlanda del Norte
+  - Royaume-Uni de Grande-Bretagne et d’Irlande du Nord
+  - UK
+  - United Kingdom
+  - United Kingdom of Great Britain and Northern Ireland
+  - Соединенное Королевство Великобритании и Северной Ирландии
+  - 大不列颠及北爱尔兰联合王国
+  - 英国
+- iso3: GEO
+  iso2: GE
+  m49: '268'
+  name_zh: 格鲁吉亚
+  name_en: Georgia
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Georgia
+  - Géorgie
+  - Грузия
+  - 格鲁吉亚
+- iso3: GGY
+  iso2: GG
+  m49: '831'
+  name_zh: 格恩西
+  name_en: Guernsey
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Guernesey
+  - Guernsey
+  - Гернси
+  - 格恩西
+- iso3: GHA
+  iso2: GH
+  m49: '288'
+  name_zh: 加纳
+  name_en: Ghana
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Ghana
+  - Гана
+  - 加纳
+- iso3: GIB
+  iso2: GI
+  m49: '292'
+  name_zh: 直布罗陀
+  name_en: Gibraltar
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Gibraltar
+  - Гибралтар
+  - 直布罗陀
+- iso3: GIN
+  iso2: GN
+  m49: '324'
+  name_zh: 几内亚
+  name_en: Guinea
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Guinea
+  - Guinée
+  - Гвинея
+  - 几内亚
+- iso3: GLP
+  iso2: GP
+  m49: '312'
+  name_zh: 瓜德罗普
+  name_en: Guadeloupe
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Guadalupe
+  - Guadeloupe
+  - Гваделупа
+  - 瓜德罗普
+- iso3: GMB
+  iso2: GM
+  m49: '270'
+  name_zh: 冈比亚
+  name_en: Gambia
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Gambia
+  - Gambia, The
+  - Gambie
+  - The Gambia
+  - Гамбия
+  - 冈比亚
+- iso3: GNB
+  iso2: GW
+  m49: '624'
+  name_zh: 几内亚比绍
+  name_en: Guinea-Bissau
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Guinea-Bissau
+  - Guinée-Bissau
+  - Гвинея-Бисау
+  - 几内亚比绍
+- iso3: GNQ
+  iso2: GQ
+  m49: '226'
+  name_zh: 赤道几内亚
+  name_en: Equatorial Guinea
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 中非
+  region_en: Middle Africa
+  aliases:
+  - Equatorial Guinea
+  - Guinea Ecuatorial
+  - Guinée équatoriale
+  - Экваториальная Гвинея
+  - 赤道几内亚
+- iso3: GRC
+  iso2: GR
+  m49: '300'
+  name_zh: 希腊
+  name_en: Greece
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Grecia
+  - Greece
+  - Grèce
+  - Греция
+  - 希腊
+- iso3: GRD
+  iso2: GD
+  m49: '308'
+  name_zh: 格林纳达
+  name_en: Grenada
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Granada
+  - Grenada
+  - Grenade
+  - Гренада
+  - 格林纳达
+- iso3: GRL
+  iso2: GL
+  m49: '304'
+  name_zh: 格陵兰
+  name_en: Greenland
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 北美
+  region_en: Northern America
+  aliases:
+  - Greenland
+  - Groenland
+  - Groenlandia
+  - Гренландия
+  - 格陵兰
+- iso3: GTM
+  iso2: GT
+  m49: '320'
+  name_zh: 危地马拉
+  name_en: Guatemala
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 中美洲
+  region_en: Central America
+  aliases:
+  - Guatemala
+  - Гватемала
+  - 危地马拉
+- iso3: GUF
+  iso2: GF
+  m49: '254'
+  name_zh: 法属圭亚那
+  name_en: French Guiana
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - French Guiana
+  - Guayana Francesa
+  - Guyane française
+  - Французская Гвиана
+  - 法属圭亚那
+- iso3: GUM
+  iso2: GU
+  m49: '316'
+  name_zh: 关岛
+  name_en: Guam
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 密克罗尼西亚
+  region_en: Micronesia
+  aliases:
+  - Guam
+  - Гуам
+  - 关岛
+- iso3: GUY
+  iso2: GY
+  m49: '328'
+  name_zh: 圭亚那
+  name_en: Guyana
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Guyana
+  - Гайана
+  - 圭亚那
+- iso3: HKG
+  iso2: HK
+  m49: '344'
+  name_zh: 中国香港
+  name_en: Hong Kong
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东亚
+  region_en: Eastern Asia
+  aliases:
+  - China, Hong Kong Special Administrative Region
+  - China, región administrativa especial de Hong Kong
+  - Chine, région administrative spéciale de Hong Kong
+  - Hong Kong
+  - Hong Kong SAR, China
+  - Китай, Специальный административный район Гонконг
+  - 中国香港
+  - 中国香港特别行政区
+- iso3: HMD
+  iso2: HM
+  m49: '334'
+  name_zh: 赫德岛和麦克唐纳岛
+  name_en: Heard Island and McDonald Islands
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 澳大利亚和新西兰
+  region_en: Australia and New Zealand
+  aliases:
+  - Heard Island and McDonald Islands
+  - Islas Heard y McDonald
+  - Île Heard-et-Îles MacDonald
+  - Остров Херд и острова Макдональд
+  - 赫德岛和麦克唐纳岛
+- iso3: HND
+  iso2: HN
+  m49: '340'
+  name_zh: 洪都拉斯
+  name_en: Honduras
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 中美洲
+  region_en: Central America
+  aliases:
+  - Honduras
+  - Гондурас
+  - 洪都拉斯
+- iso3: HRV
+  iso2: HR
+  m49: '191'
+  name_zh: 克罗地亚
+  name_en: Croatia
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Croacia
+  - Croatia
+  - Croatie
+  - Хорватия
+  - 克罗地亚
+- iso3: HTI
+  iso2: HT
+  m49: '332'
+  name_zh: 海地
+  name_en: Haiti
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Haiti
+  - Haití
+  - Haïti
+  - Гаити
+  - 海地
+- iso3: HUN
+  iso2: HU
+  m49: '348'
+  name_zh: 匈牙利
+  name_en: Hungary
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Hongrie
+  - Hungary
+  - Hungría
+  - Венгрия
+  - 匈牙利
+- iso3: IDN
+  iso2: ID
+  m49: '360'
+  name_zh: 印度尼西亚
+  name_en: Indonesia
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Indonesia
+  - Indonésie
+  - Индонезия
+  - 印度尼西亚
+- iso3: IMN
+  iso2: IM
+  m49: '833'
+  name_zh: 马恩岛
+  name_en: Isle of Man
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Isla de Man
+  - Isle of Man
+  - Île de Man
+  - Остров Мэн
+  - 马恩岛
+- iso3: IND
+  iso2: IN
+  m49: '356'
+  name_zh: 印度
+  name_en: India
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 南亚
+  region_en: Southern Asia
+  aliases:
+  - Inde
+  - India
+  - Индия
+  - 印度
+- iso3: IOT
+  iso2: IO
+  m49: 086
+  name_zh: 英属印度洋领土
+  name_en: British Indian Ocean Territory
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - British Indian Ocean Territory
+  - Territoire britannique de l'océan Indien
+  - Territorio Británico del Océano Índico
+  - Британская территория в Индийском океане
+  - 英属印度洋领土
+- iso3: IRL
+  iso2: IE
+  m49: '372'
+  name_zh: 爱尔兰
+  name_en: Ireland
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Ireland
+  - Irlanda
+  - Irlande
+  - Ирландия
+  - 爱尔兰
+- iso3: IRN
+  iso2: IR
+  m49: '364'
+  name_zh: 伊朗
+  name_en: Iran
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 南亚
+  region_en: Southern Asia
+  aliases:
+  - Iran
+  - Iran (Islamic Republic of)
+  - Iran (République islamique d’)
+  - Iran, Islamic Rep.
+  - Irán (República Islámica del)
+  - Иран (Исламская Республика)
+  - 伊朗
+  - 伊朗伊斯兰共和国
+- iso3: IRQ
+  iso2: IQ
+  m49: '368'
+  name_zh: 伊拉克
+  name_en: Iraq
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Iraq
+  - Ирак
+  - 伊拉克
+- iso3: ISL
+  iso2: IS
+  m49: '352'
+  name_zh: 冰岛
+  name_en: Iceland
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Iceland
+  - Islande
+  - Islandia
+  - Исландия
+  - 冰岛
+- iso3: ISR
+  iso2: IL
+  m49: '376'
+  name_zh: 以色列
+  name_en: Israel
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Israel
+  - Israël
+  - Израиль
+  - 以色列
+- iso3: ITA
+  iso2: IT
+  m49: '380'
+  name_zh: 意大利
+  name_en: Italy
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Italia
+  - Italie
+  - Italy
+  - Италия
+  - 意大利
+- iso3: JAM
+  iso2: JM
+  m49: '388'
+  name_zh: 牙买加
+  name_en: Jamaica
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Jamaica
+  - Jamaïque
+  - Ямайка
+  - 牙买加
+- iso3: JEY
+  iso2: JE
+  m49: '832'
+  name_zh: 泽西
+  name_en: Jersey
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Jersey
+  - Джерси
+  - 泽西
+- iso3: JOR
+  iso2: JO
+  m49: '400'
+  name_zh: 约旦
+  name_en: Jordan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Jordan
+  - Jordania
+  - Jordanie
+  - Иордания
+  - 约旦
+- iso3: JPN
+  iso2: JP
+  m49: '392'
+  name_zh: 日本
+  name_en: Japan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东亚
+  region_en: Eastern Asia
+  aliases:
+  - Japan
+  - Japon
+  - Japón
+  - Япония
+  - 日本
+- iso3: KAZ
+  iso2: KZ
+  m49: '398'
+  name_zh: 哈萨克斯坦
+  name_en: Kazakhstan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 中亚
+  region_en: Central Asia
+  aliases:
+  - Kazajstán
+  - Kazakhstan
+  - Казахстан
+  - 哈萨克斯坦
+- iso3: KEN
+  iso2: KE
+  m49: '404'
+  name_zh: 肯尼亚
+  name_en: Kenya
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Kenya
+  - Кения
+  - 肯尼亚
+- iso3: KGZ
+  iso2: KG
+  m49: '417'
+  name_zh: 吉尔吉斯斯坦
+  name_en: Kyrgyzstan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 中亚
+  region_en: Central Asia
+  aliases:
+  - Kirghizistan
+  - Kirguistán
+  - Kyrgyz Republic
+  - Kyrgyzstan
+  - Киргизия
+  - Кыргызская Республика
+  - Кыргызстан
+  - 吉尔吉斯斯坦
+  - 吉尔吉斯
+- iso3: KHM
+  iso2: KH
+  m49: '116'
+  name_zh: 柬埔寨
+  name_en: Cambodia
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Cambodge
+  - Cambodia
+  - Camboya
+  - Камбоджа
+  - 柬埔寨
+- iso3: KIR
+  iso2: KI
+  m49: '296'
+  name_zh: 基里巴斯
+  name_en: Kiribati
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 密克罗尼西亚
+  region_en: Micronesia
+  aliases:
+  - Kiribati
+  - Кирибати
+  - 基里巴斯
+- iso3: KNA
+  iso2: KN
+  m49: '659'
+  name_zh: 圣基茨和尼维斯
+  name_en: Saint Kitts and Nevis
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Saint Kitts and Nevis
+  - Saint Kitts y Nevis
+  - Saint-Kitts-et-Nevis
+  - St. Kitts and Nevis
+  - Сент-Китс и Невис
+  - 圣基茨和尼维斯
+- iso3: KOR
+  iso2: KR
+  m49: '410'
+  name_zh: 韩国
+  name_en: South Korea
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东亚
+  region_en: Eastern Asia
+  aliases:
+  - Korea, Rep.
+  - Korea, Republic of
+  - Republic of Korea
+  - República de Corea
+  - République de Corée
+  - South Korea
+  - Республика Корея
+  - 大韩民国
+  - 韩国
+- iso3: KWT
+  iso2: KW
+  m49: '414'
+  name_zh: 科威特
+  name_en: Kuwait
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Koweït
+  - Kuwait
+  - Кувейт
+  - 科威特
+- iso3: LAO
+  iso2: LA
+  m49: '418'
+  name_zh: 老挝
+  name_en: Laos
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Lao PDR
+  - Lao People's Democratic Republic
+  - Laos
+  - República Democrática Popular Lao
+  - République démocratique populaire lao
+  - Лаосская Народно-Демократическая Республика
+  - 老挝
+  - 老挝人民民主共和国
+- iso3: LBN
+  iso2: LB
+  m49: '422'
+  name_zh: 黎巴嫩
+  name_en: Lebanon
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Lebanon
+  - Liban
+  - Líbano
+  - Ливан
+  - 黎巴嫩
+- iso3: LBR
+  iso2: LR
+  m49: '430'
+  name_zh: 利比里亚
+  name_en: Liberia
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Liberia
+  - Libéria
+  - Либерия
+  - 利比里亚
+- iso3: LBY
+  iso2: LY
+  m49: '434'
+  name_zh: 利比亚
+  name_en: Libya
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 北非
+  region_en: Northern Africa
+  aliases:
+  - Libia
+  - Libya
+  - Libye
+  - Ливия
+  - 利比亚
+- iso3: LCA
+  iso2: LC
+  m49: '662'
+  name_zh: 圣卢西亚
+  name_en: Saint Lucia
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Saint Lucia
+  - Sainte-Lucie
+  - Santa Lucía
+  - St. Lucia
+  - Сент-Люсия
+  - 圣卢西亚
+- iso3: LIE
+  iso2: LI
+  m49: '438'
+  name_zh: 列支敦士登
+  name_en: Liechtenstein
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 西欧
+  region_en: Western Europe
+  aliases:
+  - Liechtenstein
+  - Лихтенштейн
+  - 列支敦士登
+- iso3: LKA
+  iso2: LK
+  m49: '144'
+  name_zh: 斯里兰卡
+  name_en: Sri Lanka
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 南亚
+  region_en: Southern Asia
+  aliases:
+  - Sri Lanka
+  - Шри-Ланка
+  - 斯里兰卡
+- iso3: LSO
+  iso2: LS
+  m49: '426'
+  name_zh: 莱索托
+  name_en: Lesotho
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 南部非洲
+  region_en: Southern Africa
+  aliases:
+  - Lesotho
+  - Лесото
+  - 莱索托
+- iso3: LTU
+  iso2: LT
+  m49: '440'
+  name_zh: 立陶宛
+  name_en: Lithuania
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Lithuania
+  - Lituania
+  - Lituanie
+  - Литва
+  - 立陶宛
+- iso3: LUX
+  iso2: LU
+  m49: '442'
+  name_zh: 卢森堡
+  name_en: Luxembourg
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 西欧
+  region_en: Western Europe
+  aliases:
+  - Luxembourg
+  - Luxemburgo
+  - Люксембург
+  - 卢森堡
+- iso3: LVA
+  iso2: LV
+  m49: '428'
+  name_zh: 拉脱维亚
+  name_en: Latvia
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Latvia
+  - Letonia
+  - Lettonie
+  - Латвия
+  - 拉脱维亚
+- iso3: MAC
+  iso2: MO
+  m49: '446'
+  name_zh: 中国澳门
+  name_en: Macao
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东亚
+  region_en: Eastern Asia
+  aliases:
+  - China, Macao Special Administrative Region
+  - China, región administrativa especial de Macao
+  - Chine, région administrative spéciale de Macao
+  - Macao
+  - Macao SAR, China
+  - Китай, Специальный административный район Макао
+  - 中国澳门
+  - 中国澳门特别行政区
+- iso3: MAF
+  iso2: MF
+  m49: '663'
+  name_zh: 圣马丁（法属）
+  name_en: Saint Martin (French Part)
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Saint Martin (French Part)
+  - Saint-Martin (partie française)
+  - San Martín (parte francesa)
+  - Сен-Мартен (французская часть)
+  - 圣马丁（法属）
+- iso3: MAR
+  iso2: MA
+  m49: '504'
+  name_zh: 摩洛哥
+  name_en: Morocco
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 北非
+  region_en: Northern Africa
+  aliases:
+  - Maroc
+  - Marruecos
+  - Morocco
+  - Марокко
+  - 摩洛哥
+- iso3: MCO
+  iso2: MC
+  m49: '492'
+  name_zh: 摩纳哥
+  name_en: Monaco
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 西欧
+  region_en: Western Europe
+  aliases:
+  - Monaco
+  - Mónaco
+  - Монако
+  - 摩纳哥
+- iso3: MDA
+  iso2: MD
+  m49: '498'
+  name_zh: 摩尔多瓦
+  name_en: Moldova
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Moldova
+  - Republic of Moldova
+  - República de Moldova
+  - République de Moldova
+  - Республика Молдова
+  - 摩尔多瓦
+  - 摩尔多瓦共和国
+- iso3: MDG
+  iso2: MG
+  m49: '450'
+  name_zh: 马达加斯加
+  name_en: Madagascar
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Madagascar
+  - Мадагаскар
+  - 马达加斯加
+- iso3: MDV
+  iso2: MV
+  m49: '462'
+  name_zh: 马尔代夫
+  name_en: Maldives
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 南亚
+  region_en: Southern Asia
+  aliases:
+  - Maldivas
+  - Maldives
+  - Мальдивские Острова
+  - 马尔代夫
+- iso3: MEX
+  iso2: MX
+  m49: '484'
+  name_zh: 墨西哥
+  name_en: Mexico
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 中美洲
+  region_en: Central America
+  aliases:
+  - Mexico
+  - Mexique
+  - México
+  - Мексика
+  - 墨西哥
+- iso3: MHL
+  iso2: MH
+  m49: '584'
+  name_zh: 马绍尔群岛
+  name_en: Marshall Islands
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 密克罗尼西亚
+  region_en: Micronesia
+  aliases:
+  - Islas Marshall
+  - Marshall Islands
+  - Îles Marshall
+  - Маршалловы Острова
+  - 马绍尔群岛
+- iso3: MKD
+  iso2: MK
+  m49: '807'
+  name_zh: 北马其顿
+  name_en: North Macedonia
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Macedonia
+  - Macedonia del Norte
+  - Macédoine du Nord
+  - North Macedonia
+  - Северная Македония
+  - 北马其顿
+- iso3: MLI
+  iso2: ML
+  m49: '466'
+  name_zh: 马里
+  name_en: Mali
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Mali
+  - Malí
+  - Мали
+  - 马里
+- iso3: MLT
+  iso2: MT
+  m49: '470'
+  name_zh: 马耳他
+  name_en: Malta
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Malta
+  - Malte
+  - Мальта
+  - 马耳他
+- iso3: MMR
+  iso2: MM
+  m49: '104'
+  name_zh: 缅甸
+  name_en: Myanmar
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Burma
+  - Myanmar
+  - Мьянма
+  - 缅甸
+- iso3: MNE
+  iso2: ME
+  m49: '499'
+  name_zh: 黑山
+  name_en: Montenegro
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Montenegro
+  - Monténégro
+  - Черногория
+  - 黑山
+- iso3: MNG
+  iso2: MN
+  m49: '496'
+  name_zh: 蒙古
+  name_en: Mongolia
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东亚
+  region_en: Eastern Asia
+  aliases:
+  - Mongolia
+  - Mongolie
+  - Монголия
+  - 蒙古
+- iso3: MNP
+  iso2: MP
+  m49: '580'
+  name_zh: 北马里亚纳群岛
+  name_en: Northern Mariana Islands
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 密克罗尼西亚
+  region_en: Micronesia
+  aliases:
+  - Islas Marianas Septentrionales
+  - Northern Mariana Islands
+  - Îles Mariannes du Nord
+  - Северные Марианские острова
+  - 北马里亚纳群岛
+- iso3: MOZ
+  iso2: MZ
+  m49: '508'
+  name_zh: 莫桑比克
+  name_en: Mozambique
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Mozambique
+  - Мозамбик
+  - 莫桑比克
+- iso3: MRT
+  iso2: MR
+  m49: '478'
+  name_zh: 毛里塔尼亚
+  name_en: Mauritania
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Mauritania
+  - Mauritanie
+  - Мавритания
+  - 毛里塔尼亚
+- iso3: MSR
+  iso2: MS
+  m49: '500'
+  name_zh: 蒙特塞拉特
+  name_en: Montserrat
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Montserrat
+  - Монтсеррат
+  - 蒙特塞拉特
+- iso3: MTQ
+  iso2: MQ
+  m49: '474'
+  name_zh: 马提尼克
+  name_en: Martinique
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Martinica
+  - Martinique
+  - Мартиника
+  - 马提尼克
+- iso3: MUS
+  iso2: MU
+  m49: '480'
+  name_zh: 毛里求斯
+  name_en: Mauritius
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Maurice
+  - Mauricio
+  - Mauritius
+  - Маврикий
+  - 毛里求斯
+- iso3: MWI
+  iso2: MW
+  m49: '454'
+  name_zh: 马拉维
+  name_en: Malawi
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Malawi
+  - Малави
+  - 马拉维
+- iso3: MYS
+  iso2: MY
+  m49: '458'
+  name_zh: 马来西亚
+  name_en: Malaysia
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Malaisie
+  - Malasia
+  - Malaysia
+  - Малайзия
+  - 马来西亚
+- iso3: MYT
+  iso2: YT
+  m49: '175'
+  name_zh: 马约特
+  name_en: Mayotte
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Mayotte
+  - Остров Майотта
+  - 马约特
+- iso3: NAM
+  iso2: NA
+  m49: '516'
+  name_zh: 纳米比亚
+  name_en: Namibia
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 南部非洲
+  region_en: Southern Africa
+  aliases:
+  - Namibia
+  - Namibie
+  - Намибия
+  - 纳米比亚
+- iso3: NCL
+  iso2: NC
+  m49: '540'
+  name_zh: 新喀里多尼亚
+  name_en: New Caledonia
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 美拉尼西亚
+  region_en: Melanesia
+  aliases:
+  - New Caledonia
+  - Nouvelle-Calédonie
+  - Nueva Caledonia
+  - Новая Каледония
+  - 新喀里多尼亚
+- iso3: NER
+  iso2: NE
+  m49: '562'
+  name_zh: 尼日尔
+  name_en: Niger
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Niger
+  - Níger
+  - Нигер
+  - 尼日尔
+- iso3: NFK
+  iso2: NF
+  m49: '574'
+  name_zh: 诺福克岛
+  name_en: Norfolk Island
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 澳大利亚和新西兰
+  region_en: Australia and New Zealand
+  aliases:
+  - Isla Norfolk
+  - Norfolk Island
+  - Île Norfolk
+  - Остров Норфолк
+  - 诺福克岛
+- iso3: NGA
+  iso2: NG
+  m49: '566'
+  name_zh: 尼日利亚
+  name_en: Nigeria
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Niger Delta
+  - Nigeria
+  - Nigéria
+  - Нигерия
+  - 尼日利亚
+- iso3: NIC
+  iso2: NI
+  m49: '558'
+  name_zh: 尼加拉瓜
+  name_en: Nicaragua
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 中美洲
+  region_en: Central America
+  aliases:
+  - Nicaragua
+  - Никарагуа
+  - 尼加拉瓜
+- iso3: NIU
+  iso2: NU
+  m49: '570'
+  name_zh: 纽埃
+  name_en: Niue
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - Nioué
+  - Niue
+  - Ниуэ
+  - 纽埃
+- iso3: NLD
+  iso2: NL
+  m49: '528'
+  name_zh: 荷兰
+  name_en: Netherlands
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 西欧
+  region_en: Western Europe
+  aliases:
+  - Netherlands
+  - Netherlands (Kingdom of the)
+  - Pays-Bas (Royaume des)
+  - Países Bajos (Reino de los)
+  - Нидерланды (Королевство)
+  - 荷兰
+  - 荷兰王国
+- iso3: NOR
+  iso2: 'NO'
+  m49: '578'
+  name_zh: 挪威
+  name_en: Norway
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Noruega
+  - Norvège
+  - Norway
+  - Норвегия
+  - 挪威
+- iso3: NPL
+  iso2: NP
+  m49: '524'
+  name_zh: 尼泊尔
+  name_en: Nepal
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 南亚
+  region_en: Southern Asia
+  aliases:
+  - Nepal
+  - Népal
+  - Непал
+  - 尼泊尔
+- iso3: NRU
+  iso2: NR
+  m49: '520'
+  name_zh: 瑙鲁
+  name_en: Naoero
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 密克罗尼西亚
+  region_en: Micronesia
+  aliases:
+  - Naoero
+  - Наоэро
+  - 瑙鲁
+- iso3: NZL
+  iso2: NZ
+  m49: '554'
+  name_zh: 新西兰
+  name_en: New Zealand
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 澳大利亚和新西兰
+  region_en: Australia and New Zealand
+  aliases:
+  - New Zealand
+  - Nouvelle-Zélande
+  - Nueva Zelandia
+  - Новая Зеландия
+  - 新西兰
+- iso3: OMN
+  iso2: OM
+  m49: '512'
+  name_zh: 阿曼
+  name_en: Oman
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Oman
+  - Omán
+  - Оман
+  - 阿曼
+- iso3: PAK
+  iso2: PK
+  m49: '586'
+  name_zh: 巴基斯坦
+  name_en: Pakistan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 南亚
+  region_en: Southern Asia
+  aliases:
+  - Pakistan
+  - Pakistán
+  - Пакистан
+  - 巴基斯坦
+- iso3: PAN
+  iso2: PA
+  m49: '591'
+  name_zh: 巴拿马
+  name_en: Panama
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 中美洲
+  region_en: Central America
+  aliases:
+  - Panama
+  - Panamá
+  - Панама
+  - 巴拿马
+- iso3: PCN
+  iso2: PN
+  m49: '612'
+  name_zh: 皮特凯恩
+  name_en: Pitcairn
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - Pitcairn
+  - Питкэрн
+  - 皮特凯恩
+- iso3: PER
+  iso2: PE
+  m49: '604'
+  name_zh: 秘鲁
+  name_en: Peru
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Peru
+  - Perú
+  - Pérou
+  - Перу
+  - 秘鲁
+- iso3: PHL
+  iso2: PH
+  m49: '608'
+  name_zh: 菲律宾
+  name_en: Philippines
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Filipinas
+  - Philippines
+  - Филиппины
+  - 菲律宾
+- iso3: PLW
+  iso2: PW
+  m49: '585'
+  name_zh: 帕劳
+  name_en: Palau
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 密克罗尼西亚
+  region_en: Micronesia
+  aliases:
+  - Palaos
+  - Palau
+  - Палау
+  - 帕劳
+- iso3: PNG
+  iso2: PG
+  m49: '598'
+  name_zh: 巴布亚新几内亚
+  name_en: Papua New Guinea
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 美拉尼西亚
+  region_en: Melanesia
+  aliases:
+  - Papouasie-Nouvelle-Guinée
+  - Papua New Guinea
+  - Papua Nueva Guinea
+  - Папуа-Новая Гвинея
+  - 巴布亚新几内亚
+  - 巴新
+- iso3: POL
+  iso2: PL
+  m49: '616'
+  name_zh: 波兰
+  name_en: Poland
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Poland
+  - Pologne
+  - Polonia
+  - Польша
+  - 波兰
+- iso3: PRI
+  iso2: PR
+  m49: '630'
+  name_zh: 波多黎各
+  name_en: Puerto Rico
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Porto Rico
+  - Puerto Rico
+  - Пуэрто-Рико
+  - 波多黎各
+- iso3: PRK
+  iso2: KP
+  m49: '408'
+  name_zh: 朝鲜
+  name_en: North Korea
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东亚
+  region_en: Eastern Asia
+  aliases:
+  - Democratic People's Republic of Korea
+  - Korea, Dem. People's Rep.
+  - Korea, Democratic People's Republic of
+  - North Korea
+  - República Popular Democrática de Corea
+  - République populaire démocratique de Corée
+  - Корейская Народно-Демократическая Республика
+  - 朝鲜
+  - 朝鲜民主主义人民共和国
+- iso3: PRT
+  iso2: PT
+  m49: '620'
+  name_zh: 葡萄牙
+  name_en: Portugal
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Portugal
+  - Португалия
+  - 葡萄牙
+- iso3: PRY
+  iso2: PY
+  m49: '600'
+  name_zh: 巴拉圭
+  name_en: Paraguay
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Paraguay
+  - Парагвай
+  - 巴拉圭
+- iso3: PSE
+  iso2: PS
+  m49: '275'
+  name_zh: 巴勒斯坦
+  name_en: Palestine
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Estado de Palestina
+  - Palestine
+  - State of Palestine
+  - West Bank & Gaza
+  - West Bank and Gaza
+  - État de Palestine
+  - Государство Палестина
+  - 巴勒斯坦
+  - 巴勒斯坦国
+- iso3: PYF
+  iso2: PF
+  m49: '258'
+  name_zh: 法属波利尼西亚
+  name_en: French Polynesia
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - French Polynesia
+  - Polinesia Francesa
+  - Polynésie française
+  - Французская Полинезия
+  - 法属波利尼西亚
+- iso3: QAT
+  iso2: QA
+  m49: '634'
+  name_zh: 卡塔尔
+  name_en: Qatar
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Qatar
+  - Катар
+  - 卡塔尔
+- iso3: REU
+  iso2: RE
+  m49: '638'
+  name_zh: 留尼汪
+  name_en: Réunion
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Reunión
+  - Réunion
+  - Реюньон
+  - 留尼汪
+- iso3: ROU
+  iso2: RO
+  m49: '642'
+  name_zh: 罗马尼亚
+  name_en: Romania
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Romania
+  - Roumanie
+  - Rumania
+  - Румыния
+  - 罗马尼亚
+- iso3: RUS
+  iso2: RU
+  m49: '643'
+  name_zh: 俄罗斯
+  name_en: Russia
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Federación de Rusia
+  - Fédération de Russie
+  - Russia
+  - Russian Federation
+  - Российская Федерация
+  - Россия
+  - 俄罗斯
+  - 俄罗斯联邦
+- iso3: RWA
+  iso2: RW
+  m49: '646'
+  name_zh: 卢旺达
+  name_en: Rwanda
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Rwanda
+  - Руанда
+  - 卢旺达
+- iso3: SAU
+  iso2: SA
+  m49: '682'
+  name_zh: 沙特阿拉伯
+  name_en: Saudi Arabia
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Arabia Saudita
+  - Arabie saoudite
+  - Saudi Arabia
+  - Саудовская Аравия
+  - 沙特阿拉伯
+  - 沙特
+- iso3: SDN
+  iso2: SD
+  m49: '729'
+  name_zh: 苏丹
+  name_en: Sudan
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 北非
+  region_en: Northern Africa
+  aliases:
+  - Soudan
+  - Sudan
+  - Sudán
+  - Судан
+  - 苏丹
+- iso3: SEN
+  iso2: SN
+  m49: '686'
+  name_zh: 塞内加尔
+  name_en: Senegal
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Senegal
+  - Sénégal
+  - Сенегал
+  - 塞内加尔
+- iso3: SGP
+  iso2: SG
+  m49: '702'
+  name_zh: 新加坡
+  name_en: Singapore
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Singapore
+  - Singapour
+  - Singapur
+  - Сингапур
+  - 新加坡
+- iso3: SGS
+  iso2: GS
+  m49: '239'
+  name_zh: 南乔治亚岛和南桑德韦奇岛
+  name_en: South Georgia and the South Sandwich Islands
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Georgia del Sur y las Islas Sandwich del Sur
+  - Géorgie du Sud-et-les Îles Sandwich du Sud
+  - South Georgia and the South Sandwich Islands
+  - Южная Джорджия и Южные Сандвичевы острова
+  - 南乔治亚岛和南桑德韦奇岛
+- iso3: SHN
+  iso2: SH
+  m49: '654'
+  name_zh: 圣赫勒拿
+  name_en: Saint Helena
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Saint Helena
+  - Sainte-Hélène
+  - Santa Elena
+  - Остров Святой Елены
+  - 圣赫勒拿
+- iso3: SJM
+  iso2: SJ
+  m49: '744'
+  name_zh: 斯瓦尔巴群岛和扬马延岛
+  name_en: Svalbard and Jan Mayen Islands
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Islas Svalbard y Jan Mayen
+  - Svalbard and Jan Mayen Islands
+  - Îles Svalbard-et-Jan Mayen
+  - Острова Свальбард и Ян-Майен
+  - 斯瓦尔巴群岛和扬马延岛
+- iso3: SLB
+  iso2: SB
+  m49: 090
+  name_zh: 所罗门群岛
+  name_en: Solomon Islands
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 美拉尼西亚
+  region_en: Melanesia
+  aliases:
+  - Islas Salomón
+  - Solomon Islands
+  - Îles Salomon
+  - Соломоновы Острова
+  - 所罗门群岛
+- iso3: SLE
+  iso2: SL
+  m49: '694'
+  name_zh: 塞拉利昂
+  name_en: Sierra Leone
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Sierra Leona
+  - Sierra Leone
+  - Сьерра-Леоне
+  - 塞拉利昂
+- iso3: SLV
+  iso2: SV
+  m49: '222'
+  name_zh: 萨尔瓦多
+  name_en: El Salvador
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 中美洲
+  region_en: Central America
+  aliases:
+  - El Salvador
+  - Сальвадор
+  - 萨尔瓦多
+- iso3: SMR
+  iso2: SM
+  m49: '674'
+  name_zh: 圣马力诺
+  name_en: San Marino
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Saint-Marin
+  - San Marino
+  - Сан-Марино
+  - 圣马力诺
+- iso3: SOM
+  iso2: SO
+  m49: '706'
+  name_zh: 索马里
+  name_en: Somalia
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Somalia
+  - Somalie
+  - Сомали
+  - 索马里
+- iso3: SPM
+  iso2: PM
+  m49: '666'
+  name_zh: 圣皮埃尔和密克隆
+  name_en: Saint Pierre and Miquelon
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 北美
+  region_en: Northern America
+  aliases:
+  - Saint Pierre and Miquelon
+  - Saint-Pierre-et-Miquelon
+  - San Pedro y Miquelón
+  - Сен-Пьер и Микелон
+  - 圣皮埃尔和密克隆
+- iso3: SRB
+  iso2: RS
+  m49: '688'
+  name_zh: 塞尔维亚
+  name_en: Serbia
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Serbia
+  - Serbie
+  - Сербия
+  - 塞尔维亚
+- iso3: SSD
+  iso2: SS
+  m49: '728'
+  name_zh: 南苏丹
+  name_en: South Sudan
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Soudan du Sud
+  - South Sudan
+  - Sudán del Sur
+  - Южный Судан
+  - 南苏丹
+- iso3: STP
+  iso2: ST
+  m49: '678'
+  name_zh: 圣多美和普林西比
+  name_en: Sao Tome and Principe
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 中非
+  region_en: Middle Africa
+  aliases:
+  - Santo Tomé y Príncipe
+  - Sao Tome and Principe
+  - Sao Tomé-et-Principe
+  - São Tomé and Príncipe
+  - Сан-Томе и Принсипи
+  - 圣多美和普林西比
+- iso3: SUR
+  iso2: SR
+  m49: '740'
+  name_zh: 苏里南
+  name_en: Suriname
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Suriname
+  - Суринам
+  - 苏里南
+- iso3: SVK
+  iso2: SK
+  m49: '703'
+  name_zh: 斯洛伐克
+  name_en: Slovakia
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Eslovaquia
+  - Slovak Republic
+  - Slovakia
+  - Slovaquie
+  - Словакия
+  - 斯洛伐克
+- iso3: SVN
+  iso2: SI
+  m49: '705'
+  name_zh: 斯洛文尼亚
+  name_en: Slovenia
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Eslovenia
+  - Slovenia
+  - Slovénie
+  - Словения
+  - 斯洛文尼亚
+- iso3: SWE
+  iso2: SE
+  m49: '752'
+  name_zh: 瑞典
+  name_en: Sweden
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 北欧
+  region_en: Northern Europe
+  aliases:
+  - Suecia
+  - Suède
+  - Sweden
+  - Швеция
+  - 瑞典
+- iso3: SWZ
+  iso2: SZ
+  m49: '748'
+  name_zh: 斯威士兰
+  name_en: Eswatini
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 南部非洲
+  region_en: Southern Africa
+  aliases:
+  - Eswatini
+  - Swaziland
+  - Эсватини
+  - 斯威士兰
+- iso3: SXM
+  iso2: SX
+  m49: '534'
+  name_zh: 圣马丁（荷属）
+  name_en: Sint Maarten (Dutch part)
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Saint-Martin (partie néerlandaise)
+  - San Martín (parte Holandesa)
+  - Sint Maarten (Dutch part)
+  - Синт-Мартен (нидерландская часть)
+  - 圣马丁（荷属）
+- iso3: SYC
+  iso2: SC
+  m49: '690'
+  name_zh: 塞舌尔
+  name_en: Seychelles
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Seychelles
+  - Сейшельские Острова
+  - 塞舌尔
+- iso3: SYR
+  iso2: SY
+  m49: '760'
+  name_zh: 叙利亚
+  name_en: Syria
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - República Árabe Siria
+  - République arabe syrienne
+  - Syria
+  - Syrian Arab Republic
+  - Сирийская Арабская Республика
+  - 叙利亚
+  - 阿拉伯叙利亚共和国
+- iso3: TCA
+  iso2: TC
+  m49: '796'
+  name_zh: 特克斯和凯科斯群岛
+  name_en: Turks and Caicos Islands
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Islas Turcas y Caicos
+  - Turks and Caicos Islands
+  - Îles Turques-et-Caïques
+  - Острова Теркс и Кайкос
+  - 特克斯和凯科斯群岛
+- iso3: TCD
+  iso2: TD
+  m49: '148'
+  name_zh: 乍得
+  name_en: Chad
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 中非
+  region_en: Middle Africa
+  aliases:
+  - Chad
+  - Tchad
+  - Чад
+  - 乍得
+- iso3: TGO
+  iso2: TG
+  m49: '768'
+  name_zh: 多哥
+  name_en: Togo
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 西非
+  region_en: Western Africa
+  aliases:
+  - Togo
+  - Того
+  - 多哥
+- iso3: THA
+  iso2: TH
+  m49: '764'
+  name_zh: 泰国
+  name_en: Thailand
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Tailandia
+  - Thailand
+  - Thaïlande
+  - Таиланд
+  - 泰国
+- iso3: TJK
+  iso2: TJ
+  m49: '762'
+  name_zh: 塔吉克斯坦
+  name_en: Tajikistan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 中亚
+  region_en: Central Asia
+  aliases:
+  - Tadjikistan
+  - Tajikistan
+  - Tayikistán
+  - Таджикистан
+  - 塔吉克斯坦
+- iso3: TKL
+  iso2: TK
+  m49: '772'
+  name_zh: 托克劳
+  name_en: Tokelau
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - Tokelau
+  - Tokélaou
+  - Токелау
+  - 托克劳
+- iso3: TKM
+  iso2: TM
+  m49: '795'
+  name_zh: 土库曼斯坦
+  name_en: Turkmenistan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 中亚
+  region_en: Central Asia
+  aliases:
+  - Turkmenistan
+  - Turkmenistán
+  - Turkménistan
+  - Туркменистан
+  - 土库曼斯坦
+- iso3: TLS
+  iso2: TL
+  m49: '626'
+  name_zh: 东帝汶
+  name_en: Timor-Leste
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - East Timor
+  - Timor Leste
+  - Timor-Leste
+  - Тимор-Лешти
+  - 东帝汶
+- iso3: TON
+  iso2: TO
+  m49: '776'
+  name_zh: 汤加
+  name_en: Tonga
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - Tonga
+  - Тонга
+  - 汤加
+- iso3: TTO
+  iso2: TT
+  m49: '780'
+  name_zh: 特立尼达和多巴哥
+  name_en: Trinidad and Tobago
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Trinidad and Tobago
+  - Trinidad y Tabago
+  - Trinité-et-Tobago
+  - Тринидад и Тобаго
+  - 特立尼达和多巴哥
+- iso3: TUN
+  iso2: TN
+  m49: '788'
+  name_zh: 突尼斯
+  name_en: Tunisia
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 北非
+  region_en: Northern Africa
+  aliases:
+  - Tunisia
+  - Tunisie
+  - Túnez
+  - Тунис
+  - 突尼斯
+- iso3: TUR
+  iso2: TR
+  m49: '792'
+  name_zh: 土耳其
+  name_en: Türkiye
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Turkey
+  - Turkiye
+  - Türkiye
+  - Турция
+  - 土耳其
+- iso3: TUV
+  iso2: TV
+  m49: '798'
+  name_zh: 图瓦卢
+  name_en: Tuvalu
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - Tuvalu
+  - Тувалу
+  - 图瓦卢
+- iso3: TZA
+  iso2: TZ
+  m49: '834'
+  name_zh: 坦桑尼亚
+  name_en: Tanzania
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - República Unida de Tanzanía
+  - République-Unie de Tanzanie
+  - Tanzania
+  - United Republic of Tanzania
+  - Объединенная Республика Танзания
+  - 坦桑尼亚
+  - 坦桑尼亚联合共和国
+- iso3: UGA
+  iso2: UG
+  m49: '800'
+  name_zh: 乌干达
+  name_en: Uganda
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Ouganda
+  - Uganda
+  - Уганда
+  - 乌干达
+- iso3: UKR
+  iso2: UA
+  m49: '804'
+  name_zh: 乌克兰
+  name_en: Ukraine
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 东欧
+  region_en: Eastern Europe
+  aliases:
+  - Ucrania
+  - Ukraine
+  - Украина
+  - 乌克兰
+- iso3: UMI
+  iso2: UM
+  m49: '581'
+  name_zh: 美国本土外小岛屿
+  name_en: United States Minor Outlying Islands
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 密克罗尼西亚
+  region_en: Micronesia
+  aliases:
+  - Islas menores alejadas de Estados Unidos
+  - United States Minor Outlying Islands
+  - Îles mineures éloignées des États-Unis
+  - Внешние малые острова Соединенных Штатов
+  - 美国本土外小岛屿
+- iso3: URY
+  iso2: UY
+  m49: '858'
+  name_zh: 乌拉圭
+  name_en: Uruguay
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Uruguay
+  - Уругвай
+  - 乌拉圭
+- iso3: USA
+  iso2: US
+  m49: '840'
+  name_zh: 美国
+  name_en: United States
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 北美
+  region_en: Northern America
+  aliases:
+  - Estados Unidos de América
+  - United States
+  - United States of America
+  - États-Unis d’Amérique
+  - Соединенные Штаты Америки
+  - 美利坚合众国
+  - 美国
+- iso3: UZB
+  iso2: UZ
+  m49: '860'
+  name_zh: 乌兹别克斯坦
+  name_en: Uzbekistan
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 中亚
+  region_en: Central Asia
+  aliases:
+  - Ouzbékistan
+  - Uzbekistan
+  - Uzbekistán
+  - Узбекистан
+  - 乌兹别克斯坦
+- iso3: VAT
+  iso2: VA
+  m49: '336'
+  name_zh: 梵蒂冈
+  name_en: Holy See
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Holy See
+  - Saint-Siège
+  - Santa Sede
+  - Святой Престол
+  - 教廷
+  - 梵蒂冈
+- iso3: VCT
+  iso2: VC
+  m49: '670'
+  name_zh: 圣文森特和格林纳丁斯
+  name_en: Saint Vincent and the Grenadines
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Saint Vincent and the Grenadines
+  - Saint-Vincent-et-les Grenadines
+  - San Vicente y las Granadinas
+  - St. Vincent and the Grenadines
+  - Сент-Винсент и Гренадины
+  - 圣文森特和格林纳丁斯
+- iso3: VEN
+  iso2: VE
+  m49: '862'
+  name_zh: 委内瑞拉
+  name_en: Venezuela
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 南美洲
+  region_en: South America
+  aliases:
+  - Venezuela
+  - Venezuela (Bolivarian Republic of)
+  - Venezuela (República Bolivariana de)
+  - Venezuela (République bolivarienne du)
+  - Venezuela, RB
+  - Венесуэла (Боливарианская Республика)
+  - 委内瑞拉
+  - 委内瑞拉玻利瓦尔共和国
+- iso3: VGB
+  iso2: VG
+  m49: 092
+  name_zh: 英属维尔京群岛
+  name_en: British Virgin Islands
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - British Virgin Islands
+  - Islas Vírgenes Británicas
+  - Îles Vierges britanniques
+  - Британские Виргинские острова
+  - 英属维尔京群岛
+- iso3: VIR
+  iso2: VI
+  m49: '850'
+  name_zh: 美属维尔京群岛
+  name_en: United States Virgin Islands
+  continent_zh: 美洲
+  continent_en: Americas
+  region_zh: 加勒比
+  region_en: Caribbean
+  aliases:
+  - Islas Vírgenes de los Estados Unidos
+  - United States Virgin Islands
+  - Îles Vierges américaines
+  - Виргинские острова Соединенных Штатов
+  - 美属维尔京群岛
+- iso3: VNM
+  iso2: VN
+  m49: '704'
+  name_zh: 越南
+  name_en: Vietnam
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 东南亚
+  region_en: South-eastern Asia
+  aliases:
+  - Viet Nam
+  - Vietnam
+  - Вьетнам
+  - 越南
+- iso3: VUT
+  iso2: VU
+  m49: '548'
+  name_zh: 瓦努阿图
+  name_en: Vanuatu
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 美拉尼西亚
+  region_en: Melanesia
+  aliases:
+  - Vanuatu
+  - Вануату
+  - 瓦努阿图
+- iso3: WLF
+  iso2: WF
+  m49: '876'
+  name_zh: 瓦利斯群岛和富图纳群岛
+  name_en: Wallis and Futuna Islands
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - Islas Wallis y Futuna
+  - Wallis and Futuna Islands
+  - Îles Wallis-et-Futuna
+  - Острова Уоллис и Футуна
+  - 瓦利斯群岛和富图纳群岛
+- iso3: WSM
+  iso2: WS
+  m49: '882'
+  name_zh: 萨摩亚
+  name_en: Samoa
+  continent_zh: 大洋洲
+  continent_en: Oceania
+  region_zh: 波利尼西亚
+  region_en: Polynesia
+  aliases:
+  - Samoa
+  - Самоа
+  - 萨摩亚
+- iso3: YEM
+  iso2: YE
+  m49: '887'
+  name_zh: 也门
+  name_en: Yemen
+  continent_zh: 亚洲
+  continent_en: Asia
+  region_zh: 西亚
+  region_en: Western Asia
+  aliases:
+  - Yemen
+  - Yemen, Rep.
+  - Yémen
+  - Йемен
+  - 也门
+- iso3: ZAF
+  iso2: ZA
+  m49: '710'
+  name_zh: 南非
+  name_en: South Africa
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 南部非洲
+  region_en: Southern Africa
+  aliases:
+  - Afrique du Sud
+  - South Africa
+  - Sudáfrica
+  - Южная Африка
+  - 南非
+- iso3: ZMB
+  iso2: ZM
+  m49: '894'
+  name_zh: 赞比亚
+  name_en: Zambia
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Zambia
+  - Zambie
+  - Замбия
+  - 赞比亚
+- iso3: ZWE
+  iso2: ZW
+  m49: '716'
+  name_zh: 津巴布韦
+  name_en: Zimbabwe
+  continent_zh: 非洲
+  continent_en: Africa
+  region_zh: 东非
+  region_en: Eastern Africa
+  aliases:
+  - Zimbabwe
+  - Зимбабве
+  - 津巴布韦
+- iso3: XKX
+  iso2: XK
+  m49: ''
+  name_zh: 科索沃
+  name_en: Kosovo
+  continent_zh: 欧洲
+  continent_en: Europe
+  region_zh: 南欧
+  region_en: Southern Europe
+  aliases:
+  - Kosovo
+  - Косово

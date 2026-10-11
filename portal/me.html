@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 我的</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="echarts.min.js"></script>
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("me.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>我的</h1>
+  <p class="muted">登录人自己的一页:帐号、关注的国别、忽略的国别、保存的日历订阅,以及我方资料(资质与业绩)的入口。密码、角色和通知在表格的<a href="/setting" target="_blank" rel="noopener">帐号设置</a>里改。</p>
+  <div class="two">
+    <div class="col">
+      <div class="panel" id="who">读取中…</div>
+      <div class="panel"><h3 style="margin:0 0 6px">入口</h3>
+        <ul class="list">
+          <li><a href="/setting" target="_blank" rel="noopener">帐号设置 ↗</a> <span class="muted small">改密码、头像、通知</span></li>
+          <li><a href="company.html">我方资料</a> <span class="muted small">我们公司的资质证书与历史业绩,勾了的写进报告</span></li>
+          <li><a href="calendar.html">日历</a> <span class="muted small">导出或订阅,订阅可存到这里</span></li>
+          <li><a href="#" id="logout2">退出登录</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="col wide">
+      <h2>关注的国别 <span class="muted" id="cCount"></span></h2>
+      <p class="muted small">关注国家的线索和商机在各清单里排在最前、带 ★,国别下拉里也放在最上面。点国名进国别页;点 × 取消关注。</p>
+      <div class="panel" id="countries">读取中…</div>
+      <div class="frow"><select id="cPick" class="inline"><option value="">+ 关注一个国别</option></select></div>
+      <h2>保存的日历订阅 <span class="muted" id="sCount"></span></h2>
+      <p class="muted small">在<a href="calendar.html">日历</a>页点「订阅到日历」→「存到我的」就会出现在这里;复制链接加到手机或电脑的日历程序。</p>
+      <div class="panel" id="subs">读取中…</div>
+    </div>
+  </div>
+  <h2>忽略的国别 <span class="muted" id="iCount"></span></h2>
+  <p class="muted small">忽略的国家在各页地图上画斜线,后台也不再采集这些国家的新线索(已有的线索保留)。在地图上点一个国家忽略,再点一下恢复;也可以按大洲、按经济水平一键忽略或恢复。没改过的默认只忽略中国。</p>
+  <div class="panel" id="ignoreBox">
+    <div class="frow" id="iConts"></div>
+    <div class="frow" id="iEcon"></div>
+    <p class="muted small">发达国家按国际货币基金组织(IMF)的「发达经济体」,美国、加拿大、欧洲大部、日本、韩国、澳新、新加坡、以色列等 38 个;收入组按世界银行的人均国民收入分组,高收入里也有沙特、阿联酋、卡塔尔等海湾国家。</p>
+    <div id="iMap" class="chart tall"></div>
+    <div id="iList"></div>
+    <div class="frow"><select id="iPick" class="inline"><option value="">+ 忽略一个国别</option></select></div>
+  </div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  let me = {}, role = "", pref = null, countries = [], cname = {}, ciso = {};
+  const hasTable = () => !!(P.cfg.tables || {}).preference;
+  const mine = () => pref ? (P.get("preference", pref, "countries") || []).map((x) => x.id) : [];
+
+  function renderCountries() {
+    const ids = mine();
+    $("cCount").textContent = ids.length ? ids.length + " 个" : "";
+    $("countries").innerHTML = ids.length ? '<div class="frow">' + ids.map((id) => '<span class="chip-btn on" style="cursor:default"><a href="country.html?iso=' + encodeURIComponent(ciso[id] || "") + '" style="color:inherit">' + P.esc(cname[id] || id) + '</a> <button type="button" data-id="' + P.esc(id) + '" title="取消关注" style="all:unset;cursor:pointer;margin-left:4px">×</button></span>').join("") + "</div>"
+      : '<p class="muted">还没关注国别。</p>';
+    $("countries").querySelectorAll("button").forEach((b) => { b.onclick = () => setCountries(ids.filter((x) => x !== b.dataset.id)); });
+    $("cPick").querySelectorAll("option").forEach((op) => { if (op.value) op.disabled = ids.includes(op.value); });
+  }
+  function renderSubs() {
+    const subs = pref ? P.subsOf(pref) : [];
+    $("sCount").textContent = subs.length ? subs.length + " 条" : "";
+    $("subs").innerHTML = subs.length ? P.tableHtml(["名称", "链接", ""], subs.map((s, i) => [s.name, P.raw("<code style=\"font-size:12px;word-break:break-all\">" + P.esc(s.url) + "</code>"),
+      P.raw('<span class="it-act"><button type="button" class="chip-btn" data-a="copy" data-i="' + i + '">复制链接</button> <a class="chip-btn" href="' + P.esc(s.url) + '">打开</a> <button type="button" class="chip-btn" data-a="del" data-i="' + i + '">删除</button></span>')]))
+      : '<p class="muted">还没保存订阅。</p>';
+    $("subs").querySelectorAll('button[data-a="copy"]').forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(subs[+b.dataset.i].url); P.toast("已复制"); } catch (e) { P.toast("复制失败,请手动选中复制", true); } }; });
+    $("subs").querySelectorAll('button[data-a="del"]').forEach((b) => { b.onclick = () => setSubs(subs.filter((_, j) => j !== +b.dataset.i)); });
+  }
+  /* ---------- 忽略的国别:地图点选、按大洲一键、下拉;存进个人设置「忽略国别」(国别码,逗号分隔) ---------- */
+  const CONTS = ["北美洲", "南美洲", "欧洲", "亚洲", "非洲", "大洋洲"];
+  const ECON = [["adv", "发达国家"], ["HIC", "高收入国家"], ["UMC", "中等偏上收入国家"], ["LMC", "中等偏下收入国家"], ["LIC", "低收入国家"]];
+  async function ignoreSection() {
+    if (!P.has("preference", "ignored")) { $("ignoreBox").innerHTML = '<p class="muted">个人设置表里还没有「忽略国别」(管理员跑一次建表命令就有)。</p>'; return; }
+    const geo = await fetch("world.geo.json").then((r) => r.json());
+    echarts.registerMap("world", geo);
+    const zh = {}, ct = {}, eco = {};
+    geo.features.forEach((f) => { const p = f.properties; if (p.kind === "line") return; zh[p.name] = p.zh || p.name; ct[p.name] = p.ct || ""; eco[p.name] = [p.inc, p.adv ? "adv" : ""]; });
+    const all = Object.keys(zh);
+    /* 一键分组:大洲、经济水平(地图要素上写好的 ct、inc、adv) */
+    const groups = CONTS.map((c) => ({ key: c, label: c, xs: all.filter((i) => ct[i] === c) }))
+      .concat(ECON.map(([k, label]) => ({ key: k, label, xs: all.filter((i) => eco[i].includes(k)) })));
+    const grp = (k) => groups.find((g) => g.key === k);
+    let ign = new Set(await P.ignored()), busy = false;
+    const mc = echarts.init($("iMap"));
+    mc.setOption({
+      tooltip: { trigger: "item", formatter: (p) => zh[p.name] ? "<b>" + P.esc(zh[p.name]) + "</b> <span class=\"muted\">" + P.esc(ct[p.name]) + "</span><br>" + (ign.has(p.name) ? "已忽略,点一下恢复" : "点一下忽略") : "" },
+      series: [{ type: "map", map: "world", roam: true, nameProperty: "name", selectedMode: false, emphasis: { label: { show: false }, itemStyle: { areaColor: "#e2e8f0" } },
+        itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" }, data: [] }],
+    });
+    let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => mc.resize(), 150); });
+    const draw = () => {
+      const n = ign.size;
+      $("iCount").textContent = n ? n + " 个" : "";
+      const raw = Array.from(ign).map((iso) => ({ name: iso, itemStyle: { areaColor: "#cbd5e1" } }));
+      mc.setOption({ series: [{ data: P.hatchData(raw, ign) }] });
+      P.hatchFit(mc, ign, { series: () => raw });
+      /* 一键按钮:整组都忽略了就亮着,点一下恢复整组;否则点一下忽略整组 */
+      const btns = (list) => list.map((g) => { const k = g.xs.filter((i) => ign.has(i)).length, full = k === g.xs.length;
+        return '<button type="button" class="chip-btn' + (full ? " blk" : "") + '" data-g="' + g.key + '">' + (full ? "恢复" : "忽略") + g.label + (k && !full ? ' <span class="muted small">已忽略 ' + k + "/" + g.xs.length + "</span>" : "") + "</button>"; }).join("");
+      $("iConts").innerHTML = '<span class="muted small">按大洲</span>' + btns(groups.slice(0, CONTS.length));
+      $("iEcon").innerHTML = '<span class="muted small">按经济水平</span>' + btns(groups.slice(CONTS.length));
+      document.querySelectorAll("#iConts button, #iEcon button").forEach((b) => { b.onclick = () => { const g = grp(b.dataset.g), on = g.xs.every((i) => ign.has(i));
+        const nx = new Set(ign); g.xs.forEach((i) => (on ? nx.delete(i) : nx.add(i))); save(nx, (on ? "已恢复" : "已忽略") + g.label); }; });
+      /* 清单:整组忽略的合成一项(大洲在前),其余一国一项,点 × 恢复 */
+      const whole = groups.filter((g) => g.xs.length && g.xs.every((i) => ign.has(i)));
+      const inWhole = new Set(whole.flatMap((g) => g.xs));
+      const singles = Array.from(ign).filter((i) => !inWhole.has(i)).sort((a, b) => P.zhCmp(zh[a] || a, zh[b] || b));
+      const chip = (label, attr, title) => '<span class="chip-btn blk" style="cursor:default">' + P.esc(label) + ' <button type="button" ' + attr + ' title="' + title + '" style="all:unset;cursor:pointer;margin-left:4px">×</button></span>';
+      $("iList").innerHTML = n ? '<div class="frow">' + whole.map((g) => chip(g.label + "(全部)", 'data-g="' + g.key + '"', "恢复全部" + g.label)).concat(singles.map((i) => chip(zh[i] || i, 'data-i="' + i + '"', "恢复"))).join("") + "</div>"
+        : '<p class="muted">没有忽略的国别。</p>';
+      $("iList").querySelectorAll("button").forEach((b) => { b.onclick = () => { const nx = new Set(ign);
+        if (b.dataset.g) grp(b.dataset.g).xs.forEach((i) => nx.delete(i)); else nx.delete(b.dataset.i);
+        save(nx, "已恢复"); }; });
+      $("iPick").querySelectorAll("option").forEach((op) => { if (op.value) op.disabled = ign.has(op.value); });
+    };
+    const save = async (nx, msg) => {
+      if (busy) return; busy = true;
+      try { await P.saveIgnored(nx); ign = nx; draw(); P.toast(msg); } catch (e) { P.toast(e.message, true); } finally { busy = false; }
+    };
+    mc.on("click", (p) => { if (!zh[p.name]) return; const nx = new Set(ign); const on = nx.has(p.name); on ? nx.delete(p.name) : nx.add(p.name); save(nx, (on ? "已恢复 " : "已忽略 ") + zh[p.name]); });
+    P.fillCountrySelect($("iPick"), all.map((i) => [i, zh[i]]), true);
+    $("iPick").onchange = () => { const v = $("iPick").value; $("iPick").value = ""; if (v && !ign.has(v)) { const nx = new Set(ign); nx.add(v); save(nx, "已忽略 " + zh[v]); } };
+    draw();
+  }
+  async function reload() { pref = await P.myPref(false); renderCountries(); renderSubs(); }
+  async function setCountries(ids) {
+    try {
+      const rec = pref || await P.myPref(true);
+      await P.send("PATCH", "/table/" + P.t("preference").id + "/record", { fieldKeyType: "id", typecast: true, records: [{ id: rec.id, fields: { [P.f("preference", "countries")]: ids.map((id) => ({ id })) } }] });
+      P._followP = null; P.followed();  // 别的页按新的关注排
+      await reload(); P.toast("已更新关注");
+    } catch (e) { P.toast(e.message, true); }
+  }
+  async function setSubs(subs) {
+    try {
+      const rec = pref || await P.myPref(true);
+      await P.send("PATCH", "/table/" + P.t("preference").id + "/record", { fieldKeyType: "id", typecast: true, records: [{ id: rec.id, fields: { [P.f("preference", "subscriptions")]: subs.map((x) => x.name + " | " + x.url).join("\n") || null } }] });
+      await reload(); P.toast("已删除");
+    } catch (e) { P.toast(e.message, true); }
+  }
+  try {
+    await P.load();
+    [me, role] = await Promise.all([P.me(), P.role()]);
+    const tag = role === "none" ? "游客 · 只读" : (P.ROLE_ZH[role] || role || "");
+    $("who").innerHTML = '<div style="font-size:20px;font-weight:700">' + P.esc(me.name || me.email || "未登录") + "</div>" + (me.email ? '<div class="muted">' + P.esc(me.email) + "</div>" : "") + (tag ? '<div class="muted small">在表格里的角色:' + P.esc(tag) + "</div>" : "");
+    $("logout2").onclick = (e) => { e.preventDefault(); const l = document.getElementById("logout"); if (l) l.click(); };
+    if (P.isGuest) { P.guest("游客帐号是大家共用的,没有自己的关注与订阅。"); $("countries").innerHTML = $("subs").innerHTML = $("ignoreBox").innerHTML = '<p class="muted">游客帐号没有这一项。</p>'; $("cPick").style.display = "none"; return; }
+    if (!hasTable()) { $("countries").innerHTML = $("subs").innerHTML = $("ignoreBox").innerHTML = '<p class="muted">库里还没有「个人设置」表(管理员跑一次建表命令就有)。</p>'; $("cPick").style.display = "none"; return; }
+    if (!(await P.canWrite())) P.guest();
+    countries = await P.records("country", { props: ["name_zh", "key"] });
+    countries.sort((a, b) => P.zhCmp(P.get("country", a, "name_zh"), P.get("country", b, "name_zh")));
+    countries.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || c.id; ciso[c.id] = P.get("country", c, "key") || ""; });
+    P.fillCountrySelect($("cPick"), countries.map((c) => [c.id, cname[c.id]]), true);
+    $("cPick").onchange = () => { const v = $("cPick").value; $("cPick").value = ""; if (v && !mine().includes(v)) setCountries(mine().concat([v])); };
+    await reload();
+    await ignoreSection();
+  } catch (e) { P.fail($("countries"), e); }
+})();
+</script>
+</body>
+</html>

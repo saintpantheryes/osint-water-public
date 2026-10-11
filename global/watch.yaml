@@ -1,0 +1,152 @@
+# 全球信源:多边开发银行与联合国机构的采购公告、项目管线,覆盖所有借款国;另有使用方重点市场国别的国家公共采购平台(文末)。
+# 条目的国别从信源的 country、结构化字段或标题里定,
+# 定不出的交给模型判断;只存初筛命中水务的条目。抓取纪律与国别信源相同(如实 UA、按主机限速、403/429 即停)。
+# 各源的字段、坑与取舍见 docs/sources/D1 与 docs/sources/D1_2026-09-26_复核.md。
+# lookback_days:该信源第一次运行时只把最近这些天的条目、以及还没截止的公告当新线索(其余只记为已见);
+# seed_from:原先按国别抓的同一信源,沿用其已见记录,避免已提醒过的公告再出一次。
+schema: osint-water/watch@1
+country: GLOBAL
+
+sources:
+  - id: wb_notices
+    name: 世行采购公告(全球)
+    kind: wb_procnotices
+    rows: 500
+    notice_types: [Invitation for Bids, Request for Expression of Interest, General Procurement Notice, Invitation for Prequalification]
+    qterm: 'water OR wastewater OR sewerage OR sewer OR irrigation OR desalination OR drainage OR sanitation OR dam OR stormwater OR eau OR assainissement OR agua OR saneamiento OR riego'
+    lookback_days: 10
+    seed_from: [wb_procnotices]
+
+  - id: ebrd_notices
+    name: EBRD 采购平台(全部国别)
+    kind: html_list
+    url: https://ecepp.ebrd.com/delta/noticeSearchResults.html
+    lang: en
+    item: '#noticeResultsTable tbody tr'
+    title: td:nth-of-type(1) a
+    date: td:nth-of-type(4)
+    fields: {notice_type: "td:nth-of-type(2)", exercise: "td:nth-of-type(3)", closing: "td:nth-of-type(5)",
+             state: "td:nth-of-type(6)", project: "td:nth-of-type(10)"}
+    country_from: {field: title, regex: '^([^:]+):'}
+    deadline_field: closing
+    lookback_days: 30
+    seed_from: [ebrd_ecepp]
+    follow: {selector: "#layout"}
+
+  - id: isdb_tenders
+    name: 伊斯兰开发银行采购(全部国别)
+    kind: html_list
+    url: https://www.isdb.org/project-procurement/tenders?loc=&page=0
+    more_pages: ['https://www.isdb.org/project-procurement/tenders?loc=&page=1', 'https://www.isdb.org/project-procurement/tenders?loc=&page=2']
+    item: .views-row article
+    title: .field-title a
+    fields: {status: .field--name-field-tender-status, type: .field--name-field-tender-type,
+             country: .field--name-field-world-country, closing: .field--name-field-close-date time}
+    deadline_field: closing
+    lookback_days: 30
+    seed_from: [isdb_aze]
+    follow: {selector: article.display-full, attachments: true, max_attachments: 2}
+
+  - id: opecfund_notices
+    name: 欧佩克基金采购机会(全部国别)
+    kind: html_list
+    url: https://opecfund.org/work-with-us/project-procurement/current-opportunities
+    lang: en
+    item: table tr
+    title: td:nth-of-type(3)
+    title_remove: ['\s*Download\s*$']
+    link: td:nth-of-type(3) a
+    date: td:nth-of-type(1)
+    fields: {country: "td:nth-of-type(2)", sector: "td:nth-of-type(4)", closing: "td:nth-of-type(5)", type: "td:nth-of-type(6)"}
+    deadline_field: closing
+    may_be_empty: true
+    seed_from: [opecfund_opps]
+
+  - id: idb_notices
+    name: 美洲开发银行采购公告(水与卫生)
+    kind: ckan
+    url: https://data.iadb.org/api/3/action/datastore_search
+    resource_id: 856aabfd-2c6a-48fb-a8b8-19f3ff443618
+    limit: 300
+    sort: publicationdate desc
+    filters: {sectorenglnm: WATER AND SANITATION, type: [SPECIFIC, EOI, GENERAL]}
+    map: {key: noticeid, title: noticetitle, url: documenturl, published: publicationdate, country: countryname,
+          deadline: deadline, text: process_desc}
+    fields: {notice_type: type, project: projectname, project_id: projectnumber, category: category_nm}
+    topic: water          # 已按"水与卫生"行业过滤(项目级,仍交模型判定)
+    lang: es
+    lookback_days: 14
+
+  - id: aiib_notices
+    name: 亚投行采购公告
+    kind: aiib
+    dataset: ppo
+    url: https://www.aiib.org/en/opportunities/business/project-procurement/_common/ppo-data-all.js
+    sectors: [Water, Water Supply and Sanitation, Water And Waste, Urban]
+    lookback_days: 30
+
+  - id: aiib_projects
+    name: 亚投行项目库(水务)
+    kind: aiib
+    dataset: projects
+    url: https://www.aiib.org/en/projects/list/.content/all-projects-data.js
+    sectors: [Water]
+    topic: water
+
+  - id: undp_notices
+    name: 联合国开发署采购公告
+    kind: html_list
+    url: https://procurement-notices.undp.org/
+    item: a.vacanciesTableLink
+    title: '.vacanciesTable__cell:nth-of-type(1) > span'
+    link: '@href'
+    date: '.vacanciesTable__cell:nth-of-type(6) > span'
+    fields: {ref: '.vacanciesTable__cell:nth-of-type(2) > span', office: '.vacanciesTable__cell:nth-of-type(3) > span',
+             process: '.vacanciesTable__cell:nth-of-type(4) > span', closing: '.vacanciesTable__cell:nth-of-type(5) > span'}
+    country_from: {field: office, regex: '([^/]+)$'}
+    deadline_field: closing
+    lookback_days: 14
+
+  # ---------- 国家公共采购平台 ----------
+  # 摩洛哥的水务工程(ONEE 供水、水利司的水坝、各地区多功能服务公司的管网)主要走本国采购平台,多边银行接口里很少。
+  # 按活动领域检索"在招"公告;页面要表单回发才出结果,与在网页上点"检索"相同(会话 + 如实 UA + 限速,不登录、不下载招标文件)。
+  - id: ma_pmmp
+    name: 摩洛哥公共采购门户(水利与供排水工程)
+    kind: atexo_search
+    country: MAR
+    url: https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseAdvancedSearch&AllCons&EnCours
+    domains: ["1.21", "1.13"]   # 1.21 水利、海事与河道工程;1.13 污水、饮用水与各类管网工程
+    # 再按关键词补抓:大型项目常只标顶层"工程"大类(如 Taza、Meknès 的污水处理厂),运营服务、设备供货也在别的领域里。
+    # 一组词为"任一词命中";门户匹配是否区分重音不确定,带重音与不带的都写上。一组结果超过 500 条时拆开(运行时会提示)
+    keywords:
+      - "STEP assainissement épuration epuration potable AEP adduction dessalement pompage réservoir reservoir réservoirs reservoirs forage forages boues collecteur collecteurs émissaire emissaire pluviales"
+      - "irrigation irrigué irrigue irrigués irrigues barrage barrages hydraulique hydrauliques canal canaux seguia séguia khettara khettaras inondations hydromécaniques hydromecaniques"
+    topic: water   # 这些结果都算水务、不再过水务词初筛(STEP 这类缩写、只写"régulation"的标题也不漏);规模看金额门槛,相关与否由模型判定
+    lang: fr
+    follow: {selector: "#infosPrincipales", cut: ["Contact Administratif"]}   # 详情页的主要信息;其后的经办人姓名与联系方式不取
+    min_amount: {label: "Estimation (en Dhs TTC)", value: 20000000, currency: MAD}   # 预估金额低于 2000 万迪拉姆(约 200 万美元)的不入库;门户检索里的金额筛选不可靠,按详情页判断
+
+  # ---------- 海湾国家的水务 PPP 采购公司(海水淡化、污水、输水) ----------
+  # 沙特、阿曼的海水淡化(IWP / IWPP)、污水处理(ISTP)与输水项目多走 PPP,由国家采购公司组织:资格预审、收到投标、选定中标人、
+  # 融资关闭都在其新闻栏发布(两家的"招标"栏只有公司自用的采购)。开发商中标后分包 EPC,是工程承包的线索。
+  - id: sharakat_news
+    name: 沙特水务合作公司 Sharakat(原 SWPC)新闻
+    kind: links
+    country: SAU
+    url: https://www.sharakat.com.sa/en/news/
+    lang: en
+    topic: water   # 全是水务 PPP(海水淡化、污水、输水、储水),每条交给模型判定;获奖、认证之类由模型判为无关
+    lookback_days: 90
+
+  - id: nama_pwp_news
+    name: 阿曼电力与水采购公司 Nama PWP 新闻
+    kind: html_list
+    country: OMN
+    url: https://www.omanpwp.om/news
+    lang: en
+    item: .news-item
+    title: h3
+    link: a.news-nav@href
+    date: .news-date
+    fields: {summary: p}
+    lookback_days: 90   # 电力与水都有:只收命中水务词的(IWP、desalination 等),光伏、风电项目不收

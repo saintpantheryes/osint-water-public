@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 报告</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("reports.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>报告</h1>
+  <p class="muted">所有生成过的报告都在这里:按类型、国别、版本、状态找,点文件名下载。日报每天采集完成后自动出(正文显示在<a href="analysis.html">线索分析</a>页顶部)、周报每周一、月报每月 1 日自动出;国别报告、项目报告和补要一份日报在左边随时要,2 分钟内生成。</p>
+  <div class="two">
+    <div class="col">
+      <div class="form"><h3>要一份新报告</h3>
+        <div class="row"><label>类型</label><select id="rpKind"><option value="国别报告">国别报告</option><option value="项目报告">项目报告</option><option value="日报">日报(今天)</option></select></div>
+        <div class="row" id="rowCountry"><label>国别</label><select id="rpCountry"><option value="">(选国别)</option></select></div>
+        <div class="row" id="rowOpp" style="display:none"><label>商机</label><select id="rpOpp"><option value="">(选商机)</option></select></div>
+        <div class="row"><label>版本</label><select id="rpEd"><option value="内部版">内部版</option><option value="公开版">公开版</option></select></div>
+        <div class="row"><label>模板</label><select id="rpTpl"><option value="">(该类型的缺省模板)</option></select></div>
+        <div class="row"><label></label><button class="primary" id="rpSave">排队生成</button><span class="muted" id="rpMsg"></span></div>
+      </div>
+      <div class="form"><h3>上传一个报告模板</h3>
+        <p class="muted small">Word 文件(.docx):页面、字体、字号、页眉页脚取自它,正文章节仍由后台按报告类型生成。</p>
+        <div class="row"><label>名称</label><input id="tpName" placeholder="如:集团标准版式"></div>
+        <div class="row"><label>适用类型</label><span id="tpKinds" class="frow" style="padding:0;flex:1"></span></div>
+        <div class="row"><label>文件</label><input id="tpFile" type="file" accept=".docx"></div>
+        <div class="row"><label>缺省</label><label style="flex:1;color:inherit"><input id="tpDefault" type="checkbox"> 这些类型没指定模板时就用它</label></div>
+        <div class="row"><label>说明</label><input id="tpNote" placeholder="(可不填)"></div>
+        <div class="row"><label></label><button class="primary" id="tpSave">上传</button><span class="muted" id="tpMsg"></span></div>
+      </div>
+    </div>
+    <div class="col wide">
+      <div class="filters">
+        <div class="frow"><b>类型</b><span id="fKind" class="frow" style="padding:0"></span></div>
+        <div class="frow"><b>版本</b><span id="fEd" class="frow" style="padding:0"></span></div>
+        <div class="frow"><b>状态</b><span id="fSt" class="frow" style="padding:0"></span></div>
+        <div class="frow"><b>国别</b><select id="fCountry" class="inline"><option value="">全部国别</option></select></div>
+        <div class="frow"><b>搜索</b><input id="fText" placeholder="搜国别、商机、期间" size="18"><span class="muted" id="count" style="margin-left:auto"></span></div>
+      </div>
+      <div class="panel" id="list">读取中…</div>
+      <p class="muted">要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开报告表 ↗</a></p>
+      <h2>报告模板 <span class="muted" id="tplCount"></span></h2>
+      <p class="muted small">每类报告用哪个模板:要报告时选了的优先,没选用该类型勾了「缺省」的,一个都没有就用程序自带的版式。换文件在这里传新的(旧的还留着,生成时取最后传的);删模板去表格里删。</p>
+      <div class="panel" id="tpls">读取中…</div>
+    </div>
+  </div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  let me = null, reports = [], opps = [], tpls = [], cname = {}, ciso = {};
+  const g = (r, p) => P.get("report", r, p);
+  const tg = (r, p) => P.get("template", r, p);
+  const flt = { k: "", e: "", s: "" };
+  const tpState = { kinds: [] };
+  const hasTpl = () => !!(P.cfg.tables || {}).template && P.t("report").props.template;
+  const lastFile = (r) => { const fs = tg(r, "file") || []; return fs.length ? fs[fs.length - 1] : null; };
+
+  function scope(r) {
+    const o = g(r, "opportunity"), c = g(r, "country");
+    const oid = P.linkId(o), cid = P.linkId(c);
+    const parts = [];
+    if (cid) parts.push(ciso[cid] ? '<a href="country.html?iso=' + encodeURIComponent(ciso[cid]) + '">' + P.esc(cname[cid] || P.text(c)) + "</a>" : P.esc(P.text(c)));
+    if (oid) parts.push('<a href="' + P.oppUrl(oid) + '">' + P.esc(P.text(o)) + "</a>");
+    if (g(r, "period")) parts.push(P.esc(P.text(g(r, "period"))));
+    return parts.join(" · ") || "—";
+  }
+  function render() {
+    const c = $("fCountry").value, t = $("fText").value.trim().toLowerCase();
+    const rows = reports.filter((r) => {
+      if (flt.k && g(r, "kind") !== flt.k) return false;
+      if (flt.e && g(r, "edition") !== flt.e) return false;
+      if (flt.s && (g(r, "gen_status") || "") !== flt.s) return false;
+      if (c && P.linkId(g(r, "country")) !== c) return false;
+      if (t && !((cname[P.linkId(g(r, "country"))] || "") + " " + P.text(g(r, "opportunity")) + " " + P.text(g(r, "period"))).toLowerCase().includes(t)) return false;
+      return true;
+    });
+    $("count").textContent = rows.length + " 份";
+    $("list").innerHTML = P.tableHtml(["日期", "类型", "范围", "版本", "状态", "发起人", "文件", ""], rows.map((r) => {
+      const st = g(r, "gen_status") || "";
+      return [P.day(g(r, "day")), g(r, "kind"), P.raw(scope(r)), g(r, "edition"), P.raw(st === "失败" ? '<span class="over">失败</span>' : st === "完成" ? "完成" : '<span class="muted">' + P.esc(st || "—") + "</span>"), P.text(g(r, "requested_by")) || "自动",
+        P.raw((g(r, "file") || []).map((a) => '<a href="' + P.esc(P.fileUrl(a)) + '" target="_blank" rel="noopener">' + P.esc(a.name) + "</a>").join("<br>") || '<span class="muted">—</span>'), P.raw(P.open("report", r.id))];
+    }));
+  }
+  async function load() {
+    reports = await P.records("report", { orderBy: [{ fieldId: P.f("report", "day"), order: "desc" }], props: ["kind", "day", "period", "country", "opportunity", "edition", "file", "gen_status", "requested_by"] });
+    render();
+  }
+  /* 模板:清单、要报告时的下拉、上传、换文件、设缺省 */
+  async function loadTpls() {
+    if (!hasTpl()) { $("tpls").innerHTML = '<p class="muted">库里还没有「报告模板」表(管理员跑一次建表命令就有)。</p>'; return; }
+    tpls = await P.records("template", { props: ["name", "kinds", "file", "is_default", "note"] });
+    tpls.sort((a, b) => String(tg(a, "name") || "").localeCompare(String(tg(b, "name") || "")));
+    $("tplCount").textContent = tpls.length ? tpls.length + " 个" : "";
+    $("tpls").innerHTML = tpls.length ? P.tableHtml(["名称", "适用类型", "缺省", "文件", "说明", ""], tpls.map((r) => {
+      const f = lastFile(r);
+      return [tg(r, "name"), (tg(r, "kinds") || []).join("、"), tg(r, "is_default") ? "✓" : "", P.raw(f ? '<a href="' + P.esc(P.fileUrl(f)) + '" target="_blank" rel="noopener">' + P.esc(f.name) + "</a>" : '<span class="over">还没传文件</span>'), tg(r, "note") || "",
+        P.raw('<span class="it-act" style="min-width:0;flex-direction:row;gap:6px"><button type="button" data-a="file" data-id="' + r.id + '">换文件</button>' + (tg(r, "is_default") ? "" : '<button type="button" data-a="def" data-id="' + r.id + '">设为缺省</button>') + P.open("template", r.id) + "</span>")];
+    })) : '<p class="muted">还没有模板,现在用的是程序自带的版式;在左边传一个就会用它。</p>';
+    $("tpls").querySelectorAll('button[data-a="file"]').forEach((b) => { b.onclick = () => replaceFile(b.dataset.id, b); });
+    $("tpls").querySelectorAll('button[data-a="def"]').forEach((b) => { b.onclick = () => setDefault(b.dataset.id, b); });
+    fillTplPick();
+  }
+  function fillTplPick() {
+    const kind = $("rpKind").value, sel = $("rpTpl"), cur = sel.value;
+    sel.innerHTML = '<option value="">(该类型的缺省模板)</option>';
+    tpls.filter((r) => (tg(r, "kinds") || []).includes(kind) && lastFile(r)).forEach((r) => { const op = document.createElement("option"); op.value = r.id; op.textContent = tg(r, "name") + (tg(r, "is_default") ? "(缺省)" : ""); sel.appendChild(op); });
+    sel.value = cur; if (sel.value !== cur) sel.value = "";
+  }
+  async function saveTpl() {
+    const name = $("tpName").value.trim(), file = ($("tpFile").files || [])[0];
+    if (!name) { P.toast("模板要有名称", true); return; }
+    if (!tpState.kinds.length) { P.toast("选一下适用的报告类型", true); return; }
+    if (!file) { P.toast("选一个 .docx 文件", true); return; }
+    if (!/\.docx$/i.test(file.name)) { P.toast("只收 Word 的 .docx 文件", true); return; }
+    const btn = $("tpSave"); btn.disabled = true; $("tpMsg").textContent = "上传中…";
+    try {
+      const rec = await P.create("template", { name, kinds: tpState.kinds, is_default: $("tpDefault").checked, note: $("tpNote").value.trim() });
+      await P.upload("template", rec.id, "file", file);
+      if ($("tpDefault").checked) await clearOtherDefaults(rec.id, tpState.kinds);
+      $("tpName").value = ""; $("tpNote").value = ""; $("tpFile").value = ""; $("tpDefault").checked = false; tpState.kinds = []; renderKindChips();
+      P.toast("模板已上传");
+      await loadTpls();
+    } catch (e) { P.toast(e.message, true); } finally { btn.disabled = false; $("tpMsg").textContent = ""; }
+  }
+  async function clearOtherDefaults(keepId, kinds) {
+    const others = tpls.filter((r) => r.id !== keepId && tg(r, "is_default") && (tg(r, "kinds") || []).some((k) => kinds.includes(k)));
+    for (const r of others) await P.patch("template", r.id, { is_default: false });
+  }
+  async function setDefault(rid, btn) {
+    const r = tpls.find((x) => x.id === rid); if (!r) return;
+    btn.disabled = true;
+    try { await P.patch("template", rid, { is_default: true }); await clearOtherDefaults(rid, tg(r, "kinds") || []); P.toast("已设为缺省"); await loadTpls(); }
+    catch (e) { P.toast(e.message, true); btn.disabled = false; }
+  }
+  function replaceFile(rid, btn) {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".docx";
+    inp.onchange = async () => {
+      const file = inp.files[0]; if (!file) return;
+      if (!/\.docx$/i.test(file.name)) { P.toast("只收 Word 的 .docx 文件", true); return; }
+      btn.disabled = true;
+      try { await P.upload("template", rid, "file", file); P.toast("新文件已传上,以后生成用它"); await loadTpls(); }
+      catch (e) { P.toast(e.message, true); btn.disabled = false; }
+    };
+    inp.click();
+  }
+  function renderKindChips() { P.chips($("tpKinds"), P.choices("template", "kinds").map((k) => [k, k]), tpState, "kinds", () => {}, true); }
+
+  function fillOpps() {
+    const cid = $("rpCountry").value, sel = $("rpOpp");
+    sel.innerHTML = '<option value="">(选商机)</option>';
+    opps.filter((o) => !cid || P.linkId(P.get("opportunity", o, "country")) === cid).forEach((o) => { const op = document.createElement("option"); op.value = o.id; op.textContent = (P.get("opportunity", o, "code") || "") + " " + (P.get("opportunity", o, "name_zh") || ""); sel.appendChild(op); });
+  }
+  async function requestReport() {
+    const kind = $("rpKind").value, cid = $("rpCountry").value, oid = $("rpOpp").value;
+    if (kind === "项目报告" && !oid) { P.toast("项目报告要选商机", true); return; }
+    if (kind === "国别报告" && !cid) { P.toast("国别报告要选国别", true); return; }
+    const btn = $("rpSave"); btn.disabled = true; $("rpMsg").textContent = "排队中…";
+    try {
+      const o = oid ? opps.find((x) => x.id === oid) : null;
+      await P.create("report", { kind, edition: $("rpEd").value, day: P.today(), gen_status: "待生成", requested_by: me && me.id, period: kind === "日报" ? P.today() : undefined,
+        opportunity: kind === "项目报告" ? oid : null, country: kind === "日报" ? null : cid || (o ? P.linkId(P.get("opportunity", o, "country")) : null), template: hasTpl() ? $("rpTpl").value : undefined });
+      P.toast("已排队,2 分钟内生成,出来后在右边列表里");
+      await load();
+    } catch (e) { P.toast(e.message, true); } finally { btn.disabled = false; $("rpMsg").textContent = ""; }
+  }
+
+  try {
+    await P.load();
+    if (!(await P.canWrite())) P.guest();  // 游客帐号(查看者)只能看
+    $("tbl").href = P.tableUrl("report");
+    const [u, cs, os] = await Promise.all([P.me(), P.countries(), P.records("opportunity", { props: ["code", "name_zh", "stage", "country"] })]);
+    me = u; opps = P.tracked(os).concat(os.filter((o) => !P.tracked([o]).length));
+    cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); ciso[c.id] = P.get("country", c, "key"); });
+    ["fCountry", "rpCountry"].forEach((id) => P.fillCountrySelect($(id), cs.map((c) => [c.id, cname[c.id]])));
+    const kinds = P.choices("report", "kind"), eds = P.choices("report", "edition"), sts = P.choices("report", "gen_status");
+    P.chips($("fKind"), [["", "全部"]].concat(kinds.map((k) => [k, k])), flt, "k", render);
+    P.chips($("fEd"), [["", "全部"]].concat(eds.map((k) => [k, k])), flt, "e", render);
+    P.chips($("fSt"), [["", "全部"]].concat(sts.map((k) => [k, k])), flt, "s", render);
+    $("fCountry").onchange = render; $("fText").oninput = render;
+    $("rpKind").onchange = () => { $("rowOpp").style.display = $("rpKind").value === "项目报告" ? "" : "none"; $("rowCountry").style.display = $("rpKind").value === "日报" ? "none" : ""; fillTplPick(); };
+    if (hasTpl()) { renderKindChips(); $("tpSave").onclick = saveTpl; } else { $("tpSave").disabled = true; $("tpMsg").textContent = "库里还没有「报告模板」表"; }
+    $("rpCountry").onchange = fillOpps; fillOpps();
+    $("rpSave").onclick = requestReport;
+    const q = new URLSearchParams(location.search);
+    if (q.get("kind")) { if (kinds.includes(q.get("kind"))) { flt.k = q.get("kind"); P.chips($("fKind"), [["", "全部"]].concat(kinds.map((k) => [k, k])), flt, "k", render); render(); } if ([...$("rpKind").options].some((o) => o.value === q.get("kind"))) { $("rpKind").value = q.get("kind"); $("rpKind").onchange(); } }
+    await Promise.all([load(), loadTpls()]);
+  } catch (e) { P.fail($("list"), e); }
+})();
+</script>
+</body>
+</html>

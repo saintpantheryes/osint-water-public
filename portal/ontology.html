@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 本体</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="echarts.min.js"></script>
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("ontology.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <div class="toolbar"><h1 style="margin:0">本体</h1><span id="ver" class="muted"></span>
+    <span class="muted small" style="margin-left:auto">这页只读:系统里有哪些对象、它们之间的关系、每个选项的定义与口径,全部按本体文件显示;要改本体暂时还是改文件(下一步做页面上改)</span></div>
+  <div class="cards" id="cards"></div>
+  <div class="onto">
+    <div class="col wide">
+      <div class="panel">
+        <div class="toolbar" style="margin:0 0 6px"><h2 style="margin:0">对象与关系</h2><span class="muted small">点一个对象看它的属性;箭头是「谁关联谁」,线上是关联的名字</span></div>
+        <div id="objs" class="chips" style="margin-bottom:6px"></div>
+        <div id="graph" class="chart tall"></div>
+        <div class="legend small"><span><i style="background:#0e6ba8"></i>公开数据(机器采集、整理)</span><span><i style="background:#15803d"></i>业务数据(人填)</span><span><i style="background:#fff;border:2px solid #111827;width:10px;height:10px"></i>核心对象</span></div>
+      </div>
+    </div>
+    <div class="col"><div class="panel" id="detail"><p class="muted">读取中…</p></div></div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="tab" data-t="tax"><div id="tax"></div></div>
+  <div class="tab" data-t="glossary"><div class="panel" id="glossary"></div><h2>行业术语(助手理解提问用;跨领域的词不当成某一个领域)</h2><div class="panel" id="terms"></div><h2>归组(页面筛选用,底下的字段是自由文本)</h2><div id="groupings"></div></div>
+  <div class="tab" data-t="rules"><div class="panel" id="rules"></div></div>
+  <div class="tab" data-t="actions"><div class="panel" id="actions"></div></div>
+  <div class="tab" data-t="views"><h2>视图(查询,不存)</h2><div class="panel" id="views"></div><h2>事件 → 行为</h2><div class="panel" id="events"></div></div>
+  <div class="tab" data-t="changes"><div class="panel" id="changes"></div></div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const BAND = { public: "#0e6ba8", business: "#15803d" };
+  const BY = { ai: "机器写", human: "人写", derived: "派生(不存,用时算)" };
+  const ACTOR = { ai: "机器", human: "人" };
+  const TABS = [["tax", "分类体系(选项与定义)"], ["glossary", "口径与归组"], ["rules", "规则"], ["actions", "行为"], ["views", "视图与事件"], ["changes", "版本记录"]];
+  let O = null, chart = null, cur = null, tab = "tax";
+  const q0 = new URLSearchParams(location.search);
+  const esc = (s) => P.esc(s);
+  const url = () => { const u = new URLSearchParams(); if (cur) u.set("o", cur); u.set("t", tab); history.replaceState(null, "", "ontology.html?" + u); };
+
+  /* 类型 → 中文 */
+  function typeZh(t) {
+    const m = { text: "文本", url: "网址", longtext: "长文本", list: "列表(一行一项)", date: "日期", datetime: "日期时间", pdate: "日期(可不精确)", number: "数字", bool: "勾选", enum: "单选", enums: "多选", file: "附件", "link:member": "成员" };
+    if (m[t]) return m[t];
+    if (t.startsWith("links:")) return "关联多个 → " + objName(t.slice(6));
+    if (t.startsWith("link:")) return "关联 → " + objName(t.slice(5));
+    return t;
+  }
+  const objName = (id) => { const o = O.objects.find((x) => x.id === id); return o ? o.name : id; };
+  const objLink = (id) => '<a href="#" data-o="' + esc(id) + '" class="olink">' + esc(objName(id)) + "</a>";
+  const taxLink = (tid, label) => '<a href="#" data-tax="' + esc(tid) + '" class="tlink">' + esc(label || (O.taxonomies[tid] || {}).name || tid) + "</a>";
+  const propName = (ref) => { const [oid, pid] = ref.split("."); const o = O.objects.find((x) => x.id === oid); const p = o && o.properties.find((x) => x.id === pid); return objName(oid) + "." + (p ? p.name : pid); };
+  function wire(root) {
+    root.querySelectorAll("a.olink").forEach((a) => { a.onclick = (e) => { e.preventDefault(); select(a.dataset.o); }; });
+    root.querySelectorAll("a.tlink").forEach((a) => { a.onclick = (e) => { e.preventDefault(); showTab("tax"); const el = document.getElementById("tax-" + a.dataset.tax); if (el) { el.open = true; el.scrollIntoView({ behavior: "smooth", block: "start" }); } }; });
+  }
+
+  /* 对象与关系图:环形布局,核心对象描黑边,颜色按公开 / 业务;点节点看详情 */
+  /* 位置自己算:核心对象在里圈,其余在外圈(环形自动布局在窄屏上会把节点挤出画面) */
+  function positions() {
+    const W = $("graph").clientWidth || 800, H = $("graph").clientHeight || 440, cx = W / 2, cy = H / 2;
+    const core = O.objects.filter((o) => o.core), rest = O.objects.filter((o) => !o.core), pos = {};
+    core.forEach((o, i) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / core.length; pos[o.id] = [cx + Math.cos(a) * Math.min(W, H) * 0.18, cy + Math.sin(a) * Math.min(W, H) * 0.2]; });
+    rest.forEach((o, i) => { const a = -Math.PI / 2 + Math.PI / rest.length + (i * 2 * Math.PI) / rest.length; pos[o.id] = [cx + Math.cos(a) * (W / 2 - 70), cy + Math.sin(a) * (H / 2 - 40)]; });
+    return pos;
+  }
+  function drawGraph() {
+    chart = echarts.init($("graph"));
+    const pos = positions();
+    nodes = O.objects.map((o) => ({ id: o.id, name: o.name, value: o.properties.length, x: pos[o.id][0], y: pos[o.id][1], symbolSize: 44 + Math.min(o.properties.length, 40) * 0.9,
+      itemStyle: { color: BAND[o.band] || "#6b7280", borderColor: o.core ? "#111827" : "#fff", borderWidth: o.core ? 3 : 1 },
+      label: { show: true, fontSize: 12, fontWeight: o.core ? "bold" : "normal", color: "#fff" } }));
+    const links = O.links.map((l) => ({ source: l.from, target: l.to, name: l.name, cardinality: l.cardinality, via: l.via, kind: l.kind,
+      label: { show: true, formatter: l.name, fontSize: 10, color: "#6b7280" }, lineStyle: { curveness: 0.25, width: l.kind === "composition" ? 2.5 : 1.2, type: l.kind === "composition" ? "solid" : "solid" } }));
+    chart.setOption({
+      tooltip: { formatter: (p) => p.dataType === "edge" ? esc(objName(p.data.source)) + " → " + esc(objName(p.data.target)) + "<br>" + esc(p.data.name) + "(" + esc(p.data.cardinality) + ")<br><span class=\"muted\">属性 " + esc(propName(p.data.via)) + "</span>" : "<b>" + esc(p.data.name) + "</b> · " + p.data.value + " 个属性<br>点击看详情" },
+      series: [{ type: "graph", layout: "none", roam: false, data: nodes, links, edgeSymbol: ["none", "arrow"], edgeSymbolSize: 8,
+        emphasis: { focus: "adjacency", lineStyle: { width: 3 } }, lineStyle: { color: "#94a3b8", opacity: 0.8 } }],
+    });
+    chart.on("click", (p) => { if (p.dataType === "node") select(p.data.id); });
+    window.addEventListener("resize", () => { const p = positions(); chart.setOption({ series: [{ data: nodes.map((n) => Object.assign(n, { x: p[n.id][0], y: p[n.id][1] })) }] }); chart.resize(); });
+  }
+  /* 选中的对象描橙边(不用 highlight:它会把不相邻的节点淡掉) */
+  let nodes = [];
+  function highlight() {
+    if (!chart) return;
+    chart.setOption({ series: [{ data: nodes.map((n) => { const o = O.objects.find((x) => x.id === n.id); return Object.assign(n, { itemStyle: { color: BAND[o.band] || "#6b7280", borderColor: n.id === cur ? "#f59e0b" : (o.core ? "#111827" : "#fff"), borderWidth: n.id === cur ? 4 : (o.core ? 3 : 1) } }); }) }] });
+  }
+
+  /* 一个对象的详情:定义、标识、状态流转、属性(按写入方分组)、涉及它的行为 */
+  function select(oid) {
+    cur = oid; url(); highlight();
+    $("objs").querySelectorAll(".chip-btn").forEach((b) => b.classList.toggle("on", b.dataset.v === oid));
+    const o = O.objects.find((x) => x.id === oid);
+    if (!o) { $("detail").innerHTML = '<p class="muted">点左边的对象</p>'; return; }
+    const open = P.cfg && P.cfg.tables && P.cfg.tables[oid] ? ' <a class="open" href="' + P.tableUrl(oid) + '" target="_blank" rel="noopener">在表格里打开 ↗</a>' : "";
+    let h = '<h2 style="margin:0 0 4px">' + esc(o.name) + ' <span class="muted small">' + esc(o.id) + "</span>" + open + "</h2>";
+    h += '<p class="small"><span class="tag" style="background:' + (BAND[o.band] || "#6b7280") + ';color:#fff">' + (o.band === "business" ? "业务数据" : "公开数据") + "</span>" + (o.core ? '<span class="tag">核心对象</span>' : "") + "</p>";
+    h += "<p>" + esc(o.definition) + "</p><p class=\"small\"><b class=\"muted\">标识</b> " + esc(o.key) + "</p>";
+    if (o.states) {
+      const sp = o.properties.find((p) => p.id === o.states.property);
+      h += '<h3>状态流转 <span class="muted small">(' + esc(sp ? sp.name : o.states.property) + ",只由人改)</span></h3><ul class=\"list small\">" +
+        o.states.transitions.map((t) => "<li>" + esc(t.from) + " → " + esc(t.to) + (t.note ? ' <span class="muted">(' + esc(t.note) + ")</span>" : "") + "</li>").join("") +
+        (o.states.initial_by_ai ? "<li>机器新建时只能是「" + esc(o.states.initial_by_ai) + "」</li>" : "") + "</ul>";
+    }
+    const rel = O.links.filter((l) => l.from === oid || l.to === oid);
+    if (rel.length) h += "<h3>关系</h3><ul class=\"list small\">" + rel.map((l) => "<li>" + (l.from === oid ? "→ " + objLink(l.to) : "← " + objLink(l.from)) + " " + esc(l.name) + ' <span class="muted">(' + esc(l.cardinality) + ")</span></li>").join("") + "</ul>";
+    h += "<h3>属性 <span class=\"muted small\">" + o.properties.length + " 个</span></h3>";
+    for (const by of ["ai", "human", "derived"]) {
+      const ps = o.properties.filter((p) => p.by === by);
+      if (!ps.length) continue;
+      h += '<h4 class="muted small" style="margin:8px 0 2px">' + BY[by] + "</h4><table class=\"props\"><tbody>" + ps.map((p) => {
+        const en = (p.type === "enum" || p.type === "enums") && p.taxonomy ? '<div class="small">' + taxLink(p.taxonomy, "选项:" + p.enum.join(" / ")) + "</div>" : "";
+        const extra = [p.required ? "必填" : "", p.format ? "写法:" + p.format : "", p.where ? "在哪算:" + p.where : "", p.note || ""].filter(Boolean).join(";");
+        return "<tr><td><b>" + esc(p.name) + "</b><div class=\"muted small\">" + esc(p.id) + "</div></td><td class=\"small\">" + typeZh(p.type) + en + (extra ? '<div class="muted">' + esc(extra) + "</div>" : "") + "</td></tr>";
+      }).join("") + "</tbody></table>";
+    }
+    const acts = O.actions.filter((a) => a.creates === oid || (a.reads || []).includes(oid) || (a.writes || []).some((w) => w.startsWith(oid + ".")) || Object.keys(a.sets_on_create || {}).some((w) => w.startsWith(oid + ".")));
+    if (acts.length) h += "<h3>涉及它的行为</h3><ul class=\"list small\">" + acts.map((a) => "<li>" + esc(a.id) + " " + esc(a.name) + ' <span class="muted">(' + ACTOR[a.actor] + (a.creates === oid ? ",新建" : (a.writes || []).some((w) => w.startsWith(oid + ".")) ? ",写" : ",读") + ")</span></li>").join("") + "</ul>";
+    const views = O.views.filter((v) => (v.of || []).includes(oid));
+    if (views.length) h += '<p class="small"><b class="muted">出现在</b> ' + views.map((v) => esc(v.id + " " + v.name)).join("、") + "</p>";
+    $("detail").innerHTML = h; wire($("detail"));
+  }
+
+  /* 分类体系:每套一个折叠块,值表带英文键、定义、边界、示例 */
+  function drawTax() {
+    $("tax").innerHTML = Object.entries(O.taxonomies).map(([tid, t]) => {
+      const used = (t.used_by || []).map((r) => { const [oid] = r.split("."); return objLink(oid) + "." + esc(propName(r).split(".")[1]); }).join("、");
+      const n = t.groups.reduce((s, g) => s + g.values.length, 0);
+      return '<details class="sec panel" id="tax-' + esc(tid) + '"><summary>' + esc(t.name) + ' <span class="muted small">' + esc(tid) + " · " + n + " 个值 · 用在 " + "</span>" + '<span class="small">' + used + "</span></summary>" +
+        (t.note ? '<p class="muted small">' + esc(t.note) + "</p>" : "") +
+        t.groups.map((g) => (t.groups.length > 1 || g.name !== "全部" ? "<h4 class=\"small\" style=\"margin:8px 0 2px\">" + esc(g.name) + "</h4>" : "") +
+          P.tableHtml(["值", "英文键", "定义", "边界", "示例"], g.values.map((v) => [v.v + (v.parent ? "(上级:" + v.parent + ")" : ""), v.code, v.def || "", v.boundary || "", v.example || ""]))).join("") + "</details>";
+    }).join("");
+    wire($("tax"));
+  }
+  function drawGlossary() {
+    $("glossary").innerHTML = "<h2 style=\"margin-top:0\">口径(同一个词在页面、报告、表格视图里只定一次)</h2>" + P.tableHtml(["口径", "含义", "用在哪"], Object.entries(O.glossary).map(([k, g]) => [g.term + "(" + k + ")", g.means + (g.example ? ";示例 " + g.example : ""), (g.used_in || []).join("、")]));
+    // 行业术语:平时读 Teable「行业术语」表(助手也读它);表没建、读不到(游客)时显示本体里的初始词
+    const termHead = ["术语", "同义说法", "跨哪些领域", "按领域筛", "相关词(查标题与中文摘要,含任一个即算)", "说明"];
+    const list = (x) => (Array.isArray(x) ? x : String(x || "").split(/[\n、,，;；]+/)).map((w) => String(w).trim()).filter(Boolean).join("、");
+    $("terms").innerHTML = '<p class="muted small">本体里的初始词</p>' + P.tableHtml(termHead, (O.terms || []).map((t) => [t.term, list(t.aliases), list(t.covers), list(t.sectors) || "不限领域", list(t.match), t.means || ""]));
+    (async () => {
+      const rows = await P.records("term", { props: ["term", "aliases", "covers", "sectors", "match", "means", "disabled"] });
+      $("terms").innerHTML = '<p class="small">助手读的是表格「行业术语」:在表里加一行、改相关词,下一分钟起的提问就用上;不用的勾「停用」。' + (P.isGuest ? "" : ' <a href="' + P.tableUrl("term") + '" target="_blank" rel="noopener">在表格里打开 →</a>') + "</p>" +
+        P.tableHtml(termHead, rows.filter((r) => !P.get("term", r, "disabled")).map((r) => [P.get("term", r, "term") || "", list(P.get("term", r, "aliases")), list(P.get("term", r, "covers")),
+          list(P.get("term", r, "sectors")) || "不限领域", list(P.get("term", r, "match")), P.get("term", r, "means") || ""]));
+    })().catch(() => {});
+    $("groupings").innerHTML = Object.entries(O.groupings).map(([gid, g]) => '<div class="panel"><h3 style="margin-top:0">' + esc(g.name) + ' <span class="muted small">' + esc(gid) + " · 作用于 " + (g.over || []).map(propName).join("、") + "</span></h3><p class=\"small\">" + esc(g.def) + "</p>" +
+      (g.groups ? P.tableHtml(["组", "英文键", "出资方文本里包含任一个即归这组"], g.groups.map((x) => [x.v, x.code, (x.patterns || []).join("、")])) : "") +
+      '<p class="muted small">' + (g.other ? "有值但不属于任何一组 → 「" + esc(g.other) + "」;" : "") + (g.empty ? "没有值 → 「" + esc(g.empty) + "」" : "") + (g.note ? "<br>" + esc(g.note) : "") + "</p></div>").join("");
+  }
+  function drawRules() {
+    $("rules").innerHTML = P.tableHtml(["编号", "规则", "内容", "怎么落实", "为什么"], O.rules.map((r) => [r.id, r.name, r.text, r.enforce || "", r.why || r.note || ""]));
+  }
+  function drawActions() {
+    $("actions").innerHTML = P.tableHtml(["编号", "行为", "谁", "在哪 / 何时", "读", "新建", "写"], O.actions.map((a) => [a.id, a.name + (a.note ? "\n" + a.note : ""), ACTOR[a.actor],
+      [(a.channel || []).join(" / "), a.trigger].filter(Boolean).join(";"), P.raw((a.reads || []).map(objLink).join("、")), P.raw(a.creates ? objLink(a.creates) : ""),
+      (a.writes || []).map(propName).join("、") + (a.sets_on_create ? "\n新建时:" + Object.entries(a.sets_on_create).map(([k, v]) => propName(k) + " = " + v).join("、") : "")]));
+    wire($("actions"));
+  }
+  function drawViews() {
+    $("views").innerHTML = P.tableHtml(["编号", "视图", "对象", "在哪看", "查询"], O.views.map((v) => [v.id, v.name, P.raw((v.of || []).map(objLink).join("、")), (v.channel || []).join(" / "), v.query]));
+    $("events").innerHTML = P.tableHtml(["编号", "当…", "就…", "说明"], O.events.map((e) => [e.id, e.when, (e.then || []).map((aid) => { const a = O.actions.find((x) => x.id === aid); return aid + (a ? " " + a.name : ""); }).join("、") || "(还没做)", e.note || ""]));
+    wire($("views"));
+  }
+  function drawChanges() {
+    const keys = Object.keys(O).filter((k) => k.startsWith("changes_v")).sort().reverse();
+    $("changes").innerHTML = '<p class="small"><b class="muted">当前版本</b> ' + esc(O.version) + "(" + esc(O.date) + ")</p>" +
+      keys.map((k) => "<h3>" + esc(k.replace("changes_v", "v").replace("_", ".")) + "</h3><ul class=\"list small\">" + (O[k] || []).map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul>").join("") +
+      "<h3>已定事项</h3><ul class=\"list small\">" + (O.decisions || []).map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul>";
+  }
+  function showTab(k) {
+    tab = k; url();
+    $("tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.t === k));
+    document.querySelectorAll(".tab").forEach((d) => d.classList.toggle("on", d.dataset.t === k));
+  }
+
+  try {
+    await P.load();
+    O = P.onto;
+    $("ver").textContent = "v" + O.version + " · " + O.date + " · " + O.schema;
+    const nProps = O.objects.reduce((s, o) => s + o.properties.length, 0), nVals = Object.values(O.taxonomies).reduce((s, t) => s + t.groups.reduce((x, g) => x + g.values.length, 0), 0);
+    $("cards").innerHTML = [[O.objects.length, "对象"], [nProps, "属性"], [O.links.length, "关系"], [Object.keys(O.taxonomies).length + " / " + nVals, "分类体系 / 选项值"], [O.actions.length, "行为"], [O.rules.length, "规则"], [O.views.length, "视图"]]
+      .map(([n, l]) => '<div class="card"><div class="n">' + n + '</div><div class="l">' + l + "</div></div>").join("");
+    $("objs").innerHTML = O.objects.map((o) => '<button type="button" class="chip-btn" data-v="' + esc(o.id) + '">' + esc(o.name) + ' <span class="muted small">' + o.properties.length + "</span></button>").join("");
+    $("objs").querySelectorAll(".chip-btn").forEach((b) => { b.onclick = () => select(b.dataset.v); });
+    drawGraph(); drawTax(); drawGlossary(); drawRules(); drawActions(); drawViews(); drawChanges();
+    $("tabs").innerHTML = TABS.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + "</button>").join("");
+    $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
+    showTab(TABS.some(([k]) => k === q0.get("t")) ? q0.get("t") : "tax");
+    select(O.objects.some((o) => o.id === q0.get("o")) ? q0.get("o") : "opportunity");
+  } catch (e) { P.fail($("detail"), e); }
+})();
+</script>
+</body>
+</html>

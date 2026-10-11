@@ -1,0 +1,175 @@
+# Teable 专用的映射:本体(ontology.yaml)→ 新库的表、字段、视图(架构方案第 3 节)。core/schema.py 读本体与本文件建表,只增不删、可重复运行。
+# 字段名一律用本体里的属性名;这里只写本体之外的事:表名与建表顺序、主字段、标识字段、缺省值、关联的方向与反向字段名、
+# 派生属性在 Teable 里的做法、辅助公式、系统字段、视图。类型映射(本体类型 → Teable 字段)写在 core/ontology.py。
+# 公式里的 {字段名} 由 schema 换成字段编号。verify: A 的是阶段 A 要核验的能力:建不成时 schema 记警告并跳过或用 fallback
+# (后备做法见架构方案第 9 节),不中断。
+schema: osint-water/teable-map@1
+base: 水务项目机会 新版
+timezone: Asia/Shanghai
+order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term]   # 建表顺序(关联字段在所有表建好后再加)
+
+tables:
+  lead:
+    table: 线索
+    primary: title
+    key: {name: 线索号, note: 信源 + 原文键的指纹(8 位);去重与迁移按它}
+    defaults: {status: 待处理, origin: 用户上传}   # 人在表里新建的行就是上传的线索(A02):来源方式缺省为用户上传
+  country:
+    table: 国别
+    primary: name_zh
+    key: {name: ISO3, note: ISO 3166-1 三位字母代码}
+  city:
+    table: 城市
+    primary: name_zh
+    key: {name: 城市码, note: GeoNames 编号;去重按它}
+    optional: true   # 2026-10-08 新加的表:库里还没建时后台与页面跳过(tstore.Base.missing),不中断
+  supply_plant:
+    table: 自来水厂
+    primary: name
+    key: {name: 编号, note: 导入数据的原编号;去重按它}
+    optional: true   # 2026-10-09 新加的表:库里还没建时后台与页面跳过
+  sewage_plant:
+    table: 污水厂
+    primary: name
+    key: {name: 编号, note: 导入数据的原编号;去重按它}
+    optional: true
+  opportunity:
+    table: 商机
+    primary: name_zh
+    defaults: {stage: 建议}
+    options: {owner: {shouldNotify: true}}   # 被设为负责人时站内通知本人(使用方 2026-09-29 定)
+    system:   # Teable 的"最后修改人 / 时间",只跟踪「我方阶段」(A18 用;派生,机器不写)
+      - {name: 阶段修改人, type: lastModifiedBy, track: [stage], verify: A}
+      - {name: 阶段修改时间, type: lastModifiedTime, track: [stage], verify: A}
+  followup:
+    table: 跟进记录
+    primary:
+      name: 摘要
+      formula: 'DATETIME_FORMAT({日期}, "YYYY-MM-DD") & " · " & {记录人} & " · " & LEFT({内容}, 40)'
+      fallback: 'DATETIME_FORMAT({日期}, "YYYY-MM-DD") & " · " & LEFT({内容}, 40)'
+      verify: A   # 长文本未必能做主字段,用公式(审查二-5)
+    default_sort: [[日期, desc]]
+  source:
+    table: 信源
+    primary: name
+    key: {name: 信源编号, by: human, note: 与 git 里 watch.yaml 的信源编号对应:怎么抓在 git,抓不抓、抓得怎样在表里}
+  milestone:
+    table: 时间节点
+    primary:
+      name: 节点
+      formula: '{类型} & " · " & {日期原文}'
+      fallback: '{类型} & " · " & DATETIME_FORMAT({日期}, "YYYY-MM-DD")'
+    helpers:   # 辅助公式(派生,机器不写)。"未来" = 状态不是"已发生"且日期不早于今天(TODAY();实施审查三-A,使用方 2026-10-03 定的)。
+               # Teable 隔天重不重算含 TODAY 的公式,阶段 A 第二天用 teable_probe.py --recheck 核验;不重算就由后台每天把过期节点改为「已发生」,改状态会触发重算,公式照样对
+      - name: 未过截止
+        format: date
+        formula: 'IF(AND(NOT({状态} = "已发生"), NOT(IS_BEFORE({日期}, TODAY())), OR({类型} = "意向书截止", {类型} = "资格预审截止", {类型} = "投标截止", {类型} = "PPP标书截止")), {日期}, BLANK())'
+      - name: 最晚启动(辅助)
+        format: date
+        formula: latest_start   # 由 profile 的 lead_times 生成:日期 − 该类节点的内部流程周期(审查二-1)
+  template:
+    table: 报告模板
+    primary: name
+  company:
+    table: 公司资料
+    primary: name
+    optional: true   # 2026-10-08 新加的表:库里还没建时后台与页面跳过
+  preference:
+    table: 个人设置
+    primary: name
+    optional: true
+  term:
+    table: 行业术语
+    primary: term
+    optional: true   # 2026-10-09 新加的表:库里还没建时助手用本体 terms 节的初始词
+  report:
+    table: 报告
+    key: {name: 文件名, note: 报告文件的文件名(含扩展名);生成报告时写,迁移与再生成按它增量——附件上传失败也认得出这一行}
+    primary:
+      name: 报告号
+      formula: '{类型} & " · " & {范围国别} & {范围商机} & " · " & DATETIME_FORMAT({日期}, "YYYY-MM-DD") & IF({版本}, " · " & {版本}, "")'
+      fallback: '{类型} & " · " & DATETIME_FORMAT({日期}, "YYYY-MM-DD") & IF({版本}, " · " & {版本}, "")'
+    default_sort: [[日期, desc]]
+
+# 关联:本体里的 link / links 属性。reverse:Teable 在对方表里自动生成的反向字段改成这个名字;one_way:不生成反向字段。
+links:
+  lead.source: {reverse: 线索}
+  lead.country: {reverse: 线索}
+  lead.suggested_opp: {one_way: true}
+  lead.opportunity: {reverse: 所属线索}
+  opportunity.country: {reverse: 商机}
+  city.country: {reverse: 城市}
+  lead.city: {reverse: 线索}
+  opportunity.city: {reverse: 商机}
+  opportunity.sources: {reverse: 作为出处的商机}
+  milestone.opportunity: {reverse: 时间节点}
+  milestone.lead: {reverse: 时间节点}
+  milestone.country: {reverse: 时间节点}
+  milestone.source: {one_way: true}
+  followup.opportunity: {reverse: 跟进记录}
+  report.country: {reverse: 报告}
+  report.opportunity: {reverse: 范围报告}
+  report.cites_leads: {reverse: 写进的报告}   # 即线索的派生属性「写进的报告」
+  report.cites_opps: {reverse: 写进的报告}
+  report.template: {reverse: 报告}
+  supply_plant.country: {one_way: true}   # 国别表不要两万多条的反向字段
+  supply_plant.city: {reverse: 自来水厂}
+  sewage_plant.country: {one_way: true}
+  sewage_plant.city: {reverse: 污水厂}
+  company.countries: {one_way: true}
+  preference.countries: {one_way: true}
+
+# 派生属性(本体 by: derived)在 Teable 里怎么算(R10)。via:本表里的关联字段;field:对方表里的字段(<primary> 为主字段)。
+derived:
+  lead.nearest_deadline: {rollup: {via: 时间节点, field: 未过截止, expression: "min({values})"}, format: date}
+  lead.in_reports: {reverse_of: report.cites_leads}
+  country.lead_count: {rollup: {via: 线索, field: <primary>, expression: "countall({values})"}}
+  country.opp_count: {rollup: {via: 商机, field: <primary>, expression: "countall({values})"}}
+  opportunity.lead_count: {rollup: {via: 所属线索, field: <primary>, expression: "countall({values})"}}
+  opportunity.next_milestone:
+    lookup: {via: 时间节点, field: <primary>, filter: [[状态, isNot, 已发生], [日期, isOnOrAfter, {mode: today}]], sort: [日期, asc], limit: 1}
+    verify: A   # 条件查找;不行时由后台算(架构方案第 9 节)。today 筛选隔天重不重算同上(--recheck)
+  opportunity.latest_start: {rollup: {via: 时间节点, field: 最晚启动(辅助), expression: "min({values})"}, format: date}
+  opportunity.last_followup: {rollup: {via: 跟进记录, field: 日期, expression: "max({values})"}, format: date}
+  opportunity.judgment:
+    lookup: {via: 跟进记录, field: 判断, filter: [[判断, isNotEmpty]], sort: [日期, desc], limit: 1}
+    verify: A
+  opportunity.next_step:
+    lookup: {via: 跟进记录, field: 下一步, filter: [[下一步, isNotEmpty]], sort: [日期, desc], limit: 1}
+    verify: A
+  opportunity.next_due:
+    lookup: {via: 跟进记录, field: 下一步到期, filter: [[下一步到期, isNotEmpty]], sort: [日期, desc], limit: 1}
+    verify: A
+  source.lead_count: {rollup: {via: 线索, field: <primary>, expression: "countall({values})"}}
+  city.lead_count: {rollup: {via: 线索, field: <primary>, expression: "countall({values})"}}
+  city.opp_count: {rollup: {via: 商机, field: <primary>, expression: "countall({values})"}}
+  city.supply_count: {rollup: {via: 自来水厂, field: <primary>, expression: "countall({values})"}}
+  city.sewage_count: {rollup: {via: 污水厂, field: <primary>, expression: "countall({values})"}}
+
+# 表格里的视图(架构方案第 3 节)。每张表建表时有一个「全部」;条件里写字段名,schema 换成编号。
+views:
+  lead:
+    - {name: 待处理, filter: {and: [[是否相关, is, true], [处理状态, is, 待处理]]}, sort: [[最近截止, asc]]}
+    - {name: 待确认归属, filter: {and: [[所属商机, isEmpty], {or: [{and: [[建议所属商机, isNotEmpty], [处理状态, isNot, 已忽略]]},
+                                                                   {and: [[可能是新项目, is, true], [处理状态, is, 待处理]]}]}]}}
+    - {name: 按国别, group: [[国别, asc]], sort: [[发现时间, desc]]}
+  opportunity:
+    - {name: 建议商机, filter: {and: [[我方阶段, is, 建议]]}, group: [[国别, asc]]}
+    - {name: 跟踪看板, type: kanban, stack: 我方阶段, filter: {and: [[我方阶段, isAnyOf, [跟踪中, 准备投标, 已投标]]]}}
+    - {name: 按国别, group: [[国别, asc]]}
+    - {name: 待核更新, filter: {and: [[待核更新, isNotEmpty]]}}
+  followup:
+    - {name: 按商机, group: [[商机, asc]], sort: [[日期, desc]]}
+    - {name: 日历, type: calendar, date: 日期}
+  milestone:
+    - {name: 日历, type: calendar, date: 日期}
+    - {name: 14 天内, filter: {and: [[日期, isWithIn, {mode: nextNumberOfDays, numberOfDays: 14}]]}, sort: [[日期, asc]]}
+  country:
+    - {name: 重点国, filter: {and: [[市场分级, is, 重点]]}}
+  source:
+    - {name: 异常, filter: {and: [[最近状态, isNotEmpty], [最近状态, isNot, 正常]]}}
+  report:
+    - {name: 待生成, filter: {and: [[生成状态, is, 待生成]]}}
+
+# 内部流程周期:ledger 的节点类型 → 本体的时间节点类型(最晚启动的公式用)
+lead_time_kinds: {tender_launch: 招标发布, eoi_deadline: 意向书截止, pq_deadline: 资格预审截止, bid_deadline: 投标截止, rfp_deadline: PPP标书截止}

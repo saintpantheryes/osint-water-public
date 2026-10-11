@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 国别概况</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="echarts.min.js"></script>
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("country.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <div class="toolbar"><h1 style="margin:0">国别概况</h1><select id="pick"></select><span id="rel"></span><span id="openRow"></span><span class="muted" style="margin-left:auto">在地图上点国家也行(滚轮缩放,<a href="#" id="mapReset">复位</a>)</span></div>
+  <div class="panel"><div id="map" class="chart"></div></div>
+  <div class="cards" id="cards"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="tab" data-t="info"><div id="info"></div></div>
+  <div class="tab" data-t="inst"><div id="inst"></div></div>
+  <div class="tab" data-t="opps">
+    <h2>商机(按我方阶段)</h2>
+    <div class="panel" id="opps">读取中…</div>
+  </div>
+  <div class="tab" data-t="leads">
+    <h2>最近 90 天线索</h2>
+    <div class="panel" id="leadStats"></div>
+    <div class="panel" id="leads"></div>
+  </div>
+  <div class="tab" data-t="ms">
+    <h2>未来 30 天时间节点</h2>
+    <div class="panel" id="ms"></div>
+  </div>
+  <div class="tab" data-t="cities">
+    <h2>规模以上城市</h2>
+    <p class="muted small">人口达到门槛(缺省 10 万)的城市,后台每月按 GeoNames 公开数据维护;面积、地区生产总值公开数据里没有,在城市表里补,密度随后自动算。</p>
+    <div class="panel" id="cities"></div>
+  </div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  let countries = [], mc = null, mapOption = null;
+  /* 页签:概况 / 机构与法规 / 商机 / 线索 / 时间节点;选中的记在网址 t= 里,数字是这个国家的条数 */
+  const TABS = [["info", "概况"], ["inst", "机构与法规"], ["opps", "商机"], ["leads", "最近 90 天线索"], ["ms", "未来 30 天节点"], ["cities", "规模以上城市"]];
+  const q0 = new URLSearchParams(location.search);
+  let tab = TABS.some(([k]) => k === q0.get("t")) ? q0.get("t") : "info";
+  function urlOf(iso) { return "country.html?" + new URLSearchParams({ iso, t: tab }); }
+  function showTab(k) {
+    tab = k;
+    $("tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.t === k));
+    document.querySelectorAll(".tab").forEach((d) => d.classList.toggle("on", d.dataset.t === k));
+    history.replaceState(null, "", urlOf($("pick").value));
+  }
+  function drawTabs(counts) {
+    $("tabs").innerHTML = TABS.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + (counts && counts[k] !== undefined ? " <b>" + counts[k] + "</b>" : "") + "</button>").join("");
+    $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
+    showTab(tab);
+  }
+
+  /* 世界地图:颜色深浅是线索数,当前国别描红边;点国家就切到它 */
+  async function drawMap() {
+    const [geo, bl] = await Promise.all([fetch("world.geo.json").then((r) => r.json()), P.ignored()]);
+    echarts.registerMap("world", geo);
+    const zh = {}; geo.features.forEach((f) => { zh[f.properties.name] = f.properties.zh || f.properties.name; });
+    const has = {}; countries.forEach((c) => { has[P.get("country", c, "key")] = c; });
+    const raw = countries.map((c) => ({ name: P.get("country", c, "key"), value: Number(P.get("country", c, "lead_count")) || 0,
+      zh: P.get("country", c, "name_zh"), opps: Number(P.get("country", c, "opp_count")) || 0 }));
+    const data = P.hatchData(raw, bl);
+    const max = Math.max(1, ...data.map((d) => d.value));
+    mc = echarts.init($("map"));
+    mapOption = {
+      tooltip: { trigger: "item", formatter: (p) => { const d = p.data || {}; return "<b>" + (d.zh || zh[p.name] || p.name) + "</b><br>" + (has[p.name] ? "线索 " + (d.value || 0) + " · 商机 " + (d.opps || 0) + "<br><span class=\"muted\">点一下看这个国家</span>" : "国别表里没有") + P.hatchTip(p.name, bl); } },
+      visualMap: { min: 0, max, text: ["线索多", "少"], calculable: true, inRange: { color: ["#dbeafe", "#1d4ed8"] }, left: 10, bottom: 10 },
+      series: [{ type: "map", map: "world", roam: true, nameProperty: "name", data, emphasis: { label: { show: false } }, selectedMode: "single",
+        itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" }, select: { itemStyle: { borderColor: "#dc2626", borderWidth: 2 }, label: { show: false } } }],
+    };
+    mc.setOption(mapOption);
+    P.hatchFit(mc, bl, { series: () => raw });  // 斜线按缩放换算成细线
+    P.hatchNote($("map"), bl);
+    mc.on("click", (p) => { if (has[p.name]) { $("pick").value = p.name; show(p.name).catch((e) => P.fail($("info"), e)); } });
+    $("mapReset").onclick = (e) => { e.preventDefault(); mc.clear(); mc.setOption(mapOption); P.hatchFit(mc, bl, { series: () => raw }); markMap($("pick").value); };
+    let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => mc.resize(), 150); });
+  }
+  function markMap(iso) { if (mc) mc.dispatchAction({ type: "select", seriesIndex: 0, name: iso }); }
+
+  async function show(iso) {
+    const c = countries.find((x) => P.get("country", x, "key") === iso);
+    if (!c) { $("info").innerHTML = '<div class="err">没有这个国别</div>'; return; }
+    history.replaceState(null, "", urlOf(iso));
+    markMap(iso);
+    const g = (p) => P.get("country", c, p);
+    document.title = "全球水务开源情报 · " + (g("name_zh") || iso);
+    $("openRow").innerHTML = P.open("country", c.id, "在表格里打开国别 ↗");
+    $("rel").innerHTML = P.marketLinks(iso, "", "country.html");
+    const since = P.addDays(P.today(), -90), until = P.addDays(P.today(), 30), today = P.today();
+    const hasCity = !!(P.cfg.tables && P.cfg.tables.city);  /* 「城市」表建了才有(表结构没更新时页签显示「未建表」) */
+    const listsP = Promise.all([  // 这几张清单只要国别编号:与读整条国别记录同时发出,不排队
+      P.records("opportunity", { filter: P.and(P.cond("opportunity", "country", "is", c.id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "priority"] }),
+      P.records("lead", { filter: P.and(P.cond("lead", "country", "is", c.id), P.cond("lead", "relevant", "is", true), P.cond("lead", "found_at", "isOnOrAfter", P.onDay(since))),
+        take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "category", "published", "found_at", "nearest_deadline", "summary_zh", "project_name", "opportunity", "status"] }),
+      P.records("milestone", { filter: P.and(...P.between("milestone", "day", today, until)), props: ["opportunity", "lead", "country", "kind", "day", "status", "label"] }),
+      hasCity ? P.records("city", { filter: P.and(P.cond("city", "country", "is", c.id)), orderBy: [{ fieldId: P.f("city", "population"), order: "desc" }],
+        props: ["name_zh", "name_en", "admin", "population", "area_km2", "density", "gdp", "gdp_year", "lead_count", "opp_count", "coords"] }) : Promise.resolve([]),
+    ]);
+    const full = await P.api("/table/" + P.t("country").id + "/record/" + c.id, { fieldKeyType: "id" });
+    const f = (p) => (full && full.fields || {})[P.f("country", p)];
+    /* 长文本按后台写入的格式整理:一行一条;「名称:数值(来源 网址)」→ 事实表;「· 」分隔 → 表格;[备注]/[情报]/[建议动作] → 标签;[8位引用键]、〔R012〕→ 小角标 */
+    const lines = (v) => String(v || "").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+    const long = ["note", "indicators", "basics", "access", "laws", "water_agencies", "water_soes", "market", "presence"];
+    const keys = P.citeKeys(long.map(f)); const numOf = {}; keys.forEach((k, i) => { numOf[k] = i + 1; });
+    let cinfo = {}; try { cinfo = keys.length ? await P.leadsByKeys(keys) : {}; } catch (e) { cinfo = {}; }
+    const cites = (txt) => P.cites(txt, numOf, cinfo).replace(/(?<!href=")(https?:\/\/[^\s)<"]+)/g, (u) => '<a href="' + u + '" target="_blank" rel="noopener">链接</a>');
+    const srcOf = (line) => {  // 末尾的 (来源 网址) → {text, src, url}
+      const m = line.match(/^(.*)\(([^()]*?)(https?:\/\/\S+)?\)$/);
+      if (!m || !(m[3] || /WDI|IMF|维基|世界银行|世行|联合国|UN/.test(m[2]))) return { text: line };
+      return { text: m[1].trim(), src: m[2].trim(), url: m[3] || "" };
+    };
+    const factRows = (v) => lines(v).map((l) => { const { text, src, url } = srcOf(l); const i = text.search(/[::]/); return { k: i > 0 ? text.slice(0, i).trim() : "", v: i > 0 ? text.slice(i + 1).trim() : text, src, url }; });
+    const facts = (v, skip) => {
+      const rows = (Array.isArray(v) ? v : factRows(v)).filter((r) => !(skip || []).includes(r));
+      if (!rows.length) return "";
+      return '<div class="facts">' + rows.map((r) => P.factHtml(r.k, r.v,
+        r.src || r.url ? (r.url ? '<a class="src" href="' + P.esc(r.url) + '" target="_blank" rel="noopener" title="' + P.esc(r.src) + '">' + P.esc(r.src || "来源") + " ↗</a>" : '<span class="src">' + P.esc(r.src) + "</span>") : "")).join("") + "</div>";
+    };
+    /* 关键指标(放大放最前,负面标红):按这个顺序从「宏观与水务指标」里挑,挑出来的不在下面重复列 */
+    const KEY = [[/^GDP\(现价\)|^GDP\s*\(现价/, "GDP"], [/^人均 GDP(?!\s*\(PPP)/, "人均 GDP"], [/实际增速/, "GDP 实际增速"], [/^总人口/, "总人口"], [/^城镇化率/, "城镇化率"],
+      [/^安全管理饮水/, "安全管理饮水覆盖率"], [/^淡水压力/, "淡水压力(取水/可再生)"], [/^政府总债务/, "政府总债务/GDP"]];
+    const indRows = factRows(f("indicators"));
+    const keyRows = KEY.map(([re, label]) => { const r = indRows.find((x) => re.test(x.k)); return r ? { r, label } : null; }).filter(Boolean);
+    const notes = (v) => {
+      const items = lines(v).map((l) => {
+        let when = "", tag = "", rest = l;
+        const w = rest.match(/^(\d{4}-\d{2}(?:-\d{2})?)\s+/); if (w) { when = w[1]; rest = rest.slice(w[0].length); }
+        const t = rest.match(/^\[([^\]]{1,8})\]\s*/); if (t) { tag = t[1]; rest = rest.slice(t[0].length); }
+        const cls = /动作|待办/.test(tag) ? "act" : /情报|动态/.test(tag) ? "intel" : "";
+        return "<li>" + (when ? '<span class="when">' + P.esc(when) + "</span>" : "") + (tag ? '<span class="tag ' + cls + '">' + P.esc(tag) + "</span>" : "") + cites(rest) + "</li>";
+      });
+      return items.length ? '<ul class="notes">' + items.join("") + "</ul>" : "";
+    };
+    const dots = (v, head) => {
+      const rows = lines(v).map((l) => l.split(/\s+·\s+/));
+      if (!rows.length) return "";
+      const cell = (c) => /^https?:\/\//.test(c) ? P.raw('<a href="' + P.esc(c) + '" target="_blank" rel="noopener">网站 ↗</a>') : P.raw(cites(c));
+      return P.tableHtml(head, rows.map((r) => { const cells = r.map(cell); while (cells.length < head.length) cells.push(""); return cells.slice(0, head.length - 1).concat([cells.slice(head.length - 1).map((x) => x.__html !== undefined ? x.__html : P.esc(x)).join(" · ")].map((x) => P.raw(x))); }));
+    };
+    const sec = (label, html, open) => html ? '<details class="sec"' + (open ? " open" : "") + "><summary>" + label + '</summary><div class="panel">' + html + "</div></details>" : "";
+    const kv = [["大洲与区域", f("region")], ["市场分级", f("tier")], ["收入组与贷款类别", f("income_group")], ["经营区域", f("market")], ["我方在当地", f("presence")]].filter((x) => x[1]);
+    $("info").innerHTML = P.kpiHtml(keyRows.map(({ r, label }) => ({ label, value: r.v }))) +
+      '<div class="panel"><div class="facts">' + kv.map(([k, v]) => "<div><b>" + k + "</b><span>" + P.esc(P.text(v)) + "</span></div>").join("") + "</div></div>" +
+      sec("国别备注与近期动态", notes(f("note")), true) + sec("宏观与水务指标", facts(indRows, keyRows.map((x) => x.r)), true) + sec("水风险与经济(趋势参考)", P.riskFacts("country", full, iso), true) + sec("基础信息", facts(f("basics")), false) + P.citeNote(numOf, cinfo);
+    const inst = sec("水务管理机构", dots(f("water_agencies"), ["机构", "英文名", "职责", "网站"]), true) + sec("水务国企", dots(f("water_soes"), ["企业", "英文名", "说明", "网站"]), true) +
+      sec("相关法律法规", dots(f("laws"), ["法规", "领域", "要点", "链接"]), true) + sec("市场准入与竞争", notes(f("access")), true);
+    $("inst").innerHTML = inst || '<p class="muted">这个国家还没填机构、国企、法规与市场准入资料(国别表里补上就显示)。</p>';
+    const [opps, leads, ms, cities] = await listsP;
+    const stage = {}; opps.forEach((o) => { const s = P.get("opportunity", o, "stage") || "建议"; stage[s] = (stage[s] || 0) + 1; });
+    const tracked = P.tracked(opps);
+    $("cards").innerHTML = [[Number(g("lead_count")) || 0, "线索(全部)"], [leads.length + (leads.length >= 200 ? "+" : ""), "最近 90 天相关线索"], [opps.length, "商机"], [tracked.length, "跟踪中"], [stage["建议"] || 0, "AI 推荐"]]
+      .map(([n, l]) => '<div class="card"><div class="n">' + n + '</div><div class="l">' + l + "</div></div>").join("");
+    opps.sort((a, b) => (P.STAGES.indexOf(P.get("opportunity", a, "stage") || "建议") - P.STAGES.indexOf(P.get("opportunity", b, "stage") || "建议")) || String(P.get("opportunity", a, "code")).localeCompare(String(P.get("opportunity", b, "code"))));
+    $("opps").innerHTML = P.tableHtml(["编号", "名称", "我方阶段", "优先级", "负责人", "公开进度", "下一节点", "资金", ""], opps.map((o) => { const q = (p) => P.get("opportunity", o, p);
+      return [q("code"), q("name_zh"), q("stage") || "建议", q("priority"), P.text(q("owner")), q("public_stage"), q("next_milestone"), (q("financing") || "").split("\n")[0], P.raw(P.open("opportunity", o.id))]; }));
+    const cat = {}; leads.forEach((l) => { const k = P.get("lead", l, "category") || "未分类"; cat[k] = (cat[k] || 0) + 1; });
+    $("leadStats").innerHTML = "<b>按类别:</b>" + (Object.entries(cat).sort((a, b) => b[1] - a[1]).map(([k, v]) => P.esc(k) + " " + v).join("、") || "无") +
+      ' · <a href="' + P.tableUrl("lead") + '" target="_blank" rel="noopener">线索表 ↗</a>';
+    $("leads").innerHTML = P.tableHtml(["标题", "类别", "发布", "最近截止", "所属商机", "处理状态", ""], leads.slice(0, 50).map((l) => { const q = (p) => P.get("lead", l, p);
+      return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), q("nearest_deadline"), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
+    const oppIds = new Set(opps.map((o) => o.id)), code = {}; opps.forEach((o) => { code[o.id] = P.get("opportunity", o, "code"); });
+    const mine = ms.filter((m) => oppIds.has(P.linkId(P.get("milestone", m, "opportunity"))) || P.linkId(P.get("milestone", m, "country")) === c.id);
+    $("ms").innerHTML = P.tableHtml(["日期", "类型", "商机", "线索", "状态", "说明", ""], mine.map((m) => { const q = (p) => P.get("milestone", m, p);
+      return [P.day(q("day")), q("kind"), code[P.linkId(q("opportunity"))] || P.text(q("opportunity")), P.text(q("lead")), q("status"), q("label"), P.raw(P.open("milestone", m.id))]; }));
+    const num = (v) => (v === undefined || v === null || v === "" ? "" : Number(v).toLocaleString("zh-CN"));
+    $("cities").innerHTML = !hasCity ? '<p class="muted">「城市」表还没建(跑一次建表命令后这里就有)。</p>' : !cities.length ? '<p class="muted">这个国家还没有规模以上城市的记录(后台每月补;新国别第二天补)。</p>' :
+      P.tableHtml(["城市", "行政区", "人口", "面积(km²)", "密度", "生产总值(亿美元)", "线索", "商机", ""], cities.map((ct) => { const q = (p) => P.get("city", ct, p);
+        return [P.raw('<a href="city.html?id=' + encodeURIComponent(ct.id) + '"><b>' + P.esc(q("name_zh") || q("name_en") || "") + "</b></a>" + (q("name_en") && q("name_en") !== q("name_zh") ? ' <span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")), q("admin") || "", num(q("population")), num(q("area_km2")), num(q("density")),
+          num(q("gdp")) + (q("gdp") && q("gdp_year") ? ' <span class="muted small">' + P.esc(String(q("gdp_year"))) + "</span>" : ""), String(q("lead_count") || 0), String(q("opp_count") || 0), P.raw(P.open("city", ct.id))]; }));
+    drawTabs({ opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
+  }
+
+  try {
+    await P.load();
+    [countries] = await Promise.all([P.countries(), P.zhTerms()]);  // 两样互不依赖,同时取
+    const pick = $("pick"); drawTabs();
+    P.fillCountrySelect(pick, countries.map((c) => [P.get("country", c, "key"), P.get("country", c, "name_zh") || P.get("country", c, "key")]));
+    const want = q0.get("iso");  // 用打开时的网址:上面画页签时已经改写过地址栏
+    const first = countries.find((c) => P.get("country", c, "key") === want) || countries.find((c) => P.get("country", c, "tier") === "重点") || countries[0];
+    if (!first) { $("info").innerHTML = '<p class="muted">国别表还是空的。</p>'; return; }
+    pick.value = P.get("country", first, "key");
+    pick.addEventListener("change", () => show(pick.value).catch((e) => P.fail($("info"), e)));
+    /* 地图(要下 world.geo.json)与这个国家的资料同时取,谁先到先画;地图画好再描红当前国别 */
+    const mapP = drawMap().then(() => markMap(pick.value)).catch((e) => { $("map").innerHTML = '<p class="muted">地图没画出来:' + P.esc(e.message) + "</p>"; });
+    await show(pick.value);
+    await mapP;
+  } catch (e) { P.fail($("info"), e); }
+})();
+</script>
+</body>
+</html>

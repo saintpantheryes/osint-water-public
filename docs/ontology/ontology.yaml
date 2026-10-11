@@ -1,0 +1,1561 @@
+# osint-water 本体 v2.0(机器可读版;说明见同目录 本体.md，图见 本体模型.svg)
+# 方法:visual-model 的 OBR 建模——对象本体(M1)、行为本体(M2)、规则本体(M3)、事件(ME)、主体(M5)、查询(M7)、对象数据映射(MM)。
+# tests/test_ontology.py 检查本文件自洽:引用的对象、属性、规则都存在;机器的行为不写人写的属性(R2);机器新建商机只能是「建议」(R5);
+# 枚举属性与 taxonomies 一致;代码里的枚举副本(code_enums)与本体一致;口径(glossary)里引用的阶段都存在。
+#
+# v2.0 新增的键(都是说明性的，core/ontology.py 不读):
+#   属性上 taxonomy(指向 taxonomies 里的分类体系，值集必须一致)、format(长文本 / 列表属性里一行怎么写)、example(示例值)、
+#   where(派生属性在哪算:teable 公式 / 页面与后台现算)。行为上 channel(人在哪做:表格 / 页面 / 命令行)。
+#
+# 属性的写入方 by:
+#   ai      机器写(采集程序或模型)，只填空值、只新建记录、列表只追加;人可以改，人改过的值机器不覆盖，要改的写进「待核更新」(R2)。
+#           人要否定机器写的值时写明确的文字(如「无」「不详」)，不要清空——清空了机器会再填。
+#   human   只有人写。机器永不写(新建记录时的初值除外，见行为的 sets_on_create)。
+#   derived 派生:用时由其他属性算出，不存(R10)。
+# 类型:text 短文本 / longtext 长文本 / url / date 日期 / pdate 部分日期(2026、2026-H2、2026-Q4、2026-12、2026-12-15)/
+#      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
+
+schema: osint-water/ontology@1
+version: 2.12
+date: 2026-10-10
+decisions:   # 使用方 2026-10-03 定
+  - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
+  - 商机的公开事实(原台账 YAML)搬进 Teable
+  - 线索上不设进展、负责人、下一步、下一步到期、结果原因(R7)
+  - 跟进记录必须关于一个商机(R7)
+changes_v1_1:
+  - 商机加别名、外部编号、地点、参与方、待核实、待核更新;出处线索、规模(美元)改为机器写(写事实时一并写)
+  - 时间节点可属于国别(投资论坛等国别级日期)
+  - 跟进记录的「推进到」改为机器记的「阶段变更」:人只在商机上改阶段，机器自动补一条跟进(A18)
+  - 报告加生成状态;一次性报告由人在报告表里新建一行发起(A13)，机器生成(A14)
+  - R2 的做法:机器只填空、只新建;要改已有值时写进「待核更新」等人确认
+changes_v1_2:   # 按 docs/架构方案审查_2026-10-03.md 第一节修订
+  - R2 改为「只填空、只新建、列表只追加」:列表类属性机器可追加新项(键 = 出处线索号 + 规范化文本)，不改不删已有项;标量属性仍只填空
+  - R2 写明人怎样否定机器值:线索只在「待处理且判定方式为空」时判定一次，判过的不再回头;商机上写「无」「不详」，不清空
+  - 线索加「判定方式」(模型 / 规则 / 不判定):判定时写，为空即还没判定——是否相关是勾选，分不出「没判」与「判为否」
+  - 待核更新一行一条提议，键 = 出处线索号 + 字段;人驳回在行首加 ✗ 并保留，机器不再提;人采纳后改事实、删该行
+  - 只新建的去重键:时间节点 = 所属 + 类型 + 日期原文;建议商机先挂接(外部编号 → 别名 → 名称相近)再新建，编号取该国最大序号 + 1
+  - A18 只在阶段修改人不是机器账号、且阶段与最近一条阶段变更不同时记;没有阶段变更跟进的视为「建议」(初始阶段)
+changes_v2_0:   # 细化版(2026-10-04):对照真实库、后台任务(阶段 D)与页面(阶段 E、F、两轮返修)补齐
+  - 新增 taxonomies:每个枚举值都有定义、边界与示例，并分层(线索领域 7 类是商机领域 12 类的上级;类别分采购 / 融资 / 立项 / 动态四组;
+    时间节点类型分采购截止 / 采购节点 / 融资与批准 / 实施四组;我方阶段分未立项 / 在跟踪 / 已结束三组);值集与 Teable 现有选项逐一相同
+  - 新增 glossary:页面与报告共用的口径只定一次(跟踪中的商机、AI 推荐的商机、待处理、待确认归属、逾期下一步、核心领域与门槛、线索号与商机编号的写法)
+  - 长文本 / 列表属性写明一行的格式(format)与示例(example):资金、标段、外部编号、别名、参与方、待核实、待核更新、国别的各列表
+  - 派生属性标明在哪算(where):含「今天」的一律页面与后台现算(R12，阶段 A 复核:Teable 含 TODAY() 的公式隔天不重算)
+  - 新增对象「报告模板」与报告的「模板」属性(与 PR #18 一致;表已在真实库里)
+  - 新增行为:A19 过期节点改已发生(后台，R2 例外)、A20 在「待我处理」页面处理线索与 AI 推荐(人)、A21 管理报告模板(人);
+    人的行为标明 channel(表格 / 页面);A14 读模板并写回用的模板
+  - 新增规则:R12 「今天」不进库公式;R13 页面是工作台不是第二份数据;R14 统计口径只定一次
+  - 视图改为页面实际的样子:V5 日历缺省只看跟踪中商机、V6 漏斗五级严格子集，新增 V8 待我处理、V9 商机列表、V10 商机工作台、V11 报告页
+  - 事件:E5 提醒仍未做，先由「待我处理」的逾期页替代;新增 E8 每天零点后 → A19
+  - as_is 改为 2026-10-04 的现状:每种对象只在 Teable 一处;列出代码里仍保留枚举副本的位置(code_enums，改枚举要同步)
+  - 代码同步:页面与报告里的阶段排序去掉「观望」(它是跟进的判断，不是阶段);周报月报的「跟踪中商机」口径与页面一致(glossary tracked)
+changes_v2_2:   # 本体运行时化(2026-10-08):为「本体页面上可看、可改」做准备
+  - 后台与页面不再抄枚举:阶段顺序、「跟踪中」等口径、资金来源归组、判定英文键 → 中文值,都在运行时从本体读(core/ontology.py 的 values / codes / glossary_stages;
+    页面读 docs/ontology/gen_json.py 生成的 portal/ontology.json);改选项只改 ontology.yaml 与 Teable 选项,代码不用动
+  - glossary.core_sectors 与 glossary.threshold 加结构化列表(sectors / categories / tiers),代码读列表而不是读说明文字
+  - code_enums 改为列代码里仍保留的"映射关系"(英文键之间的对应),不再是枚举副本
+  - 新增视图 V13 本体(页面,只读):对象与关系图、每个对象的属性与状态流转、分类体系每个值的定义边界示例、口径与归组、规则、行为、视图与事件、版本记录;
+    全部按 portal/ontology.json 现显,本体改了页面跟着变。页面上改本体(先只允许新增对象 / 属性 / 选项)是下一步
+changes_v2_1:   # 线索分析与每日简报(2026-10-07):线索过两千条，超出人工逐条看的范围
+  - 报告类型加「日报」(taxonomies.report_kind 定期组):每天采集完成后机器自建一行并生成，期间 = 当天日期;正文短，按统计与规则写，配了模型时多一段研判
+  - 报告加「简报正文」(机器写，Markdown):日报的正文直接存在行里，「线索分析」页顶部显示，不必打开 Word;其他类型留空
+  - 新增视图 V12 线索分析(页面):按时间、国别、经营区域、领域、类别、资金来源、信源、判定方式、处理状态与归属多维度统计，口径沿用 glossary 与 groupings;
+    点任一图柱列出对应线索;所有数字与首页卡片、漏斗同一口径(R14)
+  - 新增事件 E10:每天采集完成 → A14 出日报
+
+changes_v2_3:   # 投资规模(2026-10-08):使用方要线索与商机有可算的规模
+  - 线索、商机各加三个属性:投资规模(数字，原币)、货币(单选，taxonomies.currency)、折合人民币(万元)(数字);原「金额」文字字段保留(原文怎么写就怎么记)
+  - 新增行为 A21 折算人民币:后台每 2 分钟把「有规模与货币、折合为空」的行按当日汇率折成人民币万元(商机顺带填规模(美元));
+    汇率取 open.er-api.com，取不到取欧央行，再取不到用程序内置的近似表(core/fx.py);不用表格公式(R12)。旧线索的「金额」文字可解析的(如「5,000,000 USD」)一并拆成规模与货币
+  - 游客通道(guest 节)不排除这三个属性:投资规模是公开事实
+
+changes_v2_4:   # 城市(2026-10-08):使用方要国别下有「规模以上城市」，线索、商机可关联到城市
+  - 新增支撑对象「城市」(band public):所属国别、所在行政区、坐标、人口、面积、密度、地区生产总值;标识 = GeoNames 编号;线索数、商机数派生
+  - 线索、商机各加可选关联「城市」(人填;机器以后可按正文匹配，先不做)
+  - 新增行为 A22 维护城市:每月按 GeoNames 公开数据把人口达到门槛(profile 的 city_min_population，缺省 10 万)的城市建进表(只新建、只填空)，
+    人口与面积都有、密度为空的算密度;国别页多一个「规模以上城市」页签(V7)
+  - 游客通道(guest 节)放行城市
+
+changes_v2_5:   # 公司资料与个人设置(2026-10-08):使用方要资质与历史业绩能存起来、写进报告;要一个「我的」页管收藏的国别与订阅的日历
+  - 新增业务对象「公司资料」(band business):一行一项资质或业绩,带适用领域(线索领域 7 类)、适用国别、年份、金额、附件与「写进报告」勾选
+  - 新增行为 A23 维护公司资料(人,页面或表格);A14 生成国别报告、项目报告的内部版时,在正文后附「我方资质与相关业绩」一章——只取勾了「写进报告」的行,国别报告按适用国别(空 = 全球通用)匹配,项目报告再按领域(商机领域 12 类归到上级 7 类)匹配;公开版不附
+  - 新增业务对象「个人设置」(band business):一个登录账号一行,存关注的国别与保存的日历订阅(名称 | 链接);页面「我的」(V15)增删改查
+  - 新增行为 A24 个人设置(人,页面);日历页的订阅弹窗多一个「存到我的」
+  - 游客通道(guest 节)不放行这两个对象(业务数据)
+changes_v2_6:   # 菜单分组(2026-10-08):使用方嫌菜单乱,要分成首页、工作原理、项目线索、商机跟进四块
+  - 页面菜单分组:首页;工作原理(工作流程、本体、后台数据表格);项目线索(线索总览、线索分析、线索处理、国别概况);商机跟进(商机总览、日历、报告)。分组、名称与每页一句说明只写在 portal.js 的 MENU
+  - 页面改名:总览(原首页)→ 线索总览;待我处理 → 线索处理(V8,A20 跟着改名);商机列表 → 商机总览(V9);工作原理页 → 工作流程;V6 首页漏斗 → 线索总览漏斗,各处「首页卡片」→ 线索总览卡片
+  - 线索处理只留两页(待确认归属、AI 推荐的商机);下一步已逾期、待核更新两页挪进商机总览的页签(只列出来,点进工作台或表格去改;游客不显示)
+  - 对象、属性、选项、口径都没变,不用跑建表命令
+
+changes_v2_10:   # 趋势机会(2026-10-09):使用方要水风险 + 经济 / 贷款倾向,作为线索之后的趋势参考,两类机会同图显示
+  - 城市加公开数据属性:总体水风险、用水压力、2030 / 2050 年用水压力、干旱风险、河流洪水风险(WRI Aqueduct 4.0,0–5 分)、无安全饮用水、无卫生设施、未处理污水(%,同出 Aqueduct)、人均 GDP(PPP 美元,Kummu 等 2025 年格网数据,按城市所在县级区取)、风险数据来源
+  - 国别加:用水压力、2030 / 2050 年用水压力、干旱风险、河流洪水风险(Aqueduct 国别排名,按用水量加权)、人均 GDP(PPP)、世行涉水项目数与承诺额(2020-10 至 2024 年批准)、风险数据来源
+  - 新增行为 A26 导入水风险与经济数据:按私有配置仓 data/city_risk.csv.gz(按 GeoNames 编号)与 data/country_risk.csv(按 ISO3)只填空;每天城市维护之后跑一遍,新城市、新国别跟着补
+  - 新口径 glossary.risk_level(0–5 分怎么读)、glossary.trend_self_funded(自付型)、glossary.trend_loan_driven(贷款型)
+  - 菜单加一组「市场背景」(使用方 2026-10-09 定,放在项目线索前):国别概况、城市概况(从项目线索移来)、趋势机会;项目线索只剩线索总览、线索分析、线索处理
+  - 新增视图 V17 趋势机会(页面,市场背景组最后):两类机会在同一张地图上,双重的标红;门槛页面上可调;页首写明是按公开数据推算的方向,不是具体项目,不计入线索、商机的数
+  - 要跑一次建表命令(新字段)
+
+changes_v2_11:   # 行业术语(2026-10-09):使用方反映助手把「智慧水务」理解成领域「供水」,查不到;跨领域的行业词要有地方教给助手
+  - 新增公开对象「行业术语」(term)与行为 A27:每个词写明它跨哪些领域、是否按领域筛(空 = 不限领域)、按哪些相关词去找(中英法西都可以写);助手解析提问时读 Teable「行业术语」表(每分钟重读),模型只能照此理解,程序再按表纠正,不再把跨领域的词硬塞进一个领域
+  - 新增 terms 节:行业术语的初始词,建表时写进表;表没建或读不到时兜底
+  - 助手的关键词改为「标题或中文摘要含」(原来只查标题;线索标题多为英、法、西等原文,中文词只能在中文摘要里找到)
+  - 首批术语:智慧水务、海绵城市、漏损控制;懂行的人在表格里加词、改相关词,不用改程序
+  - 新增 data_scope 节「数据范围」:写明本系统面向海外、不包含中国国内(大陆、港澳台)数据;助手的提问涉及中国(含「国内」「港澳台」等说法)时在答案上方显示这句说明
+  - 要跑一次建表命令(新表「行业术语」)
+
+changes_v2_12:   # 忽略国别(2026-10-10):使用方要每人在「我的」里自己忽略一些国别(原叫「拉黑」,使用方嫌口语化改名),地图上这些国别画斜线,线索采集不再涉及它们
+  - 个人设置加「忽略国别」(人写,存国别码,逗号分隔):地图上不少国家不在国别表里,所以存码不存关联,哪国都能忽略
+  - 「我的」页:世界地图上点一个国家忽略、再点恢复;按大洲一键忽略或恢复(北美洲含中美洲与加勒比、南美洲、欧洲、亚洲、非洲、大洋洲;大洲按 core/geo,地图要素上写好);另有拼音排序的下拉
+  - 页面的世界地图(国别概况、线索总览、趋势机会、城市概况)把登录人忽略的国别画斜线,提示里写「已忽略」;游客没有个人设置,只画默认的中国
+  - 「关注国别」原来只在「我的」里列着,使用方问有什么用后定(2026-10-10):清单(线索总览、线索分析、商机总览、助手的答案)里关注国家的线索与商机排在最前、带 ★,国别下拉把它们放在最上面一组「★ 关注」
+  - 采集线索(A01)读个人设置:任何一个账号忽略了的国别,这一国的信源不再抓,全球信源里判到这一国的条目不入库;已入库的线索不删、照常显示
+  - 要跑一次建表命令(新字段)
+  - 补(2026-10-11,使用方):中国当普通国别,默认忽略(「忽略国别」空着即按忽略中国算,可以在地图上点掉);「我的」页加按经济水平一键忽略:发达国家(IMF 发达经济体)、世行四个收入组(按人均国民收入),地图要素上写好
+  - 页面地图上游客也按默认画中国的斜线
+
+changes_v2_9:   # 水厂(2026-10-09):使用方要自来水厂(含海水淡化厂)、污水厂(含中水回用厂)两类对象,与城市关联,并导入以前 water-tracker 里的那套水厂数据
+  - 新增公开对象「自来水厂」(supply_plant)与「污水厂」(sewage_plant):名称、中文名、类型、状态、所属国别、所在城市(可空:不在规模以上城市里的水厂只挂国别)、规模(万吨/日)、服务人口、建设时间、工艺、处理级别(污水厂)、改造扩建(可多条)、运营方、坐标、数据来源、编号、备注
+  - 新分类体系 supply_plant_kind(自来水厂、海水淡化厂)、sewage_plant_kind(污水厂、中水回用厂)、plant_status(运行、在建、停用)、treatment_level(一级、二级、深度)
+  - 城市加派生属性「自来水厂数」「污水厂数」;城市概况页一座城市多一个「水厂」页签,清单多两列
+  - 新增行为 A25 导入存量水厂:按私有配置仓 data/plants.csv.gz(由 water-tracker 的水厂数据导出)只新建、只填空;去重按编号;城市按 GeoNames 编号对上,对不上的挂同一国家 25 公里内最近的规模以上城市,再没有就只挂国别
+  - 游客通道放行这两个对象(示例数据里每座示例城市编一两座水厂)
+  - 城市加水价(使用方 2026-10-09 定:水价挂城市，不挂国别;各城市水价不同，国别层面以后要看就从城市汇):现行水价、水价货币、最近调价时间、水价说明、水价来源,人填;城市概况页显示
+  - 要跑一次建表命令(新表、新字段)
+
+changes_v2_8:   # 城市概况页(2026-10-09):使用方要一个单独的城市页
+  - 新增视图 V16 城市概况(页面,项目线索组里国别概况后面):全部规模以上城市按国别、有无线索 / 商机筛选、搜索,在地图上按人口或生产总值拖滑块筛城市,下面是清单;点一座城市看概况、关联的商机与线索。国别概况「规模以上城市」页签里的城市名点进这一页
+  - 游客示例数据里,归了商机的示例线索也挂上示例城市,城市的线索数、商机数按城市算(原来按国别)
+  - 对象、属性、选项、口径都没变,不用跑建表命令
+
+changes_v2_7:   # 游客只看示例数据(2026-10-09):使用方纠正「游客只看测算数据」为「只看测试数据」
+  - guest 节加 data: sample:游客通道的记录全部来自 core/sample.py 编的示例(结构仍取真实库的表与字段编号),真实库的记录一条不给游客;日历下载也给示例,订阅不给
+  - 对象、属性、选项、口径都没变,不用跑建表命令
+
+objects:
+  # ---------------- 四个核心对象 ----------------
+  - id: lead
+    name: 线索
+    core: true
+    band: public        # public = AI·公开数据;business = 人·业务数据(对应使用方流程图的上下两栏)
+    definition: 网上一条与水务项目有关的公开信息(公告、新闻、报告、文件)，由机器定时采集，或同事上传链接。它也是商机上每条公开事实的出处。
+    key: 线索号(信源 + 原文键的指纹);原文网址唯一
+    states:
+      property: status
+      transitions:
+        - {from: 待处理, to: 已处理, by: human}
+        - {from: 待处理, to: 已忽略, by: human}
+        - {from: 已处理, to: 待处理, by: human, note: 撤回}
+        - {from: 已忽略, to: 待处理, by: human, note: 撤回}
+    properties:
+      - {id: title, name: 标题, type: text, by: ai, required: true}
+      - {id: url, name: 原文网址, type: url, by: ai, required: true, note: 用户上传时由人填, example: "https://www.ebrd.com/work-with-us/procurement/p-pn-240101a.html"}
+      - {id: source, name: 信源, type: "link:source", by: ai, required: true, note: 用户上传的记为信源「人工上传」}
+      - {id: origin, name: 来源方式, type: enum, enum: [机器采集, 用户上传], by: ai, taxonomy: origin}
+      - {id: published, name: 发布日期, type: date, by: ai, note: 原文标注的发布日;没有的留空，不用发现时间代替}
+      - {id: found_at, name: 发现时间, type: datetime, by: ai}
+      - {id: excerpt, name: 原文摘录, type: longtext, by: ai, note: "网页正文与附件转出的文字，供判定与报告引用"}
+      - {id: relevant, name: 是否相关, type: bool, by: ai, note: "判定写;用户上传的恒为「是」(R8)。相关 = 与水务项目的立项、融资、采购、授标、实施或相关政策有关(见 taxonomies.lead_category);分不出「没判」与「判为否」，看判定方式"}
+      - {id: category, name: 类别, type: enum, by: ai, taxonomy: lead_category,
+         enum: [招标, 意向书, 资格预审, 总采购公告, 特定采购公告, 授标或短名单, 融资, 立项或规划, 项目动态, 政策, 其他],
+         note: 一条线索只记一个类别:原文同时是几件事时取最靠近采购的那一个(采购 > 融资 > 立项 > 动态 > 政策)}
+      - {id: sectors, name: 领域, type: enums, by: ai, enum: [供水, 污水, 水利, 海水淡化, 雨水排涝, 水环境, 其他], taxonomy: lead_sectors,
+         note: 粗分 7 类(商机的 12 类细分是它的下级，见 taxonomies.opp_sectors);线索总览「领域」筛选按它}
+      - {id: country, name: 国别, type: "link:country", by: ai}
+      - {id: city, name: 城市, type: "link:city", by: human, note: 可选;与哪座规模以上城市有关(人选;机器以后可按正文匹配)}
+      - {id: summary_zh, name: 中文摘要, type: longtext, by: ai}
+      - {id: funder, name: 出资方, type: text, by: ai}
+      - {id: project_name, name: 项目名称, type: text, by: ai}
+      - {id: amount, name: 金额, type: text, by: ai, note: "带币种，原文怎么写就怎么记", example: "EUR 25 million(EBRD 贷款)"}
+      - {id: amount_value, name: 投资规模, type: number, by: ai, note: "金额的数值(原币);判定时从模型抽的金额写，旧线索由 A21 从「金额」文字拆;人可改", example: 25000000}
+      - {id: currency, name: 货币, type: enum, by: ai, taxonomy: currency, note: 投资规模的币种(ISO 4217 代码);不在选项里的币种留空、只记「金额」文字,
+         enum: [USD, EUR, CNY, GBP, JPY, CHF, AUD, CAD, SGD, HKD, AED, SAR, QAR, KWD, OMR, EGP, MAD, DZD, TND, NGN, GHS, KES, TZS, UGX, ETB, ZAR, XOF, XAF, INR, PKR, BDT, LKR, NPR, IDR, MYR, THB, VND, PHP, MMK, KHR, KZT, UZS, AZN, GEL, AMD, KGS, TJS, TMT, MNT, TRY, IQD, JOD, LBP, PLN, RON, HUF, CZK, RSD, UAH, RUB, BRL, MXN, COP, PEN, CLP, ARS, BOB, PYG, UYU, DOP, JMD, FJD, PGK, WST, TOP, SBD, VUV]}
+      - {id: amount_cny, name: 折合人民币(万元), type: number, by: ai, note: "A21 按当日汇率算，只填空;人改了不再动(R2)", example: 18000}
+      - {id: suggested_opp, name: 建议所属商机, type: "link:opportunity", by: ai, note: "判定给出;挂接不可靠时只写这里，等人确认"}
+      - {id: suggest_reliable, name: 归属可靠, type: bool, by: ai, note: 编号吻合、或模型读原文确认的为可靠}
+      - {id: maybe_new, name: 可能是新项目, type: bool, by: ai, note: 没挂上任何商机、模型认为是新项目}
+      - {id: opportunity, name: 所属商机, type: "link:opportunity", by: ai, note: "归属可靠且为空时机器在判定那一次代填;判过的线索机器不再回头，人改了即为准(R2、R4)"}
+      - {id: judged_by, name: 判定方式, type: enum, enum: [模型, 规则, 不判定], by: ai, taxonomy: judged_by,
+         note: "判定时写(规则初筛没过的为规则;用户上传与台账出处的为不判定，机器补全后写);为空即还没判定，机器只判这种(R2)"}
+      - {id: status, name: 处理状态, type: enum, enum: [待处理, 已处理, 已忽略], by: human, default: 待处理, taxonomy: lead_status}
+      - {id: note, name: 处理备注, type: longtext, by: human, note: 多行(迁移写进去的负责人、下一步、没有商机的跟进各占一行;实施审查三-C), format: "一行一条，「YYYY-MM-DD 谁:做了什么」;只想记一笔「看过了」写这里，不开跟进(R7)"}
+      - {id: nearest_deadline, name: 最近截止, type: date, by: derived, note: 来自这条线索给出的时间节点, where: "teable 汇总(最早的「未过截止」);含 TODAY()，隔天不重算，页面与报告自己按当前日期算(R12)"}
+      - {id: in_reports, name: 写进的报告, type: "links:report", by: derived, where: teable 关联的反向字段(报告.引用的线索)}
+
+  - id: country
+    name: 国别
+    core: true
+    band: public
+    definition: 一个国家一行:经济、人口、水资源、水务管理机构、水务国企、相关法律法规，以及我方在当地的情况。
+    key: ISO3 国家代码
+    properties:
+      - {id: name_zh, name: 国名, type: text, by: ai, required: true}
+      - {id: region, name: 大洲与区域, type: text, by: ai}
+      - {id: basics, name: 基础信息, type: list, by: ai, note: 首都、官方语言、货币;每项带出处, format: "一行一项「名称:值(来源)」", example: "首都:巴库(世行国别元数据)"}
+      - {id: indicators, name: 宏观与水务指标, type: list, by: ai, note: GDP、增速、人口、城镇化、供水与卫生覆盖等;每项带年份与来源(世行 WDI、IMF 等), format: "一行一项「指标:值 单位(年份，来源 链接)」;每月整体替换(R2 例外)", example: "人均 GDP:7，155 美元(2023，世行 WDI https://data.worldbank.org/…)"}
+      - {id: income_group, name: 收入组与贷款类别, type: text, by: ai, note: 世行国别分类}
+      - {id: water_stress, name: 用水压力, type: number, by: ai, note: "Aqueduct 4.0 国别排名(按全部用水量加权),0–5 分;读法见 glossary.risk_level"}
+      - {id: water_stress_2030, name: 2030 年用水压力, type: number, by: ai, note: "照常发展情景的 2030 年预测,0–5 分"}
+      - {id: water_stress_2050, name: 2050 年用水压力, type: number, by: ai, note: "同上,2050 年"}
+      - {id: drought, name: 干旱风险, type: number, by: ai, note: "Aqueduct 国别排名,0–5 分"}
+      - {id: flood, name: 河流洪水风险, type: number, by: ai, note: "Aqueduct 国别排名(按人口加权),0–5 分"}
+      - {id: gdp_pc, name: 人均 GDP(PPP 美元), type: number, by: ai, note: "Kummu 等(2025)国别人均 GDP,2021 年国际美元,2024 年值"}
+      - {id: wb_water_n, name: 世行涉水项目数, type: number, by: ai, note: "世行项目库里 2020-10 至 2024 年批准、行业含供水 / 卫生 / 污水的项目数;项目库只到 2024 年,部分项目没标行业"}
+      - {id: wb_water_musd, name: 世行涉水承诺额(百万美元), type: number, by: ai, note: "上面那些项目的总承诺额(整个项目,不只涉水部分)"}
+      - {id: risk_source, name: 风险数据来源, type: text, by: ai, example: "WRI Aqueduct 4.0 国别排名(2023);Kummu 等 2025;世行项目库 2020-10 至 2024"}
+      - {id: water_agencies, name: 水务管理机构, type: list, by: ai, note: 每条带官网, format: "一行一个「机构名(职责)官网」", example: "阿塞拜疆水资源署 ADSEA(供水与污水运营)https://adsea.gov.az"}
+      - {id: water_soes, name: 水务国企, type: list, by: ai, note: 每条带官网, format: "一行一个「企业名(主业、隶属)官网」"}
+      - {id: laws, name: 相关法律法规, type: list, by: ai, note: 每条带原文链接, format: "一行一部「[类别] 名称(年份)链接」;类别 = 水法与水资源 / 供水排水与污水 / PPP 与特许经营 / 公共采购 / 环境 / 外资与投资"}
+      - {id: access, name: 市场准入与竞争, type: list, by: ai, note: 准入条件、本地注册、主要竞争者等;每条带出处(迁移时来自台账;使用方 2026-10-03 定的), format: "一行一条「[线索号] 事实」或「[R012] 事实」(R 号是国别成稿条目号，只提示不跳转)"}
+      - {id: market, name: 经营区域, type: text, by: human}
+      - {id: tier, name: 市场分级, type: enum, enum: [重点, 市场, 其他], by: human, note: 「重点」由人在表格里标(机器不写;迁移只填市场与其他), taxonomy: tier}
+      - {id: presence, name: 我方在当地, type: longtext, by: human, note: 机构、在建项目、常驻人员}
+      - {id: note, name: 国别备注, type: longtext, by: human, format: "一行一条「YYYY-MM-DD [备注|情报|建议动作] 内容」;国别页按标签着色、日期单列"}
+      - {id: lead_count, name: 线索数, type: number, by: derived, where: teable 汇总(关联「线索」计数)}
+      - {id: opp_count, name: 商机数, type: number, by: derived, note: 按我方阶段分开数, where: "teable 汇总(总数);按阶段分的数页面现算"}
+
+  - id: opportunity
+    name: 商机
+    core: true
+    band: public
+    definition: 一个值得我方投入的项目机会，一个项目一行。机器建议的(阶段为「建议」，写进国别报告的项目机会清单)与人立项跟踪的是同一张表里的同一种对象，区别只在「我方阶段」。公开事实由机器维护、每条带出处线索;我方的判断与进展由人写。
+    key: 商机编号(国别-序号，如 AZE-003)
+    states:
+      property: stage
+      initial_by_ai: 建议
+      transitions:
+        - {from: 建议, to: 跟踪中, by: human, note: 立项跟踪}
+        - {from: 建议, to: 不跟进, by: human}
+        - {from: 不跟进, to: 建议, by: human, note: 撤回}
+        - {from: 跟踪中, to: 准备投标, by: human}
+        - {from: 准备投标, to: 已投标, by: human}
+        - {from: 已投标, to: 中标, by: human}
+        - {from: 已投标, to: 未中标, by: human}
+        - {from: 跟踪中, to: 放弃, by: human}
+        - {from: 准备投标, to: 放弃, by: human}
+        - {from: 已投标, to: 放弃, by: human}
+    properties:
+      - {id: code, name: 商机编号, type: text, by: ai, required: true, format: "ISO3-三位序号;序号 = 该国已有最大序号 + 1，只增不复用(见 glossary.opp_code)", example: AZE-003}
+      - {id: name_zh, name: 名称, type: text, by: ai, required: true}
+      - {id: name_local, name: 原文名称, type: text, by: ai}
+      - {id: aliases, name: 别名, type: list, by: ai, note: 挂接线索用(名称匹配), format: "一行一个，原文或缩写照抄;机器只追加", example: "Absheron Water Supply Project\nAWSP"}
+      - {id: external_ids, name: 外部编号, type: list, by: ai, note: 世行 P 号、贷款号、门户招标号等;编号吻合即可靠挂接, format: "一行一个「标签: 编号」(core.jobs.common.parse_ids 读);标签如 WB、ADB、EBRD、AIIB、Loan、Tender", example: "WB: P178412\nEBRD: 54321"}
+      - {id: country, name: 国别, type: "link:country", by: ai, required: true}
+      - {id: location, name: 地点, type: text, by: ai}
+      - {id: city, name: 城市, type: "link:city", by: human, note: 可选;项目所在的规模以上城市(人选)}
+      - {id: sectors, name: 领域, type: enums, by: ai, taxonomy: opp_sectors,
+         enum: [供水, 输水干管, 水库调蓄, 减漏计量, 污水, 污泥, 再生水, 雨水排涝, 海水淡化, 灌溉, 防洪, 水环境治理],
+         note: "细分 12 类，每类归属线索领域 7 类之一(taxonomies.opp_sectors 的 parent);机器从线索领域只能推出供水、污水、海水淡化、雨水排涝、水环境治理五个，水利分不出灌溉还是防洪，留给人填"}
+      - {id: owner_org, name: 业主与执行机构, type: text, by: ai}
+      - {id: financing, name: 资金, type: list, by: ai, note: 出资方、工具、金额、币种、状态;每条带出处, format: "一行一笔「[线索号] 出资方 · 工具 · 金额 币种 · 状态」;工具 = 主权贷款 / 非主权贷款 / 赠款 / 技术援助赠款 / 国家预算 / PPP 股权 / PPP 项目融资 / 企业自有资金 / 待核实;状态 = 仅见报道 / 备忘录 / 储备 / 拟议 / 已批准 / 已签署 / 已生效 / 拨付中 / 已完成", example: "[3f9a1c2e] 亚开行 · 主权贷款 · 150 百万 USD · 已批准"}
+      - {id: public_stage, name: 公开进度, type: enum, by: ai, taxonomy: public_stage,
+         enum: [规划, 前期, 融资已落实, 采购进行中, 已定标, 在建, 已完工, 暂停, 取消],
+         note: "项目本身走到哪(公开可查)，与「我方阶段」无关;只填空，前进了写进待核更新;机器从线索类别推:采购类 → 采购进行中、授标 → 已定标、融资 → 融资已落实、立项 → 规划"}
+      - {id: public_stage_note, name: 进度说明, type: text, by: ai}
+      - {id: scope, name: 建设内容与规模, type: longtext, by: ai}
+      - {id: packages, name: 标段, type: list, by: ai, note: 名称、类型(工程、货物、咨询、设计施工、PPP)、状态;日期写成时间节点, format: "一行一个「[线索号] 标段名 · 类型 · 状态」;类型 = 工程 / 货物 / 咨询 / 设计施工 / PPP;状态 = 计划 / 在招 / 已截标 / 已授标 / 取消", example: "[3f9a1c2e] Lot 2 输水干管 DN800 · 工程 · 在招"}
+      - {id: eligibility, name: 投标资格, type: enum, enum: [可直接投标, 推定可投, 有条件, 受限, 待核实], by: ai, taxonomy: eligibility,
+         note: 以使用方(profile 的 bidder 国籍)能不能投为准;依据写在资格依据}
+      - {id: eligibility_basis, name: 资格依据, type: text, by: ai, example: "EBRD 采购规则，各国企业均可;需本地注册(约 90 天)"}
+      - {id: ai_reason, name: 建议理由, type: longtext, by: ai, note: 为什么值得跟;国别报告的项目机会清单引用}
+      - {id: verified, name: 核实状态, type: enum, enum: [已核实, 部分核实, 未核实, 来源冲突], by: ai, taxonomy: verified}
+      - {id: parties, name: 参与方, type: list, by: ai, note: 公开报道的同业、伙伴、咨询方, format: "一行一个「[线索号] 名称(角色)」;角色 = 业主 / 执行机构 / 咨询 / 承包商 / 投资人 / 竞争者"}
+      - {id: pending, name: 待核实, type: list, by: ai, format: "一行一条「[线索号] 什么没核实、为什么」;与待核更新的区别:待核实是没有一手来源的事实，待核更新是与现值矛盾的新值", example: "[7b2d0e11] 总投资 2.1 亿美元仅见报道，未见官方文件"}
+      - {id: sources, name: 出处线索, type: "links:lead", by: ai, note: 写事实时一并关联引用的线索(R3)}
+      - {id: size_usd, name: 规模(美元), type: number, by: ai, note: 写资金时按汇率一并算;投资规模与货币都有、这里为空时 A21 补}
+      - {id: size_value, name: 投资规模, type: number, by: ai, note: "项目总投资的数值(原币)，只填空;来自所属线索判定出的金额(A07)，人可改", example: 150000000}
+      - {id: currency, name: 货币, type: enum, by: ai, taxonomy: currency, note: 投资规模的币种(ISO 4217 代码),
+         enum: [USD, EUR, CNY, GBP, JPY, CHF, AUD, CAD, SGD, HKD, AED, SAR, QAR, KWD, OMR, EGP, MAD, DZD, TND, NGN, GHS, KES, TZS, UGX, ETB, ZAR, XOF, XAF, INR, PKR, BDT, LKR, NPR, IDR, MYR, THB, VND, PHP, MMK, KHR, KZT, UZS, AZN, GEL, AMD, KGS, TJS, TMT, MNT, TRY, IQD, JOD, LBP, PLN, RON, HUF, CZK, RSD, UAH, RUB, BRL, MXN, COP, PEN, CLP, ARS, BOB, PYG, UYU, DOP, JMD, FJD, PGK, WST, TOP, SBD, VUV]}
+      - {id: size_cny, name: 折合人民币(万元), type: number, by: ai, note: "A21 按当日汇率算，只填空;人改了不再动(R2)", example: 108000}
+      - {id: review_updates, name: 待核更新, type: longtext, by: ai, note: "机器发现的、与已有值不同的新信息，等人确认后改(R2)", format: "一行一条「[线索号] 字段:新值(现值:…)」;人驳回在行首加 ✗ 保留，采纳后改事实、删该行;「商机总览」页有专门一页", example: "[9c4e2a70] 公开进度:已定标(现值:采购进行中)"}
+      - {id: stage, name: 我方阶段, type: enum, by: human, required: true, taxonomy: stage,
+         enum: [建议, 不跟进, 跟踪中, 准备投标, 已投标, 中标, 未中标, 放弃],
+         note: "我方对这个项目做到哪一步，与公开进度无关;三组:未立项(建议、不跟进)、在跟踪(跟踪中、准备投标、已投标、中标)、已结束(未中标、放弃)"}
+      - {id: priority, name: 优先级, type: enum, enum: [A, B, C], by: human, taxonomy: priority}
+      - {id: owner, name: 负责人, type: "link:member", by: human}
+      - {id: internal_note, name: 内部备注, type: longtext, by: human}
+      - {id: lead_count, name: 所属线索数, type: number, by: derived, where: teable 汇总(关联「所属线索」计数)}
+      - {id: next_milestone, name: 下一时间节点, type: text, by: derived, where: "teable 条件查找(未发生、日期 ≥ 今天的最早一个);含今天，隔天不重算，页面与报告自己算(R12)"}
+      - {id: latest_start, name: 最晚启动, type: date, by: derived, note: 下一节点日期 − 内部流程周期, where: "teable 汇总(时间节点的「最晚启动(辅助)」最小值);周期来自 profile 的 lead_times，只对采购截止类节点算;含今天(R12)"}
+      - {id: last_followup, name: 最近跟进, type: date, by: derived, where: teable 汇总(跟进记录日期最大值)}
+      - {id: judgment, name: 当前判断, type: text, by: derived, note: 最近一条跟进的判断, where: teable 条件查找(最近一条判断非空的跟进)}
+      - {id: next_step, name: 下一步, type: text, by: derived, note: 最近一条跟进的下一步, where: teable 条件查找(最近一条下一步非空的跟进)}
+      - {id: next_due, name: 下一步到期, type: date, by: derived, where: "teable 条件查找(最近一条到期非空的跟进);「逾期」= 到期 < 今天且阶段在跟踪，页面现算(R12)"}
+
+  - id: followup
+    name: 跟进记录
+    core: true
+    band: business
+    definition: 我方一次跟进一行:做了什么、了解到什么、怎么判断、下一步做什么。公司内部业务数据，与公开时间节点一起排成日历。
+    key: 记录号(自动)
+    properties:
+      - {id: opportunity, name: 商机, type: "link:opportunity", by: human, required: true}
+      - {id: day, name: 日期, type: date, by: human, required: true}
+      - {id: author, name: 记录人, type: "link:member", by: human, required: true, note: 按登录人自动填}
+      - {id: content, name: 内容, type: longtext, by: human, required: true, example: "与业主 ADSEA 采购处通话，确认 Lot 2 资格预审 11 月发布;对方希望有本地合作方"}
+      - {id: judgment, name: 判断, type: enum, enum: [继续跟进, 重点推进, 观望, 放弃], by: human, taxonomy: judgment,
+         note: 这一次跟进后的态度，不改阶段;「放弃」的判断要落实为阶段才算放弃(A09)}
+      - {id: reason, name: 判断依据, type: text, by: human}
+      - {id: stage_change, name: 阶段变更, type: enum, by: ai, taxonomy: stage,
+         enum: [建议, 不跟进, 跟踪中, 准备投标, 已投标, 中标, 未中标, 放弃], note: "人在商机上改了阶段，机器自动补一条跟进并填这里(A18、R6);人再补写内容与判断依据"}
+      - {id: next_step, name: 下一步, type: text, by: human, example: 约见执行机构项目主任，确认联合体要求}
+      - {id: next_due, name: 下一步到期, type: date, by: human, note: 到期未记新跟进即「逾期」，进「商机总览 · 下一步已逾期」}
+      - {id: attachments, name: 附件, type: file, by: human}
+
+  # ---------------- 四个支撑对象 ----------------
+  - id: source
+    name: 信源
+    core: false
+    band: public
+    definition: 机器定时采集的一处网站、接口或订阅;另有一个固定信源「人工上传」。
+    key: 信源编号
+    properties:
+      - {id: name, name: 名称, type: text, by: human, required: true}
+      - {id: url, name: 网址, type: url, by: human}
+      - {id: kind, name: 类型, type: enum, enum: [网页列表, RSS, 接口, 采购门户, 人工上传], by: human, taxonomy: source_kind}
+      - {id: scope, name: 范围, type: text, by: human, note: 国别或全球, example: AZE}
+      - {id: enabled, name: 启用, type: bool, by: human}
+      - {id: last_run, name: 最近采集, type: datetime, by: ai}
+      - {id: last_status, name: 最近状态, type: enum, enum: [正常, 无条目, 出错, 被拒], by: ai, taxonomy: source_status}
+      - {id: lead_count, name: 线索数, type: number, by: derived, where: teable 汇总}
+
+  - id: milestone
+    name: 时间节点
+    core: false
+    band: public
+    definition: 一个公开的日期:截止、发布、开标、授标、签约、开工、完工等。属于一个商机或一条线索，是日历的公开那一半。
+    key: 记录号(自动)
+    properties:
+      - {id: opportunity, name: 商机, type: "link:opportunity", by: ai}
+      - {id: lead, name: 线索, type: "link:lead", by: ai, note: 截止日来自哪条线索}
+      - {id: country, name: 国别, type: "link:country", by: ai, note: 国别级日期(投资论坛、政策节点);商机、线索、国别至少关联一个}
+      - {id: kind, name: 类型, type: enum, by: ai, taxonomy: milestone_kind,
+         enum: [意向书截止, 资格预审截止, 投标截止, PPP标书截止, 招标发布, 开标, 授标, 合同签署, 贷款签署, 董事会批准, 开工, 完工, 其他],
+         note: 四组:采购截止(投标人要动作，算最晚启动)、采购节点、融资与批准、实施;归不进的记「其他」并在说明里写原名}
+      - {id: day, name: 日期, type: pdate, by: ai, required: true, note: 可以只到月、季、半年, format: "表里两个字段:日期(区间起点)+ 日期原文;原文写法 2026 / 2026-H2 / 2026-Q4 / 2026-12 / 2026-12-15", example: 2026-Q4}
+      - {id: status, name: 状态, type: enum, enum: [已发生, 官方计划, 推断], by: ai, taxonomy: milestone_status,
+         note: 日期过了由后台改成「已发生」(A19);「推断」的在说明里写依据}
+      - {id: label, name: 说明, type: text, by: ai, example: "Lot 2 投标截止;原文 deadline 15 Dec 2026 17:00 Baku time"}
+      - {id: source, name: 出处线索, type: "link:lead", by: ai, note: "推断的可空，但说明里写依据(R3)"}
+
+  - id: report
+    name: 报告
+    core: false
+    band: public
+    definition: 机器生成的 Word 报告:国别报告、项目报告(一次性，人发起)与周报、月报、日报(定期)。生成后不改，再生成即新版本。
+    key: 报告号(类型 + 范围 + 日期 + 版本);文件名唯一——迁移与再生成按它增量(机器写的标识字段，同线索号)
+    properties:
+      - {id: kind, name: 类型, type: enum, enum: [国别报告, 项目报告, 周报, 月报, 日报], by: ai, required: true, taxonomy: report_kind}
+      - {id: day, name: 日期, type: date, by: ai, required: true}
+      - {id: period, name: 期间, type: text, by: ai, note: 周报、月报、日报用, format: "周报 YYYY-Www(ISO 周)，月报 YYYY-MM，日报 YYYY-MM-DD;国别周报前面带 ISO3", example: 2026-W40}
+      - {id: country, name: 范围国别, type: "link:country", by: ai}
+      - {id: opportunity, name: 范围商机, type: "link:opportunity", by: ai}
+      - {id: edition, name: 版本, type: enum, enum: [公开版, 内部版], by: ai, taxonomy: edition}
+      - {id: file, name: 文件, type: file, by: ai}
+      - {id: cites_leads, name: 引用的线索, type: "links:lead", by: ai}
+      - {id: cites_opps, name: 写进的商机, type: "links:opportunity", by: ai}
+      - {id: gen_status, name: 生成状态, type: enum, enum: [待生成, 生成中, 完成, 失败], by: ai, taxonomy: gen_status,
+         note: 待生成 → 生成中 → 完成 / 失败;超过 30 分钟仍「生成中」的后台改回待生成(重启不丢活);失败原因在后台日志}
+      - {id: requested_by, name: 发起人, type: "link:member", by: human, note: 一次性报告由谁发起}
+      - {id: template, name: 模板, type: "link:template", by: ai, note: 套用哪个报告模板:要报告的人可先选(同类型、版本);没选的由机器生成时按该类型的缺省模板填上}
+      - {id: summary, name: 简报正文, type: longtext, by: ai, note: "日报的正文(Markdown，几百字):「线索分析」页顶部直接显示，不必打开文件;其他类型留空。库里没这个字段时后台跳过不写，页面改读附件里的 Markdown"}
+
+  - id: template
+    name: 报告模板
+    core: false
+    band: public
+    definition: 生成 Word 报告时套用的版式模板(.docx 文件):页面、字体、字号、页眉页脚取自它，正文章节仍由机器按报告类型生成。一行一个模板;同事在页面或表格里上传、换文件、设缺省。
+    key: 名称
+    properties:
+      - {id: name, name: 名称, type: text, by: human, required: true}
+      - {id: kinds, name: 适用类型, type: enums, enum: [国别报告, 项目报告, 周报, 月报, 日报], by: human, required: true, taxonomy: report_kind}
+      - {id: file, name: 模板文件, type: file, by: human, note: Word(.docx);传了多个取最后传的那个}
+      - {id: is_default, name: 缺省, type: bool, by: human, note: 报告没指定模板时用适用类型含它且勾了缺省的;勾了多个取最近改的}
+      - {id: note, name: 说明, type: longtext, by: human}
+
+  - id: city
+    name: 城市
+    core: false
+    band: public
+    definition: 一国规模以上的城市(人口达到门槛，缺省 10 万):所属国别、所在行政区、坐标、人口、面积、密度、地区生产总值。机器按 GeoNames 等公开数据建行、填空，人可改、可补;线索与商机可选择关联到一座城市。国别页「规模以上城市」页签列出。
+    key: 城市码(GeoNames 编号;去重按它)
+    properties:
+      - {id: name_zh, name: 中文名, type: text, by: ai, required: true, note: GeoNames 的中文别名;没有的用英文名}
+      - {id: name_en, name: 英文名, type: text, by: ai}
+      - {id: country, name: 所属国别, type: "link:country", by: ai, required: true}
+      - {id: admin, name: 所在行政区, type: text, by: ai, note: 一级行政区(省、州、大区)}
+      - {id: coords, name: 坐标, type: text, by: ai, format: "纬度,经度(小数)", example: "40.4093,49.8671"}
+      - {id: population, name: 人口, type: number, by: ai, note: 人;GeoNames 的最新数}
+      - {id: pop_year, name: 人口年份, type: number, by: ai}
+      - {id: area_km2, name: 面积(平方公里), type: number, by: ai, note: 公开数据没有的留空、人补}
+      - {id: density, name: 密度(人/平方公里), type: number, by: ai, note: 人口与面积都有、这里为空时后台算(A22)}
+      - {id: gdp, name: 地区生产总值(亿美元), type: number, by: ai, note: 公开数据没有的留空、人补}
+      - {id: gdp_year, name: 生产总值年份, type: number, by: ai}
+      - {id: water_risk, name: 总体水风险, type: number, by: ai, note: "Aqueduct 4.0 总体水风险(缺省行业权重,含水量、水质、监管与声誉三类),0–5 分;读法见 glossary.risk_level", example: 4.24}
+      - {id: water_stress, name: 用水压力, type: number, by: ai, note: "Aqueduct 基线用水压力(取用量 ÷ 可用量),0–5 分;4 以上 = 取用超过可用量的 80%", example: 5}
+      - {id: water_stress_2030, name: 2030 年用水压力, type: number, by: ai, note: "Aqueduct 照常发展情景(SSP3 RCP7.0)的 2030 年预测,0–5 分"}
+      - {id: water_stress_2050, name: 2050 年用水压力, type: number, by: ai, note: "同上,2050 年"}
+      - {id: drought, name: 干旱风险, type: number, by: ai, note: "Aqueduct 干旱风险,0–5 分"}
+      - {id: flood, name: 河流洪水风险, type: number, by: ai, note: "Aqueduct 河流洪水风险,0–5 分"}
+      - {id: no_drinking, name: 无安全饮用水(%), type: number, by: ai, note: "Aqueduct「未改善 / 无饮用水」人口比例,百分数"}
+      - {id: no_sanitation, name: 无卫生设施(%), type: number, by: ai, note: "Aqueduct「未改善 / 无卫生设施」人口比例,百分数"}
+      - {id: untreated_ww, name: 未处理污水(%), type: number, by: ai, note: "Aqueduct「未处理的已收集污水」比例,百分数"}
+      - {id: gdp_pc, name: 人均 GDP(PPP 美元), type: number, by: ai, note: "Kummu 等(2025)格网人均 GDP,2021 年国际美元,取城市所在县级区(没有的取省级)的 2024 年值;县级区很小的市中心会偏高", example: 25089}
+      - {id: risk_source, name: 风险数据来源, type: text, by: ai, example: "WRI Aqueduct 4.0(2023);Kummu 等 2025 人均 GDP"}
+      - {id: tariff, name: 现行水价, type: number, by: human, note: 居民生活用水的现行价格(本币/立方米;有阶梯的填第一档);含不含污水处理费、非居民价写在「水价说明」, example: 3.45}
+      - {id: tariff_currency, name: 水价货币, type: enum, by: human, taxonomy: currency, note: 现行水价的币种(ISO 4217 代码),
+         enum: [USD, EUR, CNY, GBP, JPY, CHF, AUD, CAD, SGD, HKD, AED, SAR, QAR, KWD, OMR, EGP, MAD, DZD, TND, NGN, GHS, KES, TZS, UGX, ETB, ZAR, XOF, XAF, INR, PKR, BDT, LKR, NPR, IDR, MYR, THB, VND, PHP, MMK, KHR, KZT, UZS, AZN, GEL, AMD, KGS, TJS, TMT, MNT, TRY, IQD, JOD, LBP, PLN, RON, HUF, CZK, RSD, UAH, RUB, BRL, MXN, COP, PEN, CLP, ARS, BOB, PYG, UYU, DOP, JMD, FJD, PGK, WST, TOP, SBD, VUV]}
+      - {id: tariff_changed, name: 最近调价时间, type: date, by: human, note: 最近一次调价的执行日期;只知道年月的填该月 1 日}
+      - {id: tariff_note, name: 水价说明, type: longtext, by: human, note: 阶梯、非居民价、污水处理费、调价幅度与文号等, example: "第一档 0-180 m³/年 3.45 元(含污水处理费 0.95);2024-07 上调 0.5 元"}
+      - {id: tariff_source, name: 水价来源, type: text, by: human, example: "市发改委价格通知 2024-07"}
+      - {id: source, name: 数据来源, type: text, by: ai, example: "GeoNames cities15000(2026-10)"}
+      - {id: note, name: 备注, type: longtext, by: human}
+      - {id: lead_count, name: 线索数, type: number, by: derived, where: teable 汇总}
+      - {id: opp_count, name: 商机数, type: number, by: derived, where: teable 汇总}
+      - {id: supply_count, name: 自来水厂数, type: number, by: derived, where: teable 汇总}
+      - {id: sewage_count, name: 污水厂数, type: number, by: derived, where: teable 汇总}
+
+  - id: company
+    name: 公司资料
+    core: false
+    band: business
+    definition: 我方的资质证书、历史业绩与其他公司资料,一行一项。人维护;生成国别报告、项目报告的内部版时按适用国别与领域挑出勾了「写进报告」的行,附在正文后。公开版不附,游客看不到。
+    key: 名称
+    properties:
+      - {id: kind, name: 类别, type: enum, enum: [资质, 业绩, 其他], by: human, required: true, taxonomy: company_kind}
+      - {id: name, name: 名称, type: text, by: human, required: true, example: "市政公用工程施工总承包特级"}
+      - {id: content, name: 内容, type: longtext, by: human, note: 资质的发证机关、等级、有效期;业绩的项目概况、合同额、工期、业主、我方角色}
+      - {id: sectors, name: 适用领域, type: enums, enum: [供水, 污水, 水利, 海水淡化, 雨水排涝, 水环境, 其他], by: human, taxonomy: lead_sectors, note: 空 = 各领域都适用}
+      - {id: countries, name: 适用国别, type: "links:country", by: human, note: 空 = 全球通用;业绩填项目所在国}
+      - {id: year, name: 年份, type: number, by: human, note: 业绩的完工年;资质的发证年, example: 2023}
+      - {id: amount, name: 金额, type: text, by: human, note: 原文怎么写就怎么记, example: "1.2 亿美元"}
+      - {id: file, name: 附件, type: file, by: human, note: 证书扫描件、业绩证明}
+      - {id: for_report, name: 写进报告, type: bool, by: human, note: 勾了才会附进国别报告、项目报告的内部版}
+      - {id: note, name: 备注, type: longtext, by: human}
+
+  - id: preference
+    name: 个人设置
+    core: false
+    band: business
+    definition: 一个登录账号一行:关注的国别、忽略的国别、保存的日历订阅。「我的」页读写;不存密码、不管权限(那些在 Teable 的帐号设置里)。
+    key: 账号(一个账号最多一行)
+    properties:
+      - {id: name, name: 名称, type: text, by: human, required: true, note: 登录人的显示名;页面建行时写}
+      - {id: user, name: 账号, type: "link:member", by: human, required: true}
+      - {id: countries, name: 关注国别, type: "links:country", by: human, note: "页面清单里这些国家的线索、商机排在最前、带 ★;国别下拉放在最上面一组"}
+      - {id: ignored, name: 忽略国别, type: text, by: human, format: "国别码(ISO3),英文逗号分隔", example: "USA,CAN,MEX", note: "地图上画斜线;任何一个账号忽略的国别,采集都不再涉及(A01)。没设过(空着)默认忽略中国(CHN);一个都不忽略存「-」。我的页可按大洲、按经济水平(IMF 发达经济体、世行收入组)一键忽略"}
+      - {id: subscriptions, name: 日历订阅, type: list, by: human, format: "一行一个「名称 | 链接」", example: "跟踪中商机 | https://…/calendar.ics?…"}
+      - {id: note, name: 备注, type: longtext, by: human}
+
+  - id: supply_plant
+    name: 自来水厂
+    core: false
+    band: public
+    definition: 一座供水厂(含海水淡化厂):规模、服务人口、建设与改造扩建时间、工艺。机器从公开数据导入(A25),人可改、可补;挂在所属国别下,在规模以上城市里的再挂到城市。城市概况页列出。
+    key: 编号(导入数据的原编号;人新加的可留空)
+    properties:
+      - {id: name, name: 名称, type: text, by: ai, required: true, note: 原文名(本地语言或英文);公开数据里没名字的写「(未命名水厂)」}
+      - {id: name_zh, name: 中文名, type: text, by: human}
+      - {id: kind, name: 类型, type: enum, enum: [自来水厂, 海水淡化厂], by: ai, required: true, taxonomy: supply_plant_kind}
+      - {id: status, name: 状态, type: enum, enum: [运行, 在建, 停用], by: ai, taxonomy: plant_status}
+      - {id: country, name: 所属国别, type: "link:country", by: ai, required: true}
+      - {id: city, name: 所在城市, type: "link:city", by: ai, note: 规模以上城市里的才挂;导入时按 GeoNames 编号或 25 公里内最近的城市}
+      - {id: capacity, name: 规模(万吨/日), type: number, by: ai, note: 设计处理能力}
+      - {id: pop_served, name: 服务人口, type: number, by: ai}
+      - {id: built, name: 建设时间, type: text, by: ai, format: "年份,或「开工—投运」", example: "1998"}
+      - {id: process, name: 工艺, type: text, by: ai, example: "常规处理(混凝、沉淀、过滤、消毒)"}
+      - {id: upgrades, name: 改造扩建, type: list, by: human, format: "一行一次「年份 | 改造或扩建 | 内容」", example: "2015 | 扩建 | 二期 10 万吨/日"}
+      - {id: operator, name: 运营方, type: text, by: ai}
+      - {id: coords, name: 坐标, type: text, by: ai, format: "纬度,经度(小数)"}
+      - {id: source, name: 数据来源, type: text, by: ai, example: "water-tracker 导入(OSM)"}
+      - {id: note, name: 备注, type: longtext, by: human}
+
+  - id: sewage_plant
+    name: 污水厂
+    core: false
+    band: public
+    definition: 一座污水处理厂(含中水回用厂):规模、服务人口、建设与改造扩建时间、工艺与处理级别。机器从公开数据导入(A25),人可改、可补;挂在所属国别下,在规模以上城市里的再挂到城市。城市概况页列出。
+    key: 编号(导入数据的原编号;人新加的可留空)
+    properties:
+      - {id: name, name: 名称, type: text, by: ai, required: true, note: 原文名;公开数据里没名字的写「(未命名污水厂)」}
+      - {id: name_zh, name: 中文名, type: text, by: human}
+      - {id: kind, name: 类型, type: enum, enum: [污水厂, 中水回用厂], by: ai, required: true, taxonomy: sewage_plant_kind}
+      - {id: status, name: 状态, type: enum, enum: [运行, 在建, 停用], by: ai, taxonomy: plant_status}
+      - {id: country, name: 所属国别, type: "link:country", by: ai, required: true}
+      - {id: city, name: 所在城市, type: "link:city", by: ai, note: 规模以上城市里的才挂;导入时按 GeoNames 编号或 25 公里内最近的城市}
+      - {id: capacity, name: 规模(万吨/日), type: number, by: ai, note: 设计处理能力}
+      - {id: pop_served, name: 服务人口, type: number, by: ai}
+      - {id: built, name: 建设时间, type: text, by: ai, format: "年份,或「开工—投运」", example: "2006"}
+      - {id: level, name: 处理级别, type: enum, enum: [一级, 二级, 深度], by: ai, taxonomy: treatment_level}
+      - {id: process, name: 工艺, type: text, by: ai, example: "A2/O + 深度过滤"}
+      - {id: upgrades, name: 改造扩建, type: list, by: human, format: "一行一次「年份 | 改造或扩建 | 内容」", example: "2019 | 提标改造 | 一级 A 提到准四类"}
+      - {id: operator, name: 运营方, type: text, by: ai}
+      - {id: coords, name: 坐标, type: text, by: ai, format: "纬度,经度(小数)"}
+      - {id: source, name: 数据来源, type: text, by: ai, example: "water-tracker 导入(HydroWASTE)"}
+      - {id: note, name: 备注, type: longtext, by: human}
+
+  - id: member
+    name: 成员
+    core: false
+    band: business
+    definition: 部门同事，一个登录账号一行。
+    key: 登录邮箱
+    properties:
+      - {id: display_name, name: 显示名, type: text, by: human, required: true}
+      - {id: code, name: 代号, type: text, by: human}
+      - {id: role, name: 角色, type: enum, enum: [管理员, 跟进人, 只读], by: human, required: true, taxonomy: role}
+
+  - id: term
+    name: 行业术语
+    core: false
+    band: public
+    definition: 一个行业词一行:提问里出现这个词(或它的同义说法)时,助手怎么把它翻成筛选条件——跨哪些领域、要不要按领域筛、按哪些相关词去线索标题与中文摘要里找。懂行的人在表里加词、改相关词,下一个提问就生效(助手每分钟重读一次表)。
+    key: 术语
+    properties:
+      - {id: term, name: 术语, type: text, by: human, required: true, example: 智慧水务}
+      - {id: aliases, name: 同义说法, type: longtext, by: human, format: "一行一个,或用「、」隔开;提问里出现任一个都算这个词", example: "智慧水利、智慧水网、smart water"}
+      - {id: covers, name: 跨哪些领域, type: enums, enum: [供水, 污水, 水利, 海水淡化, 雨水排涝, 水环境, 其他], by: human, taxonomy: lead_sectors, note: "说明用,显示在助手的「理解为」里"}
+      - {id: sectors, name: 按领域筛, type: enums, enum: [供水, 污水, 水利, 海水淡化, 雨水排涝, 水环境, 其他], by: human, taxonomy: lead_sectors, note: "空 = 不限领域,只按相关词找;跨领域的词留空,别把它塞进一个领域"}
+      - {id: match, name: 相关词, type: longtext, by: human, required: true, format: "一行一个,或用「、」隔开;线索标题或中文摘要含任一个即算",
+         note: "线索标题多为英、法、西等原文,英文词也要写;拉丁字母的词至少 4 个字母(GIS 会误中 logistics),短于 4 个的助手不用", example: "数字孪生、SCADA、smart、digital"}
+      - {id: means, name: 说明, type: longtext, by: human}
+      - {id: disabled, name: 停用, type: bool, by: human, note: 勾上助手就不用这一行(代替删除)}
+
+# 关系(Link type):from 指向 to;cardinality 为「from 端 .. to 端」;via 为承载它的属性
+links:
+  - {from: lead, name: 来自, to: source, cardinality: "*..1", via: lead.source}
+  - {from: lead, name: 涉及, to: country, cardinality: "*..0..1", via: lead.country}
+  - {from: lead, name: 属于, to: opportunity, cardinality: "*..0..1", via: lead.opportunity, set_by: 机器(可靠时)或人确认}
+  - {from: milestone, name: 出自, to: lead, cardinality: "*..0..1", via: milestone.source}
+  - {from: opportunity, name: 位于, to: country, cardinality: "*..1", via: opportunity.country}
+  - {from: city, name: 属于, to: country, cardinality: "*..1", via: city.country}
+  - {from: supply_plant, name: 属于, to: country, cardinality: "*..1", via: supply_plant.country}
+  - {from: supply_plant, name: 位于, to: city, cardinality: "*..0..1", via: supply_plant.city}
+  - {from: sewage_plant, name: 属于, to: country, cardinality: "*..1", via: sewage_plant.country}
+  - {from: sewage_plant, name: 位于, to: city, cardinality: "*..0..1", via: sewage_plant.city}
+  - {from: company, name: 适用于, to: country, cardinality: "*..*", via: company.countries, set_by: 人}
+  - {from: preference, name: 关注, to: country, cardinality: "*..*", via: preference.countries, set_by: 人}
+  - {from: preference, name: 属于, to: member, cardinality: "*..1", via: preference.user, set_by: 人}
+  - {from: lead, name: 涉及城市, to: city, cardinality: "*..0..1", via: lead.city, set_by: 人}
+  - {from: opportunity, name: 所在城市, to: city, cardinality: "*..0..1", via: opportunity.city, set_by: 人}
+  - {from: opportunity, name: 包含, to: milestone, cardinality: "1..*", via: milestone.opportunity, kind: composition}
+  - {from: milestone, name: 属于国别, to: country, cardinality: "*..0..1", via: milestone.country}
+  - {from: opportunity, name: 引用, to: lead, cardinality: "*..*", via: opportunity.sources}
+  - {from: opportunity, name: 负责人, to: member, cardinality: "*..0..1", via: opportunity.owner}
+  - {from: followup, name: 关于, to: opportunity, cardinality: "*..1", via: followup.opportunity}
+  - {from: followup, name: 记录人, to: member, cardinality: "*..1", via: followup.author}
+  - {from: report, name: 范围, to: country, cardinality: "*..0..1", via: report.country}
+  - {from: report, name: 范围, to: opportunity, cardinality: "*..0..1", via: report.opportunity}
+  - {from: report, name: 引用, to: lead, cardinality: "*..*", via: report.cites_leads}
+  - {from: report, name: 套用, to: template, cardinality: "*..0..1", via: report.template}
+
+# 行为(Action type):actor 为 ai 或 human;creates 新建的对象;sets_on_create 新建时的初值;writes 改写的属性(对象.属性);
+# channel 人在哪做(表格 = Teable 界面;页面 = portal 工作台，以登录人身份写同一个库;命令行 = 管理员本机)。机器的行为都在后台 worker 里跑。
+# 机器的 writes 一律"只填空、只新建、列表只追加"(R2):已有值不改，要改的写进「待核更新」;机器自己的运行状态(信源最近采集与状态、报告生成状态)与按期数据(国别指标)除外。
+actions:
+  - id: A01
+    name: 采集线索
+    actor: ai
+    trigger: 每天定时
+    reads: [source, preference]
+    creates: lead
+    sets_on_create: {lead.origin: 机器采集, lead.status: 待处理}
+    writes: [lead.title, lead.url, lead.source, lead.published, lead.found_at, lead.excerpt, source.last_run, source.last_status]
+    note: 个人设置里任何一个账号「忽略国别」里的国别不采:这一国的信源跳过,全球信源判到这一国的条目不入库(已入库的不动)。
+  - id: A02
+    name: 上传线索
+    actor: human
+    channel: [表格]
+    trigger: 随时(在线索表新建一行，填原文网址;2 分钟内后台补全，见 A03)
+    creates: lead
+    sets_on_create: {lead.origin: 用户上传, lead.relevant: true, lead.status: 待处理}
+    writes: [lead.url, lead.title]
+    rules: [R8]
+  - id: A03
+    name: 判定线索
+    actor: ai
+    trigger: 新线索入库后(含用户上传的，只补摘要、国别与日期)
+    reads: [lead, opportunity]
+    creates: milestone
+    writes: [lead.title, lead.excerpt, lead.published, lead.relevant, lead.category, lead.sectors, lead.country, lead.summary_zh,
+             lead.funder, lead.project_name, lead.amount, lead.amount_value, lead.currency, lead.amount_cny, lead.suggested_opp, lead.suggest_reliable, lead.maybe_new, lead.opportunity,
+             lead.judged_by,
+             milestone.lead, milestone.opportunity, milestone.kind, milestone.day, milestone.status, milestone.label, milestone.source]
+    note: 只判「处理状态 = 待处理且判定方式为空」的线索，一条只判一次，判完写判定方式;判过的永不回头，重判定只能在命令行显式执行——人改过、清空过的值不会被再填回来(R2)。用户上传的不判相关性，只补标题、摘要、国别与日期，判定方式写「不判定」(R8)。只有归属可靠且所属商机为空时才填所属商机(R4、R2)。时间节点按「所属(商机 / 线索 / 国别)+ 类型 + 日期原文」去重，已有的只补空着的出处线索与说明。
+    rules: [R2, R4, R8]
+  - id: A04
+    name: 处理线索
+    actor: human
+    channel: [表格, 页面]
+    trigger: 随时(页面上「忽略」即处理状态改已忽略)
+    writes: [lead.status, lead.note]
+  - id: A05
+    name: 确认归属
+    actor: human
+    channel: [表格, 页面]
+    trigger: 有建议所属商机或可能是新项目的线索(页面「线索处理 · 待确认归属」，见 A20)
+    writes: [lead.opportunity]
+    rules: [R4]
+  - id: A06
+    name: 建议商机
+    actor: ai
+    trigger: 一次性(新开国别、出国别报告前);或判为可能新项目且过门槛(重点或市场国别、核心领域、采购与立项类)
+    reads: [lead, country]
+    creates: opportunity
+    sets_on_create: {opportunity.stage: 建议}
+    writes: [opportunity.code, opportunity.name_zh, opportunity.name_local, opportunity.aliases, opportunity.external_ids,
+             opportunity.country, opportunity.location, opportunity.sectors, opportunity.owner_org, opportunity.financing,
+             opportunity.public_stage, opportunity.public_stage_note, opportunity.scope, opportunity.packages, opportunity.eligibility,
+             opportunity.eligibility_basis, opportunity.ai_reason, opportunity.verified, opportunity.parties, opportunity.pending,
+             opportunity.sources, opportunity.size_usd]
+    note: 只在线索刚判定的那一轮做(E3)，判过的线索不再回头。先挂接、后新建:按外部编号 → 别名 → 名称相近找已有商机，找到的写进线索的建议所属商机(外部编号吻合的算可靠，所属商机为空时代填);都找不到才新建，商机编号 = 该国表里现有最大序号 + 1(从表里读)，新建后把这条线索的所属商机填上。没过门槛的可能新项目留在「待确认归属」，由人决定建不建(A08)。
+    rules: [R2, R3, R5]
+  - id: A07
+    name: 更新商机事实
+    actor: ai
+    trigger: 所属线索有新内容时;定期复核
+    reads: [lead]
+    creates: milestone
+    writes: [opportunity.financing, opportunity.public_stage, opportunity.public_stage_note, opportunity.scope, opportunity.packages,
+             opportunity.eligibility, opportunity.eligibility_basis, opportunity.verified, opportunity.parties, opportunity.pending,
+             opportunity.external_ids, opportunity.sources, opportunity.size_usd, opportunity.size_value, opportunity.currency, opportunity.review_updates,
+             milestone.opportunity, milestone.kind, milestone.day, milestone.status, milestone.label, milestone.source]
+    note: 标量属性(公开进度、资格、规模等)只填空;列表属性(资金、标段、参与方、外部编号、别名、待核实)只追加新项——键 = 出处线索号 + 规范化文本，已有的不改不删;写前读最新值、读完立即写。与已有值不同的新信息写进待核更新:一行一条「[线索号] 字段:新值(现值:…)」，键 = 出处线索号 + 字段，表里已有同键的行(含人驳回的)不再提;人驳回在行首加 ✗ 并保留，人采纳后改事实、删该行。时间节点按「所属 + 类型 + 日期原文」去重，已有的只补出处与说明。人要否定机器值时写「无」「不详」，不清空(R2)。
+    rules: [R2, R3]
+  - id: A08
+    name: 新建或修改商机
+    actor: human
+    channel: [表格, 页面]
+    trigger: 随时(含核对待核更新后改事实;页面「商机工作台」可改负责人、优先级、内部备注)
+    creates: opportunity
+    writes: [opportunity.name_zh, opportunity.country, opportunity.sectors, opportunity.scope, opportunity.financing,
+             opportunity.public_stage, opportunity.review_updates, opportunity.stage, opportunity.priority, opportunity.owner,
+             opportunity.internal_note]
+    rules: [R2, R6]
+  - id: A09
+    name: 立项跟踪与改阶段
+    actor: human
+    channel: [表格, 页面]
+    trigger: 商机为「建议」时立项(页面「线索处理 · AI 推荐」的跟踪 / 不跟进);之后随进展改(表格里下拉或看板拖动，或工作台记跟进时顺带改阶段)
+    writes: [opportunity.stage, opportunity.owner, opportunity.priority]
+    note: 每次改阶段由 A18 自动补一条跟进
+    rules: [R5, R6]
+  - id: A10
+    name: 记跟进
+    actor: human
+    channel: [表格, 页面]
+    trigger: 随时(页面「商机工作台」的表单，记录人按登录人)
+    creates: followup
+    writes: [followup.opportunity, followup.day, followup.author, followup.content, followup.judgment, followup.reason,
+             followup.next_step, followup.next_due, followup.attachments]
+    rules: [R7]
+  - id: A18
+    name: 阶段变更记跟进
+    actor: ai
+    trigger: 商机的我方阶段被人改了(与最近一条阶段变更不同)
+    reads: [opportunity, followup]
+    creates: followup
+    sets_on_create: {followup.opportunity: 被改的商机, followup.day: 改阶段的日期, followup.author: 改阶段的人, followup.content: 阶段从旧值改为新值}
+    writes: [followup.stage_change]
+    note: 不用另存状态:比较商机当前阶段与它最近一条带阶段变更的跟进(没有的视为「建议」，即初始阶段);改阶段的人与时间取表格的「阶段修改人」「阶段修改时间」。只在阶段修改人不是机器账号、且阶段与最近一条阶段变更不同时记——机器建的建议商机、迁移进来的商机都不会多记;人直接以「跟踪中」等新建的商机，第一条记「立项为 X」。迁移时按旧系统的操作记录直接写出阶段变更跟进作为历史(记录人对不上账号的写进内容)。两次检查之间(2 分钟)连改两次只记最后一次，可以接受。
+    rules: [R6]
+  - id: A11
+    name: 维护国别信息
+    actor: ai
+    trigger: 每月;新开国别时
+    writes: [country.name_zh, country.region, country.basics, country.indicators, country.income_group,
+             country.water_agencies, country.water_soes, country.laws, country.access]
+    note: 指标每月更新属于机器自己的数据(带年份与来源)，新一期直接替换;人写的国别字段不碰
+    rules: [R3]
+  - id: A12
+    name: 编辑国别
+    actor: human
+    trigger: 随时
+    writes: [country.market, country.tier, country.presence, country.note]
+  - id: A13
+    name: 发起一次性报告
+    actor: human
+    channel: [表格, 页面]
+    trigger: 要一份国别报告或项目报告时，在报告表新建一行(或在「报告」页、「商机工作台」点要报告;可选模板)
+    creates: report
+    sets_on_create: {report.gen_status: 待生成}
+    writes: [report.kind, report.country, report.opportunity, report.edition, report.requested_by, report.template]
+  - id: A14
+    name: 生成报告
+    actor: ai
+    trigger: 报告表里有待生成的一行(人发起的);每周一出周报、每月 1 日出月报、每天采集完成后出日报(机器自建一行)
+    reads: [country, opportunity, lead, followup, milestone, source, template]
+    creates: report
+    writes: [report.kind, report.day, report.period, report.edition, report.file, report.cites_leads, report.cites_opps, report.gen_status, report.template, report.summary]
+    note: "公开版不读人写的属性与跟进记录(R9)。章节按类型固定:周报 / 月报 = 本期概览、本期线索、商机进展、未来 N 天的时间节点、本期跟进;国别报告 = 国别概况、商机(按阶段)、线索、时间节点;项目报告 = 项目事实、资金、标段、参与方、时间节点、所属线索、跟进(内部版);日报 = 今日概览(新增、相关、采购类、待处理、待确认归属)、分布(国别、类别、领域、资金来源)、值得看的新线索、商机动态、近 7 天时间节点、信源运行，正文另存进「简报正文」。模板只管版式:报告选的模板 → 该类型的缺省模板 → 该类型任一模板 → 自带模板，用的那个写回「模板」。配了模型时加摘要、研判、建议、风险段，每条结论标线索号或商机编号。"
+    rules: [R9]
+  - id: A16
+    name: 管理信源
+    actor: human
+    channel: [表格]
+    trigger: 随时(管理员;怎么抓在 git 的 watch.yaml，按信源编号对应)
+    creates: source
+    writes: [source.name, source.url, source.kind, source.scope, source.enabled]
+  - id: A17
+    name: 管理成员
+    actor: human
+    channel: [表格]
+    trigger: 随时(管理员，在表格的空间成员里邀请与设角色)
+    creates: member
+    writes: [member.display_name, member.code, member.role]
+  - id: A19
+    name: 过期节点改已发生
+    actor: ai
+    trigger: 每天零点后第一个周期(后台)
+    reads: [milestone]
+    writes: [milestone.status]
+    note: "日期 < 今天且状态 ≠ 已发生的时间节点改成「已发生」，别的字段不动。这是 R2「只填空」的既定例外(机器维护的运行状态):阶段 A 复核发现 Teable 含 TODAY() 的公式隔天不重算，改一次状态会触发重算，「未过截止」「最近截止」「下一时间节点」才跟得上(R12)。"
+    rules: [R2, R12]
+  - id: A20
+    name: 在「线索处理」页处理
+    actor: human
+    channel: [页面]
+    trigger: 随时(页面两页:待确认归属、AI 推荐的商机;支持多选批量)
+    reads: [lead, opportunity]
+    creates: opportunity
+    sets_on_create: {opportunity.stage: 跟踪中}
+    writes: [lead.opportunity, lead.status, opportunity.code, opportunity.name_zh, opportunity.country, opportunity.sectors, opportunity.stage, opportunity.owner]
+    note: "待确认归属:归入机器建议的商机 / 归入其他商机 / 新建商机并归入 / 忽略——归入把线索的所属商机填上、处理状态改已处理;忽略改已忽略;新建商机并归入 = 编号取该国最大序号 + 1、阶段跟踪中、负责人 = 登录人(同 A08 + A05)。AI 推荐:跟踪 = 阶段改跟踪中并把登录人记为负责人(已有负责人不动);不跟进 = 只改阶段;两者都由 A18 补一条跟进。下一步已逾期与待核更新两页在商机总览(V9),只列出来、点进商机工作台或表格去改，页面不代改事实。页面永不删记录(R13)。"
+    rules: [R4, R5, R6, R13]
+  - id: A21
+    name: 管理报告模板
+    actor: human
+    channel: [表格, 页面]
+    trigger: 随时(「报告」页的「报告模板」一节:上传新模板、换文件、设为缺省;删除只能在表格里)
+    creates: template
+    writes: [template.name, template.kinds, template.file, template.is_default, template.note]
+    note: 模板只管版式(页面、字体、页眉页脚)，正文章节仍由 A14 按类型固定生成;改章节结构是另一件事，不在模板里。
+    rules: [R13]
+
+# 规则(不变式):enforce 写怎么守住它  - id: A22
+    name: 维护城市
+    actor: ai
+    trigger: 每月 1 日(与国别信息同一天);新国别出现时第二天补
+    reads: [country]
+    creates: city
+    writes: [city.name_zh, city.name_en, city.country, city.admin, city.coords, city.population, city.pop_year, city.density, city.source]
+    note: "按 GeoNames 公开数据(cities15000 + 一级行政区名)把人口 ≥ 门槛(profile 的 city_min_population，缺省 100000)的城市建进表，去重按城市码;已有的只填空(R2)。
+      人口与面积都有、密度为空的算密度 = 人口 ÷ 面积。面积、地区生产总值公开数据里没有，留给人补或以后接别的数据。数据文件一月取一次存本机缓存，取不到就跳过。"
+    rules: [R2]
+  - id: A21
+    name: 折算人民币
+    actor: ai
+    trigger: 每 2 分钟(后台周期)
+    reads: [lead, opportunity]
+    writes: [lead.amount_value, lead.currency, lead.amount_cny, opportunity.size_cny, opportunity.size_usd]
+    note: "线索:「金额」文字可解析为「数字 + 三字母币种」且投资规模为空的，拆成投资规模与货币;投资规模与货币都有、折合人民币为空的按当日汇率算成万元(四舍五入到整数)。商机同样，顺带补规模(美元)。
+      汇率:open.er-api.com(人民币基准)→ 欧央行每日牌价 → 程序内置近似表(core/fx.py;哪一个用了写在后台日志);一天取一次，存本机缓存。只填空(R2)，不用表格公式(R12)。"
+    rules: [R2, R12]
+  - id: A25
+    name: 导入存量水厂
+    actor: ai
+    channel: [命令行]
+    trigger: 数据文件换了以后跑一次(python -m core.jobs.plants);每月 1 日城市维护之后也跑一遍,补新城市的关联
+    reads: [country, city]
+    creates: supply_plant
+    writes: [supply_plant.name, supply_plant.kind, supply_plant.status, supply_plant.country, supply_plant.city, supply_plant.capacity, supply_plant.pop_served, supply_plant.built, supply_plant.process, supply_plant.operator, supply_plant.coords, supply_plant.source,
+             sewage_plant.name, sewage_plant.kind, sewage_plant.status, sewage_plant.country, sewage_plant.city, sewage_plant.capacity, sewage_plant.pop_served, sewage_plant.built, sewage_plant.level, sewage_plant.process, sewage_plant.operator, sewage_plant.coords, sewage_plant.source]
+    note: "数据文件是私有配置仓的 data/plants.csv.gz,由使用方 6 月做的 water-tracker 的水厂数据(HydroWASTE、OSM、国内排污许可等公开来源)导出,只留国别表里有的国家。
+      只新建、只填空(R2),去重按编号;海水淡化厂、中水回用厂按名称里的关键词认。城市:导入数据的 GeoNames 编号在城市表里就挂它,不在的挂同一国家 25 公里内最近的规模以上城市,再没有就只挂国别。
+      原数据里建设时间只有极少数有,改造扩建没有,留给人补。"
+    rules: [R2]
+  - id: A26
+    name: 导入水风险与经济数据
+    actor: ai
+    channel: [命令行, 后台]
+    trigger: 数据文件换了以后跑一次(python -m core.jobs.risk);后台每天城市维护之后也跑一遍,新建的城市、国别跟着补
+    reads: [country, city]
+    writes: [city.water_risk, city.water_stress, city.water_stress_2030, city.water_stress_2050, city.drought, city.flood, city.no_drinking, city.no_sanitation, city.untreated_ww, city.gdp_pc, city.risk_source,
+             country.water_stress, country.water_stress_2030, country.water_stress_2050, country.drought, country.flood, country.gdp_pc, country.wb_water_n, country.wb_water_musd, country.risk_source]
+    note: "数据文件在私有配置仓:data/city_risk.csv.gz(GeoNames cities15000 全部约 3.4 万座城市,按城市码;坐标落在哪个 Aqueduct 子流域 × 省级区、哪个县级区就取哪个的值)与 data/country_risk.csv(按 ISO3)。都是几年一更的模型数据,不定时抓取;换新版时重做这两个文件再跑一次。只填空(R2)。"
+    rules: [R2]
+  - id: A23
+    name: 维护公司资料
+    actor: human
+    channel: [页面, 表格]
+    trigger: 随时(「我的」页里的「我方资料」:新增、改、传附件、勾「写进报告」;删除只能在表格里)
+    creates: company
+    writes: [company.kind, company.name, company.content, company.sectors, company.countries, company.year, company.amount, company.file, company.for_report, company.note]
+    note: 报告只附勾了「写进报告」的行;适用国别空 = 全球通用,适用领域空 = 各领域都适用。
+    rules: [R13]
+  - id: A24
+    name: 个人设置
+    actor: human
+    channel: [页面]
+    trigger: 随时(「我的」页:加减关注国别、忽略或恢复国别(地图点选、按大洲)、保存或删除日历订阅;日历页订阅弹窗的「存到我的」)
+    reads: [country]
+    creates: preference
+    writes: [preference.name, preference.user, preference.countries, preference.ignored, preference.subscriptions, preference.note]
+    note: 一个账号一行,页面第一次写时建;账号 = 登录人,别人的行页面不改。
+    rules: [R13]
+  - id: A27
+    name: 维护行业术语
+    actor: human
+    channel: [表格]
+    trigger: 随时(在表格「行业术语」里加一行、改相关词,或勾「停用」)
+    creates: term
+    writes: [term.term, term.aliases, term.covers, term.sectors, term.match, term.means, term.disabled]
+    note: 助手每分钟重读一次这张表;表没建或读不到时用本体 terms 节的初始词。
+    rules: [R13]
+
+rules:
+  - id: R1
+    name: 一个对象只存一处
+    text: 每种对象只在一个地方保存(Teable);别处只能读取或展示，不能各存一份再互相同步。
+    enforce: 机器任务直接读写 Teable;自建页面只读;git 只放程序与配置
+    why: 现在一个商机散在 6 处，只能靠同步保持一致，这是"要等 30 秒""数据逻辑不清"的直接原因
+  - id: R2
+    name: 人写的不被机器覆盖
+    text: 属性分机器写、人写、派生三类。机器只写机器写的属性，而且只填空值、只新建记录、列表只追加(列表类属性可追加新项，不改不删已有项);要改已有值时写进「待核更新」，等人确认后由人改。例外只有两类，可直接更新:机器自己的运行状态(信源最近采集与状态、报告生成状态)，按期替换的数据(国别指标，带年份与来源)。
+    note: 人怎样否定机器值:线索只在「待处理且判定方式为空」时判定一次，判过的永不回头(重判定只能在命令行显式执行)，所以人改了、清空了的不会被填回;商机上人要否定机器值时写明确的文字(「无」「不详」)，不要清空——清空即「空值」，机器会再填(写进《表格使用说明》)。列表只追加的键 = 出处线索号 + 规范化文本;待核更新的键 = 出处线索号 + 字段，人驳回的行首加 ✗ 保留，机器不再提。只新建的去重键:时间节点 = 所属 + 类型 + 日期原文;商机先按外部编号、别名、名称挂接，挂不上才新建。
+    enforce: tests/test_ontology.py 检查机器的行为不写 human 属性;写入层(core/tstore.py)统一"只填空、列表只追加"，单测覆盖;机器用单独的账号，表格的修改历史分得清人与机器
+    why: 不需要"三方比较判断谁改的"，也不需要记同步状态;人对机器的修正永远有效
+  - id: R3
+    name: 公开事实带出处
+    text: 商机、时间节点上的每条公开事实引用一条线索(写在出处线索里，长文本里标线索号);国别数据带年份与来源;推断的写明依据。
+    enforce: 写入时校验;核实状态由此派生
+    why: 沿用现有纪律;出处就是线索，不再另设来源登记
+  - id: R4
+    name: 线索至多属于一个商机
+    text: 一条线索最多属于一个商机。机器只在归属可靠且为空时代填，其余给出建议等人确认;人定了的机器不再改。
+    enforce: 所属商机为单值关联;不可靠的写在「建议所属商机」
+    why: 线索的"去处"唯一，漏斗与报告才数得清
+  - id: R5
+    name: 我方阶段只由人推进
+    text: 机器只能新建「建议」阶段的商机;立项、推进、结束都由人。
+    enforce: tests/test_ontology.py 检查机器新建商机的初值
+    why: 建议商机与跟踪商机同表，区别只在人有没有立项
+  - id: R6
+    name: 改阶段留一条跟进
+    text: 商机的我方阶段每次变化，都对应一条跟进记录(谁、何时、从什么改成什么)，人可补写原因。
+    enforce: A18 由机器按「阶段修改人、阶段修改时间」自动补记
+    why: 阶段变化自然进日历与周报，人不用重复录入
+  - id: R7
+    name: 跟进必须关于商机
+    text: 跟进记录必须关联一个商机;线索上只有处理状态与处理备注，不挂进展、负责人、下一步。
+    enforce: 跟进记录的商机为必填;线索表不设这些字段
+    why: 现在线索上挂着进展、负责人、下一步，才需要"线索上的进展就是所属商机的进展"这类转换
+  - id: R8
+    name: 用户上传不判定
+    text: 同事上传的线索视为相关，不经相关性判定;机器只补标题、摘要、国别与日期。
+    enforce: 上传时 relevant 初值为是，判定跳过相关性
+    why: 照使用方流程图
+  - id: R9
+    name: 报告是快照
+    text: 报告生成后不改，再生成即新版本;公开版不含内部信息(跟进、判断、优先级、负责人、内部备注)。
+    enforce: 报告只追加;生成公开版时不读 human 属性与跟进记录
+    why: 报告引用的事实可追溯到当时
+  - id: R10
+    name: 派生不存
+    text: 日历、线索总览漏斗、待处理清单、当前判断、下一步、最晚启动等都由已有属性算出，不另存。
+    enforce: derived 属性不出现在任何行为的 writes 里(测试检查);在 Teable 里做成汇总、查找、公式字段，或在自建页面里现算
+    why: 没有副本就不会不一致
+  - id: R11
+    name: 不物理删除
+    text: 线索、商机不删除，用「已忽略」「不跟进」「放弃」表达;跟进记录可改可删，但保留修改历史。
+    enforce: 业务库开记录历史;页面上没有删除按钮(R13)
+    why: 漏斗、报告的历史数字不变
+  - id: R12
+    name: 「今天」不进库公式
+    text: 任何与「今天」有关的判断(未来 N 天、逾期、最近截止、下一节点、最晚启动)由页面与后台按当前日期现算;库里含 TODAY() 的公式与「今天」筛选只当参考，不作口径。
+    note: 阶段 A 复核(2026-10-04)的结论:Teable 含 TODAY() 的公式与按 today 筛选的条件查找隔天不自动重算，值停在建表或上次改动那天。后台每天把过期节点改为「已发生」(A19)触发一次重算，让表里的值不至于太旧。
+    enforce: 页面(portal.js)与报告(core/jobs/reports.py)自己算日期窗口;派生属性的 where 标明含今天;A19 每天跑
+    why: 否则日历、线索总览卡片与表格视图各说各话
+  - id: R13
+    name: 页面是工作台，不是第二份数据
+    text: 页面(portal)只读写 Teable，不另存任何业务数据;写入以登录人身份、走表格同样的权限;页面上只做最常用的几个动作(归入、忽略、跟踪、不跟进、记跟进、要报告、改负责人 / 优先级 / 备注、传模板)，不删记录;其余仍在表格里做。
+    enforce: 页面只用 Teable 的记录接口，配置(portal/config.json)只存表与字段编号;页面不出现删除;页面受菜单约束:首页 + 工作原理、市场背景、项目线索、商机跟进四组共十二页(portal.js 的 MENU;商机工作台、我的、我方资料不进菜单)
+    why: 表格适合当台账不适合当工作台(2026-10-03 返修结论);但页面越加越多会变成第二个系统
+  - id: R14
+    name: 统计口径只定一次
+    text: 同一个概念(跟踪中的商机、AI 推荐的商机、待处理、待确认归属、逾期)在线索总览卡片、漏斗、日历、报告、表格视图里用同一条件;条件写在 glossary 里，页面与后台引用它，不各自再定。
+    enforce: glossary 里给出条件;tests/test_ontology.py 检查页面(portal.js)与报告代码的阶段集合与本体一致;漏斗每一级是上一级的子集
+    why: 2026-10-03 返修前五级漏斗各数各的、「写进报告」数全库，数字对不上就是口径不一
+
+# 事件闭环(ME):when 发生什么 → then 哪些行为
+events:
+  - {id: E1, when: 新线索入库, then: [A03]}
+  - {id: E2, when: 判定为归属可靠, then: [A07], note: 自动归属后更新商机事实与时间节点}
+  - {id: E3, when: 判定为可能新项目, then: [A06], note: "建为「建议」商机，等人立项或不跟进"}
+  - {id: E4, when: 商机的我方阶段被人改了, then: [A18], note: 自动补一条跟进;之后的情况人记跟进(A10)}
+  - {id: E5, when: 时间节点或下一步到期临近(14 天内), then: [], note: "提醒负责人(评论 @ 负责人)还没做;现在靠「商机总览 · 下一步已逾期」与日历高亮(V9、V5)替代"}
+  - {id: E6, when: 每周一 / 每月 1 日, then: [A14]}
+  - {id: E7, when: 报告表里有人发起的待生成报告, then: [A14], note: 后台每 2 分钟看一次}
+  - {id: E8, when: 每天零点后(后台第一个周期), then: [A19], note: 过期节点改已发生，顺带触发库里含今天的公式重算(R12)}
+  - {id: E9, when: 同事在线索表新建一行(用户上传), then: [A03], note: 每 2 分钟补全(core.jobs.enrich);不判相关性(R8)}
+  - {id: E10, when: 每天采集完成(08:30 后), then: [A14], note: 机器自建当天的日报行(同一天只建一次)，下个周期生成;「线索分析」页顶部显示它的正文}
+
+# 视图(查询，不存;R10)。of 为用到的对象;query 用口径(glossary)写;channel 在哪看(表格 = Teable 视图，页面 = portal)。
+views:
+  - {id: V1, name: 待处理线索, of: [lead], channel: [表格, 页面], query: "是否相关 = 是 且 处理状态 = 待处理，按最近截止升序;线索总览卡片「待处理线索」同此"}
+  - {id: V2, name: 待确认归属, of: [lead], channel: [表格, 页面],
+     query: "所属商机为空，且(有建议所属商机、处理状态不是已忽略)或(可能是新项目、处理状态是待处理);已处理的可能新项目是人看过的，不再提。表格视图、线索总览卡片、「线索处理」第一页同一条件(glossary.to_assign)"}
+  - {id: V3, name: AI 推荐的商机, of: [opportunity], channel: [表格, 页面], query: "我方阶段 = 建议(glossary.ai_suggested);国别报告的项目机会清单、线索总览卡片、「线索处理」第二页就是它;表格里的视图名仍叫「建议商机」"}
+  - {id: V4, name: 跟踪看板, of: [opportunity], channel: [表格], query: "我方阶段 ∈ 跟踪中、准备投标、已投标，按阶段分列(看板拖动即改阶段，A09)"}
+  - {id: V5, name: 日历, of: [milestone, followup, report], channel: [页面, 表格],
+     query: "缺省:跟踪中商机(glossary.tracked)的时间节点(日期) ∪ 其跟进记录(日期、下一步到期) ∪ 报告(日期);勾「也显示未归商机的线索截止」才加上挂在线索或国别上的节点(灰色);一格最多直接显示 6 条。表格里的两个日历视图不过滤"}
+  - {id: V6, name: 线索总览漏斗, of: [lead, opportunity, report], channel: [页面],
+     query: "五级严格子集，每级数线索条数:信源采集(全部)→ 相关(是否相关 = 是)→ 归入商机(所属商机非空)→ 归入跟踪中的商机(所属商机 ∈ glossary.tracked)→ 写进报告(写进的报告非空);国别 / 领域 / 类别 / 发现时间筛选作用于每一级;点一级右边列出该级最新 100 条"}
+  - {id: V7, name: 国别概况, of: [country, opportunity, lead, milestone, city], channel: [页面, 表格], query: "一国的国别信息(指标表、机构 / 国企 / 法规表、带标签的备注)+ 该国商机按阶段 + 线索统计 + 国别级时间节点 + 规模以上城市(人口、面积、密度、生产总值、线索数、商机数);引用角标 ①②③ 指向线索"}
+  - {id: V8, name: 线索处理, of: [lead, opportunity], channel: [页面],
+     query: "两页带计数:待确认归属(= V2)/ AI 推荐的商机(= V3);待确认归属可按国别、类别、有无机器建议筛选，两页都可多选后批量归入 / 忽略 / 跟踪 / 不跟进(A20)。原名「待我处理」;v2.6 起下一步已逾期、待核更新两页在商机总览(V9)"}
+  - {id: V9, name: 商机总览, of: [opportunity], channel: [页面], query: "三页:商机列表(缺省只列 glossary.tracked，可切到某一阶段或全部;按阶段顺序(跟踪中、准备投标、已投标、中标、建议、未中标、放弃、不跟进)再按编号;可按国别、负责人筛选;点进商机工作台)/ 下一步已逾期(glossary.overdue)/ 待核更新(商机.待核更新非空);后两页带计数，只列出来，点进商机工作台或表格去改，游客不显示。原名「商机列表」"}
+  - {id: V10, name: 商机工作台, of: [opportunity, followup, milestone, lead, report], channel: [页面],
+     query: "一个商机一页:左边表单(记跟进可顺带改阶段、要报告、改负责人 / 优先级 / 内部备注);右边概览、待核更新提示、跟进时间线、时间节点、项目事实(带出处角标)、所属线索、已出报告"}
+  - {id: V11, name: 报告页, of: [report, template], channel: [页面], query: "历史报告按类型 / 版本 / 生成状态 / 国别筛选、搜索、下载;左栏发起国别或项目报告(可选模板);「报告模板」一节列模板、换文件、设缺省、上传新模板(A21)"}
+  - {id: V12, name: 线索分析, of: [lead, country, opportunity, source, report], channel: [页面],
+     query: "顶部是最近一份日报的正文(report.kind = 日报，取日期最新的);下面按发现时间窗口(今天 / 7 / 30 / 90 天 / 全部)、是否只看相关、经营区域筛选后现算:每日新增走势(相关 / 不相关)、国别前 15、国别 × 类别热力、类别、领域(lead_sectors 7 类)、资金来源(groupings.funders)、信源前 15、判定方式、处理状态、归属(所属 / 建议 / 可能新项目 / 无);点任一柱右栏列出该组线索。数字与线索总览同一口径:线索总数 = 线索总览「线索」卡，待处理 = glossary.pending_leads，待确认归属 = glossary.to_assign(R14)"}
+  - {id: V13, name: 本体, of: [lead, country, opportunity, followup, source, milestone, report, template, member, city], channel: [页面],
+     query: "只读:对象与关系图(公开 / 业务两种颜色，核心对象描边，箭头是关联)，点一个对象看定义、标识、状态流转、按写入方分组的属性(单选 / 多选的指向分类体系)、关系、涉及它的行为;下面页签:分类体系(每个值的英文键、定义、边界、示例)、口径与归组、规则、行为、视图与事件、版本记录。全部读 portal/ontology.json(ontology.yaml 转的)，不读库"}
+  - {id: V14, name: 我方资料页, of: [company, country], channel: [页面], query: "从「我的」页进(不在主菜单):全部公司资料按类别 / 领域 / 国别筛选,搜索;新增、改、传附件、勾「写进报告」(A23);游客看不到"}
+  - {id: V15, name: 我的, of: [preference, country, member], channel: [页面], query: "登录人自己的一行:帐号与角色、关注的国别(加减,点进国别页;清单里这些国家排前、带 ★)、忽略的国别(地图上点选、按大洲一键;地图上画斜线,采集不再涉及)、保存的日历订阅(复制链接、删除)(A24);入口到帐号设置、退出登录、我方资料"}
+  - {id: V17, name: 趋势机会, of: [city, country, lead], channel: [页面], query: "规模以上城市按 glossary.trend_self_funded(自付型,青绿)与 glossary.trend_loan_driven(贷款型,紫)着色,两类都是的标红,都不是的灰色小点;门槛(水风险用哪一项及多少分、人均 GDP 多少、贷款判定)页面上可调并记在网址里;下面按类分列城市(水风险从高到低)与国别对照表。是趋势参考:页首写明按公开数据推算、不是具体项目,数字不计入线索、商机;只看中国以外(使用方 2026-10-09 定,中国境内的城市与国别不进地图、清单与卡片)"}
+  - {id: V16, name: 城市概况, of: [city, country, opportunity, lead, supply_plant, sewage_plant], channel: [页面], query: "全部规模以上城市按人口从多到少,可按国别、有线索 / 有商机筛选,按中文名、英文名、行政区搜索;地图上的分布(圆点大小是人口,颜色深浅是人口或生产总值,红圈有线索或商机)左下角有滑块(和国别地图一样),按人口或地区生产总值拖出一个范围,卡片(城市数、合计人口、百万人口以上、有线索、有商机的城市数)与清单(前 300 座)只算范围内的;点一座城市:人口、面积、密度、生产总值卡片,概况(所属国别、行政区、坐标、来源、备注、小地图)与商机(商机.城市 = 它)、线索(线索.城市 = 它)、水厂(自来水厂、污水厂.所在城市 = 它)三个页签;清单多自来水厂数、污水厂数两列"}
+
+# 现状对照(MM，2026-10-04):每种对象现在只存一处——Teable 库「水务项目机会 新版」的一张表(R1 已做到;切换前的多处存放见 git 历史里的 v1.2)。
+# 后面一行写"除表之外还有什么":只允许是配置、缓存或可再生的东西，不是第二份数据。
+as_is:
+  lead:
+    - Teable「线索」表(唯一)
+    - 本机缓存:网页正文与附件文本、各信源已见条目(丢了只会多算一遍，去重按线索号与原文网址)
+  opportunity:
+    - Teable「商机」表(唯一)
+  followup:
+    - Teable「跟进记录」表(唯一)
+  country:
+    - Teable「国别」表(唯一)
+    - 配置:profile 的 countries(ISO3、英文名、市场分级初值)、reference/*.yaml 的基础与水务资料(机器写进表时的来源之一)
+  milestone:
+    - Teable「时间节点」表(唯一;303 条里约 2/3 是线索截止，没挂商机，日历缺省不显示)
+  report:
+    - Teable「报告」表(唯一，文件在附件里)
+  template:
+    - Teable「报告模板」表(唯一;自带版式登记为第 1 行、四类缺省)
+    - 自带模板文件 private/templates/*.docx(表里没有可用模板时的兜底)
+  source:
+    - Teable「信源」表(抓不抓、抓得怎样)
+    - 配置:git 的 countries/<国别>/watch.yaml、global/watch.yaml(怎么抓;按信源编号对应)
+  member:
+    - Teable 空间成员(唯一;角色在空间里设)
+  supply_plant:
+    - Teable「自来水厂」表(唯一)
+    - 导入来源:私有配置仓 data/plants.csv.gz(water-tracker 导出)
+  sewage_plant:
+    - Teable「污水厂」表(唯一)
+    - 导入来源:私有配置仓 data/plants.csv.gz(water-tracker 导出)
+  city:
+    - Teable「城市」表(唯一)
+    - 本机缓存:GeoNames 的城市与行政区数据文件(可再取)
+  company:
+    - Teable「公司资料」表(唯一,附件在行里)
+  preference:
+    - Teable「个人设置」表(唯一;标识 = 「账号」成员字段,一个账号一行)
+  term:
+    - Teable「行业术语」表(唯一)
+    - 本体 terms 节:建表时的初始词;表没建或读不到时助手用它兜底
+
+# 分类体系(taxonomies):每个枚举属性的值集、分组、定义、边界与示例。values 的顺序就是显示顺序;code 是代码里的英文键(core.jobs.common 等)。
+# 属性上 taxonomy: <id> 指向这里;tests 检查属性的 enum 与这里的 values 完全相同(顺序也相同)。改选项先改这里与属性，再在 Teable 里加选项(只增不删)，再改 code_enums 列的代码。
+taxonomies:
+  lead_category:
+    name: 线索类别
+    used_by: [lead.category]
+    note: 一条线索一个类别。四组按"离采购多近"排:采购类 > 融资类 > 立项类 > 动态与政策;原文同时是几件事时取靠前的组。采购类 + 融资 = 代码里的 PROCUREMENT(漏斗与门槛用)。
+    groups:
+      - name: 采购类(有明确的招标动作，通常带截止日)
+        values:
+          - {v: 招标, code: tender, def: 招标公告或招标文件发布，邀请投标, boundary: "有标号、截止日、文件获取方式;总采购公告(GPN)不算", example: "ADSEA 发布 Absheron 输水干管 Lot 2 招标，2026-12-15 截止"}
+          - {v: 意向书, code: eoi, def: 征集意向书(EOI / REOI)，多见于咨询服务与 PPP 前期, boundary: "征集的是「有没有兴趣」，不是报价;截止日记为意向书截止", example: "世行项目征集可研咨询意向书"}
+          - {v: 资格预审, code: prequalification, def: 资格预审公告(PQ)，先筛资格再发标, boundary: 截止日记为资格预审截止, example: "海水淡化厂 EPC 资格预审"}
+          - {v: 总采购公告, code: gpn, def: 多边银行项目的总采购公告(GPN):项目要买什么、大致何时, boundary: "没有具体标段与截止日;有的就是招标", example: "世行 P178412 的 GPN"}
+          - {v: 特定采购公告, code: spn, def: 多边银行项目的特定采购公告(SPN):某个具体标段的采购公告, boundary: "与「招标」的区别只在发布渠道(多边银行门户);两者都算招标动作", example: "亚开行门户上的 Lot 3 SPN"}
+          - {v: 授标或短名单, code: award, def: 定标、授标、合同签署或咨询短名单公布, boundary: "标志一个采购动作结束;对我方是「晚了」或「看竞争者」的信号", example: "Lot 1 授予某联合体，合同 4，200 万美元"}
+      - name: 融资类
+        values:
+          - {v: 融资, code: financing, def: 贷款 / 赠款的批准、签署、生效，或融资谈判, boundary: "有出资方与金额;只提「拟申请贷款」的归立项或规划", example: "亚开行董事会批准 1.5 亿美元供水贷款"}
+      - name: 立项类
+        values:
+          - {v: 立项或规划, code: plan, def: 项目进入规划、可研、立项、列入投资计划, boundary: "还没有采购与融资动作;国家层面的行业规划也算", example: "政府批准 2030 供水总体规划，列入 12 个项目"}
+      - name: 动态与政策
+        values:
+          - {v: 项目动态, code: project_news, def: 已有项目的进展报道:开工、完工、停工、调整, boundary: "必须指向一个具体项目;否则是政策或其他", example: "某污水厂一期完工通水"}
+          - {v: 政策, code: policy, def: 法规、水价、机构改革、行业政策、国际合作框架, boundary: 不指向具体项目, example: "新《水法》生效，私营参与放开"}
+          - {v: 其他, code: other, def: 相关但归不进上面任何一类;规则初筛没过、或只是页面变化的也在这里, boundary: "代码里 page(页面变化)也映射到这里", example: "行业会议报道"}
+  lead_sectors:
+    name: 线索领域(粗分 7 类)
+    used_by: [lead.sectors, company.sectors, term.covers, term.sectors]
+    note: 多选。它是商机领域 12 类的上级(见 opp_sectors 的 parent);线索总览「领域」筛选按它。核心领域 = 供水、污水、海水淡化、雨水排涝、水环境;水利要看 profile 的 sector_scope(灌溉排水 / 防洪流域开了才算核心)。
+    groups:
+      - name: 全部
+        values:
+          - {v: 供水, code: water_supply, def: 饮用水与工业供水的取水、净水、输配、减漏与计量, boundary: 含输水干管、水库取水;灌溉用水归水利, example: "城市供水管网改造"}
+          - {v: 污水, code: wastewater, def: 污水收集、处理、污泥与再生水, boundary: 含卫生设施;雨污分流中的雨水部分归雨水排涝, example: "污水处理厂扩建"}
+          - {v: 水利, code: hydraulic, def: 水库、灌溉、渠道、调水、防洪等水资源工程, boundary: 以农业或防洪为目的;以供水为目的的水库归供水, example: "灌区现代化"}
+          - {v: 海水淡化, code: desalination, def: 海水与苦咸水淡化, boundary: 含配套取水与输水, example: "RO 海水淡化厂 BOT"}
+          - {v: 雨水排涝, code: stormwater, def: 城市雨水、排涝、内涝治理, boundary: 河道防洪归水利, example: "城市排水系统升级"}
+          - {v: 水环境, code: environment, def: 河湖水环境治理、生态修复、流域综合治理, boundary: 以环境目标为主;单纯污水厂归污水, example: "城市河道综合治理"}
+          - {v: 其他, code: other, def: 相关但归不进上面任何一类, boundary: "", example: "水务数字化平台"}
+  opp_sectors:
+    name: 商机领域(细分 12 类)
+    used_by: [opportunity.sectors]
+    note: "多选。parent 是线索领域 7 类之一:页面按 parent 把商机归到粗分里筛选;机器从线索领域只能推出五个(供水、污水、海水淡化、雨水排涝、水环境治理)，水利下的灌溉 / 防洪 / 水库调蓄分不出，留给人填。代码里 core.ledger.SEGMENTS 用「水库/调蓄」「减漏/计量」带斜杠的写法，写进表前去掉斜杠(migrate 的 SEG)。"
+    groups:
+      - name: 供水
+        values:
+          - {v: 供水, code: water_supply, parent: 供水, def: 净水厂、配水管网、泵站等供水主体工程, boundary: "", example: "巴库净水厂扩建"}
+          - {v: 输水干管, code: transmission, parent: 供水, def: 长距离原水或清水输水管线, boundary: 以输送为主，不含净水, example: "DN1200 输水干管 80 km"}
+          - {v: 水库调蓄, code: reservoir, parent: 供水, def: 为供水服务的水库、调蓄池, boundary: 以灌溉或防洪为主的水库归灌溉 / 防洪, example: "调蓄水库与取水口"}
+          - {v: 减漏计量, code: nrw, parent: 供水, def: 产销差(NRW)治理、智能水表、分区计量, boundary: "", example: "智能水表 20 万只"}
+      - name: 污水
+        values:
+          - {v: 污水, code: wastewater, parent: 污水, def: 污水收集管网与处理厂, boundary: "", example: "污水厂 10 万吨/日"}
+          - {v: 污泥, code: sludge, parent: 污水, def: 污泥处理处置, boundary: "", example: "污泥干化焚烧"}
+          - {v: 再生水, code: reuse, parent: 污水, def: 再生水回用, boundary: "", example: "再生水灌溉工程"}
+      - name: 雨水排涝
+        values:
+          - {v: 雨水排涝, code: stormwater, parent: 雨水排涝, def: 城市雨水与排涝, boundary: "", example: "排水泵站与管涵"}
+      - name: 海水淡化
+        values:
+          - {v: 海水淡化, code: desalination, parent: 海水淡化, def: 海水与苦咸水淡化, boundary: "", example: "日产 10 万吨 RO"}
+      - name: 水利
+        values:
+          - {v: 灌溉, code: irrigation, parent: 水利, def: 灌区、渠道、灌溉现代化, boundary: "", example: "灌区节水改造"}
+          - {v: 防洪, code: flood, parent: 水利, def: 防洪堤、河道整治、流域防洪, boundary: 以环境修复为主的归水环境治理, example: "河道防洪堤 30 km"}
+      - name: 水环境
+        values:
+          - {v: 水环境治理, code: environment, parent: 水环境, def: 河湖水环境与生态治理, boundary: "", example: "湖泊生态修复"}
+  public_stage:
+    name: 公开进度(项目生命周期)
+    used_by: [opportunity.public_stage]
+    note: 项目本身走到哪，公开可查;与「我方阶段」正交。前七个是顺序，后两个是搁置。机器只填空、前进了写待核更新;从线索类别推:采购类 → 采购进行中，授标 → 已定标，融资 → 融资已落实，立项 → 规划(PUBLIC_STAGE_OF)。
+    groups:
+      - name: 顺序
+        values:
+          - {v: 规划, code: planning, def: 列入规划或概念阶段, boundary: 还没有可研或融资动作, example: 列入 2030 供水规划}
+          - {v: 前期, code: preparation, def: 可研、设计、融资洽谈, boundary: 融资未签, example: 可研完成，与亚开行洽谈}
+          - {v: 融资已落实, code: financing_signed, def: 贷款 / 赠款已批准或签署, boundary: 采购未开始, example: 贷款协议签署}
+          - {v: 采购进行中, code: procurement, def: 任一标段在招(GPN、SPN、招标、EOI、PQ), boundary: 有标段授标但仍有在招的，仍算采购进行中, example: Lot 2 在招}
+          - {v: 已定标, code: awarded, def: 主要标段已授标, boundary: 未开工, example: EPC 授标}
+          - {v: 在建, code: construction, def: 已开工, boundary: "", example: 开工}
+          - {v: 已完工, code: completed, def: 完工或投运, boundary: "", example: 通水}
+      - name: 搁置
+        values:
+          - {v: 暂停, code: on_hold, def: 官方宣布暂停或长期无进展, boundary: "", example: 融资撤回暂停}
+          - {v: 取消, code: cancelled, def: 官方取消, boundary: "", example: 项目取消}
+  stage:
+    name: 我方阶段
+    used_by: [opportunity.stage, followup.stage_change]
+    note: 我方对这个项目做到哪一步，只由人改(R5);每次改阶段机器补一条跟进(A18、R6)。三组;「在跟踪」就是口径 glossary.tracked。「观望」不是阶段(它是跟进的判断)，页面与报告的排序里不再出现。
+    groups:
+      - name: 未立项
+        values:
+          - {v: 建议, code: suggested, def: 机器建议的、人还没定的商机(页面上叫「AI 推荐的商机」), boundary: 机器新建只能是它(R5), example: 后台从招标线索新建}
+          - {v: 不跟进, code: dropped, def: 人看过、决定不跟, boundary: 可撤回到建议, example: 领域不符}
+      - name: 在跟踪
+        values:
+          - {v: 跟踪中, code: tracking, def: 已立项，收集信息、接触业主, boundary: 立项即由建议改到这里, example: 立项跟踪}
+          - {v: 准备投标, code: preparing, def: 决定投标，组联合体、做标书, boundary: "", example: 标书编制中}
+          - {v: 已投标, code: submitted, def: 标书已递交，等开标 / 评标, boundary: "", example: 已递交}
+          - {v: 中标, code: won, def: 中标或签约, boundary: 仍算在跟踪(履约期继续记跟进), example: 中标}
+      - name: 已结束
+        values:
+          - {v: 未中标, code: lost, def: 投了没中, boundary: "", example: 未中标}
+          - {v: 放弃, code: abandoned, def: 跟踪或投标过程中决定不再投入, boundary: 与「不跟进」的区别是曾经立项过, example: 放弃}
+  milestone_kind:
+    name: 时间节点类型
+    used_by: [milestone.kind]
+    note: 四组。采购截止是投标人要动作的节点，只有它们算「最晚启动」(lead_times);代码 core.ledger.MILESTONES 有更细的英文键(立项/概念审查、谅解备忘录、协议生效、商业运营)，迁移时归到「其他」并把原名写进说明。
+    groups:
+      - name: 采购截止(投标人要动作)
+        values:
+          - {v: 意向书截止, code: eoi_deadline, def: EOI 递交截止, boundary: "", example: 2026-11-30}
+          - {v: 资格预审截止, code: pq_deadline, def: PQ 递交截止, boundary: "", example: 2026-12-10}
+          - {v: 投标截止, code: bid_deadline, def: 投标文件递交截止, boundary: 含 RFP 的工程 / 货物标, example: 2027-01-15}
+          - {v: PPP标书截止, code: rfp_deadline, def: PPP / 特许经营建议书递交截止, boundary: "", example: 2027-Q1}
+      - name: 采购节点
+        values:
+          - {v: 招标发布, code: tender_launch, def: 招标文件发布(预计或实际), boundary: "", example: 2026-Q4}
+          - {v: 开标, code: bid_opening, def: 开标日, boundary: "", example: 2027-01-15}
+          - {v: 授标, code: award, def: 定标 / 授标, boundary: "", example: 2027-03}
+          - {v: 合同签署, code: contract_signing, def: 承包合同签署, boundary: 贷款协议签署归贷款签署, example: 2027-04}
+      - name: 融资与批准
+        values:
+          - {v: 贷款签署, code: loan_signing, def: 贷款 / 赠款协议签署, boundary: "", example: 2026-09}
+          - {v: 董事会批准, code: board_approval, def: 多边银行董事会批准, boundary: "", example: 2026-06-20}
+      - name: 实施
+        values:
+          - {v: 开工, code: construction_start, def: 开工, boundary: "", example: 2027-H2}
+          - {v: 完工, code: completion, def: 完工 / 投运, boundary: "", example: 2029}
+          - {v: 其他, code: other, def: 归不进上面的(立项审查、备忘录、协议生效、商业运营、投资论坛等)，说明里写原名, boundary: "", example: "投资论坛 · 2026-05-12"}
+  milestone_status:
+    name: 时间节点状态
+    used_by: [milestone.status]
+    note: 日期过了由后台改成「已发生」(A19)。
+    groups:
+      - name: 全部
+        values:
+          - {v: 已发生, code: actual, def: 已经发生的日期, boundary: 日期 < 今天的都算, example: ""}
+          - {v: 官方计划, code: planned, def: 官方公布的计划日期, boundary: "", example: 招标文件写的截止日}
+          - {v: 推断, code: expected, def: 机器或人推断的日期，说明里写依据, boundary: 出处线索可空, example: 按同类项目周期推断}
+  eligibility:
+    name: 投标资格
+    used_by: [opportunity.eligibility]
+    note: 以使用方(profile 的 bidder 国籍)能不能投为准;依据写在资格依据。
+    groups:
+      - name: 全部
+        values:
+          - {v: 可直接投标, code: open, def: 采购规则明确各国企业均可, boundary: "", example: 世行 / 亚开行 / 欧复行项目}
+          - {v: 推定可投, code: presumed, def: 规则未明说但按惯例可投, boundary: "", example: 本国采购法允许外国企业}
+          - {v: 有条件, code: conditional, def: 需本地注册、本地合作方或其他前置条件, boundary: 条件写在依据里, example: 需本地注册 90 天}
+          - {v: 受限, code: restricted, def: 限定成员国 / 来源国，或我方不符, boundary: "", example: 限定出资国企业}
+          - {v: 待核实, code: unknown, def: 还没查到规则, boundary: "", example: ""}
+  verified:
+    name: 核实状态
+    used_by: [opportunity.verified]
+    note: 由出处的质量派生性地判断;机器写，人可改。
+    groups:
+      - name: 全部
+        values:
+          - {v: 已核实, code: verified, def: 关键事实有一手来源(官方公告、银行门户), boundary: "", example: ""}
+          - {v: 部分核实, code: partial, def: 部分事实有一手来源, boundary: "", example: ""}
+          - {v: 未核实, code: unverified, def: 只有二手报道或成稿转引, boundary: "", example: ""}
+          - {v: 来源冲突, code: conflict, def: 不同来源说法不一致, boundary: 冲突写进待核实, example: ""}
+  judgment:
+    name: 跟进判断
+    used_by: [followup.judgment]
+    note: 这一次跟进后的态度，不改阶段;「放弃」要落实为阶段才算(A09)。商机的「当前判断」= 最近一条非空的判断。
+    groups:
+      - name: 全部
+        values:
+          - {v: 继续跟进, code: continue, def: 按常规节奏跟, boundary: "", example: ""}
+          - {v: 重点推进, code: push, def: 值得加大投入, boundary: "", example: ""}
+          - {v: 观望, code: watch, def: 暂不投入，等待某个节点, boundary: 不是阶段, example: 等融资落实}
+          - {v: 放弃, code: drop, def: 建议放弃, boundary: 阶段仍要人改, example: ""}
+  lead_status:
+    name: 线索处理状态
+    used_by: [lead.status]
+    note: 人改;撤回 = 改回待处理。
+    groups:
+      - name: 全部
+        values:
+          - {v: 待处理, code: pending, def: 还没人看过, boundary: 新线索的初值, example: ""}
+          - {v: 已处理, code: done, def: 人看过并处理了(归入商机、记了备注), boundary: 页面「归入」即改到这里, example: ""}
+          - {v: 已忽略, code: ignored, def: 人决定不要, boundary: 不删(R11), example: ""}
+  judged_by:
+    name: 判定方式
+    used_by: [lead.judged_by]
+    note: 为空即还没判定，机器只判这种(R2)。
+    groups:
+      - name: 全部
+        values:
+          - {v: 模型, code: llm, def: 大模型读原文判定, boundary: "", example: ""}
+          - {v: 规则, code: rules, def: 规则初筛没过(关键词、信源范围)，没进模型, boundary: 也可能是模型没配, example: ""}
+          - {v: 不判定, code: skipped, def: 用户上传或台账出处，不判相关性，只补全(R8), boundary: "", example: ""}
+  origin:
+    name: 来源方式
+    used_by: [lead.origin]
+    note: 表里新建一行缺省为用户上传(A02)。
+    groups:
+      - name: 全部
+        values:
+          - {v: 机器采集, code: crawl, def: 后台从信源采的, boundary: "", example: ""}
+          - {v: 用户上传, code: manual, def: 同事在表里新建一行填网址, boundary: 信源记「人工上传」, example: ""}
+  source_kind:
+    name: 信源类型
+    used_by: [source.kind]
+    note: 怎么抓在 git 的 watch.yaml(kind 更细:html_list、links、rss、atexo_search、wb_procnotices、wb_projects、aiib、ckan、gdelt)，按 SOURCE_KIND 归到这五类。
+    groups:
+      - name: 全部
+        values:
+          - {v: 网页列表, code: html_list, def: 网页上的列表或链接页, boundary: "", example: 部委新闻页}
+          - {v: RSS, code: rss, def: RSS / Atom 订阅, boundary: "", example: ""}
+          - {v: 接口, code: api, def: 结构化接口, boundary: "", example: 世行采购公告接口、GDELT}
+          - {v: 采购门户, code: portal, def: 电子采购门户的搜索, boundary: "", example: Atexo 门户}
+          - {v: 人工上传, code: manual, def: 固定的一个信源，用户上传的线索挂它, boundary: "", example: ""}
+  source_status:
+    name: 信源最近状态
+    used_by: [source.last_status]
+    note: 机器运行状态，可直接更新(R2 例外)。
+    groups:
+      - name: 全部
+        values:
+          - {v: 正常, code: ok, def: 抓到条目, boundary: "", example: ""}
+          - {v: 无条目, code: empty, def: 抓通了但没有新条目, boundary: "", example: ""}
+          - {v: 出错, code: error, def: 抓取出错(网络、解析), boundary: "", example: ""}
+          - {v: 被拒, code: blocked, def: 对方拒绝(403、验证码), boundary: "", example: ""}
+  report_kind:
+    name: 报告类型
+    used_by: [report.kind, template.kinds]
+    note: 两类一次性(人发起)、三类定期(机器自建;人也可在报告表或报告页补要一份)。
+    groups:
+      - name: 一次性
+        values:
+          - {v: 国别报告, code: country, def: 一国的国别概况 + 商机 + 线索 + 时间节点, boundary: 要选范围国别, example: ""}
+          - {v: 项目报告, code: project, def: 一个商机的全部事实与进展, boundary: 要选范围商机, example: ""}
+      - name: 定期
+        values:
+          - {v: 周报, code: weekly, def: 每周一 09:00，上一周, boundary: 期间 YYYY-Www, example: 2026-W40}
+          - {v: 月报, code: monthly, def: 每月 1 日 09:30，上一月, boundary: 期间 YYYY-MM, example: 2026-09}
+          - {v: 日报, code: daily, def: 每天采集完成后，当天的线索分析简报(短，几百字;正文也存在「简报正文」里), boundary: 期间 YYYY-MM-DD;统计与规则写，配了模型时多一段研判, example: 2026-10-07}
+  edition:
+    name: 报告版本
+    used_by: [report.edition]
+    note: 公开版不读人写的属性与跟进记录(R9)。
+    groups:
+      - name: 全部
+        values:
+          - {v: 公开版, code: public, def: 可给外部看，只含公开事实, boundary: "", example: ""}
+          - {v: 内部版, code: internal, def: 含我方阶段、负责人、跟进、判断、优先级、内部备注, boundary: "", example: ""}
+  currency:
+    name: 货币
+    used_by: [lead.currency, opportunity.currency, city.tariff_currency]
+    note: ISO 4217 三字母代码;值即代码。按使用方的经营区域挑了常见币种，不够在这里加(加了跑 python -m core.schema 补选项)。汇率换算见 A21 / core/fx.py。
+    groups:
+      - name: 主要货币
+        values:
+          - {v: USD, code: usd, def: 美元}
+          - {v: EUR, code: eur, def: 欧元}
+          - {v: CNY, code: cny, def: 人民币}
+          - {v: GBP, code: gbp, def: 英镑}
+          - {v: JPY, code: jpy, def: 日元}
+          - {v: CHF, code: chf, def: 瑞士法郎}
+          - {v: AUD, code: aud, def: 澳元}
+          - {v: CAD, code: cad, def: 加元}
+          - {v: SGD, code: sgd, def: 新加坡元}
+          - {v: HKD, code: hkd, def: 港元}
+      - name: 中东与北非
+        values:
+          - {v: AED, code: aed, def: 阿联酋迪拉姆}
+          - {v: SAR, code: sar, def: 沙特里亚尔}
+          - {v: QAR, code: qar, def: 卡塔尔里亚尔}
+          - {v: KWD, code: kwd, def: 科威特第纳尔}
+          - {v: OMR, code: omr, def: 阿曼里亚尔}
+          - {v: EGP, code: egp, def: 埃及镑}
+          - {v: MAD, code: mad, def: 摩洛哥迪拉姆}
+          - {v: DZD, code: dzd, def: 阿尔及利亚第纳尔}
+          - {v: TND, code: tnd, def: 突尼斯第纳尔}
+      - name: 撒哈拉以南非洲
+        values:
+          - {v: NGN, code: ngn, def: 尼日利亚奈拉}
+          - {v: GHS, code: ghs, def: 加纳塞地}
+          - {v: KES, code: kes, def: 肯尼亚先令}
+          - {v: TZS, code: tzs, def: 坦桑尼亚先令}
+          - {v: UGX, code: ugx, def: 乌干达先令}
+          - {v: ETB, code: etb, def: 埃塞俄比亚比尔}
+          - {v: ZAR, code: zar, def: 南非兰特}
+          - {v: XOF, code: xof, def: 西非法郎}
+          - {v: XAF, code: xaf, def: 中非法郎}
+      - name: 南亚与东南亚
+        values:
+          - {v: INR, code: inr, def: 印度卢比}
+          - {v: PKR, code: pkr, def: 巴基斯坦卢比}
+          - {v: BDT, code: bdt, def: 孟加拉塔卡}
+          - {v: LKR, code: lkr, def: 斯里兰卡卢比}
+          - {v: NPR, code: npr, def: 尼泊尔卢比}
+          - {v: IDR, code: idr, def: 印尼卢比}
+          - {v: MYR, code: myr, def: 马来西亚林吉特}
+          - {v: THB, code: thb, def: 泰铢}
+          - {v: VND, code: vnd, def: 越南盾}
+          - {v: PHP, code: php, def: 菲律宾比索}
+          - {v: MMK, code: mmk, def: 缅甸元}
+          - {v: KHR, code: khr, def: 柬埔寨瑞尔}
+      - name: 中亚、高加索与蒙古
+        values:
+          - {v: KZT, code: kzt, def: 哈萨克斯坦坚戈}
+          - {v: UZS, code: uzs, def: 乌兹别克斯坦苏姆}
+          - {v: AZN, code: azn, def: 阿塞拜疆马纳特}
+          - {v: GEL, code: gel, def: 格鲁吉亚拉里}
+          - {v: AMD, code: amd, def: 亚美尼亚德拉姆}
+          - {v: KGS, code: kgs, def: 吉尔吉斯斯坦索姆}
+          - {v: TJS, code: tjs, def: 塔吉克斯坦索莫尼}
+          - {v: TMT, code: tmt, def: 土库曼斯坦马纳特}
+          - {v: MNT, code: mnt, def: 蒙古图格里克}
+      - name: 欧洲与西亚
+        values:
+          - {v: TRY, code: try, def: 土耳其里拉}
+          - {v: IQD, code: iqd, def: 伊拉克第纳尔}
+          - {v: JOD, code: jod, def: 约旦第纳尔}
+          - {v: LBP, code: lbp, def: 黎巴嫩镑}
+          - {v: PLN, code: pln, def: 波兰兹罗提}
+          - {v: RON, code: ron, def: 罗马尼亚列伊}
+          - {v: HUF, code: huf, def: 匈牙利福林}
+          - {v: CZK, code: czk, def: 捷克克朗}
+          - {v: RSD, code: rsd, def: 塞尔维亚第纳尔}
+          - {v: UAH, code: uah, def: 乌克兰格里夫纳}
+          - {v: RUB, code: rub, def: 俄罗斯卢布}
+      - name: 拉美与加勒比
+        values:
+          - {v: BRL, code: brl, def: 巴西雷亚尔}
+          - {v: MXN, code: mxn, def: 墨西哥比索}
+          - {v: COP, code: cop, def: 哥伦比亚比索}
+          - {v: PEN, code: pen, def: 秘鲁索尔}
+          - {v: CLP, code: clp, def: 智利比索}
+          - {v: ARS, code: ars, def: 阿根廷比索}
+          - {v: BOB, code: bob, def: 玻利维亚诺}
+          - {v: PYG, code: pyg, def: 巴拉圭瓜拉尼}
+          - {v: UYU, code: uyu, def: 乌拉圭比索}
+          - {v: DOP, code: dop, def: 多米尼加比索}
+          - {v: JMD, code: jmd, def: 牙买加元}
+      - name: 南太平洋
+        values:
+          - {v: FJD, code: fjd, def: 斐济元}
+          - {v: PGK, code: pgk, def: 巴新基那}
+          - {v: WST, code: wst, def: 萨摩亚塔拉}
+          - {v: TOP, code: top, def: 汤加潘加}
+          - {v: SBD, code: sbd, def: 所罗门群岛元}
+          - {v: VUV, code: vuv, def: 瓦努阿图瓦图}
+  gen_status:
+    name: 报告生成状态
+    used_by: [report.gen_status]
+    note: 机器运行状态，可直接更新(R2 例外)。
+    groups:
+      - name: 全部
+        values:
+          - {v: 待生成, code: pending, def: 等后台生成(每 2 分钟看一次), boundary: 人发起时的初值, example: ""}
+          - {v: 生成中, code: running, def: 后台正在生成, boundary: 超过 30 分钟改回待生成, example: ""}
+          - {v: 完成, code: done, def: 文件已上传, boundary: "", example: ""}
+          - {v: 失败, code: failed, def: 出错，原因在后台日志, boundary: 人可改回待生成重试, example: ""}
+  tier:
+    name: 市场分级
+    used_by: [country.tier]
+    note: 「重点」由人标;机器建议商机的门槛要求重点或市场。
+    groups:
+      - name: 全部
+        values:
+          - {v: 重点, code: focus, def: 重点经营的国家, boundary: "", example: ""}
+          - {v: 市场, code: market, def: 有业务或在培育的国家, boundary: 台账文件里有的国家迁移时都记市场, example: ""}
+          - {v: 其他, code: watch, def: 只观察, boundary: "", example: ""}
+  priority:
+    name: 优先级
+    used_by: [opportunity.priority]
+    note: 人定;只在在跟踪的商机上有意义。
+    groups:
+      - name: 全部
+        values:
+          - {v: A, code: A, def: 最高，资源优先, boundary: "", example: ""}
+          - {v: B, code: B, def: 正常, boundary: "", example: ""}
+          - {v: C, code: C, def: 低，顺带看, boundary: "", example: ""}
+  supply_plant_kind:
+    name: 自来水厂类型
+    used_by: [supply_plant.kind]
+    note: 导入时名称里有 desal / 淡化 / dessal / تحلية 等字样的算海水淡化厂,其余算自来水厂。
+    groups:
+      - name: 全部
+        values:
+          - {v: 自来水厂, code: water_treatment, def: 以地表水或地下水为水源的供水厂, boundary: 含水源厂、加压站以外的净水厂, example: ""}
+          - {v: 海水淡化厂, code: desalination, def: 海水或苦咸水淡化厂, boundary: 苦咸水淡化也算, example: ""}
+  sewage_plant_kind:
+    name: 污水厂类型
+    used_by: [sewage_plant.kind]
+    note: 导入时名称里有 reuse / reclamation / 再生 / 中水 等字样的算中水回用厂,其余算污水厂。
+    groups:
+      - name: 全部
+        values:
+          - {v: 污水厂, code: wastewater, def: 城镇或工业污水处理厂, boundary: "", example: ""}
+          - {v: 中水回用厂, code: reuse, def: 以出水再生利用为主的处理厂, boundary: 污水厂附带回用的仍算污水厂, example: ""}
+  plant_status:
+    name: 水厂状态
+    used_by: [supply_plant.status, sewage_plant.status]
+    groups:
+      - name: 全部
+        values:
+          - {v: 运行, code: active, def: 在运行, boundary: "", example: ""}
+          - {v: 在建, code: under_construction, def: 在建或调试中, boundary: "", example: ""}
+          - {v: 停用, code: decommissioned, def: 已停用或拆除, boundary: "", example: ""}
+  treatment_level:
+    name: 处理级别
+    used_by: [sewage_plant.level]
+    groups:
+      - name: 全部
+        values:
+          - {v: 一级, code: primary, def: 只有一级(物理)处理, boundary: "", example: ""}
+          - {v: 二级, code: secondary, def: 二级(生物)处理, boundary: "", example: ""}
+          - {v: 深度, code: advanced, def: 三级或深度处理(脱氮除磷、过滤、消毒等), boundary: "", example: ""}
+  company_kind:
+    name: 公司资料类别
+    used_by: [company.kind]
+    note: 一行一项。
+    groups:
+      - name: 全部
+        values:
+          - {v: 资质, code: qualification, def: 资质证书、许可、认证, boundary: "", example: "市政公用工程施工总承包特级"}
+          - {v: 业绩, code: track_record, def: 已完成或在建的项目业绩, boundary: 一行一个项目, example: "某国净水厂 EPC(2023)"}
+          - {v: 其他, code: other, def: 公司简介、财务指标、团队等, boundary: "", example: "公司简介(中英文)"}
+  role:
+    name: 成员角色
+    used_by: [member.role]
+    note: 在 Teable 空间里设;页面写入沿用表格权限。
+    groups:
+      - name: 全部
+        values:
+          - {v: 管理员, code: admin, def: 建表、管信源与成员, boundary: "", example: ""}
+          - {v: 跟进人, code: editor, def: 改商机、记跟进、处理线索, boundary: "", example: ""}
+          - {v: 只读, code: viewer, def: 只看, boundary: "", example: ""}
+
+# 口径与术语(glossary):页面、报告、表格视图共用，只定一次(R14)。stages 引用 taxonomies.stage 的值，tests 检查都存在。
+glossary:
+  risk_level:
+    term: 水风险分数怎么读
+    means: "Aqueduct 的 0–5 分:0–1 低,1–2 低到中,2–3 中到高,3–4 高,4–5 极高;用水压力 4 分以上 = 取用量超过可用量的 80%。分数是模型估计,不是实测"
+    used_in: [城市概况, 国别概况, 趋势机会]
+  trend_self_funded:
+    term: 自付型机会(趋势)
+    means: "城市水风险(缺省 = 总体水风险)≥ 4 分(极高)且人均 GDP(PPP)≥ 2 万美元:缺水或水质差、当地也付得起,项目多半自筹或 PPP。两个门槛页面上可调"
+    used_in: [趋势机会]
+  trend_loan_driven:
+    term: 贷款型机会(趋势)
+    means: "城市水风险 ≥ 4 分(缺省),且所在国别近年有开发性贷款进水务:世行涉水项目数 ≥ 1,或最近一年本库里出资方属开发性金融(世行、亚行、亚投行、非开行、欧复行、欧投行、伊开行、美开行、欧佩克基金、法开署、德复兴银行)的线索 ≥ 3 条。贷款按国家批,这一类按国别判,城市沿用;门槛页面上可调"
+    used_in: [趋势机会]
+  tracked:
+    term: 跟踪中的商机(在跟踪)
+    means: 我方阶段 ∈ 跟踪中、准备投标、已投标、中标;即不是 建议、不跟进、未中标、放弃，也不是空
+    stages: [跟踪中, 准备投标, 已投标, 中标]
+    used_in: [线索总览卡片「跟踪中的商机」, 漏斗第四级, 日历缺省范围, 商机总览缺省, 周报月报的「未来 N 天时间节点」范围, 「商机总览 · 下一步已逾期」]
+    code: portal.js P.tracked;core/jobs/reports.py build_periodic 的 tracked
+  ai_suggested:
+    term: AI 推荐的商机
+    means: 我方阶段 = 建议;机器新建的、人还没定跟不跟的商机。表格视图名仍是「建议商机」，页面统一叫 AI 推荐
+    stages: [建议]
+    used_in: [线索总览卡片, 「线索处理」第二页, 国别报告的项目机会清单]
+  pending_leads:
+    term: 待处理线索
+    means: 是否相关 = 是 且 处理状态 = 待处理
+    used_in: [线索总览卡片, 表格视图「待处理」]
+  to_assign:
+    term: 待确认归属
+    means: 所属商机为空，且(建议所属商机非空 且 处理状态 ≠ 已忽略)或(可能是新项目 = 是 且 处理状态 = 待处理)
+    used_in: [线索总览卡片, 表格视图「待确认归属」, 「线索处理」第一页]
+  overdue:
+    term: 下一步已逾期
+    means: 商机在跟踪(tracked)且 下一步到期 < 今天(页面按当前日期算，R12)
+    stages: [跟踪中, 准备投标, 已投标, 中标]
+    used_in: [「商机总览 · 下一步已逾期」]
+  review:
+    term: 待核更新
+    means: 商机.待核更新 非空(去掉行首 ✗ 的驳回行后仍有内容);一行一条机器提议
+    used_in: [「商机总览 · 待核更新」, 表格视图「待核更新」, 商机工作台的提示]
+  core_sectors:
+    term: 核心领域
+    means: 线索领域 ∈ 供水、污水、海水淡化、雨水排涝、水环境;profile 的 sector_scope 开了灌溉排水或防洪流域时加上水利
+    sectors: [供水, 污水, 海水淡化, 雨水排涝, 水环境]   # 代码读这里(core/jobs/suggest.py CORE_SECTORS)
+    used_in: [机器新建建议商机的门槛(A06)]
+  threshold:
+    term: 建议商机门槛
+    means: 国别市场分级 ∈ 重点、市场 且 领域含核心领域 且 类别 ∈ 招标、意向书、资格预审、总采购公告、特定采购公告、融资、立项或规划;模型判为新项目且过门槛才新建，否则只勾「可能是新项目」等人定
+    categories: [招标, 意向书, 资格预审, 总采购公告, 特定采购公告, 融资, 立项或规划]   # 代码读这里(core/jobs/suggest.py NEW_OPP_CATEGORIES)
+    tiers: [重点, 市场]
+    used_in: [A06]
+  lead_no:
+    term: 线索号
+    means: 信源 + 原文键的指纹前 8 位(十六进制);正文里的 [线索号] 在页面上显示为角标 ①②③，点开是那条线索
+    example: 3f9a1c2e
+  opp_code:
+    term: 商机编号
+    means: ISO3-三位序号，序号 = 该国已有最大序号 + 1;机器与页面新建都按这个取，不复用已删或不跟进的号
+    example: AZE-003
+  pdate:
+    term: 日期原文
+    means: 时间节点的日期可以不精确:2026 / 2026-H2 / 2026-Q4 / 2026-12 / 2026-12-15;「日期」字段存区间起点，原文另存一列
+  r_ref:
+    term: R 号
+    means: 国别成稿里的条目号〔R012〕，出现在国别的市场准入等列表里;只提示出处，不跳转(不是线索号)
+
+# 行业术语的初始词(terms,v2.11 起):Teable「行业术语」表(对象 term)建好时写进表的几行;表没建或读不到时助手用这里兜底。
+# 平时加词、改相关词在表里改,不改这里。字段含义见对象 term:aliases 同义说法、covers 跨哪些领域、sectors 按领域筛(空 = 不限领域)、match 相关词、means 说明。
+terms:
+  - term: 智慧水务
+    aliases: [智慧水利, 智慧水网, 智慧供水, 智慧排水, 数字水务, 数字水利, 水务信息化, 水务数字化, smart water]
+    covers: [供水, 污水, 雨水排涝, 水利]
+    sectors: []
+    match: [智慧水务, 智慧水利, 智慧水网, 智慧供水, 智慧排水, 数字孪生, 数字化, 信息化, 物联网, 智能, 在线监测, 远程监控, 自动化控制, 漏损, 产销差,
+            smart, digital, SCADA, telemetry, hydraulic model, automation, non-revenue, numérique, télégestion, inteligente, telemetría]
+    means: 用信息化、物联网、自动控制与模型手段管水:供水管网监测与漏损控制、智能水表、污水厂与泵站自控、排水防涝监测、灌区与水库的数字孪生都算;跨供水、排水、水利,不是某一个领域
+  - term: 海绵城市
+    aliases: [sponge city]
+    covers: [雨水排涝, 水环境]
+    sectors: []
+    match: [海绵城市, 海绵, sponge city, 雨水花园, 透水, green infrastructure, nature-based, low impact development]
+    means: 用透水铺装、下沉绿地、雨水花园等让城市就地蓄渗雨水,兼顾排涝与水环境;线索多记在雨水排涝或水环境,也有记在其他的
+  - term: 漏损控制
+    aliases: [降漏, 控漏, 降低漏损, 产销差, 无收益水, nrw]
+    covers: [供水]
+    sectors: [供水]
+    match: [漏损, 产销差, 无收益水, non-revenue, water loss, leak, pertes, fugas, agua no contabilizada]
+    means: 降低供水管网的漏失与计量损失(分区计量、检漏、换表、管网改造);只在供水领域里找
+
+# 数据范围(data_scope,v2.11 起):哪些国家的哪类数据不在采集范围。助手的提问涉及这些国家时,在答案上方原样显示 note,免得把「查不到」读成「没有项目」。
+# words 是提问里指这个国家的口语(如「国内」);note 要写准:不是库里一条该国数据都没有,而是哪类信源没采。
+data_scope:
+  not_collected:
+    - iso3: CHN
+      words: [国内, 我国, 大陆, 内地, 香港, 澳门, 台湾]
+      note: 数据范围:本系统面向海外,不包含中国国内(大陆、港澳台)数据。
+
+# 代码里还剩哪些"写死"的东西(code_enums,v2.2 起):枚举值本身都在运行时从本体读(core/ontology.py 的 values / codes / glossary_stages;
+# 页面读 portal/ontology.json 的 P.onto),改选项只改本体(再在 Teable 里加选项)。下面列的是代码里仍保留的"映射"——英文键之间、或配置键 → 本体 code 的对应关系,
+# 它们指向的值由 tests/test_ontology.py 核对必须存在。改映射关系(不是改值)仍要改代码。
+# 页面筛选用的归组(不是枚举:底下的字段是自由文本,值不规整,页面按这里的规则归到一组;页面与后台都运行时读这里)
+# 游客(不是库协作者的登录账号)能看到什么:页面检测到登录人在库里没有角色时,改走后台任务进程里的只读通道(core/guest.py,
+# /portal/api/assistant/guest/*),通道按这里放行:只列这些对象,去掉 deny 里的属性;报告只给定期报告的公开版。
+# 跟进记录、成员、报告模板整表不经过通道。业务数据(band: business)与人写的内部字段都在外面;改这里即改游客能看的范围。
+guest:
+  data: sample   # 游客只看示例数据(2026-10-09 使用方定):记录全部来自 core/sample.py 编的示例,真实库一条不给;下面的放行范围照旧作第二道关
+  objects:
+    lead: {deny: [note]}
+    country: {deny: [presence, note]}
+    opportunity: {deny: [owner, internal_note, priority, judgment, next_step, next_due, last_followup]}
+    milestone: {}
+    source: {}
+    city: {}
+    supply_plant: {}
+    sewage_plant: {}
+    report: {deny: [requested_by], rows: "版本 = 公开版 且 类型 ∈ 定期(周报、月报、日报)", kinds_group: 定期, edition: 公开版}
+  note: 游客登录后在表格里什么也看不到(不在库里);页面上看到的线索、商机、国别、时间节点、报告都是编出来的示例数据,不是真实内容;「打开表格」「在表格里打开」不显示;不能登记跟进、申请报告、订阅日历或改任何字段。
+
+groupings:
+  funders:
+    name: 资金来源
+    def: 线索「出资方」(自由文本,机器从原文抄)与商机「资金」每行开头的出资方,按机构族归组;大小写不分,包含即算;一条同时写了两家的两组都算
+    over: [lead.funder, opportunity.financing]
+    other: 其他出资方   # 有值但不属于下面任何一组
+    empty: 未填         # 没有值
+    groups:
+      - {v: 世界银行, code: wb, patterns: [World Bank, WB, IDA, IBRD, BIRD, BIRF, Banque Mondiale, Banco Mundial, International Development Association, International Bank for Reconstruction, 世界银行, 世行]}
+      - {v: 亚洲开发银行, code: adb, patterns: [Asian Development Bank, ADB, 亚洲开发银行, 亚开行]}
+      - {v: 亚投行, code: aiib, patterns: [AIIB, Asian Infrastructure Investment Bank, 亚投行]}
+      - {v: 非洲开发银行, code: afdb, patterns: [African Development Bank, AfDB, Banque Africaine de Développement, 非洲开发银行, 非开行]}
+      - {v: 欧洲复兴开发银行, code: ebrd, patterns: [EBRD, European Bank for Reconstruction, 欧洲复兴开发银行]}
+      - {v: 欧洲投资银行, code: eib, patterns: [EIB, European Investment Bank, 欧洲投资银行]}
+      - {v: 伊斯兰开发银行, code: isdb, patterns: [IsDB, Islamic Development Bank, Banque Islamique, 伊斯兰开发银行]}
+      - {v: 美洲开发银行, code: idb, patterns: [IDB, Inter-American Development Bank, 美洲开发银行]}
+      - {v: 欧佩克基金, code: opec, patterns: [OPEC, 欧佩克]}
+      - {v: 法国开发署, code: afd, patterns: [AFD, Agence Française de Développement, French Development Agency, 法国开发署, 法开署]}
+      - {v: 德国复兴信贷银行, code: kfw, patterns: [KfW, 德国复兴信贷银行]}
+      - {v: 欧盟, code: eu, patterns: [European Union, EU NIP, E5P, CINEA, 欧盟]}
+      - {v: 联合国机构, code: un, patterns: [UNDP, UNICEF, UNOPS, UN-Habitat, UNHCR, 联合国]}
+      - {v: 美国开发机构, code: us, patterns: [US DFC, USAID, Millennium Challenge, 美国国际开发]}
+      - {v: 本国政府, code: gov, patterns: [Government, Gouvernement, Gobierno, Ministry, Ministère, 政府, 国家预算, Commune, Municipal]}
+  regions:
+    name: 区域
+    def: 使用方的经营区域划分,取国别表「经营区域」的值(人填;一国一区);页面的「区域」按钮就是这些值,再加「未划区」= 经营区域为空的国家;选区域后国别只列该区域的,选国别自动点亮它的区域
+    over: [country.market]
+    empty: 未划区
+    note: 2026-10-04 查库:93 国里 39 国填了经营区域(西非、东非、中西亚、中非、南太平洋、中东欧、南美北、中东、西南欧区域,另有「土耳其公司」),54 国没填;要让更多国家进区域,在国别表里填经营区域即可,页面不用改
+
+code_enums:
+  - {where: core/jobs/common.py CAT, taxonomy: lead_category, note: "判定英文键 = 本体 code;只多一个 page(页面变化)→ 其他"}
+  - {where: core/jobs/common.py _PUBLIC_STAGE_CODE, taxonomy: lead_category → public_stage, note: 线索类别 code → 公开进度 code 的对应关系(规则,不是枚举)}
+  - {where: core/jobs/common.py _SOURCE_KIND_CODE, taxonomy: source_kind, note: 信源配置里的 kind(html_list / rss / atexo_search / wb_procnotices…)→ 本体 code}
+  - {where: core/jobs/common.py DEADLINE_KIND / OPP_SECTOR / SOURCE_STATUS, taxonomy: milestone_kind「采购截止」组 / opp_sectors 与 lead_sectors 同 code 的 / source_status, note: 整段从本体算出,没有写死的值}
+  - {where: core/watch/outputs.py SECTOR_ZH / CAT_ZH / PROCUREMENT, taxonomy: lead_sectors / lead_category, note: "SECTOR_ZH 从本体算;CAT_ZH 与 PROCUREMENT 是旧版监测输出(本机 Markdown)自己的叫法与口径,只用于本机命令,不进表"}
+  - {where: core/jobs/suggest.py NEW_OPP_CATEGORIES / CORE_SECTORS, taxonomy: glossary.threshold.categories / glossary.core_sectors.sectors, note: 门槛的两个集合,从口径的结构化列表取}
+  - {where: portal/portal.js P.STAGES / P.tracked / P.FUNDERS / P.REGION_EMPTY, taxonomy: stage / glossary.tracked / groupings.funders / groupings.regions, note: 页面加载时从 portal/ontology.json 取(P.onto);portal/country.html 的排序用 P.STAGES}
+  - {where: core/jobs/reports.py STAGE_ORDER / TRACKED_STAGES、core/jobs/brief.py TRACKED_STAGES / PROCUREMENT / CATEGORY_PRIORITY, taxonomy: stage / glossary.tracked / lead_category, note: 从本体算;日报「值得看」的类别优先级 = 本体 lead_category 的顺序}
+  - {where: core/ledger.py SEGMENTS / MILESTONES / PKG_TYPES / INSTRUMENTS / FUNDING_STATUS, taxonomy: opp_sectors / milestone_kind, note: 旧台账的英文键与中文名(更细)，迁移与成稿用;写进表前按本体归并}

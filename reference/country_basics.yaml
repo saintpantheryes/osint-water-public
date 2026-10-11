@@ -1,0 +1,56 @@
+# 国别基本资料(静态):首都、官方语言、货币,以及中英文维基百科条目。国别概况页、导出与报告"国家概况"一节调用。
+# 整理:2026-09-26,据维基百科各国条目与 ISO 4217 货币代码;条目链接即出处,使用前可点开核对。
+# 随年份变化的经济、人口、水资源数据不放这里——由 ingest 每月从世界银行 WDI、IMF《世界经济展望》接口更新(带年份与来源链接)。
+# 政体、领导人变动快(如马里、布基纳法索、几内亚、乍得、加蓬近年的过渡安排与选举),不收录,以维基百科条目为准。
+# 字段:capital 首都(括号里是需要说明的情况);languages 官方语言;currency / currency_code 货币与 ISO 4217 代码;
+#       wiki_zh / wiki_en 中文、英文维基百科条目名(链接为 https://zh.wikipedia.org/zh-cn/条目名、https://en.wikipedia.org/wiki/条目名)。
+# 先收使用方市场分布表里的国别;其他国别需要时按同样格式追加。
+schema: osint-water/country-basics@1
+checked: 2026-09-26
+countries:
+  # 中西亚
+  UZB: {capital: 塔什干, languages: 乌兹别克语, currency: 乌兹别克斯坦苏姆, currency_code: UZS, wiki_zh: 乌兹别克斯坦, wiki_en: Uzbekistan}
+  KAZ: {capital: 阿斯塔纳, languages: 哈萨克语、俄语, currency: 坚戈, currency_code: KZT, wiki_zh: 哈萨克斯坦, wiki_en: Kazakhstan}
+  TKM: {capital: 阿什哈巴德, languages: 土库曼语, currency: 土库曼斯坦马纳特, currency_code: TMT, wiki_zh: 土库曼斯坦, wiki_en: Turkmenistan}
+  TJK: {capital: 杜尚别, languages: 塔吉克语(俄语为族际交流语言), currency: 索莫尼, currency_code: TJS, wiki_zh: 塔吉克斯坦, wiki_en: Tajikistan}
+  KGZ: {capital: 比什凯克, languages: 吉尔吉斯语、俄语, currency: 吉尔吉斯斯坦索姆, currency_code: KGS, wiki_zh: 吉尔吉斯斯坦, wiki_en: Kyrgyzstan}
+  AZE: {capital: 巴库, languages: 阿塞拜疆语, currency: 阿塞拜疆马纳特, currency_code: AZN, wiki_zh: 阿塞拜疆, wiki_en: Azerbaijan}
+  # 南美北
+  PER: {capital: 利马, languages: 西班牙语(克丘亚语、艾马拉语等在通行地区亦为官方语言), currency: 索尔, currency_code: PEN, wiki_zh: 秘鲁, wiki_en: Peru}
+  BRA: {capital: 巴西利亚, languages: 葡萄牙语, currency: 雷亚尔, currency_code: BRL, wiki_zh: 巴西, wiki_en: Brazil}
+  COL: {capital: 波哥大, languages: 西班牙语, currency: 哥伦比亚比索, currency_code: COP, wiki_zh: 哥伦比亚, wiki_en: Colombia}
+  # 南太平洋
+  PNG: {capital: 莫尔斯比港, languages: 英语、托克皮辛语、希里莫图语, currency: 基那, currency_code: PGK, wiki_zh: 巴布亚新几内亚, wiki_en: Papua_New_Guinea}
+  TLS: {capital: 帝力, languages: 德顿语、葡萄牙语, currency: 美元, currency_code: USD, wiki_zh: 东帝汶, wiki_en: East_Timor}
+  SLB: {capital: 霍尼亚拉, languages: 英语, currency: 所罗门群岛元, currency_code: SBD, wiki_zh: 所罗门群岛, wiki_en: Solomon_Islands}
+  NPL: {capital: 加德满都, languages: 尼泊尔语, currency: 尼泊尔卢比, currency_code: NPR, wiki_zh: 尼泊尔, wiki_en: Nepal}
+  # 西非
+  MLI: {capital: 巴马科, languages: 13 种本国民族语言(2023 年宪法);法语为工作语言, currency: 西非法郎, currency_code: XOF, wiki_zh: 马里, wiki_en: Mali}
+  CIV: {capital: 亚穆苏克罗(政治首都;阿比让为经济中心), languages: 法语, currency: 西非法郎, currency_code: XOF, wiki_zh: 科特迪瓦, wiki_en: Ivory_Coast}
+  MRT: {capital: 努瓦克肖特, languages: 阿拉伯语, currency: 乌吉亚, currency_code: MRU, wiki_zh: 毛里塔尼亚, wiki_en: Mauritania}
+  NGA: {capital: 阿布贾, languages: 英语, currency: 奈拉, currency_code: NGN, wiki_zh: 尼日利亚, wiki_en: Nigeria}
+  GIN: {capital: 科纳克里, languages: 法语, currency: 几内亚法郎, currency_code: GNF, wiki_zh: 几内亚, wiki_en: Guinea}
+  BFA: {capital: 瓦加杜古, languages: 本国民族语言(2023 年修宪);法语、英语为工作语言, currency: 西非法郎, currency_code: XOF, wiki_zh: 布基纳法索, wiki_en: Burkina_Faso}
+  SLE: {capital: 弗里敦, languages: 英语, currency: 利昂, currency_code: SLE, wiki_zh: 塞拉利昂, wiki_en: Sierra_Leone}
+  # 东非
+  TZA: {capital: 多多马(法定首都;达累斯萨拉姆为最大城市), languages: 斯瓦希里语、英语, currency: 坦桑尼亚先令, currency_code: TZS, wiki_zh: 坦桑尼亚, wiki_en: Tanzania}
+  KEN: {capital: 内罗毕, languages: 斯瓦希里语、英语, currency: 肯尼亚先令, currency_code: KES, wiki_zh: 肯尼亚, wiki_en: Kenya}
+  ZMB: {capital: 卢萨卡, languages: 英语, currency: 赞比亚克瓦查, currency_code: ZMW, wiki_zh: 赞比亚, wiki_en: Zambia}
+  RWA: {capital: 基加利, languages: 卢旺达语、英语、法语、斯瓦希里语, currency: 卢旺达法郎, currency_code: RWF, wiki_zh: 卢旺达, wiki_en: Rwanda}
+  UGA: {capital: 坎帕拉, languages: 英语、斯瓦希里语, currency: 乌干达先令, currency_code: UGX, wiki_zh: 乌干达, wiki_en: Uganda}
+  BWA: {capital: 哈博罗内, languages: 英语(茨瓦纳语为国语), currency: 普拉, currency_code: BWP, wiki_zh: 博茨瓦纳, wiki_en: Botswana}
+  NAM: {capital: 温得和克, languages: 英语, currency: 纳米比亚元(南非兰特同时流通), currency_code: NAD, wiki_zh: 纳米比亚, wiki_en: Namibia}
+  # 中非
+  COD: {capital: 金沙萨, languages: 法语, currency: 刚果法郎, currency_code: CDF, wiki_zh: 刚果民主共和国, wiki_en: Democratic_Republic_of_the_Congo}
+  GAB: {capital: 利伯维尔, languages: 法语, currency: 中非法郎, currency_code: XAF, wiki_zh: 加蓬, wiki_en: Gabon}
+  COG: {capital: 布拉柴维尔, languages: 法语, currency: 中非法郎, currency_code: XAF, wiki_zh: 刚果共和国, wiki_en: Republic_of_the_Congo}
+  CMR: {capital: 雅温得, languages: 法语、英语, currency: 中非法郎, currency_code: XAF, wiki_zh: 喀麦隆, wiki_en: Cameroon}
+  TCD: {capital: 恩贾梅纳, languages: 法语、阿拉伯语, currency: 中非法郎, currency_code: XAF, wiki_zh: 乍得, wiki_en: Chad}
+  # 中东欧、西南欧、土耳其、中东
+  POL: {capital: 华沙, languages: 波兰语, currency: 兹罗提, currency_code: PLN, wiki_zh: 波兰, wiki_en: Poland}
+  BIH: {capital: 萨拉热窝, languages: 波斯尼亚语、克罗地亚语、塞尔维亚语, currency: 可兑换马克, currency_code: BAM, wiki_zh: 波斯尼亚和黑塞哥维那, wiki_en: Bosnia_and_Herzegovina}
+  SRB: {capital: 贝尔格莱德, languages: 塞尔维亚语, currency: 塞尔维亚第纳尔, currency_code: RSD, wiki_zh: 塞尔维亚, wiki_en: Serbia}
+  MAR: {capital: 拉巴特, languages: 阿拉伯语、阿马齐格语(柏柏尔语), currency: 摩洛哥迪拉姆, currency_code: MAD, wiki_zh: 摩洛哥, wiki_en: Morocco}
+  TUR: {capital: 安卡拉, languages: 土耳其语, currency: 土耳其里拉, currency_code: TRY, wiki_zh: 土耳其, wiki_en: Turkey}
+  SAU: {capital: 利雅得, languages: 阿拉伯语, currency: 沙特里亚尔, currency_code: SAR, wiki_zh: 沙特阿拉伯, wiki_en: Saudi_Arabia}
+  OMN: {capital: 马斯喀特, languages: 阿拉伯语, currency: 阿曼里亚尔, currency_code: OMR, wiki_zh: 阿曼, wiki_en: Oman}

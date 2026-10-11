@@ -1,0 +1,3 @@
+sources:
+  S01: {title: 虚构出资方项目页, publisher: 虚构银行, date: 2026-05-01, grade: A, via: primary_read, url: "https://example.org/project/1"}
+  S02: {title: 虚构新闻, publisher: 虚构媒体, date: 2026-06-01, grade: C, via: search_snippet, url: "https://example.org/news/2"}

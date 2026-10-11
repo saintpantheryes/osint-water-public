@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 日历</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("calendar.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>日历</h1>
+  <div class="toolbar">
+    <button id="prev">‹ 上月</button><strong id="title"></strong><button id="next">下月 ›</button><button id="todayBtn">本月</button>
+    <select id="fCountry"><option value="">全部国别</option></select>
+    <select id="fOpp"><option value="">全部商机</option></select>
+    <select id="fOwner"><option value="">全部负责人</option></select>
+    <label class="chk"><input type="checkbox" id="fLeads"> 也显示未归商机的线索截止</label>
+    <span style="margin-left:auto"><a id="icsDl" class="chip-btn" href="api/assistant/calendar.ics" download="water-osint.ics" title="按当前的国别、商机筛选,导出今天前后(前 30 天、后 365 天)的节点与到期,苹果日历、Outlook 直接打开导入">下载 .ics</a>
+      <button type="button" id="subBtn" class="chip-btn" title="给一条订阅链接,加到手机或电脑的日历里后自动更新">订阅到日历</button></span>
+  </div>
+  <!-- 订阅说明:点「订阅到日历」展开;链接由后台给(含整个团队共用的订阅令牌),不经登录检查,所以只含日历里本来就有的公开节点与到期 -->
+  <div class="panel subbox" id="subbox" hidden></div>
+  <p class="legend"><span><i style="background:#0e6ba8"></i>跟踪中商机的时间节点</span><span><i style="background:#94a3b8"></i>未归商机的线索截止(勾选才显示)</span><span><i style="background:#15803d"></i>跟进</span><span><i style="background:#b45309"></i>下一步到期</span><span><i style="background:#6d28d9"></i>报告</span></p>
+  <div id="cal" class="cal">读取中…</div>
+  <h2>本月清单</h2>
+  <div class="panel" id="list"></div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const state = { y: 0, m: 0, opps: [], tracked: new Set(), oppOf: {}, items: [], leads: false, open: {} };
+  const CAP = 6;  // 一格最多直接显示几条,多的折叠成「还有 N 条」
+  const now = new Date(); state.y = now.getFullYear(); state.m = now.getMonth() + 1;
+  const pad = (n) => String(n).padStart(2, "0");
+  const monthRange = (y, m) => { const first = y + "-" + pad(m) + "-01"; const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); return [first, last]; };
+
+  async function loadMonth() {
+    const [from, to] = monthRange(state.y, state.m);
+    $("title").textContent = state.y + " 年 " + state.m + " 月";
+    $("cal").textContent = "读取中…";
+    const [ms, fu1, fu2, rp] = await Promise.all([
+      P.records("milestone", { filter: P.and(...P.between("milestone", "day", from, to)), props: ["opportunity", "lead", "country", "kind", "day", "status", "label"] }),
+      P.records("followup", { filter: P.and(...P.between("followup", "day", from, to)), props: ["opportunity", "day", "author", "content", "stage_change", "next_step", "next_due"] }),
+      P.records("followup", { filter: P.and(...P.between("followup", "next_due", from, to)), props: ["opportunity", "day", "author", "content", "next_step", "next_due"] }),
+      P.records("report", { filter: P.and(...P.between("report", "day", from, to)), props: ["kind", "day", "country", "opportunity", "period", "gen_status"] }),
+    ]);
+    const items = [];
+    ms.forEach((r) => {
+      const oid = P.linkId(P.get("milestone", r, "opportunity"));
+      if (oid && !state.tracked.has(oid)) return;  // 挂了商机的只看跟踪中的
+      if (!oid && !state.leads) return;  // 没挂商机的(线索自带的截止、国别节点)缺省不显示,勾选后才显示
+      items.push({ kind: oid ? "ms" : "ld", day: P.day(P.get("milestone", r, "day")), opp: oid, country: P.linkId(P.get("milestone", r, "country")),
+        text: P.text(P.get("milestone", r, "kind")) + " · " + (oid ? (state.oppOf[oid]?.code || "") + (state.oppOf[oid]?.name ? " " + state.oppOf[oid].name : "") : P.text(P.get("milestone", r, "lead")) || P.text(P.get("milestone", r, "country"))) + (P.get("milestone", r, "label") ? " · " + P.get("milestone", r, "label") : ""),
+        detail: [P.text(P.get("milestone", r, "status")), P.text(P.get("milestone", r, "lead")), P.text(P.get("milestone", r, "country"))].filter(Boolean).join(" · "), oid: "milestone", rid: r.id });
+    });
+    fu1.forEach((r) => { const oid = P.linkId(P.get("followup", r, "opportunity"));
+      items.push({ kind: "fu", day: P.day(P.get("followup", r, "day")), opp: oid, owner: P.text(P.get("followup", r, "author")),
+        text: (state.oppOf[oid]?.code || "跟进") + " · " + (P.get("followup", r, "content") || "").slice(0, 40), detail: P.text(P.get("followup", r, "author")) + (P.get("followup", r, "stage_change") ? " · 阶段→" + P.get("followup", r, "stage_change") : ""), oid: "followup", rid: r.id }); });
+    fu2.forEach((r) => { const oid = P.linkId(P.get("followup", r, "opportunity"));
+      items.push({ kind: "due", day: P.day(P.get("followup", r, "next_due")), opp: oid, owner: P.text(P.get("followup", r, "author")),
+        text: "到期 · " + (state.oppOf[oid]?.code || "") + " · " + (P.get("followup", r, "next_step") || ""), detail: P.text(P.get("followup", r, "author")), oid: "followup", rid: r.id }); });
+    rp.forEach((r) => { const oid = P.linkId(P.get("report", r, "opportunity"));
+      items.push({ kind: "rp", day: P.day(P.get("report", r, "day")), opp: oid, country: P.linkId(P.get("report", r, "country")),
+        text: P.text(P.get("report", r, "kind")) + " · " + [P.text(P.get("report", r, "country")), P.text(P.get("report", r, "opportunity")), P.get("report", r, "period")].filter(Boolean).join(" "), detail: P.text(P.get("report", r, "gen_status")), oid: "report", rid: r.id }); });
+    state.items = items;
+    render();
+  }
+
+  function visible() {
+    const c = $("fCountry").value, o = $("fOpp").value, w = $("fOwner").value;
+    return state.items.filter((it) => {
+      const opp = it.opp ? state.oppOf[it.opp] : null;
+      if (o && it.opp !== o) return false;
+      if (c && !((opp && opp.country === c) || it.country === c)) return false;
+      if (w && !((opp && opp.owner === w) || it.owner === w)) return false;
+      return true;
+    });
+  }
+
+  function render() {
+    const items = visible();
+    const [from] = monthRange(state.y, state.m);
+    const first = new Date(from + "T00:00:00Z"), startDow = (first.getUTCDay() + 6) % 7;  // 周一开头
+    const days = new Date(Date.UTC(state.y, state.m, 0)).getUTCDate();
+    const byDay = {}; items.forEach((it) => { (byDay[it.day] = byDay[it.day] || []).push(it); });
+    const today = P.today();
+    let html = ["一", "二", "三", "四", "五", "六", "日"].map((d) => '<div class="dow">' + d + "</div>").join("");
+    for (let i = 0; i < startDow; i++) html += '<div class="cell other"></div>';
+    for (let d = 1; d <= days; d++) {
+      const key = state.y + "-" + pad(state.m) + "-" + pad(d);
+      const all = byDay[key] || [], shown = state.open[key] ? all : all.slice(0, CAP);
+      html += '<div class="cell' + (key === today ? " today" : "") + '"><div class="d">' + d + "</div>" +
+        shown.map((it) => '<a class="chip ' + it.kind + '" href="' + P.recordUrl(it.oid, it.rid) + '" target="_blank" rel="noopener" title="' + P.esc(it.text + (it.detail ? "\n" + it.detail : "")) + '">' + P.esc(it.text) + "</a>").join("") +
+        (all.length > shown.length ? '<a class="more" href="#" data-day="' + key + '">还有 ' + (all.length - shown.length) + " 条</a>" : "") + "</div>";
+    }
+    $("cal").innerHTML = html;
+    $("cal").querySelectorAll("a.more").forEach((a) => { a.onclick = (e) => { e.preventDefault(); state.open[a.dataset.day] = true; render(); }; });
+    const names = { ms: "时间节点", ld: "线索截止", fu: "跟进", due: "下一步到期", rp: "报告" };
+    items.sort((a, b) => a.day.localeCompare(b.day));
+    $("list").innerHTML = P.tableHtml(["日期", "类型", "内容", "说明", ""], items.map((it) => [it.day, names[it.kind], it.text, it.detail, P.raw(P.open(it.oid, it.rid))]));
+  }
+
+  try {
+    await P.load();
+    const [opps, countries] = await Promise.all([P.opps(), P.countries()]);
+    state.opps = opps;
+    P.tracked(opps).forEach((o) => state.tracked.add(o.id));
+    opps.forEach((o) => { state.oppOf[o.id] = { code: P.get("opportunity", o, "code"), name: P.get("opportunity", o, "name_zh"), country: P.linkId(P.get("opportunity", o, "country")), owner: P.text(P.get("opportunity", o, "owner")) }; });
+    P.fillCountrySelect($("fCountry"), countries.map((c) => [c.id, P.get("country", c, "name_zh") || P.get("country", c, "key")]));
+    P.tracked(opps).forEach((o) => { const op = document.createElement("option"); op.value = o.id; op.textContent = P.get("opportunity", o, "code") + " " + (P.get("opportunity", o, "name_zh") || ""); $("fOpp").appendChild(op); });
+    [...new Set(opps.map((o) => P.text(P.get("opportunity", o, "owner"))).filter(Boolean))].sort().forEach((w) => { const op = document.createElement("option"); op.value = w; op.textContent = w; $("fOwner").appendChild(op); });
+    ["fCountry", "fOpp", "fOwner"].forEach((id) => $(id).addEventListener("change", render));
+    /* 导出与订阅:国别、商机筛选跟着下拉走(国别转成 ISO3、商机转成编号,后台按这两个筛) */
+    const isoOf = {}; countries.forEach((c) => { isoOf[c.id] = P.get("country", c, "key"); });
+    const feedQs = () => { const q = new URLSearchParams(); const c = $("fCountry").value, o = $("fOpp").value; if (c && isoOf[c]) q.set("country", isoOf[c]); if (o && state.oppOf[o]) q.set("opp", state.oppOf[o].code); return q.toString(); };
+    const syncDl = () => { const q = feedQs(); $("icsDl").href = "api/assistant/calendar.ics" + (q ? "?" + q : ""); };
+    ["fCountry", "fOpp"].forEach((id) => $(id).addEventListener("change", () => { syncDl(); if (!$("subbox").hidden) showSub(); }));
+    syncDl();
+    async function showSub() {
+      const box = $("subbox"); box.hidden = false; box.innerHTML = '<p class="muted">正在取订阅链接…</p>';
+      let r = null;
+      try { const q = feedQs(); const resp = await fetch("api/assistant/feed-link" + (q ? "?" + q : ""), { credentials: "same-origin", headers: { Accept: "application/json" } }); r = resp.ok ? await resp.json() : { ok: false, error: "助手服务未就绪(后台任务没起来或还没更新到这一版)" }; }
+      catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+      if (!r || !r.ok) { box.innerHTML = '<div class="err">拿不到订阅链接:' + P.esc((r && r.error) || "未知原因") + "</div>"; return; }
+      box.innerHTML = "<b>订阅到日历</b>(自动更新,每 6 小时刷一次;只含跟踪中商机的时间节点、跟进到期与国别级节点,按当前的国别 / 商机筛选)" +
+        '<code id="subUrl">' + P.esc(r.url) + "</code>" +
+        '<button type="button" class="chip-btn" id="subCopy">复制链接</button> <a class="chip-btn" href="' + P.esc(r.url) + '">在日历程序里打开</a> ' +
+        (P.isGuest || !(P.cfg.tables && P.cfg.tables.preference) ? "" : '<button type="button" class="chip-btn" id="subSave" title="存到「我的」页,以后在那里复制">存到我的</button> ') + '<button type="button" class="chip-btn" id="subClose">收起</button>' +
+        "<ol><li><b>iPhone / iPad</b>:设置 → 日历 → 账户 → 添加账户 → 其他 → 添加订阅的日历,粘贴链接。</li>" +
+        "<li><b>Mac 日历</b>:文件 → 新建日历订阅,粘贴链接(自动刷新选「每天」或「每小时」)。</li>" +
+        "<li><b>Google 日历</b>:其他日历 → 通过网址添加,把开头的 webcal:// 改成 https://:<span class=\"muted small\">" + P.esc(r.https || "") + "</span></li>" +
+        "<li><b>Outlook</b>:添加日历 → 从 Internet 订阅,粘贴 https 链接。</li></ol>" +
+        '<p class="muted small">链接里带团队共用的订阅令牌,不要公开发到外面;换了后台的机器令牌链接会失效,到这里重新取一条即可。</p>';
+      $("subCopy").onclick = async () => { try { await navigator.clipboard.writeText(r.url); P.toast("已复制"); } catch (e) { P.toast("复制失败,请手动选中复制", true); } };
+      $("subClose").onclick = () => { box.hidden = true; };
+      if ($("subSave")) $("subSave").onclick = async () => {
+        const parts = [$("fCountry").selectedOptions[0] && $("fCountry").value ? $("fCountry").selectedOptions[0].textContent : "", $("fOpp").selectedOptions[0] && $("fOpp").value ? $("fOpp").selectedOptions[0].textContent : ""].filter(Boolean);
+        const name = "日历 · " + (parts.join(" · ") || "全部跟踪中商机");
+        try { await P.saveSub(name, r.url); P.toast("已存到「我的」"); } catch (e) { P.toast(e.message, true); }
+      };
+    }
+    $("subBtn").onclick = () => { if ($("subbox").hidden) showSub(); else $("subbox").hidden = true; };
+    $("fLeads").addEventListener("change", () => { state.leads = $("fLeads").checked; loadMonth().catch((e) => P.fail($("cal"), e)); });
+    $("prev").onclick = () => { state.m--; if (state.m < 1) { state.m = 12; state.y--; } loadMonth().catch((e) => P.fail($("cal"), e)); };
+    $("next").onclick = () => { state.m++; if (state.m > 12) { state.m = 1; state.y++; } loadMonth().catch((e) => P.fail($("cal"), e)); };
+    $("todayBtn").onclick = () => { state.y = now.getFullYear(); state.m = now.getMonth() + 1; loadMonth().catch((e) => P.fail($("cal"), e)); };
+    await loadMonth();
+  } catch (e) { P.fail($("cal"), e); }
+})();
+</script>
+</body>
+</html>

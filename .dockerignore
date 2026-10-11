@@ -1,0 +1,3 @@
+# 构建后台任务镜像(deploy/teable/worker.Dockerfile)只用到依赖清单;程序、数据、私有配置不进构建上下文(运行时挂载主机上的检出)
+*
+!requirements.txt

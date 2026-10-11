@@ -1,0 +1,11 @@
+# 域名来自 .env 的 TEABLE_HOST;证书由 Caddy 向 Let's Encrypt 自动申请、自动续期(要求域名已解析到本机、80/443 可达)。
+# caddy.d/*.caddy 放附加路由(新版只读页面 /portal/,架构方案第 5 节);目录空着时这一行什么也不引入。
+# caddy.d/*.site 放整段的附加站点,目前只有换域名后旧域名的 301 转址(domain_from_mac.sh 写);没有时最后一行什么也不引入。
+{$TEABLE_HOST} {
+	encode zstd gzip
+	import /etc/caddy/caddy.d/*.caddy
+	handle {
+		reverse_proxy teable:3000
+	}
+}
+import /etc/caddy/caddy.d/*.site

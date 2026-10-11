@@ -1,0 +1,7 @@
+schema: osint-water/overlay@1
+country: ZZZ
+country_notes: [虚构的国别判断一条]
+intel: [{date: 2026-09-10, source: 虚构渠道, content: 虚构的国别级非公开信息}]
+actions: [{action: 虚构的国别级动作, due: 2026-10-01, owner: 虚构部门}]
+items:
+  ZZZ-001: {priority: A, business_line: EPC, role: 设计施工总承包, next_actions: [{action: 准备资审文件, due: 2026-10-15}], intel: [{date: 2026-09-01, source: 虚构同业交流, content: 虚构的非公开信息}]}

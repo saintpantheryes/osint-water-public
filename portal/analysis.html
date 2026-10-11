@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 线索分析</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="echarts.min.js"></script>
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("analysis.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>线索分析</h1>
+  <p class="muted">线索多到看不完时在这里看全貌:顶部是后台每天采集完成后写的简报;下面按时间、国别、区域、领域、类别、资金来源、信源、判定与处理状态统计,数字与线索总览同一口径,图分几个页签切换,点任一柱,下面列出那组线索。</p>
+  <div class="panel brief" id="brief"><p class="muted">读取日报…</p></div>
+  <div class="filters" id="filters">
+    <div class="frow"><b>时间</b><span id="fWin" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>范围</b><span id="fRel" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>区域</b><span id="fRegion" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>国别</b><span id="fCountry" class="frow" style="padding:0"></span><button type="button" class="chip-btn more" id="moreC">更多国家 ▾</button><span class="muted small" id="fNote" style="margin-left:auto"></span></div>
+    <div class="frow" id="rowMore" style="display:none"><b></b><span id="fCountry2" class="frow" style="padding:0"></span></div>
+  </div>
+  <div class="cards" id="cards"><div class="card"><div class="n">…</div><div class="l">读取中</div></div></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="tab" data-t="trend">
+    <h2>每日新增(按发现时间;蓝色是判为相关的)</h2>
+    <div class="panel"><div id="cTrend" class="chart short"></div></div>
+  </div>
+  <div class="tab" data-t="country">
+    <div class="grid2">
+      <div><h2>国别(前 15,其余合并)</h2><div class="panel"><div id="cCountry" class="chart tall"></div></div></div>
+      <div><h2>国别 × 类别(相关线索;颜色越深条数越多)</h2><div class="panel"><div id="cHeat" class="chart tall"></div></div></div>
+    </div>
+  </div>
+  <div class="tab" data-t="kind">
+    <div class="grid2">
+      <div><h2>类别</h2><div class="panel"><div id="cCat" class="chart"></div></div></div>
+      <div><h2>领域(一条线索可属多个领域)</h2><div class="panel"><div id="cSector" class="chart"></div></div></div>
+    </div>
+  </div>
+  <div class="tab" data-t="source">
+    <div class="grid2">
+      <div><h2>资金来源(按机构族归组)</h2><div class="panel"><div id="cFunder" class="chart tall"></div></div></div>
+      <div><h2>信源(前 15)</h2><div class="panel"><div id="cSource" class="chart tall"></div></div></div>
+    </div>
+  </div>
+  <div class="tab" data-t="status">
+    <h2>判定方式 · 处理状态 · 归属</h2>
+    <div class="panel"><div id="cPies" class="chart"></div></div>
+  </div>
+  <h2 id="drillTitle">清单</h2>
+  <div class="panel" id="drill"><p class="muted">点上面任一张图的一柱(或饼的一块、一个卡片),这里列出那组线索,最多 200 条,按发现时间倒序。标题以中文名称为主:模型写的项目名或中文摘要;没有时从原题挑出认得的词作「要点」,原题在小字里。</p></div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const BLUE = "#0e6ba8", GREY = "#cbd5e1", PAL = ["#0e6ba8", "#15803d", "#b45309", "#6d28d9", "#be185d", "#0f766e", "#64748b", "#ca8a04", "#1d4ed8", "#9f1239", "#4d7c0f", "#7c3aed"];
+  const q = new URLSearchParams(location.search);
+  const state = { w: q.get("w") || "30", rel: q.get("rel") || "", r: q.get("r") || "", c: q.get("c") || "" };
+  const TABS = [["trend", "每日新增"], ["country", "国别"], ["kind", "类别与领域"], ["source", "资金来源与信源"], ["status", "判定·状态·归属"]];
+  let tab = TABS.some(([k]) => k === q.get("t")) ? q.get("t") : "trend";
+  let leads = [], countries = [], cname = {}, cregion = {}, charts = {};
+  const g = (l, p) => P.get("lead", l, p);
+  const dayOf = (l) => P.day(g(l, "found_at"));
+  const inRegion = (c) => !state.r || P.regionOf(c) === state.r;
+  const toAssign = (l) => !P.linkId(g(l, "opportunity")) && ((P.linkId(g(l, "suggested_opp")) && g(l, "status") !== "已忽略") || (g(l, "maybe_new") === true && g(l, "status") === "待处理"));  // glossary.to_assign,与线索总览卡片同一条件
+  const funderOf = (l) => P.funderGroups(g(l, "funder"));
+  let catOrder = [], secOrder = [];
+
+  /* 当前筛选下的线索(全部在本页现算,与线索总览按同样条件数出来的数一样) */
+  function current() {
+    const today = P.today(), since = state.w === "" ? "" : P.addDays(today, -Number(state.w));
+    const ids = state.c ? new Set([state.c]) : state.r ? new Set(countries.filter(inRegion).map((c) => c.id)) : null;
+    return leads.filter((l) => (!since || dayOf(l) >= since) && (!state.rel || g(l, "relevant") === true) && (!ids || ids.has(P.linkId(g(l, "country")))));
+  }
+  function count(rows, key) { const m = new Map(); rows.forEach((l) => { const ks = key(l); (Array.isArray(ks) ? ks : [ks]).forEach((k) => { if (k === undefined || k === null) return; m.set(k, (m.get(k) || 0) + 1); }); }); return m; }
+  const sortDesc = (m) => [...m.entries()].sort((a, b) => b[1] - a[1]);
+  function chart(id) { charts[id] = charts[id] || echarts.init($(id)); return charts[id]; }
+  function bars(id, cats, series, horizontal, onClick, dense) {
+    const c = chart(id);
+    c.setOption({ tooltip: { trigger: "axis", axisPointer: { type: "shadow" } }, legend: series.length > 1 ? { bottom: 0 } : undefined, grid: { left: 8, right: 16, top: 8, bottom: series.length > 1 ? 30 : 8, containLabel: true },
+      [horizontal ? "yAxis" : "xAxis"]: { type: "category", data: cats, inverse: horizontal, axisLabel: { interval: dense ? "auto" : 0, rotate: horizontal ? 0 : (cats.length > 8 ? 45 : 0), width: horizontal ? 110 : undefined, overflow: "truncate", formatter: dense ? (v) => v.slice(5) : undefined } },
+      [horizontal ? "xAxis" : "yAxis"]: { type: "value", minInterval: 1 },
+      series: series.map((s) => ({ type: "bar", name: s.name, stack: "x", data: s.data, itemStyle: { color: s.color }, barMaxWidth: 28, emphasis: { focus: "series" } })) }, true);
+    c.off("click"); c.on("click", (p) => onClick(cats[p.dataIndex], p.seriesName));
+  }
+  function splitRel(rows, key, order) {
+    const all = count(rows, key), rel = count(rows.filter((l) => g(l, "relevant") === true), key);
+    const cats = order || sortDesc(all).map(([k]) => k);
+    return { cats, series: [{ name: "相关", data: cats.map((k) => rel.get(k) || 0), color: BLUE }, { name: "不相关或未判", data: cats.map((k) => (all.get(k) || 0) - (rel.get(k) || 0)), color: GREY }] };
+  }
+  function topN(m, n, restLabel) { const s = sortDesc(m); if (s.length <= n) return s.map(([k]) => k); return s.slice(0, n).map(([k]) => k).concat([restLabel]); }
+  const REST = "其余国家", REST_S = "其余信源";
+  const countryKey = (l) => P.text(g(l, "country")) || "未定国别";
+  const sourceKey = (l) => P.text(g(l, "source")) || "未知信源";
+
+  async function refresh() {
+    const rows = current();
+    history.replaceState(null, "", location.pathname + "?" + new URLSearchParams(Object.assign({}, state, { t: tab })));
+    const rel = rows.filter((l) => g(l, "relevant") === true);
+    const pending = rows.filter((l) => g(l, "status") === "待处理").length, assign = rows.filter(toAssign).length;
+    const inOpp = rel.filter((l) => P.linkId(g(l, "opportunity"))).length, uploads = rows.filter((l) => g(l, "origin") === "用户上传").length;
+    $("fNote").textContent = state.w === "" ? "全部线索" : state.w === "0" ? "今天发现的" : "最近 " + state.w + " 天发现的";
+    $("cards").innerHTML = [[rows.length, "线索", () => drill("线索", rows)], [rel.length, "判为相关", () => drill("判为相关", rel)], [pending, "待处理", () => drill("待处理", rows.filter((l) => g(l, "status") === "待处理"))],
+      [assign, "待确认归属", () => drill("待确认归属", rows.filter(toAssign))], [inOpp, "已归入商机", () => drill("已归入商机", rel.filter((l) => P.linkId(g(l, "opportunity"))))], [uploads, "同事上传", () => drill("同事上传", rows.filter((l) => g(l, "origin") === "用户上传"))]]
+      .map(([n, l], i) => '<a class="card' + (/^待/.test(l) && n > 0 ? " warn" : "") + '" href="#" data-i="' + i + '"><div class="n">' + n + '</div><div class="l">' + l + "</div></a>").join("");
+    const cardActs = [() => drill("线索", rows), () => drill("判为相关", rel), () => drill("待处理", rows.filter((l) => g(l, "status") === "待处理")), () => drill("待确认归属", rows.filter(toAssign)),
+      () => drill("已归入商机", rel.filter((l) => P.linkId(g(l, "opportunity")))), () => drill("同事上传", rows.filter((l) => g(l, "origin") === "用户上传"))];
+    $("cards").querySelectorAll(".card").forEach((a) => { a.onclick = (e) => { e.preventDefault(); cardActs[Number(a.dataset.i)](); }; });
+
+    /* 每日新增:窗口内每天一柱(全部时从最早一天起) */
+    const days = [...count(rows, dayOf).keys()].filter(Boolean).sort();
+    let from = state.w === "" ? (days[0] || P.today()) : P.addDays(P.today(), -Number(state.w)), to = P.today();
+    const axis = []; for (let d = from; d <= to && axis.length < 400; d = P.addDays(d, 1)) axis.push(d);
+    const t = splitRel(rows, dayOf, axis);
+    bars("cTrend", axis, t.series, false, (d, s) => drill(d + " " + s, rows.filter((l) => dayOf(l) === d && (s === "相关") === (g(l, "relevant") === true))), true);
+    chart("cTrend").setOption({ dataZoom: axis.length > 45 ? [{ type: "slider", bottom: 28, height: 14, start: Math.max(0, 100 - 4500 / axis.length) }] : [] });
+
+    /* 国别:前 15 + 其余 */
+    const cm = count(rows, countryKey), cats = topN(cm, 15, REST), top = new Set(cats);
+    const ck = (l) => { const k = countryKey(l); return top.has(k) ? k : REST; };
+    const cs = splitRel(rows, ck, cats);
+    bars("cCountry", cats, cs.series, true, (k, s) => drill(k + " " + s, rows.filter((l) => ck(l) === k && (s === "相关") === (g(l, "relevant") === true))));
+
+    /* 国别 × 类别 热力(相关线索,前 12 国) */
+    const hc = topN(count(rel, countryKey), 12, REST), hcs = new Set(hc), hk = (l) => { const k = countryKey(l); return hcs.has(k) ? k : REST; };
+    const hm = count(rel, (l) => hk(l) + "\u0000" + (g(l, "category") || "未分类"));
+    const hcats = catOrder.concat(["未分类"]).filter((k) => hc.some((c) => hm.get(c + "\u0000" + k)));
+    const data = []; hc.forEach((c, i) => hcats.forEach((k, j) => { const v = hm.get(c + "\u0000" + k) || 0; if (v) data.push([j, i, v]); }));
+    const hmax = Math.max(1, ...data.map((d) => d[2]));
+    const heat = chart("cHeat");
+    heat.setOption({ tooltip: { formatter: (p) => hc[p.data[1]] + " · " + hcats[p.data[0]] + ":" + p.data[2] + " 条" }, grid: { left: 8, right: 70, top: 8, bottom: 8, containLabel: true },
+      xAxis: { type: "category", data: hcats, position: "top", axisLabel: { interval: 0, rotate: 30 } }, yAxis: { type: "category", data: hc, inverse: true, axisLabel: { width: 110, overflow: "truncate" } },
+      visualMap: { min: 0, max: hmax, calculable: false, orient: "vertical", right: 0, top: "center", inRange: { color: ["#eff6ff", "#1d4ed8"] }, text: ["多", "少"] },
+      series: [{ type: "heatmap", data, label: { show: true, color: "#1f2937", formatter: (p) => p.data[2] > hmax * 0.6 ? "{w|" + p.data[2] + "}" : String(p.data[2]), rich: { w: { color: "#fff" } } }, emphasis: { itemStyle: { borderColor: "#111827", borderWidth: 1 } } }] }, true);
+    heat.off("click"); heat.on("click", (p) => { const c = hc[p.data[1]], k = hcats[p.data[0]]; drill(c + " · " + k, rel.filter((l) => hk(l) === c && (g(l, "category") || "未分类") === k)); });
+
+    /* 类别、领域(按本体顺序) */
+    const kc = splitRel(rows, (l) => g(l, "category") || "未分类", catOrder.concat(["未分类"]).filter((k) => count(rows, (l) => g(l, "category") || "未分类").get(k)));
+    bars("cCat", kc.cats, kc.series, true, (k, s) => drill("类别 " + k + " " + s, rows.filter((l) => (g(l, "category") || "未分类") === k && (s === "相关") === (g(l, "relevant") === true))));
+    const secOf = (l) => (g(l, "sectors") || []).length ? g(l, "sectors") : ["未分领域"];
+    const sm = count(rows, secOf), sOrder = secOrder.concat(["未分领域"]).filter((k) => sm.get(k));
+    const ss = splitRel(rows, secOf, sOrder);
+    bars("cSector", sOrder, ss.series, true, (k, s) => drill("领域 " + k + " " + s, rows.filter((l) => secOf(l).includes(k) && (s === "相关") === (g(l, "relevant") === true))));
+
+    /* 资金来源(机构族,只数相关线索,与线索总览「资金来源」筛选同一归组) */
+    const fm = count(rel, funderOf), fcats = P.funderOptions().filter((k) => fm.get(k));
+    bars("cFunder", fcats, [{ name: "相关线索", data: fcats.map((k) => fm.get(k) || 0), color: BLUE }], true, (k) => drill("资金来源 " + k, rel.filter((l) => funderOf(l).includes(k))));
+
+    /* 信源 前 15 */
+    const srm = count(rows, sourceKey), scats = topN(srm, 15, REST_S), sset = new Set(scats), sk = (l) => { const k = sourceKey(l); return sset.has(k) ? k : REST_S; };
+    const srs = splitRel(rows, sk, scats);
+    bars("cSource", scats, srs.series, true, (k, s) => drill("信源 " + k + " " + s, rows.filter((l) => sk(l) === k && (s === "相关") === (g(l, "relevant") === true))));
+
+    /* 三个饼:判定方式、处理状态、归属 */
+    const belong = (l) => P.linkId(g(l, "opportunity")) ? "已归入商机" : P.linkId(g(l, "suggested_opp")) ? "有机器建议" : g(l, "maybe_new") === true ? "像是新项目" : "没有归属";
+    const pies = [["判定方式", (l) => g(l, "judged_by") || "还没判定", rows], ["处理状态", (l) => g(l, "status") || "(空)", rows], ["归属(相关线索)", belong, rel]];
+    const pc = chart("cPies");
+    pc.setOption({ tooltip: { trigger: "item", formatter: (p) => p.seriesName + "<br>" + p.name + ":" + p.value + " 条(" + p.percent + "%)" }, color: PAL,
+      title: pies.map(([n], i) => ({ text: n, left: (i * 33.3 + 16.6) + "%", top: 0, textAlign: "center", textStyle: { fontSize: 13, fontWeight: 500, color: "#6b7280" } })),
+      series: pies.map(([n, key, src], i) => ({ type: "pie", name: n, radius: ["38%", "62%"], center: [(i * 33.3 + 16.6) + "%", "56%"], label: { formatter: "{b} {c}", fontSize: 11 }, data: sortDesc(count(src, key)).map(([k, v]) => ({ name: k, value: v })) })) }, true);
+    pc.off("click"); pc.on("click", (p) => { const [n, key, src] = pies[p.seriesIndex]; drill(n + " · " + p.name, src.filter((l) => key(l) === p.name)); });
+  }
+
+  /* 页签:图分五组,一次只显示一组;隐藏时 ECharts 量不到尺寸,切过来时补一次 resize */
+  function showTab(k) {
+    tab = k;
+    $("tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.t === k));
+    document.querySelectorAll(".tab").forEach((d) => d.classList.toggle("on", d.dataset.t === k));
+    history.replaceState(null, "", location.pathname + "?" + new URLSearchParams(Object.assign({}, state, { t: tab })));
+    document.querySelectorAll(".tab.on .chart").forEach((el) => { if (charts[el.id]) charts[el.id].resize(); });
+  }
+  function drawTabs() {
+    $("tabs").innerHTML = TABS.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + "</button>").join("");
+    $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
+    showTab(tab);
+  }
+
+  function drill(name, rows) {
+    rows = P.followFirst(rows.slice().sort((a, b) => String(g(b, "found_at") || "").localeCompare(String(g(a, "found_at") || ""))).slice(0, 200), "lead");  // 关注国家的排前面
+    $("drillTitle").textContent = name + " · " + rows.length + " 条";
+    $("drill").innerHTML = (rows.length >= 200 ? '<p class="muted small">只显示最新 200 条</p>' : "") + P.tableHtml(["标题", "国别", "类别", "发现", "状态", ""], rows.map((l) => [
+      P.titleCell(l, g(l, "funder") ? String(g(l, "funder")).slice(0, 30) : ""),
+      P.text(g(l, "country")), g(l, "category") || "", dayOf(l), P.raw(P.linkId(g(l, "opportunity")) ? '<a href="' + P.oppUrl(P.linkId(g(l, "opportunity"))) + '">' + P.esc(P.text(g(l, "opportunity"))) + "</a>" : P.esc(g(l, "status") || "")), P.raw(P.open("lead", l.id))]));
+    $("drillTitle").scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  /* 日报:报告表里最新一份完成的日报;正文在「简报正文」字段,没有该字段时读附件里的 Markdown */
+  async function loadBrief() {
+    const hasSummary = P.has("report", "summary");
+    const rows = await P.records("report", { take: 1, orderBy: [{ fieldId: P.f("report", "day"), order: "desc" }], filter: P.and(P.cond("report", "kind", "is", "日报"), P.cond("report", "gen_status", "is", "完成")),
+      props: ["kind", "day", "period", "file"].concat(hasSummary ? ["summary"] : []) });
+    const r = rows[0];
+    if (!r) { $("brief").innerHTML = '<h3>每日简报</h3><p class="muted">还没有日报:后台每天 08:30 采集完成后自动写一份,出来后显示在这里;也可以在<a href="reports.html?kind=日报">报告页</a>要一份今天的。</p>'; return; }
+    const gr = (p) => P.get("report", r, p);
+    const files = (gr("file") || []), docx = files.find((f) => /\.docx$/i.test(f.name)) || files[0], mdf = files.find((f) => /\.md$/i.test(f.name));
+    let md = hasSummary ? (gr("summary") || "") : "";
+    if (!md && mdf) { try { md = await (await fetch(P.fileUrl(mdf), { credentials: "same-origin" })).text(); } catch (e) { md = ""; } }
+    const head = '<h3>每日简报 <span class="muted small">' + P.esc(gr("period") || P.day(gr("day"))) + "</span>" + (docx ? ' <a class="open" href="' + P.esc(P.fileUrl(docx)) + '" target="_blank" rel="noopener">下载 Word</a>' : "") + ' <a class="open" href="reports.html?kind=日报">全部日报</a></h3>';
+    if (!md) { $("brief").innerHTML = head + '<p class="muted">这份日报的正文没存在表里(库里还没有「简报正文」字段,管理员跑一次建表命令就有);先看文件。</p>'; return; }
+    const keys = P.citeKeys([md]), numOf = {}; keys.forEach((k, i) => { numOf[k] = i + 1; });
+    const info = keys.length ? await P.leadsByKeys(keys) : {};
+    $("brief").innerHTML = head + mdHtml(md, numOf, info) + P.citeNote(numOf, info);
+  }
+  function mdHtml(md, numOf, info) {
+    const out = []; let ul = [];
+    const flush = () => { if (ul.length) { out.push("<ul>" + ul.join("") + "</ul>"); ul = []; } };
+    md.split(/\r?\n/).forEach((ln) => {
+      if (/^# /.test(ln)) return;  // 标题由本页给
+      if (/^## /.test(ln)) { flush(); out.push("<h4>" + P.esc(ln.slice(3)) + "</h4>"); return; }
+      if (/^- /.test(ln)) { ul.push("<li>" + P.cites(ln.slice(2), numOf, info) + "</li>"); return; }
+      flush(); if (ln.trim()) out.push("<p>" + P.cites(ln, numOf, info) + "</p>");
+    });
+    flush(); return out.join("");
+  }
+
+  function chipRows() {
+    const withLeads = countries.filter((c) => Number(P.get("country", c, "lead_count")) > 0);
+    const opt = (c) => [c.id, (P.get("country", c, "name_zh") || P.get("country", c, "key")) + " " + (Number(P.get("country", c, "lead_count")) || 0)];
+    const on = () => refresh().catch((e) => P.fail($("cards"), e));
+    const nReg = {}; withLeads.forEach((c) => { const r = P.regionOf(c); nReg[r] = (nReg[r] || 0) + (Number(P.get("country", c, "lead_count")) || 0); });
+    const regions = Object.entries(nReg).sort((a, b) => (a[0] === P.REGION_EMPTY) - (b[0] === P.REGION_EMPTY) || b[1] - a[1]).map(([r, n]) => [r, r + " " + n]);
+    const drawR = () => P.chips($("fRegion"), [["", "全部"]].concat(regions), state, "r", () => { if (state.c && !inRegion(countries.find((c) => c.id === state.c))) state.c = ""; drawC(); on(); });
+    const drawC = () => {
+      const list = withLeads.filter(inRegion), top = list.slice(0, 10), rest = list.slice(10);
+      const pick = () => { const c = countries.find((x) => x.id === state.c); if (c && !state.r) { state.r = P.regionOf(c); drawR(); } drawC(); on(); };
+      P.chips($("fCountry"), [["", "全部"]].concat(top.map(opt)), state, "c", pick); P.chips($("fCountry2"), rest.map(opt).sort((a, b) => P.zhCmp(a[1], b[1])), state, "c", pick);
+      $("moreC").style.display = rest.length ? "" : "none";
+      if (!rest.length || (state.c && rest.some((c) => c.id === state.c))) $("rowMore").style.display = rest.length ? "" : "none";
+    };
+    drawR(); drawC();
+    $("moreC").onclick = () => { const vis = $("rowMore").style.display !== "none"; $("rowMore").style.display = vis ? "none" : ""; $("moreC").textContent = vis ? "更多国家 ▾" : "收起 ▴"; };
+    P.chips($("fWin"), [["0", "今天"], ["7", "最近 7 天"], ["30", "最近 30 天"], ["90", "最近 90 天"], ["", "全部"]], state, "w", on);
+    P.chips($("fRel"), [["", "全部线索"], ["1", "只看判为相关的"]], state, "rel", on);
+  }
+
+  try {
+    await P.load();
+    catOrder = P.choices("lead", "category"); secOrder = P.choices("lead", "sectors");
+    const [cs, ls] = await Promise.all([P.countries(), P.records("lead", { props: ["key", "title", "url", "relevant", "category", "sectors", "country", "funder", "found_at", "status", "opportunity", "suggested_opp", "maybe_new", "judged_by", "source", "origin", "summary_zh", "project_name"] }), P.zhTerms()]);
+    countries = cs; leads = ls;
+    cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); cregion[c.id] = P.regionOf(c); });
+    chipRows(); drawTabs();
+    await refresh();
+    let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => document.querySelectorAll(".tab.on .chart").forEach((el) => charts[el.id] && charts[el.id].resize()), 150); });
+    await loadBrief().catch((e) => P.fail($("brief"), e));
+  } catch (e) { P.fail($("cards"), e); }
+})();
+</script>
+</body>
+</html>

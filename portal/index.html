@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · Global Water OSINT</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="echarts.min.js"></script>
+<script src="portal.js"></script>
+</head>
+<body class="hero-page">
+<!-- 仿 america.gov:顶栏与首屏放在一整块大圆角浅色面板里;视频卡的宽度按「屏幕剩下的高度 × 片子宽高比」算(脚本写 --hero-used、--hero-ratio),
+     1920×1080、1366×768 这类屏幕一屏就能看全,片子照旧整幅显示不裁。提问后面板收起,换成对话模式 -->
+<div class="hero-frame" id="heroFrame">
+<!-- 顶栏与菜单紧跟着就画(不等读表,读完 load 补上帐号区);放在页尾的大脚本里的话,慢手机上会先画出没有顶栏的一帧,标题再被推下去 -->
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("index.html", true);</script>
+<main class="hero-main">
+  <section class="hero" id="hero">
+    <h1 class="hero-title">全球水务开源情报</h1>
+    <p class="hero-en">Global Water OSINT</p>
+    <p class="hero-sub">想知道哪国、哪个项目、哪条线索的事,从这里开始问。</p>
+    <div class="hero-card">
+      <form class="askbox hero-ask" id="askForm">
+        <input id="q" type="text" autocomplete="off" placeholder="试试「最近 7 天埃及有哪些新线索」" maxlength="6000" aria-label="向助手提问">
+        <button type="submit" class="go" id="go" aria-label="提问">→</button>
+      </form>
+      <div class="hero-media" id="heroMedia">
+        <!-- 视频与封面来自私有配置仓的 portal/media/(compose 把它挂到页面目录的 media/);没有就只显示封面或底色。静音自动循环,手机里也内嵌播放 -->
+        <video id="heroVideo" muted loop playsinline webkit-playsinline x5-playsinline x5-video-player-type="h5" preload="metadata" data-src="media/hero.webm media/hero.mp4" data-poster="media/hero.jpg"></video>
+      </div>
+    </div>
+    <div class="frow hero-examples" id="examples"></div>
+    <p class="muted small" id="llmNote"></p>
+  </section>
+  <div id="answers" class="hero-answers"></div>
+</main>
+</div>
+<!-- 首屏下面的系统简介(仿 america.gov:左边圆角图卡,右边大标题、一段话、一个入口);图卡全用页面自己画的示意(地图是内嵌的简化世界轮廓,不取地图文件),
+     不读表、不放截图,慢网也一样;提问后切到对话模式就收起。登录页(login.html)有同一套,测试核对两边文字一致 -->
+<section class="intro" id="intro" aria-label="系统简介">
+  <div class="intro-row">
+    <div class="intro-media im-sources" aria-hidden="true">
+      <div class="im-lane"><span>世界银行</span><span>亚洲开发银行</span><span>非洲开发银行</span><span>亚投行</span><span>欧洲复兴开发银行</span><span>世界银行</span><span>亚洲开发银行</span><span>非洲开发银行</span><span>亚投行</span><span>欧洲复兴开发银行</span></div>
+      <div class="im-lane rev"><span>各国政府采购网</span><span>欧洲投资银行</span><span>美洲开发银行</span><span>伊斯兰开发银行</span><span>各国政府采购网</span><span>欧洲投资银行</span><span>美洲开发银行</span><span>伊斯兰开发银行</span></div>
+      <div class="im-lane"><span>行业新闻</span><span>水务公司公告</span><span>政府发布</span><span>项目文件</span><span>行业新闻</span><span>水务公司公告</span><span>政府发布</span><span>项目文件</span></div>
+      <div class="im-lane rev"><span>法国开发署</span><span>德国复兴信贷银行</span><span>欧佩克基金</span><span>出口信贷</span><span>法国开发署</span><span>德国复兴信贷银行</span><span>欧佩克基金</span><span>出口信贷</span></div>
+      <div class="im-stack"><b>今天的新线索</b><i>已翻成中文</i><i>已判定是不是水务</i><i>已归到国别、商机</i></div>
+    </div>
+    <div class="intro-text">
+      <h2>公开渠道,<br>汇成一处。</h2>
+      <p>开发银行的项目库、各国的采购网、行业新闻,后台每天早上自动收一遍:翻成中文,判定是不是水务,归到国别和商机。不用再一个网站一个网站地翻。</p>
+      <a class="more" href="how.html">看看工作原理</a>
+    </div>
+  </div>
+  <div class="intro-row">
+    <div class="intro-media im-brief" aria-hidden="true">
+      <div class="im-paper">
+        <div class="im-h"><b>每日简报</b><span>今天 8:30</span></div>
+        <div class="im-k">摘要</div>
+        <div class="im-bar w90"></div><div class="im-bar w70"></div>
+        <div class="im-k">新线索</div>
+        <div class="im-li"><i class="dot"></i><div class="im-bar w60"></div><span class="im-tag">招标</span><sup>1</sup></div>
+        <div class="im-li"><i class="dot"></i><div class="im-bar w50"></div><span class="im-tag t2">项目动态</span><sup>2</sup></div>
+        <div class="im-li"><i class="dot"></i><div class="im-bar w55"></div><span class="im-tag t3">资格预审</span><sup>3</sup></div>
+        <div class="im-k">快到的节点</div>
+        <div class="im-li"><i class="dot amber"></i><div class="im-bar w40"></div><span class="im-tag t4">还有 5 天</span></div>
+      </div>
+    </div>
+    <div class="intro-text">
+      <h2>每天早上,<br>一份简报。</h2>
+      <p>采集完,助手把新线索写成简报:新到了哪些、哪些值得跟、哪些节点快到了。每一句都标着出处,点开就是原文;关注的国家排在前面。</p>
+      <a class="more" href="analysis.html">去线索分析</a>
+    </div>
+  </div>
+  <div class="intro-row">
+    <div class="intro-media im-kpi" aria-hidden="true">
+      <div class="im-sheet">
+        <div class="im-h"><b>国别概况</b><span>示例</span></div>
+        <div class="im-tiles">
+          <div class="im-t"><i>5.2<small>%</small></i><span>GDP 实际增速</span></div>
+          <div class="im-t"><i>73.9<small>%</small></i><span>安全饮水覆盖</span></div>
+          <div class="im-t bad"><i>−23.4<small>%</small></i><span>经常账户/GDP</span></div>
+          <div class="im-t bad"><i>3.3<small>分</small></i><span>用水压力</span></div>
+        </div>
+        <div class="im-bar w90"></div><div class="im-bar w70"></div><div class="im-bar w55"></div>
+        <div class="im-chips"><span>机构与法规</span><span>规模以上城市</span><span>水厂</span><span>水价</span></div>
+      </div>
+    </div>
+    <div class="intro-text">
+      <h2>国家与城市,<br>一页看清。</h2>
+      <p>国别概况把宏观经济、水务指标、机构法规和规模以上城市放在一处;城市概况看人口与经济、水价、水厂分布和水风险。关键数字放在最前,不利的标红。</p>
+      <a class="more" href="country.html">看国别概况</a>
+    </div>
+  </div>
+  <div class="intro-row">
+    <div class="intro-media im-map" aria-hidden="true">
+      <svg class="im-world" viewBox="0 0 1000 379" preserveAspectRatio="xMidYMid meet" role="img" aria-label="示意地图"><path class="land" d="M402 202L398 194L386 184L387 180L384 176L389 164L389 156L385 154L395 135L410 123L413 112L422 107L425 101L440 103L450 98L481 95L486 97L483 108L501 113L503 116L514 120L518 118L518 114L524 111L550 118L558 116L567 117L575 105L576 97L563 100L556 97L553 99L547 98L540 92L543 90L540 86L565 78L583 82L596 79L594 76L578 67L587 60L571 64L573 67L577 66L568 70L563 67L566 64L557 62L545 77L550 82L541 85L542 83L537 82L528 84L528 90L532 94L528 94L528 98L522 93L529 92L522 92L516 85L516 79L493 65L490 66L491 71L513 85L507 84L508 90L504 93L502 85L478 70L470 74L458 75L458 79L449 83L445 87L447 90L439 97L426 100L421 96L415 96L413 90L416 82L414 74L419 72L441 73L443 64L429 55L441 55L440 51L446 53L452 47L462 45L459 44L463 39L478 36L475 28L479 26L477 25L484 23L486 27L480 33L498 37L508 33L522 32L524 23L534 24L534 20L531 20L530 17L553 14L549 12L529 15L523 12L522 4L530 0L1000 0L1000 13L997 15L1000 17L958 17L929 33L935 34L935 36L937 35L937 37L941 37L942 35L947 35L952 42L947 56L929 73L922 76L917 74L910 80L910 82L902 87L908 95L908 103L898 106L899 93L893 93L894 88L891 85L879 90L883 84L880 82L871 89L867 89L872 96L878 93L884 95L872 103L882 115L879 115L882 118L878 121L882 122L881 127L862 147L855 149L852 146L852 149L840 154L841 156L839 152L834 151L828 154L824 161L835 174L837 182L836 188L828 191L826 195L821 198L822 193L807 183L807 180L803 181L801 196L803 195L805 203L815 209L819 224L808 218L804 206L797 199L799 183L795 170L793 167L787 172L783 171L782 159L776 155L773 147L770 146L769 151L758 152L755 157L733 173L732 191L723 200L709 171L706 149L704 153L698 154L693 149L698 147L688 144L684 137L666 139L654 137L649 132L642 134L631 129L625 121L618 121L628 140L629 136L631 136L629 141L631 143L640 142L647 135L650 142L656 145L660 149L653 156L653 161L643 168L603 183L598 166L587 154L584 144L570 128L571 123L568 129L563 122L574 147L578 150L580 161L584 164L588 174L600 183L601 186L599 187L606 191L628 186L629 191L618 213L590 238L586 245L587 258L591 267L591 284L571 300L573 315L564 320L562 331L541 349L518 353L514 351L510 346L511 342L501 326L498 309L488 291L491 277L496 271L490 251L494 249L491 250L478 231L481 225L481 214L477 211L468 213L463 207L459 206L439 212L432 210L420 213L402 202ZM897 344L888 350L875 350L868 354L857 351L860 343L851 322L853 323L852 320L854 323L851 315L852 309L863 302L879 298L883 290L885 288L888 291L888 287L899 278L904 282L909 282L912 274L920 272L918 268L935 272L930 282L946 292L951 286L955 267L960 280L965 282L969 296L977 300L981 308L985 309L985 313L993 319L995 330L993 341L985 351L982 362L968 368L964 364L959 367L948 364L945 357L940 356L940 352L936 355L939 346L931 353L924 343L915 341L897 344ZM987 249L981 251L976 249L985 248L988 244L991 244L987 249ZM940 255L942 257L939 248L924 241L921 243L918 239L925 236L919 237L914 233L919 230L925 231L929 240L939 234L961 242L974 251L971 253L972 255L985 266L974 264L963 256L957 258L959 261L956 262L943 258L942 257L938 259L940 255ZM965 378L963 374L976 375L976 379L965 378ZM957 78L948 77L950 80L946 80L946 76L952 74L953 66L967 74L957 78ZM962 53L958 53L956 57L959 63L953 64L955 46L952 41L956 34L962 53ZM914 106L920 102L932 101L935 95L937 95L937 97L941 95L947 88L946 84L951 81L954 87L950 92L948 103L946 101L942 105L942 103L934 104L935 106L931 109L929 108L930 105L914 106ZM920 110L921 107L927 106L926 110L920 110ZM913 117L913 111L909 110L913 107L918 111L913 117ZM905 241L904 239L909 238L914 241L905 241ZM889 262L901 259L888 266L889 262ZM894 209L889 206L888 201L882 203L886 198L889 200L894 196L894 194L898 201L897 205L896 202L894 209ZM876 229L877 234L887 231L880 235L885 244L880 245L878 238L876 248L874 249L871 238L876 229ZM876 228L878 224L889 226L894 223L890 227L876 228ZM881 178L889 179L890 184L884 179L884 181L877 179L878 177L874 172L876 171L877 162L883 163L884 168L881 178ZM877 149L876 144L881 138L877 149ZM871 225L867 226L861 241L856 243L852 240L840 239L835 227L837 222L843 223L844 219L859 210L863 204L872 210L865 216L871 225ZM823 253L825 250L835 253L843 251L855 257L855 259L823 253ZM836 163L834 160L837 157L843 157L841 162L836 163ZM817 229L816 231L825 239L824 249L820 249L812 243L799 223L786 209L795 210L817 229ZM733 193L738 201L738 205L733 207L733 193ZM603 291L605 286L616 282L623 271L627 284L624 284L615 318L609 320L604 318L601 308L605 300L603 291ZM520 1L508 6L508 12L514 15L506 19L505 26L497 31L493 31L487 18L484 16L473 21L467 20L468 17L465 16L468 14L465 13L467 12L464 12L465 7L487 1L481 1L482 0L520 1ZM491 93L502 92L500 98L491 93ZM475 83L481 82L481 89L477 90L475 83ZM436 35L434 33L428 33L429 29L426 31L426 22L429 19L435 19L433 23L440 23L435 29L441 30L446 35L446 40L453 41L448 45L451 46L428 50L437 44L428 43L436 35ZM410 43L413 39L411 35L416 35L417 32L425 32L427 34L424 35L424 42L410 43ZM388 0L380 2L365 0L388 0ZM119 178L110 171L97 171L71 159L69 148L46 125L43 117L37 115L37 121L55 144L53 146L46 140L45 135L37 130L39 127L33 122L27 109L16 105L9 92L5 90L2 76L4 62L1 57L8 57L8 60L10 57L6 51L0 49L0 0L127 0L119 2L123 3L116 4L111 9L108 18L114 19L115 25L123 24L153 32L152 39L162 46L166 41L162 33L173 28L172 23L166 18L170 14L167 11L167 6L183 5L191 10L198 10L197 19L207 20L216 13L227 25L227 29L241 34L232 38L239 35L247 38L248 42L232 49L209 49L180 68L203 55L212 53L217 54L210 57L215 58L213 60L216 63L228 67L212 73L210 70L218 66L206 67L196 72L193 77L195 79L181 84L175 95L174 88L176 101L155 118L161 133L159 138L157 139L151 129L151 125L146 121L124 120L128 124L111 122L102 126L98 132L97 148L104 162L109 164L120 162L125 153L136 152L129 172L143 171L150 175L147 189L153 197L162 194L172 200L177 191L190 184L192 185L189 187L189 193L191 196L191 189L197 188L196 185L204 191L224 190L222 191L229 195L227 198L235 200L242 209L253 208L264 214L268 224L260 234L265 232L266 235L270 236L278 231L287 235L287 240L291 237L304 239L320 248L322 258L307 276L306 291L300 307L274 319L272 331L262 342L266 337L264 337L253 352L240 352L239 344L237 352L244 359L241 365L224 367L224 375L214 374L214 379L183 377L183 362L191 345L196 300L195 294L191 290L175 281L164 258L157 250L156 244L162 238L157 237L157 232L160 226L164 224L171 216L170 205L165 197L159 199L159 203L150 200L143 192L141 193L140 189L133 181L119 178ZM297 4L294 5L296 7L292 14L287 14L281 10L275 11L262 1L302 0L297 2L297 4ZM266 235L266 229L273 230L272 234L266 235ZM254 59L247 61L250 59L234 58L244 45L248 44L244 51L246 49L249 53L256 53L254 55L257 55L254 58L258 59L256 62L253 61L254 59ZM215 1L214 5L200 1L210 8L187 0L215 1ZM202 163L194 163L191 166L180 163L188 162L185 157L202 163ZM171 155L154 148L145 149L149 146L158 146L182 156L169 158L171 155Z"/><g class="pts"><circle class="ds" cx="613" cy="141" r="7" style="animation-delay:0.0s"/><circle class="ds" cx="644" cy="139" r="7" style="animation-delay:0.4s"/><circle class="ds" cx="630" cy="138" r="7" style="animation-delay:0.7s"/><circle class="ds" cx="618" cy="124" r="7" style="animation-delay:1.1s"/><circle class="ds" cx="655" cy="144" r="7" style="animation-delay:1.5s"/><circle class="ds" cx="194" cy="348" r="7" style="animation-delay:1.9s"/><circle class="ds" cx="88" cy="137" r="7" style="animation-delay:2.2s"/><circle class="ds" cx="860" cy="343" r="7" style="animation-delay:2.6s"/><circle class="ds" cx="24" cy="107" r="7" style="animation-delay:3.0s"/><circle class="ds" cx="433" cy="84" r="7" style="animation-delay:0.3s"/><circle class="ds" cx="531" cy="93" r="7" style="animation-delay:0.7s"/><circle class="dl" cx="558" cy="122" r="7" style="animation-delay:1.1s"/><circle class="dl" cx="686" cy="140" r="7" style="animation-delay:1.4s"/><circle class="dl" cx="712" cy="116" r="7" style="animation-delay:1.8s"/><circle class="dl" cx="419" cy="109" r="7" style="animation-delay:2.2s"/><circle class="dl" cx="483" cy="97" r="7" style="animation-delay:2.5s"/><circle class="dl" cx="578" cy="233" r="7" style="animation-delay:2.9s"/><circle class="dl" cx="171" cy="272" r="7" style="animation-delay:0.3s"/><circle class="dl" cx="694" cy="81" r="7" style="animation-delay:0.7s"/><circle class="dl" cx="384" cy="176" r="7" style="animation-delay:1.0s"/><circle class="dl" cx="454" cy="181" r="7" style="animation-delay:1.4s"/><circle class="dl" cx="733" cy="182" r="7" style="animation-delay:1.8s"/><circle class="dl" cx="706" cy="147" r="7" style="animation-delay:2.1s"/><circle class="dl" cx="605" cy="110" r="7" style="animation-delay:2.5s"/><circle class="db" cx="575" cy="114" r="7" style="animation-delay:2.9s"/><circle class="db" cx="93" cy="159" r="7" style="animation-delay:0.2s"/><circle class="db" cx="550" cy="82" r="7" style="animation-delay:0.6s"/><circle class="db" cx="721" cy="74" r="7" style="animation-delay:1.0s"/><circle class="db" cx="625" cy="84" r="7" style="animation-delay:1.4s"/></g></svg>
+      <div class="im-legend"><span><i style="background:#0d9488"></i>自付型</span><span><i style="background:#7c3aed"></i>贷款型</span><span><i style="background:#dc2626"></i>两类都是</span><em>示意</em></div>
+    </div>
+    <div class="intro-text">
+      <h2>哪里缺水,<br>哪里付得起。</h2>
+      <p>把水风险、人均 GDP 和开发性贷款叠在一张地图上,推算趋势机会:缺水又有钱的城市是自付型,缺水又有贷款进来的是贷款型。这是看方向的背景,具体项目还看线索。</p>
+      <a class="more" href="trend.html">看趋势机会</a>
+    </div>
+  </div>
+  <div class="intro-row">
+    <div class="intro-media im-flow" aria-hidden="true">
+      <div class="im-track">
+        <div class="im-run"></div>
+        <div class="im-st">建议</div><div class="im-st">跟踪中</div><div class="im-st">准备投标</div><div class="im-st">已投标</div><div class="im-st">中标</div>
+      </div>
+      <div class="im-cal"><b>日历</b><span><i class="dot amber"></i>投标截止</span><span><i class="dot"></i>开标</span><span><i class="dot green"></i>签约</span><em>可订阅到手机日历</em></div>
+    </div>
+    <div class="intro-text">
+      <h2>从线索到商机,<br>一条线跟到底。</h2>
+      <p>值得跟的线索归进商机,阶段从建议、跟踪中一路走到中标;投标截止、开标这些节点进日历,能订阅到手机。谁在跟、下一步做什么,一眼看清。</p>
+      <a class="more" href="opps.html">去商机总览</a>
+    </div>
+  </div>
+  <div class="intro-row">
+    <div class="intro-media im-safe" aria-hidden="true">
+      <div class="im-lock"><svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#0b1b3a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><circle cx="12" cy="16" r="1.2" fill="#0b1b3a"/></svg></div>
+      <div class="im-badges"><span>自己的服务器</span><span>登录才能看</span><span>整库不外放</span><span>模型只读所需文字</span></div>
+    </div>
+    <div class="intro-text">
+      <h2>数据,<br>留在自己手里。</h2>
+      <p>数据库建在自己的服务器上,登录才能看,整库不交给任何第三方平台。AI 模型只读到写摘要、做判定、理解提问所需的那几段文字(公开来源的线索原文、你问的那句话),从来拿不到整个数据库。</p>
+      <a class="more" href="ontology.html">看看系统里存了什么</a>
+    </div>
+  </div>
+</section>
+<!-- 提问后的对话模式:提问框与说明挪到这里,固定在页面底部 -->
+<div id="askDock" class="ask-dock"><div class="ask-dock-in" id="askDockIn"></div></div>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const PAL = ["#0e6ba8", "#15803d", "#b45309", "#6d28d9", "#be185d", "#0f766e", "#64748b", "#ca8a04", "#1d4ed8", "#9f1239", "#4d7c0f", "#7c3aed"];
+  let countries = [], byIso = {}, nameOfCid = {}, seq = 0, ready = null;
+  const charts = [];
+
+  /* ---------- 计划 → 表格的条件 ---------- */
+  function countryIds(f) {
+    const ids = f.countries.map((c) => (byIso[c.iso3] || {}).id).filter(Boolean);
+    if (f.regions && f.regions.length) countries.filter((c) => f.regions.includes(P.regionOf(c))).forEach((c) => ids.push(c.id));
+    return [...new Set(ids)];
+  }
+  function dateConds(oid, prop, f) {
+    const c = [];
+    if (f.days) c.push(P.cond(oid, prop, "isOnOrAfter", P.onDay(P.addDays(P.today(), -f.days))));  // 与首页「最近 N 天」同一算法,数字能对上
+    if (f.from) c.push(P.cond(oid, prop, "isOnOrAfter", P.onDay(f.from)));
+    if (f.to) c.push(P.cond(oid, prop, "isOnOrBefore", P.onDay(f.to)));
+    if (f.future_days) c.push(P.cond(oid, prop, "isOnOrAfter", P.onDay(P.today())), P.cond(oid, prop, "isOnOrBefore", P.onDay(P.addDays(P.today(), f.future_days))));
+    return c;
+  }
+  function leadConds(f) {
+    const c = [];
+    const cids = countryIds(f);
+    if (f.countries.length || (f.regions || []).length) c.push(cids.length ? P.cond("lead", "country", "isAnyOf", cids) : P.cond("lead", "country", "is", "__none__"));
+    if (f.sectors.length) c.push(P.cond("lead", "sectors", "hasAnyOf", f.sectors));
+    if (f.categories.length) c.push(P.cond("lead", "category", "isAnyOf", f.categories));
+    if (f.funders.length) c.push(P.or(...f.funders.map((g) => P.funderCond("lead", "funder", g))));
+    if (f.status.length) c.push(P.cond("lead", "status", "isAnyOf", f.status));
+    if (f.relevant === true || f.relevant === false) c.push(P.cond("lead", "relevant", "is", f.relevant));
+    // 关键词与行业术语(本体 terms)都查标题和中文摘要:标题多为英、法、西等原文,中文词只能在摘要里找到;每个术语的相关词含任一个即算
+    const text = (ws) => P.or(...ws.flatMap((k) => [P.cond("lead", "title", "contains", k), P.cond("lead", "summary_zh", "contains", k)]));
+    if (f.keywords.length) c.push(text(f.keywords));
+    (f.terms || []).forEach((t) => c.push(text(t.match)));
+    return c.concat(dateConds("lead", "found_at", f));
+  }
+  function msConds(f) {
+    const c = [];
+    const cids = countryIds(f);
+    if (f.countries.length) c.push(cids.length ? P.cond("milestone", "country", "isAnyOf", cids) : P.cond("milestone", "country", "is", "__none__"));
+    if (f.kinds.length) c.push(P.cond("milestone", "kind", "isAnyOf", f.kinds));
+    return c.concat(dateConds("milestone", "day", f));
+  }
+  function rpConds(f) {
+    const c = [];
+    const cids = countryIds(f);
+    if (f.countries.length) c.push(cids.length ? P.cond("report", "country", "isAnyOf", cids) : P.cond("report", "country", "is", "__none__"));
+    if (f.kinds.length) c.push(P.cond("report", "kind", "isAnyOf", f.kinds));
+    return c.concat(dateConds("report", "day", f));
+  }
+  async function oppRows(f) {
+    const rows = await P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "sectors", "financing", "next_milestone", "public_stage", "priority", "last_followup", "lead_count"] });
+    const cids = new Set(countryIds(f));
+    const want = new Set(f.sectors_fine || []);
+    return rows.filter((o) => {
+      if ((f.countries.length || (f.regions || []).length) && !cids.has(P.linkId(P.get("opportunity", o, "country")))) return false;
+      const st = P.get("opportunity", o, "stage") || "建议";
+      if (f.tracked && !P.tracked([o]).length) return false;
+      if (f.stages.length && !f.stages.includes(st)) return false;
+      if (want.size && !(P.get("opportunity", o, "sectors") || []).some((s) => want.has(s))) return false;
+      if (f.funders.length && !P.funderGroups(P.get("opportunity", o, "financing")).some((g) => f.funders.includes(g))) return false;
+      const name = ((P.get("opportunity", o, "name_zh") || "") + " " + (P.get("opportunity", o, "code") || "")).toLowerCase();
+      if (f.keywords.length && !f.keywords.some((k) => name.includes(k.toLowerCase()))) return false;
+      if ((f.terms || []).some((t) => !t.match.some((k) => name.includes(k.toLowerCase())))) return false;
+      return true;
+    });
+  }
+
+  /* ---------- 呈现 ---------- */
+  const stageTag = (s) => '<span class="stage s-' + P.esc(s || "建议") + '">' + P.esc(s || "建议") + "</span>";
+  function leadTable(rows) {
+    return P.tableHtml(["标题", "国别", "类别", "发现", "所属商机", ""], P.followFirst(rows, "lead").map((l) => { const g = (p) => P.get("lead", l, p);
+      return [P.titleCell(l), P.text(g("country")), g("category") || "", P.day(g("found_at")), P.text(g("opportunity")), P.raw(P.open("lead", l.id))]; }));
+  }
+  function oppTable(rows) {
+    return P.tableHtml(["商机", "国别", "我方阶段", "领域", "负责人", "下一节点", "线索数"], P.followFirst(rows, "opportunity").map((o) => { const g = (p) => P.get("opportunity", o, p);
+      return [P.raw(P.star("opportunity", o) + P.oppLink(o)), P.text(g("country")), P.raw(stageTag(g("stage"))), P.text(g("sectors")), P.text(g("owner")), P.text(g("next_milestone")), String(g("lead_count") || 0)]; }));
+  }
+  function msTable(rows) {
+    return P.tableHtml(["日期", "类型", "商机 / 线索", "国别", "状态", "说明", ""], rows.map((m) => { const g = (p) => P.get("milestone", m, p);
+      const oid = P.linkId(g("opportunity"));
+      return [P.day(g("day")), g("kind") || "", P.raw(oid ? '<a href="' + P.oppUrl(oid) + '">' + P.esc(P.text(g("opportunity"))) + "</a>" : P.esc(P.text(g("lead")))), P.text(g("country")), g("status") || "", (g("label") || "").slice(0, 60), P.raw(P.open("milestone", m.id))]; }));
+  }
+  function rpTable(rows) {
+    return P.tableHtml(["日期", "类型", "范围", "文件"], rows.map((r) => { const g = (p) => P.get("report", r, p);
+      const files = (g("file") || []).map((f) => '<a href="' + P.esc(P.fileUrl(f)) + '" target="_blank" rel="noopener">' + P.esc(f.name) + "</a>").join("<br>");
+      return [P.day(g("day")), (g("kind") || "") + (g("edition") === "公开版" ? "(公开版)" : ""), [P.text(g("country")), P.text(g("opportunity")), g("period")].filter(Boolean).join(" · "), P.raw(files || P.esc(g("gen_status") || ""))]; }));
+  }
+  /* 分组:对象的记录 → {组名: 条数};「按天」用发现时间 / 日期 */
+  function groupOf(plan, r) {
+    const oid = plan.object, g = (p) => P.get(oid, r, p), gb = plan.group_by;
+    if (gb === "country") { const id = P.linkId(g("country")); return [id ? (nameOfCid[id] || P.text(g("country"))) : "未定国别"]; }
+    if (gb === "category") return [g("category") || "未填"];
+    if (gb === "sectors") { const s = g("sectors") || []; return s.length ? s : ["未填"]; }
+    if (gb === "funder") return oid === "lead" ? P.funderGroups(g("funder") || "") : P.funderGroups(g("financing") || "");
+    if (gb === "day") return [P.day(g(oid === "lead" ? "found_at" : "day")) || "未填"];
+    if (gb === "status") return [g("status") || "未填"];
+    if (gb === "source") return [P.text(g("source")) || "未填"];
+    if (gb === "stage") return [g("stage") || "建议"];
+    if (gb === "kind") return [g("kind") || "未填"];
+    return ["全部"];
+  }
+  const GROUP_PROP = { lead: { country: "country", category: "category", sectors: "sectors", funder: "funder", day: "found_at", status: "status", source: "source" },
+    milestone: { country: "country", kind: "kind", day: "day" }, report: { country: "country", kind: "kind" } };
+
+  function understoodHtml(plan) {
+    const tag = plan.parsed_by === "model" ? '<span class="tag intel" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
+    const items = (plan.understood || []).map(([k, v]) => '<span class="chip-btn on" style="cursor:default">' + P.esc(k) + ":" + P.esc(v) + "</span>").join("");
+    const un = (plan.unresolved || []).length ? '<span class="muted small">没认出来:' + plan.unresolved.map(P.esc).join("、") + "</span>" : "";
+    return '<div class="frow understood"><b>理解为</b>' + items + tag + un + "</div>";
+  }
+  function linkOut(plan) {
+    const f = plan.filters;
+    if (plan.object === "lead") {
+      const q = new URLSearchParams();
+      if (f.countries.length === 1 && byIso[f.countries[0].iso3]) q.set("c", byIso[f.countries[0].iso3].id);
+      if (f.sectors.length) q.set("s", f.sectors.join(","));
+      if (f.categories.length === 1) q.set("k", f.categories[0]);
+      if (f.funders.length === 1) q.set("f", f.funders[0]);
+      if (f.days && [7, 30, 90].includes(f.days)) q.set("w", String(f.days));
+      return '<a href="overview.html?' + q + '">在线索总览按这些条件看漏斗与地图 →</a> · <a href="analysis.html">线索分析 →</a>';
+    }
+    if (plan.object === "opportunity") return '<a href="opps.html">商机总览 →</a>';
+    if (plan.object === "milestone") return '<a href="calendar.html">日历 →</a>';
+    return '<a href="reports.html">报告页 →</a>';
+  }
+
+  /* 提问里有网址:看这条链接(读原文、信源、库里相关、公开渠道、入库建议);网址以外的字是附言,一并交给模型核对 */
+  const URL_RE = /[Hh][Tt][Tt][Pp][Ss]?:\/\/[^\s<>"'\u0080-\uffff]+/;  // 与 core/link_check.py 同:网址只认 ASCII,后面紧跟的中文不算;不加 i 标志(加了 s 会被当成 ſ 排除)
+  const ADV_CLS = { "入库": "go", "先核实": "check", "不入库": "no", "已在库": "have" };
+  const LV_CLS = { "高": "hi", "中": "mid", "低": "lo", "待核实": "lo" };
+  function leadLine(l) {
+    const zh = l.project_name || (l.summary_zh || "").slice(0, 60);
+    const name = zh ? P.esc(zh) + (l.title && l.title !== zh ? ' <span class="muted small">' + P.esc(l.title.slice(0, 90)) + "</span>" : "") : P.esc(l.title || "(无标题)");
+    const meta = [l.country, l.found_at, l.status, l.opportunity ? "商机:" + l.opportunity : ""].filter(Boolean).map(P.esc).join(" · ");
+    return "<li>" + (l.url ? '<a href="' + P.esc(l.url) + '" target="_blank" rel="noopener">' + name + "</a>" : name) + ' <span class="muted small">' + meta + "</span> " + P.open("lead", l.id) + "</li>";
+  }
+  async function linkAnswer(url, note, el) {
+    el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="frow understood"><b>理解为</b><span class="chip-btn on" style="cursor:default">看一条链接:读原文、判断信源、查库里相关,给入库建议</span></div>');
+    el.querySelector(".a-body").innerHTML = '<p class="muted">读原文、查库里和公开渠道…(要十几秒到半分钟)</p>';
+    const r = await P.checkLink(url, note);
+    if (!r) return;
+    const body = el.querySelector(".a-body");
+    if (!r.ok) { body.innerHTML = '<div class="warn">' + P.esc(r.error || "没看成") + "</div>"; return; }
+    const a = r.analysis || {}, s = r.source || {}, adv = r.advice || {};
+    const h = [];
+    h.push('<div class="lk-advice ' + (ADV_CLS[adv.action] || "") + '">建议:' + P.esc(adv.action || "先核实") + "</div>");
+    h.push('<p class="lk-why">' + P.esc(adv.reason || "") + "</p>");
+    if (a.mismatch) h.push('<div class="warn small"><b>和你说的对不上:</b>' + P.esc(a.mismatch) + "</div>");
+    h.push("<h2>原文</h2><p>" + '<a href="' + P.esc(r.final_url || url) + '" target="_blank" rel="noopener">' + P.esc(a.title_zh || r.title || url) + "</a>" +
+      (a.title_zh && r.title ? ' <span class="muted small">' + P.esc(r.title) + "</span>" : "") + "</p>");
+    if (a.summary_zh) h.push("<p>" + P.esc(a.summary_zh) + "</p>");
+    const kv = [["项目", a.project_name], ["国别", r.country && r.country.name], ["城市或地区", a.city], ["出资方", a.funder], ["规模或金额", a.amount], ["进展", a.stage], ["信息日期", r.published], ["领域", (a.sectors || []).join("、")]].filter((x) => x[1]);
+    if (kv.length) h.push('<dl class="lk-kv">' + kv.map(([k, v]) => "<dt>" + P.esc(k) + "</dt><dd>" + P.esc(v) + "</dd>").join("") + "</dl>");
+    const cred = (a.credibility && a.credibility.level) || s.level;
+    h.push("<h2>信源</h2><p>" + '<span class="lk-lv ' + (LV_CLS[cred] || "mid") + '">可信度 ' + P.esc(cred || "待核实") + "</span>" + P.esc(s.domain || "") + "(" + P.esc(s.label || s.kind || "") + ")" +
+      (s.known ? ',库里已有信源「' + P.esc(s.known) + "」" : "") + "</p>" + (a.credibility && a.credibility.reason ? "<p>" + P.esc(a.credibility.reason) + "</p>" : ""));
+    if (a.freshness) h.push("<h2>时效</h2><p>" + P.esc(a.freshness) + "</p>");
+    h.push("<h2>库里</h2>");
+    if ((r.same_url || []).length) h.push("<p><b>这个网址已经在库里:</b></p><ul class=\"list\">" + r.same_url.map(leadLine).join("") + "</ul>");
+    if ((r.related_leads || []).length) h.push("<p>可能相关的线索 " + r.related_leads.length + " 条(按项目名、地名搜的,请人看一眼是不是同一项目):</p><ul class=\"list\">" + r.related_leads.map(leadLine).join("") + "</ul>");
+    if ((r.related_opps || []).length) h.push("<p>可能相关的商机:" + r.related_opps.map((o) => '<a href="' + P.oppUrl(o.id) + '">' + P.esc(o.name_zh || o.code || "商机") + "</a>" + (o.stage ? '<span class="muted small">(' + P.esc(o.stage) + ")</span>" : "")).join("、") + "</p>");
+    if (!(r.same_url || []).length && !(r.related_leads || []).length && !(r.related_opps || []).length) h.push('<p class="muted">没找到同一项目的线索或商机。</p>');
+    if ((r.outside || []).length) h.push("<h2>公开渠道</h2><p class=\"muted small\">世界银行检索和近三个月的新闻,自动搜的,未必是同一项目:</p><ul class=\"list\">" + r.outside.map((x) => '<li><a href="' + P.esc(x.url) + '" target="_blank" rel="noopener">' + P.esc(x.title) + '</a> <span class="muted small">' + P.esc([x.kind, x.date].filter(Boolean).join(" · ")) + "</span></li>").join("") + "</ul>");
+    if ((a.verify || []).length) h.push("<h2>要核实</h2><ul class=\"list\">" + a.verify.map((v) => "<li>" + P.esc(v) + "</li>").join("") + "</ul>");
+    h.push('<div class="lk-act"></div>');
+    if ((r.notes || []).length) h.push('<p class="muted small">' + r.notes.map(P.esc).join(";") + "</p>");
+    if (a.model) h.push('<p class="muted small">分析由模型(' + P.esc(a.model) + ")读这一页原文写出,只是建议;入库后照常由人确认归属。</p>");
+    body.innerHTML = h.join("");
+    const act = body.querySelector(".lk-act");
+    if ((r.same_url || []).length) return;
+    if (!(await P.canWrite())) { act.innerHTML = '<span class="muted small">你的帐号只能看,不能入库。</span>'; return; }
+    act.innerHTML = '<button type="button" class="btn ' + (adv.action === "不入库" ? "" : "primary") + '">收进线索库</button><span class="muted small">记为同事上传;后台几分钟内补全摘录、线索号和商机建议。</span>';
+    act.querySelector("button").onclick = async (ev) => {
+      const b = ev.currentTarget; b.disabled = true; b.textContent = "入库中…";
+      try {
+        const d = Object.assign({}, r.draft);
+        const iso = d.country_iso3; delete d.country_iso3;
+        if (iso && byIso[iso]) d.country = byIso[iso].id;
+        const rec = await P.create("lead", d);
+        act.innerHTML = '<b style="color:var(--ok)">已收进线索库。</b>' + (rec ? P.open("lead", rec.id) : "");
+      } catch (e) { b.disabled = false; b.textContent = "收进线索库"; P.toast(e.message || String(e), true); }
+    };
+  }
+
+  async function answer(q, el) {
+    const plan = await P.ask(q);
+    if (!plan) return;
+    const f = plan.filters, body = document.createElement("div");
+    el.querySelector(".a-body").replaceWith(body); body.className = "a-body";
+    el.querySelector(".a-head").insertAdjacentHTML("beforeend", understoodHtml(plan));
+    if (plan.note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<p class="muted small">' + P.esc(plan.note) + "</p>");
+    if (plan.scope_note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="warn small">' + P.esc(plan.scope_note) + "</div>");  // 本体 data_scope:不在采集范围的国家
+    if (plan.intent === "help") {
+      body.innerHTML = '<p>没听懂这句。可以这样问:</p><ul class="list">' + (plan.examples || []).map((e) => '<li><a href="#" class="ex">' + P.esc(e) + "</a></li>").join("") + "</ul>";
+      body.querySelectorAll(".ex").forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); submit(a.textContent); }; });
+      return;
+    }
+    if (plan.intent === "report") {
+      const c = f.countries[0];
+      body.innerHTML = '<p>生成报告由助手直接发起要到第二步;现在可以到报告页申请,后台两分钟内生成 Word:</p><p><a class="btn" href="reports.html' + (c && byIso[c.iso3] ? "?country=" + encodeURIComponent(byIso[c.iso3].id) : "") + '">去报告页' + (c ? "(" + P.esc(c.name) + ")" : "") + " →</a></p>";
+      return;
+    }
+    body.innerHTML = '<p class="muted">查表中…</p>';
+    const oid = plan.object;
+    if (plan.intent === "count") {
+      let n;
+      if (oid === "lead") n = await P.count("lead", P.and(...leadConds(f)));
+      else if (oid === "milestone") n = await P.count("milestone", P.and(...msConds(f)));
+      else if (oid === "report") n = await P.count("report", P.and(...rpConds(f)));
+      else n = (await oppRows(f)).length;
+      body.innerHTML = '<div class="cards"><div class="card"><div class="n">' + n + '</div><div class="l">' + P.esc({ lead: "条线索", opportunity: "个商机", milestone: "个时间节点", report: "份报告" }[oid]) + '</div></div></div><p><a href="#" class="show-list">列出清单</a> · ' + linkOut(plan) + "</p>";
+      body.querySelector(".show-list").onclick = async (ev) => { ev.preventDefault(); const d = document.createElement("div"); body.appendChild(d); d.innerHTML = '<p class="muted">读取中…</p>'; try { d.innerHTML = await listHtml(plan, Math.min(plan.limit || 50, 200)); } catch (e) { P.fail(d, e); } };
+      return;
+    }
+    if (plan.intent === "chart") { await chart(plan, body); return; }
+    body.innerHTML = await listHtml(plan, plan.limit || 50) + "<p>" + linkOut(plan) + "</p>";
+  }
+  async function listHtml(plan, limit) {
+    const f = plan.filters, oid = plan.object;
+    let rows;
+    if (oid === "lead") rows = await P.records("lead", { filter: P.and(...leadConds(f)), take: limit, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "country", "category", "found_at", "opportunity", "status", "project_name", "summary_zh"] });
+    else if (oid === "milestone") rows = await P.records("milestone", { filter: P.and(...msConds(f)), take: limit, orderBy: [{ fieldId: P.f("milestone", "day"), order: "asc" }], props: ["opportunity", "lead", "country", "kind", "day", "status", "label"] });
+    else if (oid === "report") rows = await P.records("report", { filter: P.and(...rpConds(f)), take: limit, orderBy: [{ fieldId: P.f("report", "day"), order: "desc" }], props: ["kind", "day", "period", "country", "opportunity", "edition", "file", "gen_status"] });
+    else rows = (await oppRows(f)).slice(0, limit);
+    const head = '<p class="muted small">' + (rows.length >= limit ? "最新 " + rows.length + " 条(只显示前 " + limit + ")" : rows.length + " 条") + "</p>";
+    return head + ({ lead: leadTable, opportunity: oppTable, milestone: msTable, report: rpTable }[oid])(rows);
+  }
+  async function chart(plan, body) {
+    const f = plan.filters, oid = plan.object, gb = plan.group_by;
+    let rows;
+    if (oid === "opportunity") rows = await oppRows(f);
+    else {
+      const conds = { lead: leadConds, milestone: msConds, report: rpConds }[oid](f);
+      const props = [GROUP_PROP[oid][gb]].filter(Boolean);
+      rows = await P.records(oid, { filter: P.and(...conds), take: 3000, props });
+    }
+    const cnt = {}; rows.forEach((r) => groupOf(plan, r).forEach((g) => { cnt[g] = (cnt[g] || 0) + 1; }));
+    let pairs = Object.entries(cnt);
+    pairs.sort(gb === "day" ? (a, b) => (a[0] < b[0] ? -1 : 1) : (a, b) => b[1] - a[1]);
+    if (gb !== "day" && pairs.length > 20) { const rest = pairs.slice(19).reduce((s, x) => s + x[1], 0); pairs = pairs.slice(0, 19).concat([["其余", rest]]); }
+    const total = rows.length;
+    body.innerHTML = '<p class="muted small">共 ' + total + " " + P.esc({ lead: "条线索", opportunity: "个商机", milestone: "个时间节点", report: "份报告" }[oid]) + (rows.length >= 3000 ? "(只统计了前 3000 条)" : "") + ",按" + P.esc((plan.understood.find((x) => x[0] === "分组") || ["", ""])[1]) + '分;点一柱列出那组。</p><div class="panel"><div class="chart' + (pairs.length > 8 && gb !== "day" ? " tall" : "") + '"></div></div><div class="drill"></div><p>' + linkOut(plan) + "</p>";
+    if (!pairs.length) { body.querySelector(".panel").innerHTML = '<p class="muted">(无)</p>'; return; }
+    const ch = echarts.init(body.querySelector(".chart"));
+    charts.push(ch);
+    const horizontal = gb !== "day";
+    ch.setOption({
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } }, grid: { left: horizontal ? 120 : 40, right: 24, top: 10, bottom: horizontal ? 24 : 60, containLabel: !horizontal },
+      [horizontal ? "yAxis" : "xAxis"]: { type: "category", data: pairs.map((p) => p[0]).reverse(), axisLabel: horizontal ? { width: 110, overflow: "truncate" } : { rotate: 45 }, inverse: false },
+      [horizontal ? "xAxis" : "yAxis"]: { type: "value", minInterval: 1 },
+      series: [{ type: "bar", data: pairs.map((p, i) => ({ value: p[1], itemStyle: { color: gb === "day" ? PAL[0] : PAL[i % PAL.length] } })).reverse(), label: { show: true, position: horizontal ? "right" : "top" } }],
+    });
+    if (!horizontal) ch.setOption({ xAxis: { data: pairs.map((p) => p[0]) }, series: [{ data: pairs.map((p) => ({ value: p[1], itemStyle: { color: PAL[0] } })) }] });
+    ch.on("click", async (p) => {
+      const name = p.name, d = body.querySelector(".drill");
+      d.innerHTML = '<p class="muted">读取中…</p>';
+      try {
+        const sub = rows.filter((r) => groupOf(plan, r).includes(name) || (name === "其余" && !pairs.slice(0, 19).some((x) => groupOf(plan, r).includes(x[0]))));
+        const ids = new Set(sub.map((r) => r.id));
+        let full = sub;
+        if (oid !== "opportunity") {  // 分组时只取了分组字段;列清单再取齐
+          const need = { lead: ["key", "title", "url", "country", "category", "found_at", "opportunity", "status", "project_name", "summary_zh"], milestone: ["opportunity", "lead", "country", "kind", "day", "status", "label"], report: ["kind", "day", "period", "country", "opportunity", "edition", "file", "gen_status"] }[oid];
+          const conds = { lead: leadConds, milestone: msConds, report: rpConds }[oid](f);
+          const more = await P.records(oid, { filter: P.and(...conds), take: 3000, props: need, orderBy: [{ fieldId: P.f(oid, oid === "lead" ? "found_at" : "day"), order: oid === "lead" ? "desc" : "asc" }] });
+          full = more.filter((r) => ids.has(r.id)).slice(0, 200);
+        }
+        d.innerHTML = "<h2>" + P.esc(name) + " · " + full.length + " 条" + (sub.length > full.length ? "(只显示前 200)" : "") + "</h2>" + ({ lead: leadTable, opportunity: oppTable, milestone: msTable, report: rpTable }[oid])(full);
+        d.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (e) { P.fail(d, e); }
+    });
+  }
+
+  /* 首屏一屏放下:量出视频以外的东西(顶栏、标题、提问框、示例、说明、面板留白)一共占多高,写进 --hero-used;
+     CSS 拿「屏幕高度 − 这个数」当视频的高,再乘片子的宽高比(--hero-ratio)得出视频卡的宽,太宽、太窄各有上下限 */
+  function sizeHero() {
+    if (document.body.classList.contains("asked")) return;
+    const hero = $("hero"), media = $("heroMedia"), frame = $("heroFrame");
+    if (!hero || !media || !frame) return;
+    const cs = getComputedStyle(frame);
+    const top = hero.getBoundingClientRect().top + window.scrollY;
+    const used = Math.ceil(top + hero.offsetHeight - media.offsetHeight + parseFloat(cs.paddingBottom || 0) + parseFloat(cs.marginBottom || 0));
+    const root = document.documentElement.style;
+    if (root.getPropertyValue("--hero-used") !== used + "px") root.setProperty("--hero-used", used + "px");
+  }
+  sizeHero();
+  if (window.ResizeObserver) new ResizeObserver(() => sizeHero()).observe($("hero"));
+  window.addEventListener("resize", sizeHero);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeHero);
+
+  /* 提问后切成对话模式:标题、视频、示例全部收起,问题靠右、答案靠左,提问框与说明固定在页面底部;点左上角站名回到完整首页 */
+  function asked() {
+    if (document.body.classList.contains("asked")) return;
+    document.body.classList.add("asked");
+    const v = $("heroVideo"); try { v.pause(); } catch (e) {}
+    $("askDockIn").append($("askForm"), $("llmNote"));
+    /* 把底部提问框的实际高度写进 --dock-h,正文底部按它留白(说明文字换行、手机窄屏都算得准) */
+    const dock = $("askDock");
+    const fit = () => document.documentElement.style.setProperty("--dock-h", dock.offsetHeight + "px");
+    fit();
+    if (window.ResizeObserver) new ResizeObserver(fit).observe(dock); else window.addEventListener("resize", fit);
+  }
+
+  async function submit(q) {
+    q = (q || "").trim();
+    if (!q) return;
+    const id = "a" + (++seq);
+    const el = document.createElement("section"); el.className = "answer"; el.id = id;
+    el.innerHTML = '<div class="a-head"><div class="a-q">' + P.esc(q) + "</div></div>" + '<div class="a-body"><p class="muted">解析中…</p></div>';
+    $("answers").append(el);
+    asked();
+    $("q").value = ""; $("q").placeholder = "继续问…";
+    el.scrollIntoView({ block: "start", behavior: "smooth" });
+    history.replaceState(null, "", location.pathname + "?q=" + encodeURIComponent(q));
+    const link = q.match(URL_RE);
+    try {
+      await ready;
+      if (link) await linkAnswer(link[0].replace(/[.,;:!?]+$/, ""), q.replace(link[0], " ").replace(/\s+/g, " ").trim(), el);
+      else await answer(q, el);
+    } catch (e) { P.fail(el.querySelector(".a-body"), e); }
+  }
+
+  /* 首屏一次画好:示例与说明不等数据,一打开就画;助手说明、视频、读表三件事同时去取,谁先到谁先填。
+     (以前排在「配置 → 角色 → 视频 → 词表 → 国别 → 助手」六次读服务器之后,线上要晚两秒才冒出来,视频卡还跟着再缩一次) */
+  const EXAMPLES = ["最近 7 天埃及有哪些新线索", "世界银行出资的供水项目有多少条", "最近 30 天的招标按国家分", "在跟踪的商机有哪些",
+    "未来 30 天有哪些投标截止", "海水淡化的线索按资金来源统计", "最近的周报"];  // 与 core/assistant.py 的 EXAMPLES 一致(测试核对);后台给的不一样才换
+  function showExamples(list) {
+    $("examples").innerHTML = '<b class="muted small">试试</b>' + list.map((e) => '<button type="button" class="chip-btn">' + P.esc(e) + "</button>").join("");
+    $("examples").querySelectorAll(".chip-btn").forEach((b) => { b.onclick = () => submit(b.textContent); });
+  }
+  showExamples(EXAMPLES);
+  const over = '<a href="overview.html">看线索总览(漏斗、地图、最新报告)→</a> ';
+  $("llmNote").innerHTML = over;
+  $("askForm").onsubmit = (ev) => { ev.preventDefault(); submit($("q").value); };
+  sizeHero();
+  fetch("api/assistant/health", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((health) => {  // 没起也能问,规则在后台
+    if (health && Array.isArray(health.examples) && health.examples.length && health.examples.join("\n") !== EXAMPLES.join("\n")) showExamples(health.examples);
+    if (health) $("llmNote").innerHTML = over + P.esc(health.llm ? "问题由模型(" + health.llm + ")翻成条件;模型看不到表里的数据,只看到你的问题。" : "当前按词表解析(" + (health.note || "未配置模型密钥") + "):能认国名、领域、类别、出资方、时间、阶段这些词,自由发挥的问法可能听不懂。");
+    else $("llmNote").innerHTML = over + "助手服务未就绪(后台任务没起来或还没更新到这一版);其余页面照常可用。";
+    sizeHero();
+  });
+
+  /* 视频:先问一次有没有文件(私有配置仓的 portal/media/ 可能还没放),有才接上并自动播;两种格式(webm、mp4,都可选)浏览器挑能放的;
+     系统设了「减少动态效果」的只显示封面;都放不了就收起只留底色。不等读表,一打开就去问 */
+  (async function () {
+    const v = $("heroVideo");
+    const noMedia = () => { v.parentElement.classList.add("nomedia"); v.closest(".hero-card").classList.add("nomedia"); sizeHero(); };  // 没有视频:卡片只剩提问框
+    try {
+      const srcs = v.dataset.src.split(" ");
+      const heads = await Promise.all(srcs.map((u) => fetch(u, { method: "HEAD", credentials: "same-origin" }).then((r) => r.ok).catch(() => false)));
+      const have = srcs.filter((u, i) => heads[i]);
+      if (have.length) {
+        v.poster = v.dataset.poster;
+        const fit = (w, hh) => { if (w && hh) { v.parentElement.style.aspectRatio = w + " / " + hh; document.documentElement.style.setProperty("--hero-ratio", (w / hh).toFixed(4)); sizeHero(); } };  // 容器跟着片子的真实宽高走,整幅显示不裁;视频卡的宽按这个比例算
+        v.addEventListener("loadedmetadata", () => fit(v.videoWidth, v.videoHeight));
+        have.forEach((u, i) => { const el = document.createElement("source"); el.src = u; el.type = u.endsWith(".webm") ? "video/webm" : "video/mp4"; if (i === have.length - 1) el.addEventListener("error", () => { const img = document.createElement("img"); img.src = v.dataset.poster; img.alt = ""; img.onload = () => fit(img.naturalWidth, img.naturalHeight); v.style.display = "none"; v.insertAdjacentElement("afterend", img); }); v.appendChild(el); });  // 都放不了:换成封面图
+        v.load();
+        if (!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+          /* 手机(尤其微信、QQ 这类内置浏览器)不让脚本直接起播:静音 + 内嵌已经声明;播不起来就等页面第一次被点、滑,或微信的桥接就绪事件,再播一次 */
+          v.muted = true; v.autoplay = true;
+          const tryPlay = () => { if (document.body.classList.contains("asked")) return; const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); };  // 已经切到对话模式就不播了
+          const later = () => { if (v.paused) tryPlay(); };
+          ["touchstart", "touchend", "click", "scroll"].forEach((ev) => document.addEventListener(ev, later, { once: true, passive: true }));
+          document.addEventListener("WeixinJSBridgeReady", later, { once: true });
+          v.addEventListener("canplay", later, { once: true });
+          tryPlay();
+        }
+      } else noMedia();
+    } catch (e) { noMedia(); }
+  })();
+
+  /* 读表:配置、登录角色、词表、国别读完才能答题;提问在这之前就点了的,等它读完再答 */
+  ready = (async function () {
+    await P.load();
+    sizeHero();
+    [countries] = await Promise.all([P.countries(), P.zhTerms()]);  // 两样互不依赖,同时取
+    countries.forEach((c) => { byIso[P.get("country", c, "key")] = c; nameOfCid[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); });
+  })();
+  try {
+    await ready;
+    const q0 = new URLSearchParams(location.search).get("q");
+    if (q0) submit(q0);
+    let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => charts.forEach((c) => c.resize()), 150); });
+  } catch (e) { P.fail($("answers"), e); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 商机总览</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("opps.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>商机总览</h1>
+  <div class="tabs" id="tabs">
+    <button type="button" data-t="list" class="on">商机列表<b id="nList">…</b></button>
+    <button type="button" data-t="over">下一步已逾期<b id="nOver">…</b></button>
+    <button type="button" data-t="review">待核更新<b id="nReview">…</b></button>
+  </div>
+  <section class="tab on" id="tab-list">
+  <div class="filters">
+    <div class="frow"><b>阶段</b><span id="fStage" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>区域</b><span id="fRegion" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>国别</b><span id="fCountry" class="frow" style="padding:0"></span><button type="button" class="chip-btn more" id="moreC" style="display:none">更多国家 ▾</button></div>
+    <div class="frow" id="rowMore" style="display:none"><b></b><span id="fCountry2" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>领域</b><span id="fSector" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>资金来源</b><span id="fFunder" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>负责人</b><span id="fOwner" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>搜索</b><input id="fText" placeholder="搜编号或名称" size="18"><span class="muted" id="count" style="margin-left:auto"></span></div>
+  </div>
+  <p class="muted">点一行进「商机工作台」:看全貌、记跟进、要报告、改阶段。要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开商机表 ↗</a></p>
+  <div class="panel" id="list">读取中…</div>
+  </section>
+  <section class="tab" id="tab-over">
+    <p class="muted">跟踪中的商机里,「下一步」的到期日已过。进工作台记一条跟进、写上新的下一步与到期日,这一条就不在这里了。</p>
+    <div id="over" class="panel">读取中…</div>
+  </section>
+  <section class="tab" id="tab-review">
+    <p class="muted">机器抓到与表里已有值不同的新信息,等人核对;进工作台看,核后在表格里改并清掉这一条。</p>
+    <div id="review" class="panel">读取中…</div>
+  </section>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  let opps = [], cname = {}, creg = {};
+  const q = new URLSearchParams(location.search);
+  /* 筛选状态(与线索总览同一套平铺按钮;写进地址栏,刷新、转发都保得住):阶段 ""=跟踪中的、"*"=全部;领域可多选 */
+  const state = { stage: q.get("stage") || "", r: q.get("r") || "", c: q.get("c") || "", s: (q.get("s") || "").split(",").filter(Boolean), f: q.get("f") || "", w: q.get("w") || "" };
+  let tab = q.get("t") || "list";
+  const here = () => { const u = new URLSearchParams({ stage: state.stage, r: state.r, c: state.c, s: state.s.join(","), f: state.f, w: state.w }); if (tab !== "list") u.set("t", tab); return location.pathname + "?" + u; };
+  /* 页签:商机列表(带筛选)/ 下一步已逾期 / 待核更新(后两页原在「待我处理」页);地址栏 t= 记住开的是哪页 */
+  function showTab(x) {
+    if (![...$("tabs").querySelectorAll("button")].some((b) => b.dataset.t === x)) x = "list";  // 不认识的(或游客没有的)页签回到列表
+    tab = x;
+    $("tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.t === x));
+    document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("on", el.id === "tab-" + x));
+    history.replaceState(null, "", here());
+  }
+  $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
+
+  function render() {
+    const st = state.stage, c = state.c, w = state.w, t = $("fText").value.trim().toLowerCase();
+    history.replaceState(null, "", here());
+    const g = (o, p) => P.get("opportunity", o, p);
+    let rows = opps.filter((o) => {
+      const stage = g(o, "stage") || "建议";
+      if (st === "") { if (!P.tracked([o]).length) return false; } else if (st !== "*" && stage !== st) return false;
+      if (c && P.linkId(g(o, "country")) !== c) return false;
+      if (!c && state.r && (creg[P.linkId(g(o, "country"))] || P.REGION_EMPTY) !== state.r) return false;
+      if (state.s.length && !(g(o, "sectors") || []).some((x) => state.s.includes(x))) return false;
+      if (state.f && !P.funderGroups(g(o, "financing")).includes(state.f)) return false;
+      if (w && P.text(g(o, "owner")) !== w) return false;
+      if (t && !((g(o, "code") || "") + " " + (g(o, "name_zh") || "")).toLowerCase().includes(t)) return false;
+      return true;
+    });
+    rows.sort((a, b) => (P.isFollowed("opportunity", b) - P.isFollowed("opportunity", a)) || (P.STAGES.indexOf(g(a, "stage") || "建议") - P.STAGES.indexOf(g(b, "stage") || "建议")) || String(g(a, "code")).localeCompare(String(g(b, "code"))));  // 关注国家的排前面
+    $("count").textContent = rows.length + " 个"; $("nList").textContent = rows.length;
+    const today = P.today();
+    $("list").innerHTML = P.tableHtml(["编号", "名称", "国别", "我方阶段", "投资规模", "优先级", "负责人", "下一节点", "下一步", "到期", "最近跟进", "线索"], rows.map((o) => {
+      const due = P.day(g(o, "next_due")), over = due && due < today;
+      return [P.raw(P.star("opportunity", o) + '<a href="' + P.oppUrl(o.id) + '"><b>' + P.esc(g(o, "code")) + "</b></a>"), P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(g(o, "name_zh") || "") + "</a>"),
+        cname[P.linkId(g(o, "country"))] || P.text(g(o, "country")), P.raw('<span class="stage s-' + P.esc(g(o, "stage") || "建议") + '">' + P.esc(g(o, "stage") || "建议") + "</span>"),
+        P.sizeText("opportunity", o), g(o, "priority"), P.text(g(o, "owner")), g(o, "next_milestone"), g(o, "next_step"), P.raw(due ? '<span class="' + (over ? "over" : "") + '">' + due + (over ? " 逾期" : "") + "</span>" : ""),
+        P.day(g(o, "last_followup")), g(o, "lead_count")];
+    }));
+  }
+
+  try {
+    await P.load();
+    if (P.isGuest) document.querySelectorAll('#tabs [data-t="over"], #tabs [data-t="review"], #tab-over, #tab-review').forEach((el) => el.remove());  // 游客没有跟进可做
+    showTab(tab);
+    $("tbl").href = P.tableUrl("opportunity");
+    const [os, cs] = await Promise.all([P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "next_milestone", "public_stage", "priority", "next_step", "next_due", "last_followup", "lead_count", "sectors", "financing", "size_value", "currency", "size_cny", "review_updates"] }), P.countries(), P.followed()]);
+    opps = os;
+    cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); creg[c.id] = P.regionOf(c); });
+    const g = (o, p) => P.get("opportunity", o, p);
+    /* 阶段:跟踪中的(缺省)、全部、再逐个阶段 */
+    P.chips($("fStage"), [["", "跟踪中的"], ["*", "全部阶段"]].concat(P.STAGES.map((s) => [s, s])), state, "stage", render);
+    /* 国别:有商机的国家按商机数排,前 10 个直接列,其余收在「更多国家」里 */
+    const nOpp = {}; opps.forEach((o) => { const cid = P.linkId(g(o, "country")); if (cid) nOpp[cid] = (nOpp[cid] || 0) + 1; });
+    const ordered = Object.entries(nOpp).sort((a, b) => b[1] - a[1]).map(([cid, n]) => [cid, (cname[cid] || cid) + " " + n]);
+    /* 区域(经营区域)与国别联动,同线索总览 */
+    const nReg = {}; Object.entries(nOpp).forEach(([cid, n]) => { const r = creg[cid] || P.REGION_EMPTY; nReg[r] = (nReg[r] || 0) + n; });
+    const regions = Object.entries(nReg).sort((a, b) => (a[0] === P.REGION_EMPTY) - (b[0] === P.REGION_EMPTY) || b[1] - a[1]).map(([r, n]) => [r, r + " " + n]);
+    const drawR = () => P.chips($("fRegion"), [["", "全部"]].concat(regions), state, "r", () => { if (state.c && (creg[state.c] || P.REGION_EMPTY) !== state.r && state.r) state.c = ""; drawC(); render(); });
+    const drawC = () => {
+      const list = ordered.filter(([cid]) => !state.r || (creg[cid] || P.REGION_EMPTY) === state.r), top = list.slice(0, 10), rest = list.slice(10);
+      const pick = () => { if (state.c && !state.r) { state.r = creg[state.c] || P.REGION_EMPTY; drawR(); } drawC(); render(); };
+      P.chips($("fCountry"), [["", "全部"]].concat(top), state, "c", pick); P.chips($("fCountry2"), rest.slice().sort((a, b) => P.zhCmp(a[1], b[1])), state, "c", pick);
+      $("moreC").style.display = rest.length ? "" : "none";
+      if (!rest.length || (state.c && rest.some(([cid]) => cid === state.c))) $("rowMore").style.display = rest.length ? "" : "none";
+    };
+    drawR(); drawC();
+    P.chips($("fFunder"), [["", "全部"]].concat(P.funderOptions().map((x) => [x, x])), state, "f", render);
+    $("moreC").onclick = () => { const vis = $("rowMore").style.display !== "none"; $("rowMore").style.display = vis ? "none" : ""; $("moreC").textContent = vis ? "更多国家 ▾" : "收起 ▴"; };
+    /* 领域:商机的 12 类细分,可多选 */
+    P.chips($("fSector"), [["", "全部"]].concat(P.choices("opportunity", "sectors").map((s) => [s, s])), state, "s", render, true);
+    const owners = [...new Set(opps.map((o) => P.text(g(o, "owner"))).filter(Boolean))].sort();
+    P.chips($("fOwner"), [["", "全部"]].concat(owners.map((w) => [w, w])), state, "w", render);
+    $("fText").addEventListener("input", render);
+    render();
+    /* 下一步已逾期(本体 glossary.overdue)与待核更新(glossary.review) */
+    if (!P.isGuest) {
+      const today = P.today(), trunc = (x, n) => { x = String(x || ""); return x.length > n ? x.slice(0, n) + "…" : x; }, none = '<p class="muted">没有了 ✓</p>';
+      const over = P.tracked(opps).filter((o) => P.day(g(o, "next_due")) && P.day(g(o, "next_due")) < today).sort((a, b) => P.day(g(a, "next_due")).localeCompare(P.day(g(b, "next_due"))));
+      $("over").innerHTML = over.map((o) => '<div class="item"><div class="it-main"><div class="it-title">' + P.oppLink(o) + ' <span class="muted">' + P.esc(P.text(g(o, "owner")) || "无负责人") + "</span></div><div>" + P.esc(g(o, "next_step") || "(下一步没写)") + ' · <span class="over">到期 ' + P.day(g(o, "next_due")) + "</span></div></div>" +
+        '<div class="it-act"><a class="btn" href="' + P.oppUrl(o.id) + '">去记跟进</a></div></div>').join("") || none;
+      const rv = opps.filter((o) => g(o, "review_updates"));
+      $("review").innerHTML = rv.map((o) => '<div class="item"><div class="it-main"><div class="it-title">' + P.oppLink(o) + '</div><div class="muted">' + P.esc(trunc(g(o, "review_updates"), 200)) + "</div></div>" +
+        '<div class="it-act"><a class="btn" href="' + P.oppUrl(o.id) + '">去看</a>' + P.open("opportunity", o.id) + "</div></div>").join("") || none;
+      $("nOver").textContent = over.length; $("nOver").classList.toggle("bad", over.length > 0); $("nReview").textContent = rv.length;
+    }
+  } catch (e) { P.fail($("list"), e); }
+})();
+</script>
+</body>
+</html>

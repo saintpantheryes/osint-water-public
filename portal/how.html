@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 工作流程</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("how.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main class="how">
+  <h1>工作流程</h1>
+  <p class="lede">机器每天在网上收集与水务项目有关的公开信息,判定后挂到具体的项目机会上;人在此基础上立项、跟进、做判断;
+    报告、日历和这页问答都从同一张台账里出。下面按「流程 → 节奏 → 分工 → 规矩 → 问答」说清楚。</p>
+
+  <!-- 1. 主流程:上面一栏是机器与公开数据,下面一栏是人与业务数据(沿用使用方流程图的两栏与配色:绿 = 机器,粉 = 人) -->
+  <h2>1. 一条主线:线索 → 商机 → 跟进 → 报告与日历</h2>
+  <div class="flow">
+    <div class="band ai"><div class="band-l">机器<small>公开数据</small></div>
+      <div class="steps">
+        <div class="step"><b>信源</b><span>每天定时抓采购门户、多边银行、新闻与 RSS</span></div>
+        <div class="step"><b>线索</b><span>每条判定:相关吗、什么类别、哪个领域、哪国、中文摘要、金额与截止日</span></div>
+        <div class="step"><b>商机</b><span>线索挂到已有项目;像新项目的建一条「建议」商机,每条事实带出处</span></div>
+        <div class="step"><b>时间节点</b><span>截止、开标、授标、签约等公开日期,过期自动改「已发生」</span></div>
+        <div class="step"><b>定期报告</b><span>日报、周报、月报自动生成;配了模型的多一段研判</span></div>
+      </div>
+    </div>
+    <div class="band human"><div class="band-l">人<small>业务数据</small></div>
+      <div class="steps">
+        <div class="step"><b>线索处理</b><span>确认线索归属;对建议商机决定「跟踪」或「不跟进」</span></div>
+        <div class="step"><b>我方阶段</b><span>跟踪中 → 准备投标 → 已投标 → 中标 / 未中标;改阶段自动补一条跟进</span></div>
+        <div class="step"><b>跟进记录</b><span>做了什么、了解到什么、怎么判断、下一步与到期日</span></div>
+        <div class="step"><b>日历</b><span>公开节点 + 跟进到期排在一起;可导出或订阅到手机日历</span></div>
+        <div class="step"><b>国别 / 项目报告</b><span>在页面上要一份,2 分钟内出 Word</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="muted small">线索、国别、商机、跟进记录是四个核心对象;信源、时间节点、城市、报告、报告模板、成员是支撑对象。每个对象的属性、状态流转与口径见<a href="ontology.html">本体</a>页。</p>
+
+  <!-- 2. 节奏 -->
+  <h2>2. 每天的节奏</h2>
+  <div class="panel"><table class="props"><tbody>
+    <tr><th>每天 08:00</th><td>程序自动更新到最新版(页面、后台任务)。</td></tr>
+    <tr><th>每天 08:30</th><td>采集全部信源 → 判定新线索 → 挂接或建议商机 → 写时间节点;完成后自建当天的日报,「线索分析」页顶部显示正文。</td></tr>
+    <tr><th>每 2 分钟</th><td>补全同事上传的线索(抓网页、补摘要与国别);生成报告表里「待生成」的报告;人改了商机阶段就补一条跟进。</td></tr>
+    <tr><th>每天第一个周期</th><td>把已过期的时间节点改成「已发生」。</td></tr>
+    <tr><th>周一 09:00 · 每月 1 日 09:30</th><td>自建上周周报、上月月报。</td></tr>
+    <tr><th>每月 1 日</th><td>按世行、IMF 接口刷新各国宏观与水务指标;出现新国别时第二天补齐。</td></tr>
+  </tbody></table></div>
+
+  <!-- 3. 分工:按本体里的行为(actions)现列,机器一列、人一列 -->
+  <h2>3. 谁做什么</h2>
+  <div class="two" id="actors"><div class="panel">读取中…</div></div>
+  <p class="muted small">这两列按本体里登记的行为现列:机器只写机器的字段、只填空、只新建、列表只追加;人写的字段机器永不覆盖。</p>
+
+  <!-- 4. 规矩:本体 rules -->
+  <h2>4. 几条底线</h2>
+  <div id="rules" class="panel">读取中…</div>
+
+  <!-- 5. 问答 -->
+  <h2>5. 首页的问答是怎么回答的</h2>
+  <div class="panel">
+    <ol class="how-steps">
+      <li><b>听懂</b>:把一句话翻成筛选条件——对象(线索 / 商机 / 节点 / 报告)、国别、时间、领域、类别、资金来源、阶段、怎么呈现(数一下 / 列清单 / 按什么分)。配了模型用模型翻,没配按词表认。</li>
+      <li><b>查表</b>:页面带着你的登录身份直接去台账里数、列;模型从头到尾看不到表里的任何一条数据,只看到你的问题。</li>
+      <li><b>呈现</b>:数字卡、清单或按国别 / 类别 / 月份的柱图,同一口径下给出去「线索总览」「商机总览」「日历」「报告」的链接;要报告的问题转到报告页排队生成。</li>
+    </ol>
+    <p class="muted small">所以它答的是「表里有什么」,不是「网上有什么」;它不会编数据,也不会替你改表。</p>
+  </div>
+
+  <!-- 6. 页面导览:按菜单的分组列(portal.js 的 P.MENU,页签上的提示也是这一句) -->
+  <h2>6. 各页是干什么的</h2>
+  <div class="panel" id="pages"></div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  try {
+    await P.load();
+    const acts = (P.onto.actions || []);
+    const col = (actor, title) => '<div class="panel"><h3>' + title + "</h3><ul class=\"acts\">" +
+      acts.filter((a) => a.actor === actor).map((a) => "<li><b>" + P.esc(a.name) + "</b>" + (a.trigger ? '<span class="muted">' + P.esc(String(a.trigger).split(/[;(（]/)[0]) + "</span>" : "") + "</li>").join("") + "</ul></div>";
+    $("actors").innerHTML = col("ai", "机器(自动)") + col("human", "人(在表格或页面上)");
+    const rules = (P.onto.rules || []);
+    $("rules").innerHTML = rules.map((r) => "<details><summary><b>" + P.esc(r.id) + "</b> " + P.esc(r.name) + "</summary><p>" + P.esc(r.text) + "</p>" + (r.why ? '<p class="muted small">为什么:' + P.esc(r.why) + "</p>" : "") + "</details>").join("");
+    const row = ([h, n, d]) => h === "@table"
+      ? (P.isGuest ? "" : '<tr><th><a href="' + P.esc("/base/" + P.cfg.base.id) + '" target="_blank" rel="noopener">' + P.esc(n) + " ↗</a></th><td>" + P.esc(d) + "</td></tr>")
+      : '<tr><th><a href="' + h + '">' + P.esc(n) + "</a></th><td>" + P.esc(h === "how.html" ? d.replace(/。$/, "(本页)。") : d) + "</td></tr>";
+    $("pages").innerHTML = '<table class="props pages"><tbody>' + P.MENU.map((g) => (g.items
+      ? '<tr class="grp"><th colspan="2">' + P.esc(g.name) + "</th></tr>" + g.items.map(row).join("")
+      : row([g.href, g.name, g.desc]))).join("") + "</tbody></table>";
+  } catch (e) { P.fail($("actors"), e); }
+})();
+</script>
+</body>
+</html>

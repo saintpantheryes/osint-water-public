@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 线索总览</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="echarts.min.js"></script>
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("overview.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>线索总览</h1>
+  <div class="filters" id="filters">
+    <div class="frow"><b>区域</b><span id="fRegion" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>国别</b><span id="fCountry" class="frow" style="padding:0"></span><button type="button" class="chip-btn more" id="moreC">更多国家 ▾</button></div>
+    <div class="frow" id="rowMore" style="display:none"><b></b><span id="fCountry2" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>领域</b><span id="fSector" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>类别</b><span id="fCat" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>资金来源</b><span id="fFunder" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>时间</b><span id="fWin" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>搜索</b><input id="fText" placeholder="搜标题、项目名、中文摘要或线索号" size="30" aria-label="搜线索"><span class="muted" id="fNote" style="margin-left:auto"></span></div>
+  </div>
+  <div class="cards" id="cards"><div class="card"><div class="n">…</div><div class="l">读取中</div></div></div>
+  <div class="home">
+    <div class="col">
+      <h2>漏斗:信源采集 → 相关 → 归入商机 → 归入跟踪中的商机 → 写进报告(数线索条数,每级是上一级的子集;点一级,右边出清单)<a href="analysis.html" class="more" style="display:inline;margin-left:10px;font-weight:400">多维度分析与每日简报 →</a></h2>
+      <div class="panel"><div id="funnel" class="chart"></div><p class="muted small" id="funnel-note"></p></div>
+      <h2>各国线索与商机(点国家看国别概况;滚轮缩放,<a href="#" id="mapReset">复位</a>)</h2>
+      <div class="panel"><div id="map" class="chart tall"></div></div>
+    </div>
+    <div class="col">
+      <h2 id="drillTitle">清单</h2>
+      <div class="panel" id="drill"><p class="muted">点左边漏斗的任一级,这里列出该级的线索;上面输搜索词,这里列出搜到的线索;点地图上的国家进国别概况。</p></div>
+      <h2>最新报告</h2>
+      <div class="panel" id="reports">读取中…</div>
+    </div>
+  </div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  let fc = null, mc = null, opps = [], countries = [], canWrite = false;
+  const q = new URLSearchParams(location.search);
+  const state = { r: q.get("r") || "", c: q.get("c") || "", s: (q.get("s") || "").split(",").filter(Boolean), k: q.get("k") || "", f: q.get("f") || "", w: q.get("w") || "", q: (q.get("q") || "").trim() };
+  const inRegion = (c) => !state.r || P.regionOf(c) === state.r;
+
+  /* 当前筛选 → 线索表的条件(国别、领域、类别、资金来源、发现时间、搜索词) */
+  function leadConds() {
+    const c = [];
+    if (state.c) c.push(P.cond("lead", "country", "is", state.c));
+    else if (state.r) { const ids = countries.filter(inRegion).map((x) => x.id); c.push(ids.length ? P.cond("lead", "country", "isAnyOf", ids) : P.cond("lead", "country", "is", "__none__")); }
+    if (state.s.length) c.push(P.cond("lead", "sectors", "hasAnyOf", state.s));
+    if (state.k) c.push(P.cond("lead", "category", "is", state.k));
+    if (state.f) c.push(P.funderCond("lead", "funder", state.f));
+    if (Number(state.w)) c.push(P.cond("lead", "found_at", "isOnOrAfter", P.onDay(P.addDays(P.today(), -Number(state.w)))));
+    if (state.q) c.push(P.or(...["title", "project_name", "summary_zh", "key"].filter((p) => P.has("lead", p)).map((p) => P.cond("lead", p, "contains", state.q))));  // 原题、项目名、中文摘要、线索号里含这个词(不分大小写)
+    return c;
+  }
+  function oppsNow() {
+    if (state.c) return opps.filter((o) => P.linkId(P.get("opportunity", o, "country")) === state.c);
+    if (state.r) { const ids = new Set(countries.filter(inRegion).map((x) => x.id)); return opps.filter((o) => ids.has(P.linkId(P.get("opportunity", o, "country")))); }
+    return opps;
+  }
+
+  async function refresh() {
+    const base = leadConds(), cur = oppsNow(), tracked = P.tracked(cur);
+    history.replaceState(null, "", location.pathname + (base.length ? "?" + new URLSearchParams({ r: state.r, c: state.c, s: state.s.join(","), k: state.k, f: state.f, w: state.w, q: state.q }) : ""));
+    /* 有搜索词:右边清单直接列出搜到的线索(连同上面其余筛选);清掉搜索词,清单回到提示 */
+    if (state.q) drill("搜索「" + state.q + "」", P.and(...base)).catch((e) => P.fail($("drill"), e));
+    else if (searched) { $("drillTitle").textContent = "清单"; $("drill").innerHTML = DRILL_HINT; }
+    searched = !!state.q;
+    $("fNote").textContent = "统计中…";
+    const L = [
+      ["信源采集", []],
+      ["相关", [P.cond("lead", "relevant", "is", true)]],
+      ["归入商机", [P.cond("lead", "relevant", "is", true), P.cond("lead", "opportunity", "isNotEmpty")]],
+      ["归入跟踪中的商机", tracked.length ? [P.cond("lead", "relevant", "is", true), P.cond("lead", "opportunity", "isAnyOf", tracked.map((o) => o.id))] : null],
+      ["写进报告", tracked.length ? [P.cond("lead", "relevant", "is", true), P.cond("lead", "opportunity", "isAnyOf", tracked.map((o) => o.id)), P.cond("lead", "in_reports", "isNotEmpty")] : null],
+    ];
+    const counts = await Promise.all(L.map(([, c]) => (c ? P.count("lead", P.and(...base, ...c)) : 0)).concat([
+      P.count("lead", P.and(...base, P.cond("lead", "status", "is", "待处理"))),
+      P.count("lead", P.and(...base, P.cond("lead", "opportunity", "isEmpty"), P.or(P.and(P.cond("lead", "suggested_opp", "isNotEmpty"), P.cond("lead", "status", "isNot", "已忽略")), P.and(P.cond("lead", "maybe_new", "is", true), P.cond("lead", "status", "is", "待处理"))))),  // 与「待确认归属」视图同一条件
+    ]));
+    const [total, , , , , pending, toAssign] = counts;
+    $("fNote").textContent = base.length ? "已按筛选统计(地图不受筛选影响)" : "";
+    const stageCount = {}; cur.forEach((o) => { const s = P.get("opportunity", o, "stage") || "建议"; stageCount[s] = (stageCount[s] || 0) + 1; });
+    $("cards").innerHTML = [
+      [total, "线索", P.tableUrl("lead")], [pending, "待处理线索", P.tableUrl("lead", "待处理")], [toAssign, "待确认归属", "inbox.html"],
+      [tracked.length, "跟踪中的商机", "opps.html"], [stageCount["建议"] || 0, "AI 推荐的商机", "inbox.html#suggest"],
+    ].map(([n, l, u]) => '<a class="card' + (/^待/.test(l) && n > 0 ? " warn" : "") + '" href="' + u + '"' + (u.startsWith("/") ? ' target="_blank" rel="noopener"' : "") + '><div class="n">' + n + '</div><div class="l">' + l + "</div></a>").join("");
+
+    const levels = L.map(([n], i) => [n, counts[i]]);
+    const nodes = levels.map(([n]) => ({ name: n })), links = [];
+    for (let i = 0; i < levels.length - 1; i++) {
+      const [a, va] = levels[i], [b, vb] = levels[i + 1];
+      if (vb > 0) links.push({ source: a, target: b, value: vb });
+      if (va - vb > 0) { nodes.push({ name: "其余 ← " + a, itemStyle: { color: "#cbd5e1" } }); links.push({ source: a, target: "其余 ← " + a, value: va - vb, lineStyle: { color: "#e2e8f0" } }); }
+    }
+    fc = fc || echarts.init($("funnel"));
+    fc.setOption({ tooltip: { trigger: "item" }, series: [{ type: "sankey", data: nodes, links, emphasis: { focus: "adjacency" }, lineStyle: { color: "gradient", curveness: 0.5 },
+      label: { formatter: (p) => { const l = levels.find((x) => x[0] === p.name); return l ? p.name + "  " + l[1] : p.name; } }, nodeAlign: "left" }] }, true);
+    fc.off("click");
+    fc.on("click", (p) => { if (p.dataType === "node") { const i = L.findIndex(([n]) => n === p.name); if (i >= 0 && L[i][1]) drill(L[i][0], P.and(...base, ...L[i][1])).catch((e) => P.fail($("drill"), e)); } });
+    $("funnel-note").textContent = "跟踪中的商机 " + tracked.length + " 个,归入它们的线索 " + levels[3][1] + " 条,其中 " + levels[4][1] + " 条已写进报告。";
+  }
+
+  /* 点漏斗一级(或输了搜索词)→ 右栏列出这些线索(最多 100 条,中文名称在前,原题与线索号小字);连着改筛选时只画最后一次的 */
+  let searched = !!state.q, drillSeq = 0;
+  const DRILL_HINT = '<p class="muted">点左边漏斗的任一级,这里列出该级的线索;上面输搜索词,这里列出搜到的线索;点地图上的国家进国别概况。</p>';
+  async function drill(name, filter) {
+    const my = ++drillSeq;
+    $("drillTitle").textContent = name + " · 清单";
+    $("drill").innerHTML = '<p class="muted">读取中…</p>';
+    let [rows] = await Promise.all([P.records("lead", { filter, take: 100, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "country", "category", "found_at", "opportunity", "status", "url", "project_name", "summary_zh"] }), P.zhTerms(), P.followed()]);
+    if (my !== drillSeq) return;
+    rows = P.followFirst(rows, "lead");  // 关注国家的排前面
+    $("drill").innerHTML = '<p class="muted small">' + (rows.length ? "最新 " + rows.length + " 条" + (rows.length >= 100 ? "(只显示前 100)" : "") : "没有符合的线索") + "</p>" + (rows.length ? P.tableHtml(["标题", "国别", "类别", "发现", "所属商机", ""], rows.map((l) => { const g = (p) => P.get("lead", l, p);
+      return [P.titleCell(l), P.text(g("country")), g("category"), P.day(g("found_at")), P.raw(oppCell(l)), P.raw(P.open("lead", l.id))]; })) : "");
+    const byId = {}; rows.forEach((l) => { byId[l.id] = l; });
+    $("drill").querySelectorAll("button.conv").forEach((b) => { b.onclick = () => convert(b, byId[b.dataset.l]); });
+  }
+
+  /* 所属商机:已归入的点开商机页;还没归入的,能写的帐号有「转为商机」(与线索处理同一套:归入已有商机,或新建商机并归入) */
+  const oppName = (o) => (P.get("opportunity", o, "code") || "") + " " + (P.get("opportunity", o, "name_zh") || "");
+  function oppCell(l) {
+    const oid = P.linkId(P.get("lead", l, "opportunity"));
+    if (oid) { const o = opps.find((x) => x.id === oid); return '<a href="' + P.oppUrl(oid) + '">' + P.esc(o ? oppName(o) : P.text(P.get("lead", l, "opportunity"))) + "</a>"; }
+    return canWrite ? '<button type="button" class="conv" data-l="' + P.esc(l.id) + '">转为商机</button>' : "";
+  }
+  function convert(btn, l) {
+    const tr = btn.closest("tr"), open = tr.nextElementSibling;
+    if (open && open.classList.contains("convrow")) { open.remove(); return; }
+    const cid = P.linkId(P.get("lead", l, "country")), c = countries.find((x) => x.id === cid), iso = c && P.get("country", c, "key");
+    const live = opps.filter((o) => (P.get("opportunity", o, "stage") || "建议") !== "不跟进");
+    const same = live.filter((o) => P.linkId(P.get("opportunity", o, "country")) === cid), others = live.filter((o) => P.linkId(P.get("opportunity", o, "country")) !== cid);
+    const opts = (arr) => arr.map((o) => '<option value="' + o.id + '">' + P.esc(oppName(o)) + "</option>").join("");
+    const row = document.createElement("tr"); row.className = "convrow";
+    row.innerHTML = '<td colspan="' + tr.children.length + '"><div class="convbox"><button type="button" class="primary" data-a="new">新建商机并归入</button>' +
+      '<select data-a="pick"><option value="">归入已有商机…</option>' + (same.length ? '<optgroup label="' + P.esc(c ? P.get("country", c, "name_zh") || iso : "同国") + '">' + opts(same) + "</optgroup>" : "") + (others.length ? '<optgroup label="其他国家">' + opts(others) + "</optgroup>" : "") + "</select>" +
+      '<button type="button" data-a="x">取消</button></div></td>';
+    tr.after(row);
+    const done = (o, msg) => { tr.children[4].innerHTML = '<a href="' + P.oppUrl(o.id) + '">' + P.esc(oppName(o)) + "</a>"; row.remove(); P.toast(msg); };
+    const busy = (on) => row.querySelectorAll("button, select").forEach((e) => { e.disabled = on; });
+    row.querySelector('[data-a="x"]').onclick = () => row.remove();
+    row.querySelector('[data-a="pick"]').onchange = async (e) => {
+      const o = opps.find((x) => x.id === e.target.value); if (!o) return;
+      busy(true);
+      try { await P.leadToOpp(l.id, o.id); done(o, "已归入 " + (P.get("opportunity", o, "code") || "")); } catch (err) { P.toast(err.message, true); busy(false); }
+    };
+    row.querySelector('[data-a="new"]').onclick = async () => {
+      if (!iso) { P.toast("这条线索没有国别,先在表格里填国别", true); return; }
+      const name = prompt("新商机的名称(可改):", String(P.get("lead", l, "project_name") || P.zhName(l).name || P.get("lead", l, "title") || "").split("\n")[0]);
+      if (name === null || !name.trim()) return;
+      busy(true);
+      try { const rec = await P.newOppFromLead(l.id, { name: name.trim(), cid, iso, opps }); opps.push(rec); done(rec, "已新建商机 " + (P.get("opportunity", rec, "code") || "") + " 并归入,阶段跟踪中、负责人是你"); }
+      catch (err) { P.toast(err.message, true); busy(false); }
+    };
+  }
+
+  function chipRows() {
+    const withLeads = countries.filter((c) => Number(P.get("country", c, "lead_count")) > 0);
+    const opt = (c) => [c.id, (P.get("country", c, "name_zh") || P.get("country", c, "key")) + " " + (Number(P.get("country", c, "lead_count")) || 0)];
+    const on = () => refresh().catch((e) => P.fail($("cards"), e));
+    /* 区域(经营区域)与国别联动:选区域 → 国别只列该区域的;选国别 → 点亮它的区域 */
+    const nReg = {}; withLeads.forEach((c) => { const r = P.regionOf(c); nReg[r] = (nReg[r] || 0) + (Number(P.get("country", c, "lead_count")) || 0); });
+    const regions = Object.entries(nReg).sort((a, b) => (a[0] === P.REGION_EMPTY) - (b[0] === P.REGION_EMPTY) || b[1] - a[1]).map(([r, n]) => [r, r + " " + n]);
+    const drawR = () => P.chips($("fRegion"), [["", "全部"]].concat(regions), state, "r", () => { if (state.c && !inRegion(countries.find((c) => c.id === state.c))) state.c = ""; drawC(); on(); });
+    const drawC = () => {
+      const list = withLeads.filter(inRegion), top = list.slice(0, 10), rest = list.slice(10);
+      const pick = () => { const c = countries.find((x) => x.id === state.c); if (c && !state.r) { state.r = P.regionOf(c); drawR(); } drawC(); on(); };
+      P.chips($("fCountry"), [["", "全部"]].concat(top.map(opt)), state, "c", pick); P.chips($("fCountry2"), rest.map(opt).sort((a, b) => P.zhCmp(a[1], b[1])), state, "c", pick);
+      $("moreC").style.display = rest.length ? "" : "none";
+      if (!rest.length || (state.c && rest.some((c) => c.id === state.c))) $("rowMore").style.display = rest.length ? "" : "none";
+    };
+    drawR(); drawC();
+    $("moreC").onclick = () => { const vis = $("rowMore").style.display !== "none"; $("rowMore").style.display = vis ? "none" : ""; $("moreC").textContent = vis ? "更多国家 ▾" : "收起 ▴"; };
+    P.chips($("fFunder"), [["", "全部"]].concat(P.funderOptions().map((g) => [g, g])), state, "f", on);
+    P.chips($("fSector"), [["", "全部"]].concat(P.choices("lead", "sectors").map((s) => [s, s])), state, "s", on, true);
+    P.chips($("fCat"), [["", "全部"]].concat(P.choices("lead", "category").map((s) => [s, s])), state, "k", on);
+    P.chips($("fWin"), [["", "全部"], ["7", "最近 7 天"], ["30", "最近 30 天"], ["90", "最近 90 天"]], state, "w", on);
+    /* 搜索:停手 0.4 秒再查(边打字边查太频繁);回车马上查 */
+    let tt = 0;
+    const go = () => { clearTimeout(tt); const v = $("fText").value.trim(); if (v !== state.q) { state.q = v; on(); } };
+    $("fText").value = state.q;
+    $("fText").oninput = () => { clearTimeout(tt); tt = setTimeout(go, 400); };
+    $("fText").onkeydown = (e) => { if (e.key === "Enter") go(); };
+  }
+
+  try {
+    await P.load();
+    [opps, countries, canWrite] = await Promise.all([P.opps(), P.countries(), P.canWrite()]);
+    chipRows();
+    await refresh();
+
+    /* 世界地图(中国口径的 world.geo.json;要素名是 ISO3) */
+    const [geo, bl] = await Promise.all([fetch("world.geo.json").then((r) => r.json()), P.ignored()]);
+    echarts.registerMap("world", geo);
+    const zh = {}; geo.features.forEach((f) => { zh[f.properties.name] = f.properties.zh || f.properties.name; });
+    const byIso = {};
+    countries.forEach((c) => { byIso[P.get("country", c, "key")] = c; });
+    const raw = countries.map((c) => ({ name: P.get("country", c, "key"), value: Number(P.get("country", c, "lead_count")) || 0,
+      opps: Number(P.get("country", c, "opp_count")) || 0, zh: P.get("country", c, "name_zh") || "" }));
+    const data = P.hatchData(raw, bl);
+    const max = Math.max(1, ...data.map((d) => d.value));
+    mc = echarts.init($("map"));
+    const mapOption = {
+      tooltip: { trigger: "item", formatter: (p) => { const d = p.data || {}; return "<b>" + (d.zh || zh[p.name] || p.name) + "</b><br>线索 " + (d.value || 0) + " · 商机 " + (d.opps || 0) + P.hatchTip(p.name, bl); } },
+      visualMap: { min: 0, max, text: ["线索多", "少"], calculable: true, inRange: { color: ["#dbeafe", "#1d4ed8"] }, left: 10, bottom: 10 },
+      series: [{ type: "map", map: "world", roam: true, nameProperty: "name", data, emphasis: { label: { show: false } }, itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" } }],
+    };
+    mc.setOption(mapOption);
+    P.hatchFit(mc, bl, { series: () => raw });  // 斜线按缩放换算成细线
+    P.hatchNote($("map"), bl);
+    mc.on("click", (p) => { if (byIso[p.name]) location.href = "country.html?iso=" + encodeURIComponent(p.name); });
+    $("mapReset").onclick = (e) => { e.preventDefault(); mc.clear(); mc.setOption(mapOption); P.hatchFit(mc, bl, { series: () => raw }); };
+    let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { fc && fc.resize(); mc.resize(); }, 150); });  // 连续 resize 要缓一拍,不然地图内部算变换会报错
+
+    /* 最新报告 */
+    const reports = await P.records("report", { take: 8, orderBy: [{ fieldId: P.f("report", "day"), order: "desc" }],
+      props: ["kind", "day", "period", "country", "opportunity", "edition", "file", "gen_status"] });
+    $("reports").innerHTML = P.tableHtml(["日期", "类型", "范围", "文件"], reports.map((r) => {
+      const g = (p) => P.get("report", r, p);
+      const files = (g("file") || []).map((f) => '<a href="' + P.esc(P.fileUrl(f)) + '" target="_blank" rel="noopener">' + P.esc(f.name) + "</a>").join("<br>");
+      return [P.day(g("day")), g("kind") + (g("edition") === "公开版" ? "(公开版)" : ""), [P.text(g("country")), P.text(g("opportunity")), g("period")].filter(Boolean).join(" · "), P.raw(files || P.esc(g("gen_status") || ""))];
+    })) + '<p><a href="reports.html">全部报告、要一份新报告 →</a></p>';
+  } catch (e) { P.fail($("cards"), e); }
+})();
+</script>
+</body>
+</html>

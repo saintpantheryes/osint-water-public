@@ -1,0 +1,53 @@
+# 虚构示例台账,仅供测试;国别 ZZZ 为用户自定义码,与任何真实国家无关
+schema: osint-water/ledger@1
+country: ZZZ
+as_of: 2026-09-20
+fx: {USD: 1, EUR: 1.1}
+opportunities:
+  - id: ZZZ-001
+    name_zh: 甲市污水处理厂
+    segments: [wastewater]
+    stage: procurement
+    location: {city_zh: 甲市}
+    financing:
+      - {funder: EBRD, instrument: sovereign_loan, amount: 50000000, currency: EUR, status: signed, date: 2026-03-01, src: [S01]}
+    procurement:
+      regime: EBRD_PPR
+      packages:
+        - {name: 污水厂设计施工, type: design_build, status: planned, deadline: 2026-12, src: [S01]}
+    milestones:
+      - {type: gpn, date: 2026-04-01, status: actual, src: [S01]}
+      - {type: pq_deadline, date: 2026-11-15, status: planned, src: [S01]}
+      - {type: eoi_deadline, date: 2026-08-01, status: actual, src: [S02]}
+    verification: {status: verified, checked_at: 2026-09-20, method: primary_read, pending: [标段划分]}
+  - id: ZZZ-002
+    name_zh: 乙市灌溉渠
+    in_scope: false
+    segments: [irrigation]
+    stage: financing_signed
+    financing:
+      - {funder: ISDB, instrument: sovereign_loan, amount: 100000000, currency: USD, status: signed, src: [S02]}
+    procurement: {regime: ISDB_PG}
+    milestones:
+      - {type: tender_launch, date: 2026-Q4, status: expected}
+      - {type: loan_signing, date: 2026-06, status: planned}
+    verification: {status: partial, checked_at: 2026-09-20, method: search_snippet}
+  - id: ZZZ-003
+    name_zh: 丙市管网改造
+    segments: [water_supply, nrw]
+    stage: plan
+    total_cost: {amount: 20000000, currency: USD, src: [S02]}
+    procurement: {regime: ZZ_PPL}
+    milestones:
+      - {type: bid_deadline, date: 2027-03-10, status: expected}
+    verification: {status: unverified, checked_at: 2026-09-20, method: report_baseline}
+  - id: ZZZ-004
+    name_zh: 丁市供水项目
+    segments: [water_supply]
+    stage: preparation
+    procurement:
+      regime: ISDB_PG
+      eligibility: {status: eligible, basis: 公告明示对所有国家开放(虚构)}
+    verification: {status: conflicting, checked_at: 2026-09-20, method: search_snippet, conflicts: [金额两说]}
+events:
+  - {name: 虚构投资论坛, date: 2026-10-05, end: 2026-10-06, place: 甲市, src: [S02]}

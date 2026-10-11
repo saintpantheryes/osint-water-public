@@ -1,0 +1,107 @@
+# 监测规则词表:按领域分组的多语种水务词 × 机会阶段词。只做初筛(召回优先),真正的判定交给模型;公开信息,CC BY 4.0。
+# 匹配方式:不区分大小写,须从词首开始(sewer 能匹配 sewerage;dam 这种短词会误中 damage,不要收);
+#           全大写、≤5 个字母的缩写(EOI、GPN、WWTP)按整词、区分大小写匹配;
+#           写成 /…/ 的是正则(同样从词首开始),用来排除易混的词,如 '/kanal(?!iz)/' 不算 kanalizasiya。
+# 俄语、阿塞拜疆语多写词干(водоснабжен 匹配 водоснабжение/водоснабжения)。
+# 命中任一领域的词即算"水务";领域可多选,都没命中具体领域时记为 other。
+schema: osint-water/watch-terms@2
+
+sectors:
+  water_supply:
+    zh: 供水
+    en: [water supply, drinking water, potable water, water treatment plant, non-revenue water, water loss, water main,
+         water pipeline, transmission main, water transmission, water network, water distribution, water meter, bulk water, water utility,
+         water utilities, water treatment, borehole, water well]
+    az: [su təchizatı, içməli su, su təmizləyici, su kəməri, magistral su, su xətti, su itkisi, sayğac]
+    ru: [водоснабжен, водопровод, питьев, водоканал]
+    tr: [içme suyu, su şebekesi]
+    fr: [eau potable, alimentation en eau, adduction d'eau, réseau d'eau, AEP, distribution d'eau, château d'eau, forage,
+         point d'eau]
+    es: [agua potable, abastecimiento de agua, suministro de agua, red de agua, potabiliz]
+    pt: [abastecimento de água, água potável]
+    ar: [مياه الشرب, إمدادات المياه, شبكة المياه]
+  wastewater:
+    zh: 污水
+    en: [wastewater, waste water, sewage, sewerage, sewer, sanitation, WWTP, ISTP, sludge, reuse of treated, faecal sludge, fecal sludge,
+         effluent, latrine]
+    az: [çirkab, tullantı su, kanalizasiya, sutəmizləyici, kollektor, su və kanalizasiya]
+    ru: [водоотведен, канализац, сточн, очистн]
+    tr: [atık su, kanalizasyon, arıtma]
+    fr: [assainissement, eaux usées, station d'épuration, boues, épuration]
+    es: [aguas residuales, alcantarillado, saneamiento, planta de tratamiento de aguas residuales]
+    pt: [esgoto, esgotamento sanitário, saneamento, águas residuais]
+    ar: [الصرف الصحي, مياه الصرف, محطة معالجة]
+  hydraulic:
+    zh: 水利
+    en: [reservoir, irrigation, irrigat, canal, dam construction, dam rehabilitation, dam safety, hydraulic structure,
+         flood protection, flood control, headworks, weir, embankment, water transfer, flood risk, flood management,
+         flood mitigation]
+    az: [su anbarı, suvarma, '/kanal(?!iz)/', meliorasiya, drenaj, hidroqovşaq, sututar, daşqın]
+    ru: [водохранилищ, орошен, ирригац, '/канал(?!из)/', плотин, гидроузел, паводк]
+    tr: [baraj, sulama, taşkın]
+    fr: [irrigation, barrage, périmètre irrigué, protection contre les inondations, transfert d'eau, transfert des eaux, seguia]
+    es: [riego, represa, embalse, canal de riego, control de inundaciones, presa, trasvase]
+    pt: [irrigação, barragem, transposição]
+    ar: [الري, سد, خزان, السدود]
+  desalination:
+    zh: 海水淡化
+    # IWP / IWPP:海湾国家海水淡化 PPP 的通称(独立水厂、独立水电联产,如沙特 Sharakat、阿曼 Nama PWP 的项目);
+    # 反渗透(SWRO 海水、BWRO 苦咸水)是主流工艺,招标标题常只写工艺不写"海水淡化"
+    en: [desalination, desalinat, desalinis, seawater reverse osmosis, reverse osmosis, SWRO, BWRO, IWP, IWPP, brackish water]
+    az: [duzsuzlaşdırma, şirinləşdir]
+    ru: [опреснен, опреснит, обратного осмоса, обратный осмос]
+    tr: [tuzdan arındırma, desalinasyon, deniz suyu arıtma, ters ozmoz]
+    fr: [dessalement, dessalinis, osmose inverse]
+    es: [desalinización, desalinizadora, desaladora, desalación, ósmosis inversa]
+    pt: [dessalinização, dessalinizadora, osmose reversa]
+    ar: [تحلية, التناضح العكسي]
+  stormwater:
+    zh: 雨水排涝
+    en: [stormwater, storm water, urban drainage, storm drain, rainwater drainage]
+    az: [yağış suyu]
+    ru: [ливнев]
+    fr: [eaux pluviales, drainage pluvial]
+    es: [drenaje pluvial, aguas pluviales]
+    pt: [drenagem pluvial, águas pluviais]
+    ar: [تصريف مياه الأمطار]
+  environment:
+    zh: 水环境
+    en: [river rehabilitation, river restoration, lake restoration, water pollution, water quality improvement, wetland restoration]
+    az: [çayların təmizlənməsi]
+    ru: [очистка рек]
+    fr: [dépollution, réhabilitation des rivières]
+    es: [descontaminación, recuperación de ríos]
+    pt: [despoluição]
+  general:            # 只说明"是水务",不定具体领域(机构名里常有"水资源",不能据此归到水利)
+    zh: 水务(综合)
+    en: [treatment plant, hydraulic, SCADA, water sector, water and sanitation, WASH, water resources, water security,
+         pumping station, pump station, water resource, water conservation, water saving, water efficiency,
+         water use efficiency, water management, water services, water infrastructure, groundwater, drainage]
+    az: [su təsərrüfatı, su ehtiyatları, nasos stansiyası]
+    ru: [водное хозяйство, водохозяйств, водных ресурс, насосн]
+    fr: [secteur de l'eau, ressources en eau, ressources hydriques, gestion de l'eau, économie d'eau, économies d'eau,
+         eaux souterraines, station de pompage, hydraulique, station de traitement]
+    es: [sector agua, recursos hídricos, gestión del agua, aguas subterráneas, hidráulic]
+    pt: [recursos hídricos, gestão da água, águas subterrâneas, hidráulic]
+    ar: [الموارد المائية]
+
+stage:
+  tender: [invitation for bids, invitation for tenders, invitation for tender, request for bids, request for proposals,
+           bidding documents, tender notice, call for tenders, ICB, NCB, RFB, RFP, tender elan, satınalma, müsabiqə,
+           podratçı, торги, тендер, конкурс, ihale, appel d'offres, licitación, concurso público, licitação]
+  eoi: [expression of interest, expressions of interest, REOI, EOI, maraqların ifadə, niyyət bildirişi,
+        выражение заинтересованности, manifestation d'intérêt, manifestations d'intérêt, expresiones de interés,
+        expresión de interés, manifestação de interesse]
+  prequalification: [prequalification, pre-qualification, PQQ, ilkin seçim, préqualification, precalificación]
+  gpn: [general procurement notice, GPN, ümumi satınalma bildirişi, avis général de passation, aviso general de adquisiciones]
+  spn: [specific procurement notice, SPN, xüsusi satınalma bildirişi, avis spécifique de passation]
+  award: [contract award, awarded, award notice, shortlist, short list, qalibi, qalib, müqavilə imzalan, qısa siyahı,
+          attribution du marché, adjudicación]
+  financing: [loan agreement, grant agreement, financing agreement, approves, approved, board of directors, loan, grant,
+              kredit, saziş, maliyyələşdir, qrant, заем, кредит, грант, accord de prêt, contrato de préstamo]
+  plan: [feasibility study, detailed design, design and construction supervision, environmental and social impact,
+         ESIA, layihə-smeta, texniki-iqtisadi, state program, dövlət proqramı, foundation stone, təməl, étude de faisabilité,
+         estudio de factibilidad]
+
+# 阶段优先级:同一条同时命中多类、且出现位置相同时取靠前的
+stage_order: [tender, eoi, prequalification, spn, gpn, award, financing, plan]

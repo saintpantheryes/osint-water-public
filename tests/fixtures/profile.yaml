@@ -1,0 +1,15 @@
+# 测试 profile(虚构)
+name: test-fixture
+countries:
+  - {iso2: ZZ, iso3: ZZZ, name_en: Testland, name_zh: 测试国, tier: focus, ledger: ZZZ/ledger.yaml, overlay: overlay.yaml}
+bidder:
+  nationality: chn
+  local_entity: {}
+lead_times:
+  tender_launch: {立项与伙伴: 30}
+  eoi_deadline: {准备: 10, 审批: 5}
+  pq_deadline: {准备: 20, 审批: 10}
+  bid_deadline: {准备: 40, 审批: 15}
+  rfp_deadline: {准备: 60, 审批: 20}
+  local_registration: 120
+procurement_rules: rules.yaml

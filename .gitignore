@@ -1,0 +1,34 @@
+# 私有 profile 永不入库(demo 除外)
+profiles/*
+!profiles/README.md
+!profiles/demo/
+!profiles/demo/**
+!profiles/example/
+!profiles/example/**
+
+# 本地数据
+data/raw/
+data/snapshots/
+data/private/
+*.duckdb
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# 环境与产物
+.env
+.env.*
+# 云主机密钥,绝不进仓库
+*.pem
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+reports/out/
+.DS_Store
+
+# 页面配置(库、表、字段编号)属于部署,在私有配置目录 private/portal/config.json;主机上由 compose 挂进页面目录
+portal/config.json
+# 私有配置仓的检出(另一个仓库),不进公开核心仓
+private/
+portal/media/
