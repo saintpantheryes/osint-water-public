@@ -49,6 +49,12 @@ checkout_repo() {
   git -C "$dir" remote set-url origin "$repo"
   git -C "$dir" fetch -q origin main || die "取不到 GitHub 上的 $kind 仓库(网络或部署密钥)"
   git -C "$dir" checkout -q main 2>/dev/null || true
+  # 换了仓库(例如从私有开发仓换到公开仓,两边历史不相干):没有本地改动时直接换成新仓库的 main
+  if ! git -C "$dir" merge-base HEAD origin/main >/dev/null 2>&1; then
+    [ -z "$(git -C "$dir" status --porcelain --untracked-files=no)" ] || die "主机上的 $kind 检出有本地改动,不能换仓库:ssh 上去看 git -C $dir status"
+    git -C "$dir" checkout -q -B main origin/main
+    echo "  $kind 换成新仓库 $repo 的 main"
+  fi
   git -C "$dir" merge -q --ff-only origin/main || die "主机上的 $kind 检出有本地改动,快进不了:ssh 上去看 git -C $dir status"
   echo "  $kind $(git -C "$dir" rev-parse --short HEAD)"
 }

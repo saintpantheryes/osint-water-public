@@ -184,6 +184,31 @@ def test_ckan_collector(monkeypatch):
         KINDS["ckan"](src, CTX)
 
 
+def test_iati_projects_grouped_by_project(monkeypatch):
+    def row(aid, status, day, amount, sector, cc):
+        return {"aid": f"XM-DAC-46004-{aid}", "title": "Urban Water Supply Project", "description": "Water supply and sanitation.",
+                "status_code": status, "day_start": day, "commitment": amount, "sector_code": sector, "country_code": cc}
+    rows = [row("58040-001-LN4755", 1, 20543, 30000000, "14031", "PG"), row("58040-001-LN4755", 1, 20543, 30000000, "14022", "PG"),
+            row("58040-001-LN4756", 2, 20500, 30900000, "14031", "PG"),  # 同一项目的另一笔贷款
+            row("40000-001-LN1", 4, 20000, 1, "14031", "PK"),  # 已关闭的不收
+            {**row("x", 1, 1, 1, "14031", "PK"), "aid": "XM-DAC-41114-1"}]  # 别的发布机构的不收
+    calls: list = []
+    _serve(monkeypatch, {"https://dportal.test/q.json": json.dumps({"rows": rows})}, calls)
+    src = {"id": "adb_projects", "kind": "iati", "api": "https://dportal.test/q.json", "reporting_ref": "XM-DAC-46004",
+           "sectors": [14031, 14022], "project_url": "https://www.adb.org/projects/{project}/main"}
+    it, = KINDS["iati"](src, CTX)
+    assert calls[0][1]["sector_code"] == "14031|14022" and calls[0][1]["reporting_ref"] == "XM-DAC-46004"
+    assert (it.key, it.url, it.published) == ("adb_projects:58040-001", "https://www.adb.org/projects/58040-001/main", "2026-02-16")
+    assert it.title == "58040-001 Urban Water Supply Project" and geo.iso3(it.fields["country"]) == "PNG"
+    assert (it.fields["status"], it.fields["amount_usd"], it.fields["sectors"]) == ("Pipeline", 60900000, "14031, 14022")
+    rows[0]["status_code"] = rows[1]["status_code"] = 2  # 筹备转实施:出一条"变化"
+    _serve(monkeypatch, {"https://dportal.test/q.json": json.dumps({"rows": rows})})
+    again, = KINDS["iati"](src, CTX)
+    assert again.key == it.key and again.fields["status"] == "Active" and again.fingerprint != it.fingerprint
+    adb, = [x for x in yaml.safe_load((ROOT / "global/watch.yaml").read_text(encoding="utf-8"))["sources"] if x["id"] == "adb_projects"]
+    assert adb["kind"] == "iati" and adb["reporting_ref"] == "XM-DAC-46004"
+
+
 LINKS_HTML = """<html><body><nav><a href="/">Home page of the ministry of water</a></nav>
 <div class="news">
   <div class="item"><span>24 Sentyabr 2026</span><h3><a href="/news/101">Suvarma kanalının tikintisi üzrə tender elan edilir</a></h3></div>

@@ -25,7 +25,7 @@ from core.watch.store import Store
 CAT = {**onto_mod.codes("lead_category"), "page": onto_mod.codes("lead_category")["other"]}  # 判定的类别 → 本体的类别(page = 页面变化,归「其他」)
 DEADLINE_KIND = {onto_mod.code_of("milestone_kind")[v]: v for v in onto_mod.group_values("milestone_kind", "采购截止")}  # 线索里抽出的四种截止(「采购截止」组)
 _SOURCE_KIND_CODE = {"html_list": "html_list", "page": "html_list", "links": "html_list", "rss": "rss", "atexo_search": "portal",
-                     "wb_procnotices": "api", "wb_projects": "api", "aiib": "api", "ckan": "api", "gdelt": "api"}  # 信源配置里的 kind → 本体 source_kind 的 code
+                     "wb_procnotices": "api", "wb_projects": "api", "aiib": "api", "ckan": "api", "iati": "api", "gdelt": "api"}  # 信源配置里的 kind → 本体 source_kind 的 code
 SOURCE_KIND = {k: onto_mod.codes("source_kind")[c] for k, c in _SOURCE_KIND_CODE.items()}
 SOURCE_STATUS = dict(onto_mod.codes("source_status"))
 # 线索的类别 → 商机的公开进度(机器只填空;不同的写进待核更新):类别 code → 公开进度 code

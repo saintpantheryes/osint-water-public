@@ -57,7 +57,7 @@ MS_KIND = {"board_approval": "董事会批准", "loan_signing": "贷款签署", 
            "contract_signing": "合同签署", "construction_start": "开工", "completion": "完工"}  # 其余为「其他」
 DEADLINE_KIND = {"bid_deadline": "投标截止", "eoi_deadline": "意向书截止", "pq_deadline": "资格预审截止", "rfp_deadline": "PPP标书截止"}
 SOURCE_KIND = {"html_list": "网页列表", "page": "网页列表", "links": "网页列表", "rss": "RSS", "atexo_search": "采购门户",
-               "wb_procnotices": "接口", "wb_projects": "接口", "aiib": "接口", "ckan": "接口", "gdelt": "接口"}
+               "wb_procnotices": "接口", "wb_projects": "接口", "aiib": "接口", "ckan": "接口", "iati": "接口", "gdelt": "接口"}
 SOURCE_STATUS = {"ok": "正常", "empty": "无条目", "error": "出错", "blocked": "被拒"}
 REPORT_KIND = {"国别报告": "国别报告", "项目报告": "项目报告", "周报": "周报", "月度台账分析": "月报", "线索简报": "月报"}
 EXCERPT_MAX = 20000

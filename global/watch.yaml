@@ -93,6 +93,16 @@ sources:
     sectors: [Water]
     topic: water
 
+  - id: adb_projects
+    name: 亚行项目库(水务)
+    kind: iati            # 亚行网站不让程序读,招标公告也没有允许程序取的入口;改用亚行发布到 IATI 的项目数据(筹备中与实施中)
+    reporting_ref: XM-DAC-46004
+    sectors: [14010, 14015, 14020, 14021, 14022, 14030, 14031, 14032, 14040, 14050, 14081, 31140, 41050]
+    url: https://www.adb.org/projects
+    project_url: https://www.adb.org/projects/{project}/main
+    topic: water          # 已按水务行业代码过滤(项目级,仍交模型判定)
+    lookback_days: 180     # 亚行的 IATI 数据常晚几个月才更新
+
   - id: undp_notices
     name: 联合国开发署采购公告
     kind: html_list
