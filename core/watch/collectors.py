@@ -12,6 +12,7 @@
 - ckan           CKAN 开放数据接口(美洲开发银行采购公告等)
 - gdelt          GDELT 新闻接口(可选;限流即停)
 - atexo_search   Atexo 公共采购平台(摩洛哥公共采购门户等)的在线检索:按活动领域取"在招"公告,要经页面表单回发
+- iati           国际援助透明度(IATI)数据,经 d-portal 接口按发布机构与行业代码取项目(亚洲开发银行的项目管线等)
 """
 from __future__ import annotations
 
@@ -431,6 +432,54 @@ def ckan(src: dict, ctx: Ctx) -> list[Item]:
         out.append(Item(key=f"{src['id']}:{g('key')}", url=g("url") or src.get("home") or "", title=g("title") or "",
                         published=parse_date((g("published") or "")[:10]), text=(g("text") or "")[:4000], fields=fields,
                         lang=src.get("lang")))
+    return out
+
+
+IATI_QUERY = "https://d-portal.org/q.json"
+IATI_STATUS = {1: "Pipeline", 2: "Active", 3: "Finalisation", 4: "Closed", 5: "Cancelled", 6: "Suspended"}  # IATI 活动状态代码
+_EPOCH = date(1970, 1, 1).toordinal()
+
+
+@kind("iati")
+def iati(src: dict, ctx: Ctx) -> list[Item]:
+    """IATI 数据(经 d-portal 的公开查询接口):reporting_ref 是发布机构(亚行 XM-DAC-46004),sectors 是 DAC 行业代码。
+    同一项目的几笔贷款、赠款(IATI 里各是一条活动)按项目编号并成一条;状态或金额变了出一条"变化"。
+    project_url 里的 {project} 换成项目编号(活动编号去掉发布机构前缀和末段贷款号,如 56139-001)。"""
+    params = {"from": "act,sector,country", "reporting_ref": src["reporting_ref"], "orderby": "day_start-",
+              "select": "aid,title,description,status_code,day_start,commitment,sector_code,country_code",
+              "limit": src.get("rows", 300)}
+    if src.get("sectors"):
+        params["sector_code"] = "|".join(str(x) for x in src["sectors"])
+    data = json.loads(fetch.get(src.get("api", IATI_QUERY), params=params).content)
+    keep = set(src.get("statuses") or [1, 2])
+    prefix = src["reporting_ref"] + "-"
+    projects: dict[str, dict] = {}
+    for r in data.get("rows") or []:
+        aid = str(r.get("aid") or "")
+        if not aid.startswith(prefix) or r.get("status_code") not in keep:
+            continue
+        rest = aid[len(prefix):]
+        pid = rest.rsplit("-", 1)[0] if rest.count("-") >= 2 else rest
+        p = projects.setdefault(pid, {"aids": {}, "sectors": [], "countries": [], "title": r.get("title"),
+                                      "text": r.get("description") or "", "status": r["status_code"], "start": r.get("day_start")})
+        p["aids"][aid] = r.get("commitment") or 0  # 一笔活动按行业、国别各出一行,金额只算一次
+        for k, v in (("sectors", r.get("sector_code")), ("countries", r.get("country_code"))):
+            if v and v not in p[k]:
+                p[k].append(v)
+        p["status"] = min(p["status"], r["status_code"])  # 有一笔还在筹备,项目就算筹备
+        if r.get("day_start") and (not p["start"] or r["day_start"] < p["start"]):
+            p["start"] = r["day_start"]
+    out = []
+    for pid, p in projects.items():
+        start = date.fromordinal(_EPOCH + p["start"]).isoformat() if p["start"] else None
+        amount = sum(p["aids"].values()) or None
+        fields = {"country": p["countries"][0] if p["countries"] else None, "countries": ", ".join(p["countries"]) or None,
+                  "status": IATI_STATUS.get(p["status"]), "start": start, "amount_usd": amount,
+                  "sectors": ", ".join(p["sectors"]), "project_id": pid}
+        it = Item(key=f"{src['id']}:{pid}", url=src["project_url"].format(project=pid), title=f"{pid} {p['title'] or ''}".strip(),
+                  published=start, text=p["text"][:4000], fields=fields, lang="en")
+        it.fingerprint = _fingerprint(it, ["status", "amount_usd"])
+        out.append(it)
     return out
 
 

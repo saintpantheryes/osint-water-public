@@ -228,7 +228,7 @@ FUNDERS = (
 _FUNDER_RE = [(name, re.compile(words, re.I), re.compile(rf"(?<![A-Za-z])(?:{acr})(?![A-Za-z])")) for name, words, acr in FUNDERS]
 # 没写出资方时:多边开发银行、联合国机构自己的采购公告栏,出资方就是它(按信源编号的开头认)
 SOURCE_FUNDER = (("wb_", "世界银行"), ("ebrd", "欧洲复兴开发银行"), ("isdb", "伊斯兰开发银行"), ("idb_", "美洲开发银行"),
-                 ("aiib", "亚洲基础设施投资银行"), ("opecfund", "欧佩克基金"), ("undp", "联合国开发署"))
+                 ("aiib", "亚洲基础设施投资银行"), ("adb_", "亚洲开发银行"), ("opecfund", "欧佩克基金"), ("undp", "联合国开发署"))
 
 
 def funders_of(r: dict) -> list[str]:
