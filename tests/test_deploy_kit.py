@@ -163,3 +163,20 @@ def test_default_report_templates_are_neutral():
     for p in tdir.glob("*.docx"):
         core = zipfile.ZipFile(p).read("docProps/core.xml").decode()
         assert "<dc:creator></dc:creator>" in core or "<dc:creator/>" in core or "dc:creator" not in core, p.name
+
+
+def test_one_click_installer_keeps_secrets_out_of_the_terminal():
+    """一键安装(给 AI 代跑):不读终端输入;密钥不打印、不上命令行;AI 向导与技能指向它。"""
+    s = (KIT / "one_click.sh").read_text(encoding="utf-8")
+    subprocess.run(["bash", "-n", str(KIT / "one_click.sh")], check=True)
+    assert not re.search(r"^[^#]*\bread -r -(s|p)", s, re.M)  # 不在终端里等输入,AI 代跑不会卡住
+    assert not re.search(r"\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]", s)  # Mac 自带 bash 3.2,见上面换域名脚本的测试
+    # ADMIN.txt 只另存到本机(只有用户能读),不打到终端;secrets.env 只按名字取值,不 source
+    assert re.search(r'on_host "cat /opt/teable/ADMIN.txt" > "\$ADMIN_LOCAL"', s) and "umask 077" in s
+    assert not re.search(r'^[^#]*(\bsource\b|^\s*\. )', s, re.M)
+    assert "exit 10" in s and "需要你做" in s
+    guide = (ROOT / "docs" / "AI_INSTALL.md").read_text(encoding="utf-8")
+    assert "deploy/teable/one_click.sh" in guide and "secrets.env" in guide
+    skill = (ROOT / ".claude" / "skills" / "install-osint-water" / "SKILL.md").read_text(encoding="utf-8")
+    assert skill.startswith("---\nname: install-osint-water\n") and "docs/AI_INSTALL.md" in skill
+    assert "docs/AI_INSTALL.md" in (ROOT / "README.md").read_text(encoding="utf-8")

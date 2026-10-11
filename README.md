@@ -62,7 +62,16 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 ## 部署
 
-见 **[docs/部署指南.md](docs/部署指南.md)**:一台云主机、一个域名,几条命令装好 Teable、Caddy、页面与后台任务。
+**让 AI 帮你装**(不懂技术也行):把下面这句话复制给能在你电脑上跑命令的 AI 助手(Claude Code、Cursor、Codex 等),它会一步步带你做。
+要你在网页上操作的地方(买服务器、加域名记录、拿模型密钥)它会提示你;密钥由你自己填进本机文件,不用发给 AI。
+
+```text
+请帮我安装全球水务开源情报:先读 https://raw.githubusercontent.com/saintpantheryes/osint-water-public/main/docs/AI_INSTALL.md ,然后一步步带我做。
+```
+
+**自己装**:准备好云主机、域名和两个仓库后,一条命令装完(可重复运行):
+`bash deploy/teable/one_click.sh <密钥.pem> <主机IP> <域名> <你>/osint-water-private`。
+每一步分开做见 **[docs/部署指南.md](docs/部署指南.md)**。
 运维(备份、恢复、换域名、迁主机、令牌轮换)见 [deploy/teable/README.md](deploy/teable/README.md)。
 
 ## 参与
@@ -131,8 +140,11 @@ links notices to tracked opportunities, and produces a daily brief, country prof
 - **Two repositories**: this one holds the code; your own configuration (profile, page config, report templates,
   country ledgers) lives in a separate private repo mounted at `private/`.
 - **UI language**: the interface and reports are currently in Chinese; project reports also have an English edition.
-- **Deploy**: see [docs/部署指南.md](docs/部署指南.md) (Chinese; the commands are self-explanatory):
-  fork, create a private config repo from `profiles/example/profile.yaml`, run `deploy/teable/push_from_mac.sh`
-  (works from any bash), `python -m core.schema`, then `deploy/teable/worker_from_mac.sh`.
+- **Deploy**: easiest is to hand an AI coding agent this sentence: "Please install Global Water OSINT for me: read
+  https://raw.githubusercontent.com/saintpantheryes/osint-water-public/main/docs/AI_INSTALL.md first, then walk me through it."
+  Secrets never go through the chat: you type them into `~/.osint-water/secrets.env` yourself.
+  By hand: fork, create an empty private config repo, then run
+  `bash deploy/teable/one_click.sh <key>.pem <server-ip> <domain> <you>/osint-water-private` (re-runnable; exit code 10 means
+  "do the step printed under 需要你做 and re-run"). Step by step: [docs/部署指南.md](docs/部署指南.md).
 - **License**: code AGPL-3.0; `docs/` and `reference/` CC BY 4.0; each data source keeps its own terms.
 - **Security**: report vulnerabilities privately, see [SECURITY.md](SECURITY.md).
