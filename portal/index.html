@@ -23,6 +23,9 @@
     <p class="hero-sub">想知道哪国、哪个项目、哪条线索的事,从这里开始问。</p>
     <div class="hero-card">
       <form class="askbox hero-ask" id="askForm">
+        <button type="button" class="att" id="att" aria-label="上传 PDF、Word 或截图" title="上传 PDF、Word 或截图(网站打不开时用)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></button>
+        <input type="file" id="file" accept=".pdf,.docx,image/*,application/pdf" hidden>
+        <span class="file-chip" id="fileChip" hidden></span>
         <input id="q" type="text" autocomplete="off" placeholder="试试「最近 7 天埃及有哪些新线索」" maxlength="6000" aria-label="向助手提问">
         <button type="submit" class="go" id="go" aria-label="提问">→</button>
       </form>
@@ -270,10 +273,11 @@
     const meta = [l.country, l.found_at, l.status, l.opportunity ? "商机:" + l.opportunity : ""].filter(Boolean).map(P.esc).join(" · ");
     return "<li>" + (l.url ? '<a href="' + P.esc(l.url) + '" target="_blank" rel="noopener">' + name + "</a>" : name) + ' <span class="muted small">' + meta + "</span> " + P.open("lead", l.id) + "</li>";
   }
-  async function linkAnswer(url, note, el) {
-    el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="frow understood"><b>理解为</b><span class="chip-btn on" style="cursor:default">看一条链接:读原文、判断信源、查库里相关,给入库建议</span></div>');
-    el.querySelector(".a-body").innerHTML = '<p class="muted">读原文、查库里和公开渠道…(要十几秒到半分钟)</p>';
-    const r = await P.checkLink(url, note);
+  async function linkAnswer(url, note, el, file) {
+    el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="frow understood"><b>理解为</b><span class="chip-btn on" style="cursor:default">' +
+      (file ? "看一份文件:读文件里的字、判断信源、查库里相关,给入库建议" : "看一条链接:读原文、判断信源、查库里相关,给入库建议") + "</span></div>");
+    el.querySelector(".a-body").innerHTML = '<p class="muted">' + (file ? "读文件(截图和扫描件要识别文字)" : "读原文") + "、查库里和公开渠道…(要十几秒到半分钟)</p>";
+    const r = await P.checkLink(url, note, file ? await fileData(file) : undefined);
     if (!r) return;
     const body = el.querySelector(".a-body");
     if (!r.ok) { body.innerHTML = '<div class="warn">' + P.esc(r.error || "没看成") + "</div>"; return; }
@@ -282,7 +286,8 @@
     h.push('<div class="lk-advice ' + (ADV_CLS[adv.action] || "") + '">建议:' + P.esc(adv.action || "先核实") + "</div>");
     h.push('<p class="lk-why">' + P.esc(adv.reason || "") + "</p>");
     if (a.mismatch) h.push('<div class="warn small"><b>和你说的对不上:</b>' + P.esc(a.mismatch) + "</div>");
-    h.push("<h2>原文</h2><p>" + '<a href="' + P.esc(r.final_url || url) + '" target="_blank" rel="noopener">' + P.esc(a.title_zh || r.title || url) + "</a>" +
+    const src = r.final_url || url;
+    h.push("<h2>原文</h2><p>" + (src ? '<a href="' + P.esc(src) + '" target="_blank" rel="noopener">' + P.esc(a.title_zh || r.title || src) + "</a>" : P.esc(a.title_zh || r.title || "上传的文件")) +
       (a.title_zh && r.title ? ' <span class="muted small">' + P.esc(r.title) + "</span>" : "") + "</p>");
     if (a.summary_zh) h.push("<p>" + P.esc(a.summary_zh) + "</p>");
     const kv = [["项目", a.project_name], ["国别", r.country && r.country.name], ["城市或地区", a.city], ["出资方", a.funder], ["规模或金额", a.amount], ["进展", a.stage], ["信息日期", r.published], ["领域", (a.sectors || []).join("、")]].filter((x) => x[1]);
@@ -310,6 +315,7 @@
       const b = ev.currentTarget; b.disabled = true; b.textContent = "入库中…";
       try {
         const d = Object.assign({}, r.draft);
+        if (!d.url) delete d.url;
         const iso = d.country_iso3; delete d.country_iso3;
         if (iso && byIso[iso]) d.country = byIso[iso].id;
         const rec = await P.create("lead", d);
@@ -436,21 +442,58 @@
     if (window.ResizeObserver) new ResizeObserver(fit).observe(dock); else window.addEventListener("resize", fit);
   }
 
+  /* 上传文件(网站不让程序读时,把下载的 PDF、Word 或截图交给助手):点回形针选、拖进页面、或在提问框里粘贴截图 */
+  const FILE_MAX = 12 * 1024 * 1024;
+  let picked = null;
+  function pick(f) {
+    if (f && f.size > FILE_MAX) { P.toast("文件太大(超过 12 MB);可以只截要点那几页", true); f = null; }
+    picked = f || null;
+    const chip = $("fileChip");
+    chip.hidden = !picked;
+    chip.innerHTML = picked ? '<span class="fc-name" title="' + P.esc(picked.name) + '">' + P.esc(picked.name) + '</span><button type="button" aria-label="不传这个文件">×</button>' : "";
+    if (picked) { chip.querySelector("button").onclick = () => pick(null); $("q").placeholder = "可以再说一句,比如「这个项目能跟吗」"; $("q").focus(); }
+  }
+  $("att").onclick = () => $("file").click();
+  $("file").onchange = () => { pick($("file").files[0]); $("file").value = ""; };
+  $("q").addEventListener("paste", (ev) => {
+    const f = [...((ev.clipboardData && ev.clipboardData.files) || [])].find((x) => /^image\//.test(x.type));
+    if (f) { ev.preventDefault(); pick(new File([f], f.name && f.name !== "image.png" ? f.name : "截图.png", { type: f.type })); }
+  });
+  document.addEventListener("dragover", (ev) => { if (ev.dataTransfer && [...ev.dataTransfer.types].includes("Files")) ev.preventDefault(); });
+  document.addEventListener("drop", (ev) => { const f = ev.dataTransfer && ev.dataTransfer.files[0]; if (f) { ev.preventDefault(); pick(f); } });
+  /* 文件 → base64;图片先缩到长边 2400 像素以内(手机原图十几 MB,识别字用不着这么大,也顺带把 HEIC 转成 JPEG) */
+  async function fileData(f) {
+    let blob = f;
+    if (/^image\//.test(f.type) && window.createImageBitmap) {
+      try {
+        const bm = await createImageBitmap(f), k = Math.min(1, 2400 / Math.max(bm.width, bm.height));
+        const c = document.createElement("canvas"); c.width = Math.round(bm.width * k); c.height = Math.round(bm.height * k);
+        const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(bm, 0, 0, c.width, c.height);
+        blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.9)) || f;
+      } catch (e) { blob = f; }
+    }
+    const s = await new Promise((ok, bad) => { const rd = new FileReader(); rd.onload = () => ok(rd.result); rd.onerror = () => bad(new Error("文件读不了")); rd.readAsDataURL(blob); });
+    return s.slice(s.indexOf(",") + 1);
+  }
+
   async function submit(q) {
     q = (q || "").trim();
-    if (!q) return;
+    const file = picked;
+    if (!q && !file) return;
+    pick(null);
     const id = "a" + (++seq);
     const el = document.createElement("section"); el.className = "answer"; el.id = id;
-    el.innerHTML = '<div class="a-head"><div class="a-q">' + P.esc(q) + "</div></div>" + '<div class="a-body"><p class="muted">解析中…</p></div>';
+    el.innerHTML = '<div class="a-head"><div class="a-q">' + (file ? '<span class="a-file">📎 ' + P.esc(file.name) + "</span>" : "") + P.esc(q) + "</div></div>" + '<div class="a-body"><p class="muted">解析中…</p></div>';
     $("answers").append(el);
     asked();
     $("q").value = ""; $("q").placeholder = "继续问…";
     el.scrollIntoView({ block: "start", behavior: "smooth" });
-    history.replaceState(null, "", location.pathname + "?q=" + encodeURIComponent(q));
+    if (q && !file) history.replaceState(null, "", location.pathname + "?q=" + encodeURIComponent(q));
     const link = q.match(URL_RE);
     try {
       await ready;
-      if (link) await linkAnswer(link[0].replace(/[.,;:!?]+$/, ""), q.replace(link[0], " ").replace(/\s+/g, " ").trim(), el);
+      if (file) await linkAnswer(link ? link[0].replace(/[.,;:!?]+$/, "") : "", link ? q.replace(link[0], " ").replace(/\s+/g, " ").trim() : q, el, file);
+      else if (link) await linkAnswer(link[0].replace(/[.,;:!?]+$/, ""), q.replace(link[0], " ").replace(/\s+/g, " ").trim(), el);
       else await answer(q, el);
     } catch (e) { P.fail(el.querySelector(".a-body"), e); }
   }

@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import sys
 import threading
@@ -33,6 +34,7 @@ from core.profile import Profile, load_profile
 from core.watch.llm import Classifier, LLMConfig
 
 DEFAULT_PORT = 8765
+UPLOAD_JSON = 17_000_000  # 「看链接」带文件时的请求体上限:12 MB 文件转 base64 后约 16 MB
 FORGIVE_AFTER = 600  # 秒:模型连续出错停用后,过这么久再试
 TERMS_EVERY = 60  # 秒:隔这么久重读一次 Teable「行业术语」表(人在表里加的词下一个提问就用上)
 
@@ -99,7 +101,7 @@ class Assistant:
             self._terms_db, self._terms_db_at = self.terms_base(), now
         return self._terms_db
 
-    def check_link(self, url: str, note: str = "") -> dict:
+    def check_link(self, url: str, note: str = "", upload: bytes | None = None) -> dict:
         """看一条用户贴来的链接(core/link_check.py);抓不到、不让抓时给原因。查库出错照样给其余部分。"""
         self._maybe_forgive()
         db = None
@@ -110,7 +112,7 @@ class Assistant:
                 self._terms_db = None
                 self.log(f"看链接时连不上表格:{type(e).__name__}: {e}")
         try:
-            return link_check.check(url, note, self.today, self.clf, db, **self.link_kw)
+            return link_check.check(url, note, self.today, self.clf, db, upload=upload, **self.link_kw)
         except link_check.LinkError as e:
             return {"ok": False, "error": str(e)}
 
@@ -274,7 +276,7 @@ def make_handler(bot: Assistant):
                 self._send(404, {"ok": False, "error": "not found"})
                 return
             n = int(self.headers.get("Content-Length") or 0)
-            if n > 20_000:
+            if n > (UPLOAD_JSON if path == "/link" else 20_000):
                 self._send(413, {"ok": False, "error": "问题太长"})
                 return
             try:
@@ -291,7 +293,12 @@ def make_handler(bot: Assistant):
                     self._send(200, {"ok": False, "error": "游客帐号不能用这个功能(要查真实的线索库);可以用正式帐号登录后再试"})
                     return
                 try:
-                    out = bot.check_link(str(data.get("url") or ""), str(data.get("note") or "")[:link_check.DOC_CHARS])  # 网站不让读时附言就是正文
+                    upload = base64.b64decode(str(data.get("file") or ""), validate=True) if data.get("file") else None
+                except ValueError:
+                    self._send(400, {"ok": False, "error": "文件没传完整,请重新选一次"})
+                    return
+                try:
+                    out = bot.check_link(str(data.get("url") or ""), str(data.get("note") or "")[:link_check.DOC_CHARS], upload)  # 网站不让读时附言就是正文
                 except Exception as e:  # noqa: BLE001
                     bot.log(f"看链接出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
                     out = {"ok": False, "error": f"分析出错({type(e).__name__})"}

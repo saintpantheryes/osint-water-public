@@ -29,6 +29,7 @@ from urllib.parse import urlparse
 import httpx
 
 from core import geo
+from core.file_text import FileError, file_text
 from core.storage import USER_AGENT
 from core.watch.fetch import Page
 from core.watch.run import doc_text
@@ -327,21 +328,41 @@ def _advice(src: dict, a: dict | None, lib: dict) -> dict:
     return {"action": act, "reason": why.strip()}
 
 
-def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_page, outside=search_outside) -> dict:
+UPLOAD_SOURCE = {"kind": "其他网站", "label": "上传的文件(没给网址,信源要人看)", "level": "待核实", "known": "", "domain": ""}
+
+
+def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_page, outside=search_outside,
+          upload: bytes | None = None) -> dict:
+    """看一条链接;upload 是用户传来的文件(PDF、Word、截图):有文件就按文件看,不去抓网页,网址(可不给)只用来认信源、查库。"""
     url = (url or "").strip()
-    if not URL_RE.fullmatch(url):
-        raise LinkError("这不是一个完整的网址")
     notes: list[str] = []
+    if upload is not None:
+        try:
+            body, how = file_text(upload)
+        except FileError as e:
+            raise LinkError(str(e)) from e
+        url = url or find_url(body) or ""
+        if url and not URL_RE.fullmatch(url):
+            raise LinkError("这不是一个完整的网址")
+        page = Page(url, 0, html.escape(body).encode(), "text/plain")
+        note = (note or "")[:500]
+        notes.append("按你上传的文件分析" + (f"({how})" if how else ""))
+        body_ok = True
+    else:
+        if not URL_RE.fullmatch(url):
+            raise LinkError("这不是一个完整的网址")
+        body_ok = False
     pasted = (note or "").strip()
-    try:
-        page = fetch(url)
-        body, _ = doc_text(page)
-        note = (note or "")[:500]  # 读到了网页,附言只是附言
-    except LinkError:
-        if len(pasted) < PASTED_MIN:
-            raise
-        page, body = None, ""
-    if len(body.strip()) < 40:
+    if not body_ok:
+        try:
+            page = fetch(url)
+            body, _ = doc_text(page)
+            note = (note or "")[:500]  # 读到了网页,附言只是附言
+        except LinkError:
+            if len(pasted) < PASTED_MIN:
+                raise
+            page, body = None, ""
+    if not body_ok and len(body.strip()) < 40:
         if len(pasted) < PASTED_MIN:
             raise LinkError("没有读到正文(网页可能要登录或靠脚本生成);可以把链接和正文一起贴给我")
         # 网站不让程序读、或读不到正文:按用户一起贴来的正文看(网址照旧用来认信源、查库)
@@ -355,8 +376,8 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
             known = known_sources(db)
         except Exception as e:  # noqa: BLE001
             notes.append(f"读信源表出错({type(e).__name__})")
-    src = source_kind(page.url, known)
-    if _domain(page.url) != _domain(url):
+    src = source_kind(page.url, known) if page.url else dict(UPLOAD_SOURCE)
+    if page.url and _domain(page.url) != _domain(url):
         src["redirected_from"] = _domain(url)
     a = None
     if clf is not None and getattr(clf, "enabled", False):
@@ -372,7 +393,7 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
     lib = {"same_url": [], "related_leads": [], "related_opps": []}
     if db is not None:
         try:
-            lib = search_library(db, [url, page.url], words, iso)
+            lib = search_library(db, [u for u in (url, page.url) if u], words, iso)
         except Exception as e:  # noqa: BLE001
             notes.append(f"查库出错({type(e).__name__})")
     found, more = outside((a or {}).get("news_query"), iso)

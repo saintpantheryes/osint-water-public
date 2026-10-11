@@ -166,3 +166,72 @@ def test_link_endpoint(db):
         assert r["ok"] is False and "游客" in r["error"]
     finally:
         srv.shutdown()
+
+
+def _text_image(lines, fmt="PNG"):
+    import io
+
+    from PIL import Image, ImageDraw, ImageFont
+    img = Image.new("RGB", (1400, 90 * len(lines) + 60), "white")
+    d = ImageDraw.Draw(img)
+    font = ImageFont.load_default(size=40)
+    for i, ln in enumerate(lines):
+        d.text((40, 30 + 90 * i), ln, fill="black", font=font)
+    buf = io.BytesIO()
+    img.save(buf, fmt)
+    return buf.getvalue()
+
+
+ADB_LINES = ["Invitation for Bids", "Water Supply and Sanitation Improvement Project", "Lao People's Democratic Republic",
+             "Deadline for Submission of Bids: 18 November 2026"]
+
+
+def test_uploaded_file_stands_in_for_the_page(db, monkeypatch):
+    """网站不让程序读时,用户传来的 PDF、Word、截图照样能看:有文件就不去抓网页;没给网址时从文件里找,找不到也能看。"""
+    from core import file_text as F
+
+    def never(u):
+        raise AssertionError("有文件时不该去抓网页")
+    pdf = b"%PDF-1.4 fake"
+    monkeypatch.setattr(F, "pdf_text", lambda data: ("\n".join(ADB_LINES + ["See https://www.adb.org/node/1181131 for details."]), 1))
+    out = L.check("", "这个能跟吗", TODAY, None, db, fetch=never, outside=lambda q, iso: ([], []), upload=pdf)
+    assert out["ok"] and out["url"] == "https://www.adb.org/node/1181131" and out["source"]["label"] == "亚洲开发银行"
+    assert out["country"]["iso3"] == "LAO" and out["notes"][0] == "按你上传的文件分析"
+    monkeypatch.setattr(F, "pdf_text", lambda data: ("\n".join(ADB_LINES), 1))
+    out = L.check("", "", TODAY, None, db, fetch=never, outside=lambda q, iso: ([], []), upload=pdf)  # 文件里没有网址
+    assert out["ok"] and out["url"] == "" and out["source"]["level"] == "待核实" and out["draft"]["url"] == ""
+    with pytest.raises(L.LinkError, match="只能看 PDF"):
+        L.check("", "", TODAY, None, db, fetch=never, upload=b"hello world")
+    with pytest.raises(L.LinkError, match="太大"):
+        L.check("", "", TODAY, None, db, fetch=never, upload=b"%PDF-" + b"0" * F.MAX_BYTES)
+
+
+@pytest.mark.skipif(not __import__("shutil").which("tesseract"), reason="本机没装 tesseract")
+def test_screenshot_and_scanned_pdf_are_read_by_ocr():
+    from core.file_text import FileError, file_text
+    text, how = file_text(_text_image(ADB_LINES))
+    assert "Water Supply" in text and "18 November 2026" in text and "文字识别" in how
+    text, how = file_text(_text_image(ADB_LINES, "PDF"))  # 只有图片的 PDF = 扫描件
+    assert "Water Supply" in text and "扫描件" in how
+    with pytest.raises(FileError, match="没读到文字"):
+        file_text(_text_image([""]))
+
+
+def test_link_endpoint_takes_a_file(db, monkeypatch):
+    import base64
+
+    from core import file_text as F
+    monkeypatch.setattr(F, "pdf_text", lambda data: ("\n".join(ADB_LINES), 1))
+    bot = Assistant(None)
+    bot.terms_base = lambda: db
+    bot.link_kw = {"fetch": lambda u: (_ for _ in ()).throw(AssertionError()), "outside": lambda q, iso: ([], [])}
+    srv = serve(bot, 0, host="127.0.0.1")
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        base, h = f"http://127.0.0.1:{srv.server_port}", {"X-Portal-Auth": "1"}
+        r = httpx.post(base + "/link", json={"url": "https://www.adb.org/node/1181131", "file": base64.b64encode(b"%PDF-1.4").decode()},
+                       headers=h).json()
+        assert r["ok"] and r["country"]["iso3"] == "LAO" and "上传的文件" in r["notes"][0]
+        assert httpx.post(base + "/link", json={"file": "不是base64"}, headers=h).json()["error"].startswith("文件没传完整")
+    finally:
+        srv.shutdown()
