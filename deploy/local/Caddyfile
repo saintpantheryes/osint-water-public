@@ -1,0 +1,8 @@
+# 单机版:只在本机 http://localhost 上,不申请证书。路由与服务器版相同(页面、登录页、助手接口都在 portal.caddy)。
+:80 {
+	encode zstd gzip
+	import /etc/caddy/caddy.d/*.caddy
+	handle {
+		reverse_proxy teable:3000
+	}
+}

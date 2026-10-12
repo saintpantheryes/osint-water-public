@@ -1,0 +1,112 @@
+# 单机版(deploy/local/start.sh 用):表格、页面、后台任务都在自己电脑的 Docker 里,只在本机 http://localhost:<OW_PORT> 可见。
+# 和服务器版(deploy/teable/docker-compose.yml)同一套程序;区别:不对外开端口、不申请证书,程序与配置直接挂本机的检出。
+name: osint-water-local
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${OW_PORT:-8080}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../teable/portal.caddy:/etc/caddy/caddy.d/portal.caddy:ro
+      - ../../portal:/srv/portal:ro
+      - ../../private/portal/config.json:/srv/portal/config.json:ro
+      - ../../private/portal/media:/srv/portal/media:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - teable
+
+  teable:
+    image: ${TEABLE_IMAGE:-ghcr.io/teableio/teable:latest}
+    restart: unless-stopped
+    volumes:
+      - teable-data:/app/.assets:rw
+    env_file:
+      - state/.env
+    environment:
+      - NEXT_ENV_IMAGES_ALL_REMOTE=true
+    depends_on:
+      teable-db:
+        condition: service_healthy
+      teable-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      start_period: 180s  # 第一次启动要建库、编译页面,一两分钟
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  teable-db:
+    image: postgres:15.4
+    restart: unless-stopped
+    volumes:
+      - teable-db:/var/lib/postgresql/data:rw
+    env_file:
+      - state/.env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  teable-cache:
+    image: redis:7.2.4
+    restart: unless-stopped
+    volumes:
+      - teable-cache:/data:rw
+    env_file:
+      - state/.env
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/teable/worker.Dockerfile
+    image: osint-water-worker:local
+    restart: unless-stopped
+    env_file:
+      - state/worker.env
+    environment:
+      - OW_CACHE=/cache
+    volumes:
+      - ../..:/opt/osint-water:ro
+      - ../../private:/opt/osint-water/private:ro
+      - worker-cache:/cache
+    depends_on:
+      teable:
+        condition: service_healthy
+
+  # 初始化(start.sh 每次先跑一遍):建管理员与令牌、按本体建库建表;私有配置可写(写 portal/config.json)
+  setup:
+    profiles: ["setup"]
+    image: osint-water-worker:local
+    user: "${OW_UID:-0}:${OW_GID:-0}"  # 以本机用户身份写文件(Linux 上不然会写成 root 的,本人读不了)
+    environment:
+      - HOME=/tmp
+      - OW_STATE=/state
+      - OW_SITE=http://localhost:${OW_PORT:-8080}
+      - OW_CACHE=/tmp/cache
+    volumes:
+      - ../..:/opt/osint-water:ro
+      - ../../private:/opt/osint-water/private:rw
+      - ./state:/state:rw
+    command: ["python", "deploy/local/bootstrap.py"]
+    depends_on:
+      teable:
+        condition: service_healthy
+
+volumes:
+  teable-db: {}
+  teable-data: {}
+  teable-cache: {}
+  worker-cache: {}
+  caddy-data: {}
+  caddy-config: {}

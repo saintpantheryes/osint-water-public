@@ -180,3 +180,17 @@ def test_one_click_installer_keeps_secrets_out_of_the_terminal():
     skill = (ROOT / ".claude" / "skills" / "install-osint-water" / "SKILL.md").read_text(encoding="utf-8")
     assert skill.startswith("---\nname: install-osint-water\n") and "docs/AI_INSTALL.md" in skill
     assert "docs/AI_INSTALL.md" in (ROOT / "README.md").read_text(encoding="utf-8")
+
+
+def test_local_trial_stays_on_this_computer():
+    """单机试用版(deploy/local):只在本机 127.0.0.1 开端口;和服务器版共用页面路由;本机状态不进仓库。"""
+    compose = yaml.safe_load((ROOT / "deploy" / "local" / "docker-compose.yml").read_text(encoding="utf-8"))
+    for name, svc in compose["services"].items():
+        assert all(str(p).startswith("127.0.0.1:") for p in svc.get("ports", [])), name
+    assert "../teable/portal.caddy:/etc/caddy/caddy.d/portal.caddy:ro" in compose["services"]["caddy"]["volumes"]
+    assert compose["services"]["setup"]["profiles"] == ["setup"]
+    s = (ROOT / "deploy" / "local" / "start.sh").read_text(encoding="utf-8")
+    subprocess.run(["bash", "-n", str(ROOT / "deploy" / "local" / "start.sh")], check=True)
+    assert not re.search(r"\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]", s)  # Mac 自带 bash 3.2
+    assert not re.search(r"^[^#]*(\bsource\b|^\s*\. |\bread -r -(s|p))", s, re.M)
+    assert "deploy/local/state/" in (ROOT / ".gitignore").read_text(encoding="utf-8")

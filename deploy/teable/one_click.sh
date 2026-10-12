@@ -52,24 +52,7 @@ gh_ok() { command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; }
 step "0/8 本机准备"
 umask 077; mkdir -p "$HOME_DIR"; chmod 700 "$HOME_DIR"; umask 022
 if [ ! -f "$SECRETS" ]; then
-  (umask 077; cat > "$SECRETS" <<'T'
-# 全球水务开源情报的密钥(只在本机,只有你能读;不要发到聊天里,也不要提交到任何仓库)
-# 每行 名字=值,等号两边不要空格。没有的留空。改完保存,重跑安装命令即可。
-
-# 大模型密钥(二选一即可;都空 = 只用规则初筛,中文摘要与项目研判会弱很多)
-# DeepSeek:https://platform.deepseek.com → API keys → 创建,形如 sk-…(要先充值几块钱)
-DEEPSEEK_API_KEY=
-# Claude:https://console.anthropic.com → API Keys,形如 sk-ant-…
-ANTHROPIC_API_KEY=
-
-# 可选:告警心跳网址(https://healthchecks.io 免费建一个检查,复制 ping 网址)。每天采集成功后 ping 一次,一天没 ping 它给你发邮件
-HEALTHCHECK_URL=
-
-# 可选:后台任务用的表格令牌。留空时用安装时自动生成的那把(10 年有效)。
-# 想单独给后台任务一把:登录表格 → 右上角头像 → 个人设置 → 个人访问令牌 → 新建,权限全选、有效期选最长,粘到这里
-TEABLE_TOKEN=
-T
-  )
+  (umask 077; cp "$KIT/secrets.env.example" "$SECRETS")
   echo "  新建了 $SECRETS(只有你能读)"
 fi
 chmod 600 "$SECRETS"

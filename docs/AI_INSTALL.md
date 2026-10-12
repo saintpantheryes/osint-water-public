@@ -10,11 +10,31 @@
 你的任务:替用户跑命令,把只有用户本人能做的事(买服务器、加 DNS 记录、在网页上点按钮、拿密钥)一件一件讲清楚,直到浏览器里能打开系统。
 用户不懂技术:每次只让他做一件事,说清楚去哪个网页、点什么、做完告诉你什么。不要甩一大段命令给他看。
 
+## 先问:试用还是正式用?
+
+- **只想在自己电脑上试试**(不买服务器、不要域名,只有自己能用,电脑关机时不采集):走下面的「单机试用版」,几步就完。
+- **团队正式用**(同事都能登录、每天自动采集):走第 1–7 步的服务器版。试用版的配置以后可以原样搬上服务器。
+
+## 单机试用版
+
+1. 看第 1 步把 `git` 装好;Windows 先装 WSL,后面的命令都在 Ubuntu 里跑。
+2. 让用户装 **Docker Desktop**(https://www.docker.com/products/docker-desktop/ ,它会在电脑里跑一个小虚拟机),装好后打开它,
+   等它显示 running。电脑要有 8 GB 以上内存、10 GB 空闲硬盘。Linux 可以直接装 Docker Engine(当前用户要能不加 sudo 运行 docker)。
+3. 克隆本仓库(不用 fork):`git clone https://github.com/saintpantheryes/osint-water-public.git && cd osint-water-public`
+4. 运行 `bash deploy/local/start.sh`。第一次要 5–15 分钟(下载、构建)。它会新建 `~/.osint-water/secrets.env`;
+   想要中文摘要和项目研判,按第 5 步让用户**自己**填 `DEEPSEEK_API_KEY`,然后重跑同一条命令。
+5. 让用户打开 http://localhost:8080/portal/ ,邮箱和密码在 `deploy/local/state/ADMIN.txt`,让用户**自己**打开它
+   (macOS:`open -e deploy/local/state/ADMIN.txt`),你不要读。
+6. 想马上有东西看:`bash deploy/local/start.sh collect`(补国别资料、采集一次,十几分钟到半小时)。
+   否则每天北京时间 08:30 之后电脑开着时自动采集。
+7. 其他:`bash deploy/local/start.sh stop` 停下(数据留着);`status` 看状态;端口被占用时在命令前加 `OW_PORT=8090`。
+   改重点国别:改 `private/profile.yaml` 后重跑 `start.sh`。更新程序:`git pull` 后重跑 `start.sh`。
+
 ## 规则(必须遵守)
 
 1. **密钥不经过聊天。** 模型密钥、表格令牌、管理员密码都不要让用户粘贴给你,你也不要读、不要打印。
    - 用户自己用编辑器把密钥填进本机的 `~/.osint-water/secrets.env`;安装脚本经 ssh 把它直接送到主机上只 root 可读的文件里。
-   - 不要 `cat`、`less`、`grep` 出 `~/.osint-water/` 下文件的内容,也不要读主机上的 `/opt/teable/ADMIN.txt`、`/opt/teable/worker.env`、`/opt/teable/.env`。
+   - 不要 `cat`、`less`、`grep` 出 `~/.osint-water/` 和 `deploy/local/state/` 下文件的内容,也不要读主机上的 `/opt/teable/ADMIN.txt`、`/opt/teable/worker.env`、`/opt/teable/.env`。
      只想确认某个密钥填了没有,用只输出数字的命令:`grep -c '^DEEPSEEK_API_KEY=.' ~/.osint-water/secrets.env`。
    - 用户要是把密钥贴进了聊天,提醒他这把密钥已经暴露,去对应网站删掉、重新生成一把,再填进文件。
 2. **花钱的事先问。** 买服务器、买域名、给模型充值,都要用户自己确认、自己付款。

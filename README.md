@@ -69,6 +69,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 请帮我安装全球水务开源情报:先读 https://raw.githubusercontent.com/saintpantheryes/osint-water-public/main/docs/AI_INSTALL.md ,然后一步步带我做。
 ```
 
+**只想先试试**:不用服务器和域名,装好 Docker Desktop 后在本仓库里运行 `bash deploy/local/start.sh`,
+浏览器打开 http://localhost:8080/portal/ (单机试用版,只有自己能用;说明见 [AI_INSTALL.md](docs/AI_INSTALL.md#单机试用版))。
+
 **自己装**:准备好云主机、域名和两个仓库后,一条命令装完(可重复运行):
 `bash deploy/teable/one_click.sh <密钥.pem> <主机IP> <域名> <你>/osint-water-private`。
 每一步分开做见 **[docs/部署指南.md](docs/部署指南.md)**。
@@ -146,5 +149,7 @@ links notices to tracked opportunities, and produces a daily brief, country prof
   By hand: fork, create an empty private config repo, then run
   `bash deploy/teable/one_click.sh <key>.pem <server-ip> <domain> <you>/osint-water-private` (re-runnable; exit code 10 means
   "do the step printed under 需要你做 and re-run"). Step by step: [docs/部署指南.md](docs/部署指南.md).
+- **Try it on your own computer**: with Docker Desktop running, `bash deploy/local/start.sh` in a clone, then open
+  http://localhost:8080/portal/ (single-user, no server or domain; admin login in `deploy/local/state/ADMIN.txt`).
 - **License**: code AGPL-3.0; `docs/` and `reference/` CC BY 4.0; each data source keeps its own terms.
 - **Security**: report vulnerabilities privately, see [SECURITY.md](SECURITY.md).

@@ -32,3 +32,6 @@ portal/config.json
 # 私有配置仓的检出(另一个仓库),不进公开核心仓
 private/
 portal/media/
+
+# 单机版的本机状态(数据库密码、管理员凭据、后台任务密钥)
+deploy/local/state/
