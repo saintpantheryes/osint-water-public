@@ -45,6 +45,7 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .chart { width: 100%; height: 320px; }
 .chart.tall { height: 440px; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
+tr.bad td { background: #fef2f2; }  /* 信源页:出错、被拒、多日未采集的一行整行标红 */
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 .muted { color: var(--muted); }
