@@ -234,3 +234,18 @@ def test_code_enums_match_the_ontology():
     assert not re.search(r'STAGES:\s*\[', js) and not re.search(r'FUNDERS:\s*\{', js) and '"跟踪中"' not in js and '"世界银行"' not in js
     html = (ROOT / "portal" / "country.html").read_text(encoding="utf-8")
     assert "P.STAGES" in html and not re.search(r'ORDER\s*=\s*\[', html)
+
+
+def test_ontology_picture_is_current(tmp_path):
+    """本体图 本体模型.svg 由 docs/ontology/draw_svg.py 画(版本、日期从 ontology.yaml 读):每个对象都画在图上,
+    提交的图与脚本当前画出的一致。加了对象却没改画图脚本、或改了脚本没重画,会在这里发现。"""
+    import subprocess
+    import sys
+    out = tmp_path / "onto.svg"
+    subprocess.run([sys.executable, str(ROOT / "docs" / "ontology" / "draw_svg.py"), str(out)], check=True, capture_output=True)
+    svg = out.read_text(encoding="utf-8")
+    names = [o["name"] for o in yaml.safe_load((ROOT / "docs" / "ontology" / "ontology.yaml").read_text(encoding="utf-8"))["objects"]]
+    missing = [n for n in names if f">{n}<" not in svg]
+    assert not missing, f"本体图上没有这些对象:{missing}(在 draw_svg.py 里画上)"
+    assert svg == (ROOT / "docs" / "ontology" / "本体模型.svg").read_text(encoding="utf-8"), \
+        "本体模型.svg 不是最新:python docs/ontology/draw_svg.py docs/ontology/本体模型.svg,再导出 PNG"
