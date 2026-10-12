@@ -3,6 +3,10 @@ import sys
 from html import escape
 
 W, H = 1800, 1720
+_ONTO = __import__("yaml").safe_load(open(__import__("os").path.join(__import__("os").path.dirname(__file__), "ontology.yaml"), encoding="utf-8"))
+VER, DATE = _ONTO["version"], _ONTO["date"]
+N_CORE = sum(1 for o in _ONTO["objects"] if o.get("core"))
+N_SUPPORT = len(_ONTO["objects"]) - N_CORE
 FONT = "'PingFang SC','Microsoft YaHei','Noto Sans CJK SC','WenQuanYi Zen Hei',sans-serif"
 C = {
     "ai": "#D5E8D4", "ai_b": "#82B366", "hu": "#F8CECC", "hu_b": "#B85450", "dv": "#F0F0F0", "dv_b": "#BDBDBD",
@@ -144,11 +148,11 @@ out.append("</defs>")
 R(0, 0, W, H, "#FFFFFF", "none")
 
 # 标题
-T(40, 50, "osint-water 本体模型 v2.0 · 对象 — 行为 — 规则", size=28, weight="bold")
-T(40, 80, "SAM/SCBRD 五维建模 × OBR(对象本体 · 行为本体 · 规则本体),参考 visual-model  |  "
-          "4 个核心对象 + 5 个支撑对象  |  判定是行为、日历是查询  |  每个对象只存一处  |  每个选项值有定义、每个口径只定一次", size=14, fill="#555555")
-T(W - 40, 50, "«system» Ontology · osint-water v2.0", size=15, fill=C["blue"], anchor="end", weight="bold")
-T(W - 40, 78, "2026-10-04 · 唯一业务库 Teable · 机器可读版 docs/ontology/ontology.yaml(分类体系与口径见 本体.md)", size=12.5, fill="#888888", anchor="end")
+T(40, 50, f"全球水务开源情报 本体模型 v{VER} · 对象 — 行为 — 规则", size=28, weight="bold")
+T(40, 80, "SAM/SCBRD × OBR(对象 · 行为 · 规则)  |  "
+          f"{N_CORE} 个核心对象 + {N_SUPPORT} 个支撑对象  |  判定是行为、日历是查询  |  每个对象只存一处  |  每个口径只定一次", size=14, fill="#555555")
+T(W - 40, 50, f"«system» Ontology · Global Water OSINT v{VER}", size=15, fill=C["blue"], anchor="end", weight="bold")
+T(W - 40, 78, f"{DATE} · 唯一业务库 Teable · 机器可读版 docs/ontology/ontology.yaml(分类体系与口径见 本体.md)", size=12.5, fill="#888888", anchor="end")
 out.append(f'<line x1="40" y1="96" x2="{W - 40}" y2="96" stroke="#E0E0E0" stroke-width="1.5"/>')
 
 # 主链路横幅
@@ -184,7 +188,7 @@ label(cx0 + 110, 190, "A01 采集 · 机器 · 每天", C["red"], weight="bold")
 lead = obj(296, 196, 310, "线索", core=True, sections=[
     ("ai", "机器写 · 采集", "标题 · 原文网址 · 信源 · 来源方式 · 发布日期 · 发现时间 · 原文摘录"),
     ("ai", "机器写 · 判定(只判一次,判过不回头)", "判定方式 · 是否相关 · 类别 · 领域 · 国别 · 中文摘要 · 出资方 · 项目名称 · 金额 · "
-                                         "建议所属商机 · 可能是新项目\n所属商机:可靠且为空时机器代填,人确认或改定"),
+                                         "投资规模 · 货币 · 折合人民币 · 建议所属商机 · 可能是新项目\n所属商机:可靠且为空时机器代填,人确认或改定"),
     ("hu", "人写", "处理状态(待处理 / 已处理 / 已忽略) · 处理备注"),
     ("dv", "派生(不存)", "最近截止 · 写进的报告"),
 ])
@@ -210,9 +214,10 @@ country = obj(296, my + mh + 48, 310, "国别", core=True, sections=[
 cxx, cyy, cww, chh = country
 # 城市(支撑对象):国别下面;线索、商机可选关联它(本栏的底边按它算)
 city = obj(296, cyy + chh + 22, 310, "城市", sections=[
-    ("ai", "机器写(GeoNames,每月)", "中文名 · 英文名 · 所属国别 · 行政区 · 坐标 · 人口 · 密度"),
-    ("hu", "人补", "面积 · 地区生产总值 · 备注"),
-    ("dv", "派生(不存)", "线索数 · 商机数"),
+    ("ai", "机器写(GeoNames、WRI Aqueduct 等,每月)", "中文名 · 英文名 · 所属国别 · 行政区 · 坐标 · 人口 · 密度 · "
+                                               "水风险(总体、用水压力、干旱、洪水) · 无安全饮水 / 卫生设施 · 人均 GDP"),
+    ("hu", "人补", "面积 · 地区生产总值 · 现行水价与货币 · 调价时间 · 备注"),
+    ("dv", "派生(不存)", "线索数 · 商机数 · 自来水厂数 · 污水厂数"),
 ])
 ctx_, cty_, ctw_, cth_ = city
 
@@ -224,7 +229,7 @@ T(dx, dy + 5, "判定", size=17, weight="bold", anchor="middle")
 T(dx, dy + 23, "行为,不是表", size=11, fill=C["orange"], anchor="middle", weight="bold")
 
 opp = obj(880, 196, 350, "商机", core=True, sections=[
-    ("ai", "机器写 · 公开事实(只填空、列表只追加,每条带出处)", "商机编号 · 名称 · 别名 · 外部编号 · 国别 · 地点 · 领域 · 业主与执行机构 · 资金 · 规模 · 公开进度 · "
+    ("ai", "机器写 · 公开事实(只填空、列表只追加,每条带出处)", "商机编号 · 名称 · 别名 · 外部编号 · 国别 · 城市 · 地点 · 领域 · 业主与执行机构 · 资金 · 规模 · 货币 · 折合人民币 · 公开进度 · "
                                          "建设内容 · 标段 · 投标资格与依据 · 参与方 · 待核实 · 核实状态 · 建议理由 · 出处线索 · 待核更新"),
     ("hu", "人写 · 我方", "我方阶段:建议 → 跟踪中 → 准备投标 → 已投标\n→ 中标 / 未中标;或 不跟进 / 放弃\n优先级 · 负责人 · 内部备注"),
     ("dv", "派生(不存)", "所属线索数 · 下一时间节点 · 最晚启动 · 最近跟进 · 当前判断 · 下一步 · 下一步到期"),
@@ -238,8 +243,23 @@ report = obj(1290, 196, 250, "报告", sections=[
 ])
 rpx, rpy, rpw, rph = report
 rpb = rpy + rph
+# 存量水厂(公开对象,v2.9)与行业术语(v2.11):城市下面一行;商机、报告两列下面有好几条竖线穿过,不放那里
+PLANT_Y = cty_ + cth_ + 40
+supply = obj(296, PLANT_Y, 210, "自来水厂", sections=[
+    ("ai", "机器写(导入,每月)", "名称 · 类型 · 状态 · 国别 · 城市 · 规模(万吨/日) · 服务人口 · 建设时间 · 工艺 · 运营方 · 坐标"),
+    ("hu", "人补", "中文名 · 改造扩建 · 备注"),
+])
+sewage = obj(526, PLANT_Y, 220, "污水厂", sections=[
+    ("ai", "机器写(导入,每月)", "同自来水厂,另有处理级别"),
+    ("hu", "人补", "中文名 · 改造扩建 · 备注"),
+])
+# 行业术语:助手理解提问用,和别的对象没有关联
+term = obj(56, PLANT_Y, 220, "行业术语", sections=[
+    ("hu", "人写(表格,A27)", "术语 · 同义说法 · 跨哪些领域 · 按领域筛 · 相关词 · 说明 · 停用"),
+    ("nt", "谁读", "助手每分钟重读:提问里的行业词照此翻成筛选条件"),
+])
 
-B1_BOT = cty_ + cth_ + 40
+B1_BOT = max(cty_ + cth_, supply[1] + supply[3], sewage[1] + sewage[3], term[1] + term[3]) + 40
 R(40, B1_TOP, 1500, B1_BOT - B1_TOP, C["band"], C["band_b"], sw=1.5, rx=8, extra=' fill-opacity="0.55"')
 out.insert(next(i for i, s in enumerate(out) if s.startswith('<circle')), out.pop())  # 底色放到最下层
 T(790, B1_TOP + 24, "AI · 公开数据(机器采集、判定、建议;人可增删改)", size=15, fill="#455A64", anchor="middle", weight="bold")
@@ -270,7 +290,7 @@ company = obj(296, member[1] + member[3] + 22, 310, "公司资料", sections=[
     ("nt", "进报告", "勾了「写进报告」的行附在国别 / 项目报告的内部版后"),
 ])
 pref = obj(296, company[1] + company[3] + 22, 310, "个人设置", sections=[
-    ("hu", "人写(「我的」页,A24)", "名称 · 账号 · 关注国别 · 日历订阅(名称 | 链接) · 备注"),
+    ("hu", "人写(「我的」页,A24)", "名称 · 账号 · 关注国别 · 忽略国别(采集不再涉及) · 日历订阅(名称 | 链接) · 备注"),
 ])
 B2_BOT = max(fy + fh, ky + kh, pref[1] + pref[3], ty + th) + 30
 R(40, B2_TOP, 1500, B2_BOT - B2_TOP, "#FFF6F5", C["band_b"], sw=1.5, rx=8)
@@ -294,6 +314,12 @@ views = [
     ("商机总览", "商机列表(缺省只列跟踪中的)· 下一步已逾期 · 待核更新"),
     ("商机工作台", "一个商机一页 · 记跟进 · 要报告 · 改负责人"),
     ("报告页", "历史报告 · 要报告 · 管理模板"),
+    ("线索分析", "日报正文 · 按时间、国别、类别、资金来源现算"),
+    ("本体", "对象与关系图 · 分类体系 · 口径 · 规则"),
+    ("我方资料页", "公司资料筛选、新增、勾选写进报告"),
+    ("我的", "关注 / 忽略的国别 · 日历订阅"),
+    ("城市概况", "规模以上城市 · 地图滑块 · 商机、线索、水厂"),
+    ("趋势机会", "水风险 × 经济水平 × 贷款项目 · 趋势参考,不计入线索"),
 ]
 vy = B1_TOP + 64
 for i, (n, q) in enumerate(views):
@@ -377,6 +403,10 @@ label((fx + mbx + mbw) / 2, fy + 58, "记录人 *..1", C["black"], weight="bold"
 # 城市 → 国别 属于
 path(f"M{ctx_ + 60},{cty_} L{ctx_ + 60},{cyy + chh}", C["black"], sw=1.6, end="aK")
 label(ctx_ + 68, cty_ - 6, "属于 *..1", C["black"], size=11.5, anchor="start")
+# 自来水厂、污水厂 → 城市 位于(可空:不在规模以上城市里的只挂国别)
+path(f"M{supply[0] + 60},{supply[1]} L{supply[0] + 60},{cty_ + cth_}", C["black"], sw=1.6, end="aK")
+label(supply[0] + 68, supply[1] - 8, "位于 *..0..1", C["black"], size=11.5, anchor="start")
+ortho([(sewage[0] + 60, sewage[1]), (sewage[0] + 60, cty_ + cth_ + 18), (ctx_ + ctw_ - 30, cty_ + cth_ + 18), (ctx_ + ctw_ - 30, cty_ + cth_)], C["black"], sw=1.6, end="aK")
 # 国别 → 报告(沿底部走)
 gy_ = cyy + 120
 ortho([(cxx + cww, gy_), (rpx + 40, gy_), (rpx + 40, rpb)], C["blue"], sw=2, end="aB")
