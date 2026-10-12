@@ -473,3 +473,15 @@ details.sec.panel summary { margin: -4px 0; }
 .chip-btn.blk { color: #334155; border-color: #94a3b8; background: repeating-linear-gradient(-45deg, #f8fafc 0 5px, #e2e8f0 5px 7px); }
 /* 关注的国别:清单里的 ★ */
 .star { color: #d97706; font-size: 13px; }
+.nw { white-space: nowrap; }
+/* 已中标项目(国别概况、城市一页最下面):手机上一份合同一张小卡片,不横着滚 */
+.aw-q { flex: 1 1 200px; min-width: 0; max-width: 100%; }
+@media (max-width: 640px) {
+  .aw-t thead { display: none; }
+  .aw-t table, .aw-t tbody, .aw-t tr, .aw-t td { display: block; width: auto; }
+  .aw-t tr { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  .panel.aw-t table td { border: 0; padding: 1px 0; overflow-wrap: anywhere; min-width: 0; white-space: normal; }
+  .aw-t td:nth-child(3), .aw-t td:nth-child(4), .aw-t td:nth-last-child(1), .aw-t td:nth-last-child(2) { display: inline-block; margin-right: 10px; font-size: 13px; color: var(--muted); }
+  .aw-t td:empty { display: none; }
+  .aw-t td:first-child { color: var(--muted); font-size: 13px; }
+}

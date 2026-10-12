@@ -6,7 +6,7 @@
 schema: osint-water/teable-map@1
 base: 水务项目机会 新版
 timezone: Asia/Shanghai
-order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term]   # 建表顺序(关联字段在所有表建好后再加)
+order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, award]   # 建表顺序(关联字段在所有表建好后再加)
 
 tables:
   lead:
@@ -33,6 +33,12 @@ tables:
     primary: name
     key: {name: 编号, note: 导入数据的原编号;去重按它}
     optional: true
+  award:
+    table: 已中标项目
+    primary: name
+    key: {name: 编号, note: 来源缩写 + 原合同号(WB-1543858);去重按它,人补录的可空}
+    default_sort: [[中标时间, desc]]
+    optional: true   # 2026-10-12 新加的表:库里还没建时后台与页面跳过
   opportunity:
     table: 商机
     primary: name_zh
@@ -116,6 +122,8 @@ links:
   supply_plant.city: {reverse: 自来水厂}
   sewage_plant.country: {one_way: true}
   sewage_plant.city: {reverse: 污水厂}
+  award.country: {one_way: true}   # 国别表不要几千条的反向字段
+  award.city: {reverse: 已中标项目}
   company.countries: {one_way: true}
   preference.countries: {one_way: true}
 
@@ -166,6 +174,8 @@ views:
     - {name: 14 天内, filter: {and: [[日期, isWithIn, {mode: nextNumberOfDays, numberOfDays: 14}]]}, sort: [[日期, asc]]}
   country:
     - {name: 重点国, filter: {and: [[市场分级, is, 重点]]}}
+  award:
+    - {name: 按国别, group: [[所属国别, asc]], sort: [[中标时间, desc]]}
   source:
     - {name: 异常, filter: {and: [[最近状态, isNotEmpty], [最近状态, isNot, 正常]]}}
   report:

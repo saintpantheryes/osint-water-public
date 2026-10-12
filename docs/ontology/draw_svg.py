@@ -259,7 +259,14 @@ term = obj(56, PLANT_Y, 220, "行业术语", sections=[
     ("nt", "谁读", "助手每分钟重读:提问里的行业词照此翻成筛选条件"),
 ])
 
-B1_BOT = max(cty_ + cth_, supply[1] + supply[3], sewage[1] + sewage[3], term[1] + term[3]) + 40
+# 已中标项目(公开对象,v2.14):水厂下面;属于国别、可挂城市
+award = obj(296, max(supply[1] + supply[3], sewage[1] + sewage[3]) + 22, 450, "已中标项目", sections=[
+    ("ai", "机器写(开发银行中标记录,一次性导入)", "名称 · 类别 · 合同类型 · 中标价 · 货币 · 折合人民币 · 中标时间 · 工程量 · 中标单位与国别 · "
+                                          "所属项目 · 资金来源 · 采购方式 · 国别 · 城市 · 数据来源"),
+    ("hu", "人补", "中文名(配了模型时机器译) · 别的来源补录 · 备注"),
+])
+
+B1_BOT = max(cty_ + cth_, supply[1] + supply[3], sewage[1] + sewage[3], term[1] + term[3], award[1] + award[3]) + 40
 R(40, B1_TOP, 1500, B1_BOT - B1_TOP, C["band"], C["band_b"], sw=1.5, rx=8, extra=' fill-opacity="0.55"')
 out.insert(next(i for i, s in enumerate(out) if s.startswith('<circle')), out.pop())  # 底色放到最下层
 T(790, B1_TOP + 24, "AI · 公开数据(机器采集、判定、建议;人可增删改)", size=15, fill="#455A64", anchor="middle", weight="bold")
@@ -407,6 +414,9 @@ label(ctx_ + 68, cty_ - 6, "属于 *..1", C["black"], size=11.5, anchor="start")
 path(f"M{supply[0] + 60},{supply[1]} L{supply[0] + 60},{cty_ + cth_}", C["black"], sw=1.6, end="aK")
 label(supply[0] + 68, supply[1] - 8, "位于 *..0..1", C["black"], size=11.5, anchor="start")
 ortho([(sewage[0] + 60, sewage[1]), (sewage[0] + 60, cty_ + cth_ + 18), (ctx_ + ctw_ - 30, cty_ + cth_ + 18), (ctx_ + ctw_ - 30, cty_ + cth_)], C["black"], sw=1.6, end="aK")
+# 已中标项目 → 城市:从左边绕上去(术语框与城市之间的空当)
+ortho([(award[0], award[1] + 30), (award[0] - 10, award[1] + 30), (award[0] - 10, cty_ + cth_ - 24), (ctx_, cty_ + cth_ - 24)], C["black"], sw=1.6, end="aK")
+label(award[0] + 6, award[1] - 8, "位于 *..0..1(属于国别 *..1)", C["black"], size=11.5, anchor="start")
 # 国别 → 报告(沿底部走)
 gy_ = cyy + 120
 ortho([(cxx + cww, gy_), (rpx + 40, gy_), (rpx + 40, rpb)], C["blue"], sw=2, end="aB")

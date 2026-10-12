@@ -561,6 +561,63 @@
       return this.kpiHtml(kp) + (rest.length ? '<div class="facts">' + rest.map(([k, v]) => this.factHtml(k, v)).join("") + "</div>" : "") +
         '<p class="muted small">分数 0–5:4 以上极高,3–4 高。来源:' + this.esc(this.get(oid, rec, "risk_source") || "WRI Aqueduct 4.0 等") + '。模型估计,作趋势参考' + (iso === "CHN" ? "(中国境内不做趋势机会分析)" : ';<a href="trend.html' + (iso ? "?" + new URLSearchParams({ c: iso }) : "") + '">看趋势机会 →</a>') + "</p>";
     },
+    /* 已中标项目(本体 V7、V16;2026-10-12 使用方要):国别概况、城市一页最下面的同一块。prop = "country" 或 "city",rid = 那条记录。
+       类别、年份可多选筛选,筛选项上的数跟着另一项与搜索走;卡片(份数、合计中标价、最大一笔、中国企业中标)与表只算筛出来的;表按中标时间从新到旧。 */
+    async awards(el, prop, rid) {
+      const head = '<h2 id="awards">已中标项目</h2><p class="muted small">开发银行公开的中标记录(首批来自世界银行,2019 年以来、10 万美元以上的水务合同)和人工补录的,作报价与竞争对手的参考;不计入线索、商机。</p>';
+      if (!(this.cfg.tables && this.cfg.tables.award) || !this.has("award", prop)) { el.innerHTML = head + '<p class="muted">「已中标项目」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
+      el.innerHTML = head + '<div class="panel">读取中…</div>';
+      const rows = await this.records("award", { filter: this.and(this.cond("award", prop, "is", rid)),
+        props: ["name", "name_zh", "sector", "contract_type", "price", "currency", "price_cny", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "city", "source", "url"] });
+      const g = (r, p) => this.get("award", r, p);
+      const year = (r) => (this.day(g(r, "awarded")) || "").slice(0, 4);
+      rows.sort((a, b) => String(this.day(g(b, "awarded")) || "").localeCompare(String(this.day(g(a, "awarded")) || "")));
+      if (!rows.length) { el.innerHTML = head + '<p class="muted">还没有记录。' + (prop === "city" ? "导入时合同名称里写了这座城市的才挂到城市上,其余只在国别概况里;" : "") + "别的来源的中标结果可以在表格「已中标项目」里补一行。</p>"; return 0; }
+      const SECT = this.values("lead_sectors"), st = { s: [], y: [], q: "" };
+      const big = (n) => (n >= 1e8 ? (n / 1e8).toFixed(n >= 1e10 ? 0 : 2) + " 亿" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString("zh-CN") + " 万" : Math.round(n).toLocaleString("zh-CN"));
+      const curZh = (c) => ({ USD: "美元", EUR: "欧元", CNY: "元" }[c] || (c ? " " + c : ""));
+      const cny = (w) => (w >= 1e4 ? (Math.round(w / 100) / 100).toFixed(2) + " 亿元" : Math.round(w).toLocaleString("zh-CN") + " 万元");  // 万元 → 文字
+      const words = (r) => [g(r, "name"), g(r, "name_zh"), g(r, "winner"), g(r, "winner_country"), g(r, "project")].join(" ").toLowerCase();
+      const pass = (r, skip) => (skip === "s" || !st.s.length || st.s.includes(g(r, "sector") || "其他")) && (skip === "y" || !st.y.length || st.y.includes(year(r))) &&
+        (!st.q || words(r).includes(st.q.toLowerCase()));
+      const years = [...new Set(rows.map(year).filter(Boolean))].sort().reverse();
+      el.innerHTML = head + '<div class="filters"><div class="frow"><b>类别</b><span class="frow aw-s" style="padding:0"></span></div>' +
+        '<div class="frow"><b>年份</b><span class="frow aw-y" style="padding:0"></span></div>' +
+        '<div class="frow"><b>搜索</b><input class="aw-q" placeholder="搜名称、中标单位或国别(如:中国)" size="30" aria-label="搜已中标项目"><span class="muted small aw-n" style="margin-left:auto"></span></div></div>' +
+        '<div class="aw-k"></div><div class="panel aw-t"></div>';
+      const $ = (c) => el.querySelector(c), PAGE = 20;  // 表一次列 20 份,「再列」往下加
+      let show = PAGE;
+      const refilter = () => { show = PAGE; render(); };  // 换了筛选从头列
+      const render = () => {
+        const forS = rows.filter((r) => pass(r, "s")), forY = rows.filter((r) => pass(r, "y")), list = rows.filter((r) => pass(r));
+        const cnt = (arr, f) => arr.filter(f).length;
+        this.chips($(".aw-s"), [["", "全部 " + forS.length]].concat(SECT.filter((s) => st.s.includes(s) || rows.some((r) => (g(r, "sector") || "其他") === s))
+          .map((s) => [s, s + " " + cnt(forS, (r) => (g(r, "sector") || "其他") === s)])), st, "s", refilter, true);
+        this.chips($(".aw-y"), [["", "全部 " + forY.length]].concat(years.map((y) => [y, y + " " + cnt(forY, (r) => year(r) === y)])), st, "y", refilter, true);
+        const sum = list.reduce((s, r) => s + (Number(g(r, "price_cny")) || 0), 0), max = Math.max(0, ...list.map((r) => Number(g(r, "price_cny")) || 0));
+        const cn = cnt(list, (r) => /中国/.test(String(g(r, "winner_country") || "")));
+        $(".aw-k").innerHTML = this.kpiHtml([{ label: "已中标项目", value: list.length + " 份" }, { label: "合计中标价(折合人民币)", value: sum ? cny(sum) : "—" },
+          { label: "最大一笔", value: max ? cny(max) : "—" }, { label: "中国企业中标", value: cn + " 份", note: list.length ? "占 " + Math.round(cn * 100 / list.length) + "%" : "" }]);
+        $(".aw-n").textContent = "共 " + rows.length + " 份";
+        const city = prop === "country";
+        $(".aw-t").innerHTML = !list.length ? '<p class="muted">没有符合条件的已中标项目。</p>' :
+          this.tableHtml(["中标时间", "名称", "类别", "合同类型", "中标价", "工程量", "中标单位"].concat(city ? ["城市"] : [], ["资金来源", ""]), list.slice(0, show).map((r) => {
+            const zh = g(r, "name_zh"), en = g(r, "name") || "", u = g(r, "url");
+            const nm = (zh ? "<b>" + this.esc(zh) + '</b><br><span class="muted small">' + this.esc(en) + "</span>" : "<b>" + this.esc(en) + "</b>") +
+              (g(r, "project") ? '<br><span class="muted small">项目:' + (u ? '<a href="' + this.esc(u) + '" target="_blank" rel="noopener">' + this.esc(g(r, "project")) + " ↗</a>" : this.esc(g(r, "project"))) + "</span>" : "");
+            const p = Number(g(r, "price")), w = Number(g(r, "price_cny"));
+            const price = '<span class="nw">' + (p ? "<b>" + this.esc(big(p) + curZh(g(r, "currency"))) + "</b>" : "") + (w ? '<br><span class="muted small">≈ ' + this.esc(cny(w)) + "</span>" : "") + "</span>";
+            const win = this.esc(g(r, "winner") || "") + (g(r, "winner_country") ? '<br><span class="muted small">' + this.esc(g(r, "winner_country")) + "</span>" : "");
+            const ct = city && this.linkId(g(r, "city")) ? this.raw('<a class="nw" href="city.html?id=' + encodeURIComponent(this.linkId(g(r, "city"))) + '">' + this.esc(this.text(g(r, "city"))) + "</a>") : "";
+            return [this.raw('<span class="nw">' + this.esc(this.day(g(r, "awarded")) || "") + "</span>"), this.raw(nm), g(r, "sector") || "", g(r, "contract_type") || "", this.raw(price), g(r, "quantity") || "", this.raw(win)]
+              .concat(city ? [ct] : [], [g(r, "funder") || "", this.raw(this.open("award", r.id))]);
+          })) + (list.length > show ? '<p><button type="button" class="chip-btn more aw-more">再列 ' + Math.min(PAGE, list.length - show) + " 份(已列 " + show + " / " + list.length + ")</button></p>" : "");
+        const more = $(".aw-more"); if (more) more.onclick = () => { show += PAGE; render(); };
+      };
+      let tt = 0; $(".aw-q").oninput = () => { clearTimeout(tt); tt = setTimeout(() => { st.q = $(".aw-q").value.trim(); show = PAGE; render(); }, 250); };
+      render();
+      return rows.length;
+    },
     /* 平铺筛选(一组按钮,点亮一个;multi 时可多选,一个没选就点亮「全部」(值为空的那个)) */
     chips(el, opts, state, key, onChange, multi) {
       const cur = state[key];

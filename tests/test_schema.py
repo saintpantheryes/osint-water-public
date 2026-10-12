@@ -53,7 +53,7 @@ def test_plan_covers_every_property_once_with_the_right_types():
 def test_builds_the_eight_tables_with_links_derived_fields_and_views():
     fake, _, res = _built()
     base = next(b for b in fake.bases.values() if b["name"] == NEW)
-    assert {t["name"] for t in fake.tables.values() if t["baseId"] == base["id"]} == {"线索", "国别", "城市", "商机", "跟进记录", "信源", "时间节点", "报告模板", "报告", "公司资料", "个人设置", "自来水厂", "污水厂", "行业术语"}
+    assert {t["name"] for t in fake.tables.values() if t["baseId"] == base["id"]} == {"线索", "国别", "城市", "商机", "跟进记录", "信源", "时间节点", "报告模板", "报告", "公司资料", "个人设置", "自来水厂", "污水厂", "行业术语", "已中标项目"}
     assert not [t for t in fake.tables.values() if t["baseId"] == "bseOLD"]  # 旧库没动
     f = {oid: res.fields[oid] for oid in res.fields}
     assert f["lead"]["所属商机"]["options"]["relationship"] == "manyOne" and f["lead"]["建议所属商机"]["options"].get("isOneWay")

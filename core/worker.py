@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from core import assistant_server, storage, tstore
-from core.jobs import cities, collect, common, countries, enrich, expire, fx, plants, reports, risk, stage_log
+from core.jobs import awards, cities, collect, common, countries, enrich, expire, fx, plants, reports, risk, stage_log
 from core.profile import load_profile
 
 EVERY = 120  # 秒
@@ -72,7 +72,8 @@ def tick(profile, now: datetime, state: dict, use_llm: bool = True) -> None:
                 log(f"expire:{out}")
         except Exception as e:  # noqa: BLE001
             log(f"expire 出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
-    for name, fn in (("enrich", lambda: enrich.run(ctx)), ("stage_log", lambda: stage_log.run(ctx)), ("fx", lambda: fx.run(ctx)), ("reports", _reports)):
+    for name, fn in (("enrich", lambda: enrich.run(ctx)), ("stage_log", lambda: stage_log.run(ctx)), ("fx", lambda: fx.run(ctx)), ("reports", _reports),
+                     ("awards_zh", lambda: awards.translate(ctx.base, ctx.clf, log=log))):  # 已中标项目译中文名(A28;没配模型时什么也不做)
         try:
             out = fn()
             if out:
