@@ -210,7 +210,7 @@
 <rect x="56.0" y="1677.5" width="176.0" height="262.0" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
 <rect x="57.5" y="1679.0" width="173.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
 <text x="68.0" y="1695.5" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
-<text x="68.0" y="1714.5" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">中标单位</text>
+<text x="68.0" y="1714.5" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">供应商</text>
 <rect x="62.0" y="1727.5" width="164.0" height="64.0" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
 <text x="70.0" y="1743.5" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写(导入时建行)</text>
 <text x="70.0" y="1762.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">名称 · 国别 · 国别码 ·</text>

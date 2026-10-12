@@ -3,27 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>全球水务开源情报 · 中标单位</title>
+<title>全球水务开源情报 · 供应商</title>
 <link rel="icon" href="favicon.png">
 <link rel="stylesheet" href="portal.css">
 <script src="portal.js"></script>
 </head>
 <body>
 <div id="nav"></div>
-<script>document.getElementById("nav").innerHTML = P.nav("country.html");  /* 顶栏紧跟着就画,不等读表;中标单位页挂在「市场背景」下 */</script>
+<script>document.getElementById("nav").innerHTML = P.nav("country.html");  /* 顶栏紧跟着就画,不等读表;供应商页挂在「市场背景」下 */</script>
 <main>
-  <!-- 两种样子(本体 V19):不带 id 是全部中标单位(按中标数排);带 ?id= 是一家单位(基本资料 + 它的全部中标记录) -->
+  <!-- 两种样子(本体 V19):不带 id 是全部供应商(按中标数排);带 ?id= 是一家供应商(基本资料 + 它的全部中标记录) -->
   <section id="list" style="display:none">
-    <h1>中标单位</h1>
+    <h1>供应商</h1>
     <p class="muted">在已中标项目里中过标的公司,联合体的每一家各算一家;按中标份数从多到少。中文名、性质、母公司、简介等由人在表格里补,做竞争对手分析时展开。</p>
     <div class="filters">
       <div class="frow"><b>注册国</b><select id="fNat" aria-label="注册国"><option value="">全部</option></select></div>
-      <div class="frow"><b>搜索</b><input id="fText" placeholder="搜单位名称或中文名" size="30" aria-label="搜中标单位"><span class="muted" id="fNote" style="margin-left:auto"></span></div>
+      <div class="frow"><b>搜索</b><input id="fText" placeholder="搜供应商名称或中文名" size="30" aria-label="搜供应商"><span class="muted" id="fNote" style="margin-left:auto"></span></div>
     </div>
     <div class="panel" id="rows">读取中…</div>
   </section>
   <section id="one" style="display:none">
-    <div class="toolbar"><a href="contractor.html" id="back">← 全部中标单位</a><h1 style="margin:0" id="fname"></h1><span class="muted" id="fname2"></span><span id="openRow" style="margin-left:auto"></span></div>
+    <div class="toolbar"><a href="contractor.html" id="back">← 全部供应商</a><h1 style="margin:0" id="fname"></h1><span class="muted" id="fname2"></span><span id="openRow" style="margin-left:auto"></span></div>
     <div class="panel" id="info">读取中…</div>
     <section id="awBox"></section>
   </section>
@@ -37,7 +37,7 @@
   const cny = (w) => (w >= 1e4 ? (Math.round(w / 100) / 100).toFixed(2) + " 亿元" : Math.round(w).toLocaleString("zh-CN") + " 万元");
   const SHOW = 300;
 
-  /* ---------- 全部中标单位 ---------- */
+  /* ---------- 全部供应商 ---------- */
   async function list() {
     const props = ["name", "name_zh", "nationality", "kind", "parent", "award_count", "award_cny"].filter((p) => P.has("contractor", p));
     const opt = P.has("contractor", "award_count") ? { orderBy: [{ fieldId: P.f("contractor", "award_count"), order: "desc" }] } : {};
@@ -52,8 +52,8 @@
       const q = st.q.toLowerCase();
       const rows = all.filter((r) => (!st.n || g(r, "nationality") === st.n) && (!q || [g(r, "name"), g(r, "name_zh"), g(r, "parent")].join(" ").toLowerCase().includes(q)));
       $("fNote").textContent = "共 " + rows.length.toLocaleString("zh-CN") + " 家";
-      $("rows").innerHTML = !all.length ? '<p class="muted">还没有中标单位:导入已中标项目时按中标记录建行。</p>' : !rows.length ? '<p class="muted">没有符合条件的中标单位。</p>' :
-        P.tableHtml(["单位", "注册国", "性质", "中标", "合计(折合人民币)"], rows.slice(0, SHOW).map((r) => [
+      $("rows").innerHTML = !all.length ? '<p class="muted">还没有供应商:导入已中标项目时按中标记录建行。</p>' : !rows.length ? '<p class="muted">没有符合条件的供应商。</p>' :
+        P.tableHtml(["供应商", "注册国", "性质", "中标", "合计(折合人民币)"], rows.slice(0, SHOW).map((r) => [
           P.raw('<a href="contractor.html?id=' + encodeURIComponent(r.id) + '"><b>' + P.esc(g(r, "name_zh") || g(r, "name") || "") + "</b></a>" + (g(r, "name_zh") ? '<br><span class="muted small">' + P.esc(g(r, "name") || "") + "</span>" : "")),
           P.raw('<span class="nw">' + P.esc(g(r, "nationality") || "") + "</span>"), g(r, "kind") || "", n(r) + " 份", Number(g(r, "award_cny")) ? cny(Number(g(r, "award_cny"))) : "—"]))
         + (rows.length > SHOW ? '<p class="muted small">列出前 ' + SHOW + " 家,筛选或搜索看其余的。</p>" : "");
@@ -63,17 +63,17 @@
     draw();
   }
 
-  /* ---------- 一家单位 ---------- */
+  /* ---------- 一家供应商 ---------- */
   async function one(id) {
     P.awards($("awBox"), "winners", id).catch((e) => P.fail($("awBox"), e));  /* 它的全部中标记录:自己读自己画 */
     const r = await P.api("/table/" + P.t("contractor").id + "/record/" + id, { fieldKeyType: "id" });
-    if (!r || !r.fields) { $("info").innerHTML = '<div class="err">没有这家单位</div>'; return; }
+    if (!r || !r.fields) { $("info").innerHTML = '<div class="err">没有这家供应商</div>'; return; }
     const nm = g(r, "name_zh") || g(r, "name") || "";
     $("fname").textContent = nm;
     if (g(r, "name_zh") && g(r, "name")) $("fname2").textContent = g(r, "name");
     document.title = "全球水务开源情报 · " + nm;
-    P.backLink($("back"), "contractor.html", "全部中标单位");
-    $("openRow").innerHTML = P.open("contractor", id, "在表格里打开这家单位 ↗");
+    P.backLink($("back"), "contractor.html", "全部供应商");
+    $("openRow").innerHTML = P.open("contractor", id, "在表格里打开这家供应商 ↗");
     const site = g(r, "website");
     const facts = [["注册国", g(r, "nationality")], ["性质", g(r, "kind")], ["母公司或所属集团", g(r, "parent")], ["主营领域", (g(r, "sectors") || []).join("、")],
       ["外部编号", ((ids) => ids.slice(0, 3).join("、") + (ids.length > 3 ? " 等 " + ids.length + " 个" : ""))(String(g(r, "ext_ids") || "").split(",").map((x) => x.trim()).filter(Boolean))]]
@@ -92,7 +92,7 @@
     await P.load();
     if (!(P.cfg.tables && P.cfg.tables.contractor)) {
       $("one").style.display = "none"; $("list").style.display = "";
-      $("rows").innerHTML = '<p class="muted">「中标单位」表还没建(跑一次建表命令后这里就有)。</p>';
+      $("rows").innerHTML = '<p class="muted">「供应商」表还没建(跑一次建表命令后这里就有)。</p>';
       return;
     }
     const id = q0.get("id");

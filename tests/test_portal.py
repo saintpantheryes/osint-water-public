@@ -1770,8 +1770,8 @@ def test_sources_page_flags_problems_and_toggles_enabled():
     now = datetime.now(timezone.utc)
     iso = lambda d: d.strftime("%Y-%m-%dT%H:%M:%S.000Z")
     b.create("source", [
-        {"key": "ok_src", "name": "世行采购公告(全球)", "kind": "接口", "scope": "全球", "enabled": True, "last_run": iso(now - timedelta(hours=3)), "last_status": "正常", "url": "https://example.org/wb"},
-        {"key": "blocked_src", "name": "GDELT 新闻", "kind": "接口", "scope": "AZE", "enabled": True, "last_run": iso(now - timedelta(hours=3)), "last_status": "被拒"},
+        {"key": "ok_src", "name": "世行采购公告(全球)", "kind": "接口", "scope": "全球", "enabled": True, "last_run": iso(now - timedelta(minutes=1)), "last_status": "正常", "url": "https://example.org/wb"},  # 一分钟前:三小时前在北京时间零点后会变成「昨天」
+        {"key": "blocked_src", "name": "GDELT 新闻", "kind": "接口", "scope": "AZE", "enabled": True, "last_run": iso(now - timedelta(minutes=1)), "last_status": "被拒"},
         {"key": "stale_src", "name": "MEED 水务", "kind": "网页列表", "scope": "全球", "enabled": True, "last_run": iso(now - timedelta(days=9)), "last_status": "正常"},
         {"key": "off_src", "name": "旧 EBRD 采购平台", "kind": "网页列表", "scope": "AZE", "last_run": iso(now - timedelta(days=16)), "last_status": "正常"},
     ])
@@ -1892,8 +1892,8 @@ def test_awards_table_at_the_bottom_of_country_and_city_pages():
 
 
 def test_contractor_page_lists_its_awards_and_winner_names_link_to_it():
-    """中标单位(使用方 2026-10-12 要的,v2.15):已中标项目表里每家中标方点进中标单位页;那页是基本资料(人补的没填时提示)
-    和它的全部中标(多一组国别筛选、一列国别,卡片换成涉及国别);不带 id 是全部中标单位按中标数排。只读。"""
+    """供应商(使用方 2026-10-12 要的,v2.15):已中标项目表里每家中标方点进供应商页;那页是基本资料(人补的没填时提示)
+    和它的全部中标(多一组国别筛选、一列国别,卡片换成涉及国别);不带 id 是全部供应商按中标数排。只读。"""
     from playwright.sync_api import Error as PWError, sync_playwright
     fake, admin = _fake_with_schema()
     c, o, ld = _seed(admin, fake)
@@ -1947,4 +1947,4 @@ def test_contractor_page_lists_its_awards_and_winner_names_link_to_it():
             browser.close()
     finally:
         srv.shutdown()
-    assert all(m == "GET" for m, _ in fake.calls[seeded:]), "中标单位页只读"
+    assert all(m == "GET" for m, _ in fake.calls[seeded:]), "供应商页只读"

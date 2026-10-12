@@ -1,7 +1,7 @@
 """A28 导入已中标项目:按私有配置仓的 data/awards.csv.gz 把已授出的合同建进「已中标项目」表;只新建、只填空(R2),去重按编号。
 首批数据由 scripts/fetch_wb_awards.py 从世界银行公开的合同授予数据取(那个脚本用这里的 classify / quantity 归类、摘工程量);
 别的来源整理成同样的列(COLS)也能导入。城市:合同名称(或所属项目名)里出现了该国某座规模以上城市的英文名才挂,几座都出现取人口最多的。
-中标单位(v2.15):winners 列是 JSON 列表 [{name, iso3, country_zh, ext}],每家一行建进「中标单位」表(标识 = contractor_key(名称),同名的并成一家),
+供应商(v2.15):winners 列是 JSON 列表 [{name, iso3, country_zh, ext}],每家一行建进「供应商」表(标识 = contractor_key(名称),同名的并成一家),
 再把合同的「中标方」关联到这几家;同样只新建、只填空。
 后台每个周期另有 translate:给没有中文名的行请模型译中文名(配了模型时,一次 TRANSLATE_BATCH 条)。
 命令行:python -m core.jobs.awards [--file 路径] [--dry-run]。库里还没建这张表时跳过。"""
@@ -98,7 +98,7 @@ def contract_type(category: str | None, name: str | None) -> str:
     return "运营" if zh in ("工程", "非咨询服务") and _OPS.search(t) and not side else zh
 
 
-# 中标单位标识:名称大写、去标点、去开头的 M/S 与结尾的公司后缀(可连着几个),空白并成一个
+# 供应商标识:名称大写、去标点、去开头的 M/S 与结尾的公司后缀(可连着几个),空白并成一个
 _SUFFIX = {"LLC", "LTD", "LIMITED", "CO", "COMPANY", "CORP", "CORPORATION", "INC", "INCORPORATED", "JSC", "OJSC", "CJSC", "PJSC", "OAO", "ZAO",
            "OOO", "TOO", "SA", "SAS", "SARL", "SRL", "SPA", "SAU", "SL", "SAC", "LTDA", "LDA", "CIA", "PVT", "PRIVATE", "PLC", "LLP", "GMBH",
            "AG", "BV", "NV", "AB", "AS", "PTY", "PT", "TBK", "BHD", "SDN", "KG", "EIRL", "SE", "AND", "Ş", "ŞTI", "STI", "AŞ", "A", "S", "L", "C"}
@@ -237,14 +237,14 @@ def run(b: tstore.Base, path: Path | None = None, dry_run: bool = False, log=pri
         b.update_many(OID, ups)
     out = {"新建": len(new), "补空": len(ups), "挂上城市": n_city, "国别表里没有": skipped}
     if with_firms:
-        out.update({"新建中标单位": n_firm_new, "中标单位补空": n_firm_fill})
+        out.update({"新建供应商": n_firm_new, "供应商补空": n_firm_fill})
     log(f"  award:新建 {len(new)},补空 {len(ups)},挂上城市 {n_city},国别表里没有的跳过 {skipped}"
-        + (f";中标单位新建 {n_firm_new},补空 {n_firm_fill}" if with_firms else "") + ("(只算,没写)" if dry_run else ""))
+        + (f";供应商新建 {n_firm_new},补空 {n_firm_fill}" if with_firms else "") + ("(只算,没写)" if dry_run else ""))
     return out
 
 
 def _contractors(b: tstore.Base, rows: list[dict], countries: dict, dry_run: bool) -> tuple[dict[str, str | None], int, int]:
-    """把数据文件里出现的中标单位建进「中标单位」表(国别表里没有的合同也不建它的单位)。
+    """把数据文件里出现的供应商建进「供应商」表(国别表里没有的合同也不建它的单位)。
     → ({标识: 记录编号(只算不写时新建的是 None)}, 新建几家, 补空几家)"""
     C = "contractor"
     want: dict[str, dict] = {}

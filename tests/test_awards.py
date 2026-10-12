@@ -1,5 +1,5 @@
 """已中标项目(core/jobs/awards.py,A28;scripts/fetch_wb_awards.py):类别按关键词归、工程量从名称里摘、运营维护合同记「运营」;
-中标单位按规范化名称并成一家、建行并挂到合同的「中标方」;世行原始行并成一份合同一行;
+供应商按规范化名称并成一家、建行并挂到合同的「中标方」;世行原始行并成一份合同一行;
 导入按编号去重、只填空,城市按英文名对上;后台译中文名(顺带摘工程量)只填空;A21 折算中标价。不联网。"""
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def test_import_links_cities_fills_blanks_and_skips_unknown_countries(env, tmp_p
         {"key": "WB-2", "iso3": "AZE", "name": "Baku WWTP", "sector": "污水", "price": "8000000", "currency": "USD", "awarded": "2022-03-01", "source": "测试"},
         {"key": "WB-3", "iso3": "MAR", "name": "Rabat desal", "sector": "海水淡化", "source": "测试"},  # 国别表里没有
     ])
-    assert awards.run(b, path, dry_run=True, log=lambda *a: None) == {"新建": 2, "补空": 0, "挂上城市": 1, "国别表里没有": 1, "新建中标单位": 0, "中标单位补空": 0}
+    assert awards.run(b, path, dry_run=True, log=lambda *a: None) == {"新建": 2, "补空": 0, "挂上城市": 1, "国别表里没有": 1, "新建供应商": 0, "供应商补空": 0}
     assert not b.rows("award")
     awards.run(b, path, log=lambda *a: None)
     got = {b.get("award", r, "key"): r for r in b.rows("award")}
@@ -85,7 +85,7 @@ def test_import_links_cities_fills_blanks_and_skips_unknown_countries(env, tmp_p
     assert not b.get("award", got["WB-2"], "city") and tstore.link_id(b.get("award", got["WB-2"], "country")) == crid
     # 人改过的不覆盖;再跑不重建
     b.update("award", got["WB-1"]["id"], {"quantity": "配水管网 42 公里"})
-    assert awards.run(b, path, log=lambda *a: None) == {"新建": 0, "补空": 0, "挂上城市": 0, "国别表里没有": 1, "新建中标单位": 0, "中标单位补空": 0}
+    assert awards.run(b, path, log=lambda *a: None) == {"新建": 0, "补空": 0, "挂上城市": 0, "国别表里没有": 1, "新建供应商": 0, "供应商补空": 0}
     assert b.get("award", b.record("award", got["WB-1"]["id"]), "quantity") == "配水管网 42 公里"
     # A21:中标价按汇率折人民币
     assert fx.run(ctx).get("已中标项目折算") == 2 and b.get("award", b.record("award", got["WB-2"]["id"]), "price_cny") > 0
@@ -105,9 +105,9 @@ def test_import_creates_contractors_and_links_winners(env, tmp_path):
          "winners": w(("CHINA GEZHOUBA GROUP COMPANY LIMITED", "CHN", "中国", "WB:3"))},
         {"key": "WB-3", "iso3": "MAR", "name": "Rabat", "sector": "供水", "source": "测试", "winners": w(("Only Morocco Co", "MAR", "摩洛哥", ""))},
     ])
-    assert awards.run(b, path, dry_run=True, log=lambda *a: None)["新建中标单位"] == 1 and not b.rows("contractor")[1:]
+    assert awards.run(b, path, dry_run=True, log=lambda *a: None)["新建供应商"] == 1 and not b.rows("contractor")[1:]
     got = awards.run(b, path, log=lambda *a: None)
-    assert got["新建"] == 1 and got["补空"] == 1 and got["新建中标单位"] == 1 and got["中标单位补空"] == 1
+    assert got["新建"] == 1 and got["补空"] == 1 and got["新建供应商"] == 1 and got["供应商补空"] == 1
     firms = {b.get("contractor", r, "key"): r for r in b.rows("contractor")}
     assert set(firms) == {"CHINA GEZHOUBA GROUP", "VEOLIA EAU"}  # 国别表里没有的合同不建它的单位
     cg, ve = firms["CHINA GEZHOUBA GROUP"], firms["VEOLIA EAU"]
@@ -118,7 +118,7 @@ def test_import_creates_contractors_and_links_winners(env, tmp_path):
     assert set(tstore.link_ids(b.get("award", rows["WB-1"], "winners"))) == {cg["id"], ve["id"]} and rows["WB-1"]["id"] == old["id"]
     assert tstore.link_ids(b.get("award", rows["WB-2"], "winners")) == [cg["id"]] and b.get("award", rows["WB-2"], "contract_type") == "运营"
     again = awards.run(b, path, log=lambda *a: None)
-    assert again["新建"] == again["补空"] == again["新建中标单位"] == again["中标单位补空"] == 0
+    assert again["新建"] == again["补空"] == again["新建供应商"] == again["供应商补空"] == 0
 
 
 class _Clf:

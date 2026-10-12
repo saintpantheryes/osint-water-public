@@ -40,7 +40,7 @@ tables:
     default_sort: [[中标时间, desc]]
     optional: true   # 2026-10-12 新加的表:库里还没建时后台与页面跳过
   contractor:
-    table: 中标单位
+    table: 供应商
     primary: name
     key: {name: 标识, note: 名称规范化(大写、去标点与公司后缀);去重按它}
     default_sort: [[中标数, desc]]

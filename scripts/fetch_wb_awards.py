@@ -4,7 +4,7 @@
 公开接口 datacatalogapi.worldbank.org,一页 1000 条,全量约 30 万条、300 MB,取一次几分钟。
 挑法:项目属水务实践(project_global_practice 含 Water)、合同名称归得进一个类别(core.jobs.awards.classify)、金额 ≥ --min-usd(缺省 10 万美元)、
 不是个人咨询顾问合同;同一合同号的多行(联合体各家)并成一行,金额相同的只算一次、不同的相加。国别按借款国(地区性项目没有国别的丢掉)。
-每家中标单位另记进 winners 列(名称、注册国、世行供应商编号),导入时建成「中标单位」;合同类型按 awards.contract_type(运营维护类合同记「运营」)。
+每家供应商另记进 winners 列(名称、注册国、世行供应商编号),导入时建成「供应商」;合同类型按 awards.contract_type(运营维护类合同记「运营」)。
 
 python scripts/fetch_wb_awards.py [--out private/data/awards.csv.gz] [--min-usd 100000] [--cache 目录]
 """
