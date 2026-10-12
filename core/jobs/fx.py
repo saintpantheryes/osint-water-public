@@ -1,4 +1,4 @@
-"""A21 折算人民币:每个后台周期,把「投资规模与货币都有、折合人民币为空」的线索与商机按当日汇率折成万元(core/fx.py);
+"""A21 折算人民币:每个后台周期,把「投资规模与货币都有、折合人民币为空」的线索与商机(还有已中标项目的中标价)按当日汇率折成万元(core/fx.py);
 商机顺带补「规模(美元)」。旧线索「金额」文字可解析的(「5,000,000 USD」)先拆成投资规模与货币。只填空(R2);库里还没建这些字段时跳过。"""
 from __future__ import annotations
 
@@ -62,6 +62,10 @@ def run(ctx: Ctx) -> dict:
     n = convert(ctx, "opportunity", "size_value", "size_cny", "size_usd")
     if n:
         out["商机折算"] = n
+    if "award" in ctx.base.t:
+        n = convert(ctx, "award", "price", "price_cny")
+        if n:
+            out["已中标项目折算"] = n
     if out and ctx.fx.source:
         out["汇率"] = ctx.fx.source
     return out

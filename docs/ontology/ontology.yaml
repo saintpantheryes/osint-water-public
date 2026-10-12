@@ -16,7 +16,7 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.13
+version: 2.15
 date: 2026-10-12
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
@@ -105,6 +105,24 @@ changes_v2_11:   # 行业术语(2026-10-09):使用方反映助手把「智慧水
   - 首批术语:智慧水务、海绵城市、漏损控制;懂行的人在表格里加词、改相关词,不用改程序
   - 新增 data_scope 节「数据范围」:写明本系统面向海外、不包含中国国内(大陆、港澳台)数据;助手的提问涉及中国(含「国内」「港澳台」等说法)时在答案上方显示这句说明
   - 要跑一次建表命令(新表「行业术语」)
+
+changes_v2_15:   # 供应商(2026-10-12):使用方要供应商单独成对象、与已中标项目关联,以后在国别范围内做竞争对手分析,单位的基本信息要能展开
+  - 新增公开对象「供应商」(contractor):名称、中文名、国别与国别码、性质(国有企业、民营企业、外资或国际企业、设计咨询机构、其他)、母公司或所属集团、官网、主营领域、简介、外部编号、备注;派生中标数、中标总额
+  - 已中标项目加关联「中标方」(links:contractor,联合体各家都挂上);原「中标单位」「中标单位国别」两个文字字段保留(原文怎么写就怎么记)
+  - A28 导入时按供应商名称规范化后去重建行,只填空;基本信息由人补(A30)
+  - 新增视图 V19 供应商页(从已中标项目表里点单位名进入,不进菜单):基本信息、在各国的全部中标,按国别、类别、年份筛选
+  - 已中标项目的合同类型加「运营」(使用方 2026-10-12 要):运营维护、委托运营、管理合同等;导入时按名称里的字样从工程、货物、非咨询服务里挑出来
+  - 要跑一次建表命令(新表、新字段、新选项)
+
+changes_v2_14:   # 已中标项目(2026-10-12):使用方要一类「已中标项目」,国别概况、城市概况页最下面一张表,按类别、年份筛选,作参考;数据基本一次性收集
+  - 新增公开对象「已中标项目」(award):名称、中文名、类别(线索领域 7 类)、合同类型、中标价、货币、折合人民币、中标时间、工程量、中标单位与其国别、所属项目、资金来源、采购方式、所属国别、所属城市(可空)、数据来源、原文链接、编号、备注
+  - 新分类体系 award_contract_type(工程、货物、咨询服务、非咨询服务);类别沿用 lead_sectors,货币沿用 currency
+  - 新增行为 A28 导入已中标项目(一次性,命令行):按私有配置仓 data/awards.csv.gz 只新建、只填空,去重按编号;首批是世界银行公开的合同授予数据(2019 年以来、水务相关、10 万美元以上),由 scripts/fetch_wb_awards.py 取;别的来源整理成同样的列也能导入。后台把没有中文名的按名称译成中文(配了模型时)
+  - 新增行为 A29 补录已中标项目(人,表格):别的来源(本国招标网、新闻、同行消息)在表格里加一行
+  - A21 折算人民币也折中标价
+  - 国别概况(V7)、城市概况一座城市(V16)页面最下面加「已中标项目」:卡片 + 表,按类别、年份筛选
+  - 游客通道放行(示例数据里编几条)
+  - 要跑一次建表命令(新表)
 
 changes_v2_13:   # 信源页(2026-10-12):使用方找不到管信源的地方,要一个页面
   - 新增视图 V18 信源(页面,工作原理组里本体后面):全部信源的类型、范围、最近采集、状态、线索数;出错、被拒、启用着却两天以上没采集的标红排最前;按状态、范围筛选、搜索;编辑者可直接停用或启用(只改「启用」一个字段,下一次采集起生效)
@@ -501,6 +519,58 @@ objects:
       - {id: source, name: 数据来源, type: text, by: ai, example: "water-tracker 导入(HydroWASTE)"}
       - {id: note, name: 备注, type: longtext, by: human}
 
+  - id: award
+    name: 已中标项目
+    core: false
+    band: public
+    definition: 一份已经授出的合同(中标结果):类别、中标价、中标时间、工程量、中标单位,属于哪个国家、哪座城市,数据从哪来。机器从开发银行公开的中标记录一次性导入(A28),人可改,也可在表格里补录别的来源(A29)。国别概况、城市概况页最下面列出,按类别、年份筛选,作报价与竞争对手的参考;不计入线索、商机的数。
+    key: 编号(来源缩写 + 原合同号,如 WB-1543858;人补录的可留空)
+    properties:
+      - {id: name, name: 名称, type: text, by: ai, required: true, note: 合同名称原文(英、法、西等), example: "Construction of Water Supply System in Osh City"}
+      - {id: name_zh, name: 中文名, type: text, by: ai, note: "后台按名称译成中文(配了模型时,每个周期补一批),只填空;人可改"}
+      - {id: sector, name: 类别, type: enum, enum: [供水, 污水, 水利, 海水淡化, 雨水排涝, 水环境, 其他], by: ai, required: true, taxonomy: lead_sectors,
+         note: "导入时按合同名称里的关键词归一类:海水淡化 → 污水 → 雨水排涝 → 供水 → 水利 → 水环境,先中先得;都不中的算其他"}
+      - {id: contract_type, name: 合同类型, type: enum, enum: [工程, 货物, 运营, 咨询服务, 非咨询服务], by: ai, taxonomy: award_contract_type}
+      - {id: price, name: 中标价, type: number, by: ai, note: "合同金额(原币);联合体各家记同一金额的只算一次", example: 25720221}
+      - {id: currency, name: 货币, type: enum, by: ai, taxonomy: currency, note: 中标价的币种(ISO 4217 代码;世行数据一律是美元),
+         enum: [USD, EUR, CNY, GBP, JPY, CHF, AUD, CAD, SGD, HKD, AED, SAR, QAR, KWD, OMR, EGP, MAD, DZD, TND, NGN, GHS, KES, TZS, UGX, ETB, ZAR, XOF, XAF, INR, PKR, BDT, LKR, NPR, IDR, MYR, THB, VND, PHP, MMK, KHR, KZT, UZS, AZN, GEL, AMD, KGS, TJS, TMT, MNT, TRY, IQD, JOD, LBP, PLN, RON, HUF, CZK, RSD, UAH, RUB, BRL, MXN, COP, PEN, CLP, ARS, BOB, PYG, UYU, DOP, JMD, FJD, PGK, WST, TOP, SBD, VUV]}
+      - {id: price_cny, name: 折合人民币(万元), type: number, by: ai, note: "A21 按当日汇率算,只填空;人改了不再动(R2)", example: 18500}
+      - {id: awarded, name: 中标时间, type: date, by: ai, note: "合同签订日期(世行数据只有签约日,以它为准)"}
+      - {id: quantity, name: 工程量, type: text, by: ai, format: "主要工程量,「、」隔开", example: "配水管网 17 km、净水厂 5 万吨/日",
+         note: "导入时从合同名称里摘出带单位的数量(公里、米、立方米/日、公顷、口井、座等);摘不出的,后台译中文名时请模型从名称里摘(只摘名称里明说了的);都没有的留空,人补"}
+      - {id: winner, name: 中标单位, type: text, by: ai, note: "联合体各家用「、」隔开;原文照记,关联见「中标方」"}
+      - {id: winners, name: 中标方, type: "links:contractor", by: ai, note: 联合体各家都挂上;导入时按名称规范化后对上供应商表}
+      - {id: winner_country, name: 中标单位国别, type: text, by: ai, format: "中文国名,联合体各家用「、」隔开(同一国家只写一次)", example: 中国、印度}
+      - {id: project, name: 所属项目, type: text, by: ai, format: "项目编号 项目名", example: "P151416 Urban Development Project"}
+      - {id: funder, name: 资金来源, type: text, by: ai, example: 世界银行}
+      - {id: method, name: 采购方式, type: text, by: ai, example: 国际竞争性招标}
+      - {id: country, name: 所属国别, type: "link:country", by: ai, required: true}
+      - {id: city, name: 所属城市, type: "link:city", by: ai, note: "导入时合同名称里出现了该国某座规模以上城市的英文名(5 个字母以上)才挂,几座都出现取人口最多的;对不上留空,人可选"}
+      - {id: source, name: 数据来源, type: text, by: ai, example: "世界银行合同授予数据(STEP,2026-10-12 取)"}
+      - {id: url, name: 原文链接, type: url, by: ai, note: 世行数据给的是所属项目的页面}
+      - {id: note, name: 备注, type: longtext, by: human}
+
+  - id: contractor
+    name: 供应商
+    core: false
+    band: public
+    definition: 一家在已中标项目里中过标的公司(联合体的每一家各是一行)。机器从中标记录建行(A28),只写名称、国别与外部编号;中文名、性质、母公司、官网、主营领域、简介由人补(A30),以后做国别范围的竞争对手分析时在这里展开。供应商页列出它在各国的全部中标。
+    key: 标识(名称规范化:大写、去标点与公司后缀,如 CHINA GEZHOUBA GROUP;同一家公司的不同写法暂不自动合并)
+    properties:
+      - {id: name, name: 名称, type: text, by: ai, required: true, note: 中标记录里的原文名, example: "CHINA GEZHOUBA GROUP COMPANY LIMITED"}
+      - {id: name_zh, name: 中文名, type: text, by: human}
+      - {id: nationality, name: 国别, type: text, by: ai, note: 中文国名(中标记录里的注册国)}
+      - {id: nationality_code, name: 国别码, type: text, by: ai, format: ISO3, example: CHN}
+      - {id: kind, name: 性质, type: enum, enum: [国有企业, 民营企业, 外资或国际企业, 设计咨询机构, 其他], by: human, taxonomy: contractor_kind}
+      - {id: parent, name: 母公司或所属集团, type: text, by: human, example: 中国能源建设集团}
+      - {id: website, name: 官网, type: url, by: human}
+      - {id: sectors, name: 主营领域, type: enums, enum: [供水, 污水, 水利, 海水淡化, 雨水排涝, 水环境, 其他], by: human, taxonomy: lead_sectors}
+      - {id: profile, name: 简介, type: longtext, by: human, note: "规模、资质、在当地的分支与合作方、和我方的关系等,竞争对手分析时展开"}
+      - {id: ext_ids, name: 外部编号, type: text, by: ai, format: "来源:编号,英文逗号分隔", example: "WB:316882"}
+      - {id: award_count, name: 中标数, type: number, by: derived, where: teable 汇总}
+      - {id: award_cny, name: 中标总额(万元), type: number, by: derived, where: teable 汇总, note: 各合同折合人民币相加;联合体的合同按全额计入每一家}
+      - {id: note, name: 备注, type: longtext, by: human}
+
   - id: member
     name: 成员
     core: false
@@ -540,6 +610,9 @@ links:
   - {from: supply_plant, name: 位于, to: city, cardinality: "*..0..1", via: supply_plant.city}
   - {from: sewage_plant, name: 属于, to: country, cardinality: "*..1", via: sewage_plant.country}
   - {from: sewage_plant, name: 位于, to: city, cardinality: "*..0..1", via: sewage_plant.city}
+  - {from: award, name: 属于, to: country, cardinality: "*..1", via: award.country}
+  - {from: award, name: 中标方, to: contractor, cardinality: "*..*", via: award.winners}
+  - {from: award, name: 位于, to: city, cardinality: "*..0..1", via: award.city}
   - {from: company, name: 适用于, to: country, cardinality: "*..*", via: company.countries, set_by: 人}
   - {from: preference, name: 关注, to: country, cardinality: "*..*", via: preference.countries, set_by: 人}
   - {from: preference, name: 属于, to: member, cardinality: "*..1", via: preference.user, set_by: 人}
@@ -753,8 +826,8 @@ actions:
     name: 折算人民币
     actor: ai
     trigger: 每 2 分钟(后台周期)
-    reads: [lead, opportunity]
-    writes: [lead.amount_value, lead.currency, lead.amount_cny, opportunity.size_cny, opportunity.size_usd]
+    reads: [lead, opportunity, award]
+    writes: [lead.amount_value, lead.currency, lead.amount_cny, opportunity.size_cny, opportunity.size_usd, award.price_cny]
     note: "线索:「金额」文字可解析为「数字 + 三字母币种」且投资规模为空的，拆成投资规模与货币;投资规模与货币都有、折合人民币为空的按当日汇率算成万元(四舍五入到整数)。商机同样，顺带补规模(美元)。
       汇率:open.er-api.com(人民币基准)→ 欧央行每日牌价 → 程序内置近似表(core/fx.py;哪一个用了写在后台日志);一天取一次，存本机缓存。只填空(R2)，不用表格公式(R12)。"
     rules: [R2, R12]
@@ -808,6 +881,39 @@ actions:
     creates: term
     writes: [term.term, term.aliases, term.covers, term.sectors, term.match, term.means, term.disabled]
     note: 助手每分钟重读一次这张表;表没建或读不到时用本体 terms 节的初始词。
+    rules: [R13]
+  - id: A28
+    name: 导入已中标项目
+    actor: ai
+    channel: [命令行, 后台]
+    trigger: 一次性(python -m core.jobs.awards;数据文件换了再跑一次);后台每个周期给没有中文名的补一批中文名
+    reads: [country, city]
+    creates: award
+    writes: [award.name, award.name_zh, award.sector, award.contract_type, award.price, award.currency, award.awarded, award.quantity, award.winner, award.winner_country,
+             award.project, award.funder, award.method, award.country, award.city, award.source, award.url, award.winners,
+             contractor.name, contractor.nationality, contractor.nationality_code, contractor.ext_ids]
+    note: "数据文件是私有配置仓的 data/awards.csv.gz。首批由 scripts/fetch_wb_awards.py 从世界银行 Finances One 的「投资项目合同授予」数据(STEP 系统,借款国录入)取:
+      项目属水务实践、合同名称里有水务字样、10 万美元以上;同一合同号的多行(联合体各家)并成一行,金额不同的各家相加。只留国别表里有的国家。
+      只新建、只填空(R2),去重按编号;别的来源(亚行、非行等)整理成同样的列也能导入。中文名:配了模型时后台每个周期译 40 条(工程量空着的顺带从名称里摘),没配就留空、人可补。"
+    rules: [R2]
+  - id: A29
+    name: 补录已中标项目
+    actor: human
+    channel: [表格]
+    trigger: 随时(在表格「已中标项目」里加一行或改一行)
+    creates: award
+    writes: [award.name, award.name_zh, award.sector, award.contract_type, award.price, award.currency, award.awarded, award.quantity, award.winner, award.winner_country,
+             award.project, award.funder, award.method, award.country, award.city, award.source, award.url, award.note]
+    note: 至少填名称、类别、所属国别;中标价填了货币,折合人民币后台自动算;编号可空。
+    rules: [R13]
+  - id: A30
+    name: 补供应商资料
+    actor: human
+    channel: [表格]
+    trigger: 随时(在表格「供应商」里补中文名、性质、母公司、官网、主营领域、简介;别的来源的新单位也可以加一行)
+    creates: contractor
+    writes: [contractor.name, contractor.name_zh, contractor.nationality, contractor.nationality_code, contractor.kind, contractor.parent, contractor.website, contractor.sectors, contractor.profile, contractor.note]
+    note: 机器只建行、只填名称与国别,人补的资料机器不动(R2)。
     rules: [R13]
 
 rules:
@@ -908,7 +1014,7 @@ views:
      query: "缺省:跟踪中商机(glossary.tracked)的时间节点(日期) ∪ 其跟进记录(日期、下一步到期) ∪ 报告(日期);勾「也显示未归商机的线索截止」才加上挂在线索或国别上的节点(灰色);一格最多直接显示 6 条。表格里的两个日历视图不过滤"}
   - {id: V6, name: 线索总览漏斗, of: [lead, opportunity, report], channel: [页面],
      query: "五级严格子集，每级数线索条数:信源采集(全部)→ 相关(是否相关 = 是)→ 归入商机(所属商机非空)→ 归入跟踪中的商机(所属商机 ∈ glossary.tracked)→ 写进报告(写进的报告非空);国别 / 领域 / 类别 / 发现时间筛选作用于每一级;点一级右边列出该级最新 100 条"}
-  - {id: V7, name: 国别概况, of: [country, opportunity, lead, milestone, city], channel: [页面, 表格], query: "一国的国别信息(指标表、机构 / 国企 / 法规表、带标签的备注)+ 该国商机按阶段 + 线索统计 + 国别级时间节点 + 规模以上城市(人口、面积、密度、生产总值、线索数、商机数);引用角标 ①②③ 指向线索"}
+  - {id: V7, name: 国别概况, of: [country, opportunity, lead, milestone, city, award], channel: [页面, 表格], query: "一国的国别信息(指标表、机构 / 国企 / 法规表、带标签的备注)+ 该国商机按阶段 + 线索统计 + 国别级时间节点 + 规模以上城市(人口、面积、密度、生产总值、线索数、商机数);引用角标 ①②③ 指向线索;页面最下面「已中标项目」(所属国别 = 它):按类别、年份筛选(筛选项上的数跟着另一项走),卡片(项目数、合计中标价折合人民币、最大一笔、中国企业中标数),表按中标时间从新到旧"}
   - {id: V8, name: 线索处理, of: [lead, opportunity], channel: [页面],
      query: "两页带计数:待确认归属(= V2)/ AI 推荐的商机(= V3);待确认归属可按国别、类别、有无机器建议筛选，两页都可多选后批量归入 / 忽略 / 跟踪 / 不跟进(A20)。原名「待我处理」;v2.6 起下一步已逾期、待核更新两页在商机总览(V9)"}
   - {id: V9, name: 商机总览, of: [opportunity], channel: [页面], query: "三页:商机列表(缺省只列 glossary.tracked，可切到某一阶段或全部;按阶段顺序(跟踪中、准备投标、已投标、中标、建议、未中标、放弃、不跟进)再按编号;可按国别、负责人筛选;点进商机工作台)/ 下一步已逾期(glossary.overdue)/ 待核更新(商机.待核更新非空);后两页带计数，只列出来，点进商机工作台或表格去改，游客不显示。原名「商机列表」"}
@@ -923,7 +1029,8 @@ views:
   - {id: V15, name: 我的, of: [preference, country, member], channel: [页面], query: "登录人自己的一行:帐号与角色、关注的国别(加减,点进国别页;清单里这些国家排前、带 ★)、忽略的国别(地图上点选、按大洲一键;地图上画斜线,采集不再涉及)、保存的日历订阅(复制链接、删除)(A24);入口到帐号设置、退出登录、我方资料"}
   - {id: V17, name: 趋势机会, of: [city, country, lead], channel: [页面], query: "规模以上城市按 glossary.trend_self_funded(自付型,青绿)与 glossary.trend_loan_driven(贷款型,紫)着色,两类都是的标红,都不是的灰色小点;门槛(水风险用哪一项及多少分、人均 GDP 多少、贷款判定)页面上可调并记在网址里;下面按类分列城市(水风险从高到低)与国别对照表。是趋势参考:页首写明按公开数据推算、不是具体项目,数字不计入线索、商机;只看中国以外(使用方 2026-10-09 定,中国境内的城市与国别不进地图、清单与卡片)"}
   - {id: V18, name: 信源, of: [source, country], channel: [页面, 表格], query: "全部信源:名称与网址、类型、范围(全球或国别)、最近采集、状态、线索数、启用;状态口径:停用 / 出错、被拒 / 启用着却两天以上没采集(多日未采集)/ 正常、无条目;有问题的(出错、被拒、多日未采集)整行标红排最前,其余按线索数从多到少;按状态、范围筛选(筛选项上的数跟着其他筛选走)、搜索;编辑者点「启用」停用或重新启用一个信源;游客看示例"}
-  - {id: V16, name: 城市概况, of: [city, country, opportunity, lead, supply_plant, sewage_plant], channel: [页面], query: "全部规模以上城市按人口从多到少,可按国别、有线索 / 有商机筛选,按中文名、英文名、行政区搜索;地图上的分布(圆点大小是人口,颜色深浅是人口或生产总值,红圈有线索或商机)左下角有滑块(和国别地图一样),按人口或地区生产总值拖出一个范围,卡片(城市数、合计人口、百万人口以上、有线索、有商机的城市数)与清单(前 300 座)只算范围内的;点一座城市:人口、面积、密度、生产总值卡片,概况(所属国别、行政区、坐标、来源、备注、小地图)与商机(商机.城市 = 它)、线索(线索.城市 = 它)、水厂(自来水厂、污水厂.所在城市 = 它)三个页签;清单多自来水厂数、污水厂数两列"}
+  - {id: V19, name: 供应商页, of: [contractor, award, country], channel: [页面], query: "从已中标项目表里点供应商进(不在主菜单):卡片(中标份数、合计中标价、涉及几个国家、最近一次中标)、基本信息(人补的中文名、性质、母公司、官网、主营领域、简介)、它的全部已中标项目(中标方含它),按国别、类别、年份筛选"}
+  - {id: V16, name: 城市概况, of: [city, country, opportunity, lead, supply_plant, sewage_plant, award], channel: [页面], query: "全部规模以上城市按人口从多到少,可按国别、有线索 / 有商机筛选,按中文名、英文名、行政区搜索;地图上的分布(圆点大小是人口,颜色深浅是人口或生产总值,红圈有线索或商机)左下角有滑块(和国别地图一样),按人口或地区生产总值拖出一个范围,卡片(城市数、合计人口、百万人口以上、有线索、有商机的城市数)与清单(前 300 座)只算范围内的;点一座城市:人口、面积、密度、生产总值卡片,概况(所属国别、行政区、坐标、来源、备注、小地图)与商机(商机.城市 = 它)、线索(线索.城市 = 它)、水厂(自来水厂、污水厂.所在城市 = 它)三个页签;清单多自来水厂数、污水厂数两列;一座城市的页面最下面「已中标项目」(所属城市 = 它),与国别概况同一张表"}
 
 # 现状对照(MM，2026-10-04):每种对象现在只存一处——Teable 库「水务项目机会 新版」的一张表(R1 已做到;切换前的多处存放见 git 历史里的 v1.2)。
 # 后面一行写"除表之外还有什么":只允许是配置、缓存或可再生的东西，不是第二份数据。
@@ -959,6 +1066,11 @@ as_is:
   city:
     - Teable「城市」表(唯一)
     - 本机缓存:GeoNames 的城市与行政区数据文件(可再取)
+  award:
+    - Teable「已中标项目」表(唯一)
+    - 导入来源:私有配置仓 data/awards.csv.gz(scripts/fetch_wb_awards.py 从世界银行公开数据取)
+  contractor:
+    - Teable「供应商」表(唯一;机器从已中标项目的中标记录建行)
   company:
     - Teable「公司资料」表(唯一,附件在行里)
   preference:
@@ -996,7 +1108,7 @@ taxonomies:
           - {v: 其他, code: other, def: 相关但归不进上面任何一类;规则初筛没过、或只是页面变化的也在这里, boundary: "代码里 page(页面变化)也映射到这里", example: "行业会议报道"}
   lead_sectors:
     name: 线索领域(粗分 7 类)
-    used_by: [lead.sectors, company.sectors, term.covers, term.sectors]
+    used_by: [lead.sectors, company.sectors, term.covers, term.sectors, award.sector, contractor.sectors]
     note: 多选。它是商机领域 12 类的上级(见 opp_sectors 的 parent);线索总览「领域」筛选按它。核心领域 = 供水、污水、海水淡化、雨水排涝、水环境;水利要看 profile 的 sector_scope(灌溉排水 / 防洪流域开了才算核心)。
     groups:
       - name: 全部
@@ -1221,7 +1333,7 @@ taxonomies:
           - {v: 内部版, code: internal, def: 含我方阶段、负责人、跟进、判断、优先级、内部备注, boundary: "", example: ""}
   currency:
     name: 货币
-    used_by: [lead.currency, opportunity.currency, city.tariff_currency]
+    used_by: [lead.currency, opportunity.currency, city.tariff_currency, award.currency]
     note: ISO 4217 三字母代码;值即代码。按使用方的经营区域挑了常见币种，不够在这里加(加了跑 python -m core.schema 补选项)。汇率换算见 A21 / core/fx.py。
     groups:
       - name: 主要货币
@@ -1384,6 +1496,30 @@ taxonomies:
           - {v: 一级, code: primary, def: 只有一级(物理)处理, boundary: "", example: ""}
           - {v: 二级, code: secondary, def: 二级(生物)处理, boundary: "", example: ""}
           - {v: 深度, code: advanced, def: 三级或深度处理(脱氮除磷、过滤、消毒等), boundary: "", example: ""}
+  award_contract_type:
+    name: 合同类型
+    used_by: [award.contract_type]
+    note: 按世界银行采购的四类,另加运营(使用方 2026-10-12 要);别的来源照此归。
+    groups:
+      - name: 全部
+        values:
+          - {v: 工程, code: works, def: 土建与安装工程(含设计施工总承包), boundary: "", example: "净水厂 EPC"}
+          - {v: 货物, code: goods, def: 设备、材料采购, boundary: 带安装的设备采购也算货物, example: "水表 5 万只"}
+          - {v: 运营, code: operation, def: 运营维护、委托运营、管理合同、租赁经营(affermage)、绩效型减漏等以运营为主的合同, boundary: "设计建设运营(DBO)以建设为主的仍算工程;导入时名称里有 operation and maintenance、O&M、management contract、affermage 等字样的归这里", example: "某市供水管网 5 年运维"}
+          - {v: 咨询服务, code: consulting, def: 设计、监理、可研、技术咨询, boundary: "", example: "施工监理"}
+          - {v: 非咨询服务, code: non_consulting, def: 运维、勘测、钻探等以产出计的服务, boundary: "", example: "管网检漏服务"}
+  contractor_kind:
+    name: 供应商性质
+    used_by: [contractor.kind]
+    note: 人补;机器不判断。
+    groups:
+      - name: 全部
+        values:
+          - {v: 国有企业, code: soe, def: 国家或地方政府控股的企业, boundary: 中央企业的子公司也算, example: "中国电建所属工程局"}
+          - {v: 民营企业, code: private, def: 私人控股的企业, boundary: "", example: ""}
+          - {v: 外资或国际企业, code: international, def: 跨国公司或其在当地的分支, boundary: 当地注册但由外国公司控股的也算, example: ""}
+          - {v: 设计咨询机构, code: consultant, def: 设计院、咨询公司、监理单位, boundary: "", example: ""}
+          - {v: 其他, code: other, def: 个人、联合体名义、非营利机构等, boundary: "", example: ""}
   company_kind:
     name: 公司资料类别
     used_by: [company.kind]
@@ -1522,6 +1658,8 @@ guest:
     city: {}
     supply_plant: {}
     sewage_plant: {}
+    award: {}
+    contractor: {}
     report: {deny: [requested_by], rows: "版本 = 公开版 且 类型 ∈ 定期(周报、月报、日报)", kinds_group: 定期, edition: 公开版}
   note: 游客登录后在表格里什么也看不到(不在库里);页面上看到的线索、商机、国别、时间节点、报告都是编出来的示例数据,不是真实内容;「打开表格」「在表格里打开」不显示;不能登记跟进、申请报告、订阅日历或改任何字段。
 

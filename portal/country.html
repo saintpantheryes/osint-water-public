@@ -37,6 +37,7 @@
     <p class="muted small">人口达到门槛(缺省 10 万)的城市,后台每月按 GeoNames 公开数据维护;面积、地区生产总值公开数据里没有,在城市表里补,密度随后自动算。</p>
     <div class="panel" id="cities"></div>
   </div>
+  <section id="awBox"></section>
 </main>
 <script>
 (async function () {
@@ -104,6 +105,7 @@
       hasCity ? P.records("city", { filter: P.and(P.cond("city", "country", "is", c.id)), orderBy: [{ fieldId: P.f("city", "population"), order: "desc" }],
         props: ["name_zh", "name_en", "admin", "population", "area_km2", "density", "gdp", "gdp_year", "lead_count", "opp_count", "coords"] }) : Promise.resolve([]),
     ]);
+    P.awards($("awBox"), "country", c.id).catch((e) => P.fail($("awBox"), e));  /* 已中标项目(页面最下面):自己读自己画,不等别的 */
     const full = await P.api("/table/" + P.t("country").id + "/record/" + c.id, { fieldKeyType: "id" });
     const f = (p) => (full && full.fields || {})[P.f("country", p)];
     /* 长文本按后台写入的格式整理:一行一条;「名称:数值(来源 网址)」→ 事实表;「· 」分隔 → 表格;[备注]/[情报]/[建议动作] → 标签;[8位引用键]、〔R012〕→ 小角标 */

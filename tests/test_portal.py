@@ -21,7 +21,7 @@ ONTO_RAW = ontology.raw()
 # 菜单(使用方 2026-10-08 定,10-09 加「市场背景」):首页 + 四组,组内顺序也按这个;「后台数据表格」是表格本身
 MENU_SPEC = [("工作原理", ["工作流程", "本体", "信源", "后台数据表格 ↗"]), ("市场背景", ["国别概况", "城市概况", "趋势机会"]), ("项目线索", ["线索总览", "线索分析", "线索处理"]), ("商机跟进", ["商机总览", "日历", "报告"])]
 NEW = "水务项目机会 新版"
-READ_PAGES = ("calendar.html", "country.html", "city.html", "trend.html", "analysis.html", "ontology.html")  # 只读
+READ_PAGES = ("calendar.html", "country.html", "city.html", "trend.html", "analysis.html", "ontology.html", "contractor.html")  # 只读
 WRITE_PAGES = ("index.html", "overview.html", "opps.html", "opp.html", "inbox.html", "reports.html", "sources.html")  # 信源页只改「启用」; 以登录人身份写(跟进、报告申请、阶段、归属;首页只在看完一条链接后按「收进线索库」建一行线索;线索总览只有清单里的「转为商机」)
 PAGES = READ_PAGES + WRITE_PAGES
 
@@ -1770,8 +1770,8 @@ def test_sources_page_flags_problems_and_toggles_enabled():
     now = datetime.now(timezone.utc)
     iso = lambda d: d.strftime("%Y-%m-%dT%H:%M:%S.000Z")
     b.create("source", [
-        {"key": "ok_src", "name": "世行采购公告(全球)", "kind": "接口", "scope": "全球", "enabled": True, "last_run": iso(now - timedelta(hours=3)), "last_status": "正常", "url": "https://example.org/wb"},
-        {"key": "blocked_src", "name": "GDELT 新闻", "kind": "接口", "scope": "AZE", "enabled": True, "last_run": iso(now - timedelta(hours=3)), "last_status": "被拒"},
+        {"key": "ok_src", "name": "世行采购公告(全球)", "kind": "接口", "scope": "全球", "enabled": True, "last_run": iso(now - timedelta(minutes=1)), "last_status": "正常", "url": "https://example.org/wb"},  # 一分钟前:三小时前在北京时间零点后会变成「昨天」
+        {"key": "blocked_src", "name": "GDELT 新闻", "kind": "接口", "scope": "AZE", "enabled": True, "last_run": iso(now - timedelta(minutes=1)), "last_status": "被拒"},
         {"key": "stale_src", "name": "MEED 水务", "kind": "网页列表", "scope": "全球", "enabled": True, "last_run": iso(now - timedelta(days=9)), "last_status": "正常"},
         {"key": "off_src", "name": "旧 EBRD 采购平台", "kind": "网页列表", "scope": "AZE", "last_run": iso(now - timedelta(days=16)), "last_status": "正常"},
     ])
@@ -1819,3 +1819,132 @@ def test_sources_page_flags_problems_and_toggles_enabled():
         srv.shutdown()
     writes = [x for x in fake.calls if x[0] != "GET"][-2:]
     assert all(m == "PATCH" for m, _ in writes)
+
+
+def test_awards_table_at_the_bottom_of_country_and_city_pages():
+    """已中标项目(使用方 2026-10-12 要的):国别概况、城市一页最下面一张表,按类别、年份筛选(多选,筛选项上的数跟着另一项走),
+    卡片是份数、合计中标价(折合人民币)、最大一笔、中国企业中标;城市页只列挂在这座城市的。只读。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    city = b.create("city", [{"key": "586523", "name_zh": "甘贾", "name_en": "Ganja", "country": c["id"], "coords": "40.6828,46.3606", "population": 335600}])[0]
+    b.create("award", [
+        {"key": "WB-1", "name": "Ganja water supply network, 42 km", "name_zh": "甘贾供水管网 42 公里", "sector": "供水", "contract_type": "工程", "price": 25_000_000, "currency": "USD",
+         "price_cny": 17750, "awarded": "2024-05-10", "quantity": "42 km", "winner": "China Sample Engineering Co", "winner_country": "中国", "project": "P1 Ganja Water",
+         "funder": "世界银行", "country": c["id"], "city": city["id"], "url": "https://projects.worldbank.org/x"},
+        {"key": "WB-2", "name": "Baku WWTP rehabilitation", "sector": "污水", "contract_type": "工程", "price": 8_000_000, "currency": "USD", "price_cny": 5680,
+         "awarded": "2022-03-01", "winner": "Sample JV", "winner_country": "土耳其、中国", "country": c["id"]},
+        {"key": "WB-3", "name": "Supervision consultant", "sector": "供水", "contract_type": "咨询服务", "price": 400_000, "currency": "USD", "price_cny": 284,
+         "awarded": "2022-11-20", "winner": "Sample Consult", "winner_country": "德国", "country": c["id"]},
+    ])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    seeded = len(fake.calls)
+    shots = Path(os.environ.get("PORTAL_SHOTS", "")) if os.environ.get("PORTAL_SHOTS") else None
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/country.html?iso=AZE")
+            page.wait_for_selector("#awBox table", timeout=15000)
+            rows = page.locator("#awBox tbody tr").all_inner_texts()
+            assert len(rows) == 3 and rows[0].startswith("2024-05-10") and "甘贾供水管网 42 公里" in rows[0] and "甘贾" in rows[0] and "2,500 万美元" in rows[0]
+            assert rows[1].startswith("2022-11-20") and rows[2].startswith("2022-03-01")  # 中标时间从新到旧
+            k = page.inner_text("#awBox .aw-k")
+            assert "3\n份" in k and "2.37\n亿元" in k and "1.78\n亿元" in k and "2\n份" in k and "占 67%" in k  # 合计、最大一笔、中国企业中标(联合体里有中国也算)
+            assert page.locator("#awBox .aw-s .chip-btn").all_inner_texts() == ["全部 3", "供水 2", "污水 1"]
+            assert page.locator("#awBox .aw-y .chip-btn").all_inner_texts() == ["全部 3", "2024 1", "2022 2"]
+            page.click("#awBox .aw-y .chip-btn[data-v='2022']")  # 选了年份,类别上的数跟着变
+            assert page.locator("#awBox .aw-s .chip-btn").all_inner_texts() == ["全部 2", "供水 1", "污水 1"] and page.locator("#awBox tbody tr").count() == 2
+            page.click("#awBox .aw-s .chip-btn[data-v='污水']")
+            assert page.locator("#awBox tbody tr").count() == 1 and "Baku WWTP" in page.inner_text("#awBox tbody")
+            assert page.locator("#awBox .aw-y .chip-btn").all_inner_texts() == ["全部 1", "2024 0", "2022 1"]
+            page.click("#awBox .aw-s .chip-btn[data-v='']")
+            page.click("#awBox .aw-y .chip-btn[data-v='']")
+            page.fill("#awBox .aw-q", "中国")
+            page.wait_for_function("document.querySelectorAll('#awBox tbody tr').length === 2")
+            page.fill("#awBox .aw-q", "")
+            page.wait_for_function("document.querySelectorAll('#awBox tbody tr').length === 3")
+            if shots:
+                page.locator("#awBox").screenshot(path=str(shots / "awards_country.png"))
+            # 城市页:只列挂在这座城市的
+            page.goto(base + f"/city.html?id={city['id']}")
+            page.wait_for_selector("#awBox table", timeout=15000)
+            assert page.locator("#awBox tbody tr").count() == 1 and "甘贾供水管网" in page.inner_text("#awBox tbody")
+            phone = browser.new_page(viewport={"width": 390, "height": 760})
+            phone.goto(base + "/country.html?iso=AZE")
+            phone.wait_for_selector("#awBox table", timeout=15000)
+            assert phone.evaluate("document.documentElement.scrollWidth") <= 400
+            if shots:
+                phone.locator("#awBox").screenshot(path=str(shots / "awards_phone.png"))
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    assert all(m == "GET" for m, _ in fake.calls[seeded:]), "已中标项目只读"
+
+
+def test_contractor_page_lists_its_awards_and_winner_names_link_to_it():
+    """供应商(使用方 2026-10-12 要的,v2.15):已中标项目表里每家中标方点进供应商页;那页是基本资料(人补的没填时提示)
+    和它的全部中标(多一组国别筛选、一列国别,卡片换成涉及国别);不带 id 是全部供应商按中标数排。只读。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    geo2 = b.create("country", [{"key": "GEO", "name_zh": "格鲁吉亚"}])[0]
+    cg, ve = b.create("contractor", [{"key": "CHINA SAMPLE", "name": "China Sample Engineering Co", "nationality": "中国", "nationality_code": "CHN", "ext_ids": "WB:1"},
+                                     {"key": "VEOLIA SAMPLE", "name": "Veolia Sample SA", "name_zh": "威立雅示例", "nationality": "法国", "kind": "外资或国际企业"}])
+    b.create("award", [
+        {"key": "WB-1", "name": "Ganja water supply", "sector": "供水", "contract_type": "工程", "price": 25_000_000, "currency": "USD", "price_cny": 17750,
+         "awarded": "2024-05-10", "winner": "China Sample Engineering Co、Veolia Sample SA", "winner_country": "中国、法国", "country": c["id"], "winners": [cg["id"], ve["id"]]},
+        {"key": "WB-2", "name": "Tbilisi O&M contract", "sector": "供水", "contract_type": "运营", "price": 3_000_000, "currency": "USD", "price_cny": 2130,
+         "awarded": "2023-02-01", "winner": "China Sample Engineering Co", "winner_country": "中国", "country": geo2["id"], "winners": [cg["id"]]},
+    ])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    seeded = len(fake.calls)
+    shots = Path(os.environ.get("PORTAL_SHOTS", "")) if os.environ.get("PORTAL_SHOTS") else None
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/country.html?iso=AZE")
+            page.wait_for_selector("#awBox table", timeout=15000)
+            assert page.locator("#awBox tbody a[href^='contractor.html?id=']").count() == 2  # 联合体两家各一个链接
+            page.click(f"#awBox tbody a[href='contractor.html?id={cg['id']}']")
+            page.wait_for_selector("#awBox table", timeout=15000)
+            assert page.inner_text("#fname") == "China Sample Engineering Co" and "中国" in page.inner_text("#info") and "WB:1" in page.inner_text("#info")
+            assert "还没填:中文名、性质" in page.inner_text("#info")
+            rows = page.locator("#awBox tbody tr").all_inner_texts()
+            assert len(rows) == 2 and "格鲁吉亚" in rows[1] and "运营" in rows[1]
+            k = page.inner_text("#awBox .aw-k")
+            assert "2\n份" in k and "2\n个" in k  # 中标份数、涉及国别
+            assert page.locator("#awBox .aw-c .chip-btn").all_inner_texts()[0] == "全部 2"
+            page.click("#awBox .aw-c .chip-btn[data-v='格鲁吉亚']")
+            assert page.locator("#awBox tbody tr").count() == 1
+            if shots:
+                page.screenshot(path=str(shots / "contractor.png"), full_page=True)
+            page.goto(base + "/contractor.html")
+            page.wait_for_selector("#rows table", timeout=15000)
+            rows = page.locator("#rows tbody tr").all_inner_texts()
+            assert len(rows) == 2 and rows[0].startswith("China Sample") and "2 份" in rows[0] and "威立雅示例" in rows[1]
+            page.select_option("#fNat", "法国")
+            assert page.locator("#rows tbody tr").count() == 1
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    assert all(m == "GET" for m, _ in fake.calls[seeded:]), "供应商页只读"
