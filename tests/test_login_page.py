@@ -72,7 +72,8 @@ def test_caddy_accepts_the_config():
 
 def test_login_page_is_self_contained_and_uses_the_table_sign_in():
     s = (PORTAL / "login.html").read_text(encoding="utf-8")
-    assert 'name="viewport"' in s and not re.search(r'(?:src|href)="https?://', s)  # 不引外站
+    assert 'name="viewport"' in s and not re.search(r'src="https?://|<link[^>]*href="https?://', s)  # 不引外站的资源(去 GitHub 的普通链接可以)
+    assert "docs/AI_INSTALL.md" in s and 'id="copyCmd"' in s  # 页面最后:自己部署一套的那句提示
     assert not re.search(r'(?:href|src)="[^"]*portal\.(?:css|js)"', s)  # 不引 portal.css / portal.js:那两个要登录后才取得到
     assert '"/api/auth/signin"' in s and 'method: "POST"' in s and 'credentials: "same-origin"' in s
     assert "TEABLE_TOKEN" not in s and "Bearer" not in s

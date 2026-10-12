@@ -164,6 +164,16 @@ a:hover { text-decoration: underline; }
   @keyframes im-step { 0% { top: 0; } 20% { top: 40px; } 40% { top: 80px; } 60% { top: 120px; } 80% { top: 160px; } }
   .im-track { gap: 6px; }
 }
+/* 页面最后:自己部署一套(代码开源;一句话交给 AI 助手,它带着装) */
+.selfhost { max-width: 760px; margin: 0 auto clamp(64px, 12vh, 140px); padding: 0 clamp(16px, 3vw, 32px); text-align: center; }
+.selfhost h2 { margin: 0 0 14px; font-size: clamp(24px, 2.6vw, 34px); line-height: 1.2; font-weight: 600; color: #0b1b3a; }
+.selfhost p { margin: 0 0 20px; font-size: 16px; line-height: 1.8; color: #4b5563; }
+.selfhost .cmd { display: flex; gap: 10px; align-items: stretch; text-align: left; background: #f3f5f8; border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.selfhost code { flex: 1; min-width: 0; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #0b1b3a; overflow-wrap: anywhere; user-select: all; }
+.selfhost button { flex: 0 0 auto; border: 0; border-radius: 10px; padding: 0 16px; background: var(--brand); color: #fff; font: inherit; font-size: 14px; cursor: pointer; }
+.selfhost .src { margin: 14px 0 0; font-size: 14px; }
+.selfhost .src a { color: var(--brand); }
+@media (max-width: 760px) { .selfhost .cmd { flex-direction: column; } .selfhost button { padding: 10px; } }
 </style>
 </head>
 <body>
@@ -285,6 +295,12 @@ a:hover { text-decoration: underline; }
     </div>
   </div>
 </section>
+<section class="selfhost" aria-label="自己部署">
+  <h2>代码开源，一句话交给 AI 就能部署</h2>
+  <p>一个人能用，整个团队也能用。把下面这句话交给能在电脑上跑命令的 AI 助手（Claude Code、Cursor 等），它会一步步带你装好。</p>
+  <div class="cmd"><code id="aiCmd">请帮我安装全球水务开源情报:先读 https://raw.githubusercontent.com/saintpantheryes/osint-water-public/main/docs/AI_INSTALL.md ,然后一步步带我做。</code><button type="button" id="copyCmd">复制</button></div>
+  <p class="src"><a href="https://github.com/saintpantheryes/osint-water-public" target="_blank" rel="noopener">在 GitHub 上看源代码 →</a></p>
+</section>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -340,6 +356,13 @@ a:hover { text-decoration: underline; }
     v.addEventListener("canplay", play, { once: true });
     play();
   }
+
+  /* 复制那句安装提示:能用剪贴板就用,不能就把文字选中让人自己复制 */
+  $("copyCmd").onclick = () => {
+    const t = $("aiCmd").textContent, done = () => { $("copyCmd").textContent = "已复制"; setTimeout(() => { $("copyCmd").textContent = "复制"; }, 2000); };
+    const pick = () => { const r = document.createRange(); r.selectNodeContents($("aiCmd")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t).then(done, pick); else pick();
+  };
 
   /* 显示 / 隐藏密码 */
   $("peek").onclick = () => {
