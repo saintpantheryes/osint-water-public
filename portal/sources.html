@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 信源</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("sources.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>信源</h1>
+  <p class="muted">机器每天北京时间 08:30 去这些网站、接口与订阅收集线索。这里看每个信源最近一次采集得怎样、带来了多少条线索;有问题的排在最前、标红。编辑者可以直接停用或重新启用一个信源,从下一次采集起生效。新增信源要按网站结构写抓取规则,请把网址交给系统维护人。</p>
+  <div id="kpis"></div>
+  <div class="filters">
+    <div class="frow"><b>状态</b><span id="fState" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>范围</b><span id="fScope" class="frow" style="padding:0"></span></div>
+    <div class="frow"><b>搜索</b><input id="fText" placeholder="搜名称、网址" size="18"><span class="muted" id="count" style="margin-left:auto"></span></div>
+  </div>
+  <div class="panel" id="list">读取中…</div>
+  <p class="muted" id="tblp">要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开信源表 ↗</a></p>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const g = (r, p) => P.get("source", r, p);
+  const STALE_DAYS = 2;  // 启用着、却超过两天没采集(每天采一次,隔一天还没动就是没在跑)
+  let rows = [], cname = {}, writable = false;
+  const flt = { st: "", sc: "" };
+  const BAD = { "出错": "出错:程序没读懂网站,多半是网站改版了", "被拒": "被拒:网站拒绝程序访问" };
+
+  /* 一个信源现在的情况:key 用于筛选与排序,text 是表格里写的话,bad 标红 */
+  function state(r) {
+    const on = !!g(r, "enabled"), st = g(r, "last_status"), run = g(r, "last_run"), manual = g(r, "kind") === "人工上传";
+    if (!on) return { key: "off", order: 4, text: "已停用", bad: false };
+    if (manual) return { key: "ok", order: 3, text: "人工上传,不定时采集", bad: false };
+    if (!run) return { key: "ok", order: 3, text: "还没采集过", bad: false };
+    if (BAD[st]) return { key: "bad", order: 0, text: BAD[st], bad: true };
+    const days = Math.floor((Date.now() - new Date(run).getTime()) / 86400000);
+    if (days >= STALE_DAYS) return { key: "bad", order: 1, text: "多日未采集:最近一次是 " + days + " 天前", bad: true, tip: "启用着却好几天没采集:可能已不在采集清单里,或后台没在跑" };
+    if (st === "无条目") return { key: "ok", order: 2, text: "无条目:这次网站上没列出东西", bad: false };
+    return { key: "ok", order: 2, text: st || "正常", bad: false };
+  }
+  const scopeOf = (r) => { const s = String(g(r, "scope") || "").trim(); return !s || s === "全球" || s.toUpperCase() === "GLOBAL" ? "全球" : s.toUpperCase(); };
+  const scopeName = (s) => (s === "全球" ? "全球" : cname[s] || s);
+  const ago = (v) => { const d = Math.round((new Date(P.today()) - new Date(P.day(v))) / 86400000); return d <= 0 ? "今天" : d === 1 ? "昨天" : d + " 天前"; };
+  const when = (v) => (v ? P.day(v) + " " + new Date(v).toLocaleTimeString("zh-CN", { timeZone: P.tz, hour: "2-digit", minute: "2-digit", hour12: false }) : "—");
+
+  function render() {
+    const q = $("fText").value.trim().toLowerCase();
+    const okText = (r) => !q || ((g(r, "name") || "") + " " + (g(r, "url") || "") + " " + (g(r, "key") || "")).toLowerCase().includes(q);
+    const inState = (r) => !flt.st || state(r).key === flt.st, inScope = (r) => !flt.sc || scopeOf(r) === flt.sc;
+    /* 筛选项上的数跟着其他筛选走 */
+    const forState = rows.filter((r) => inScope(r) && okText(r)), forScope = rows.filter((r) => inState(r) && okText(r));
+    const n = (list, k) => list.filter((r) => state(r).key === k).length;
+    P.chips($("fState"), [["", "全部 " + forState.length], ["bad", "有问题 " + n(forState, "bad")], ["ok", "正常 " + n(forState, "ok")], ["off", "已停用 " + n(forState, "off")]], flt, "st", render);
+    const scopes = [...new Set(rows.map(scopeOf))].sort((a, b) => (a === "全球" ? -1 : b === "全球" ? 1 : P.zhCmp(scopeName(a), scopeName(b))));
+    P.chips($("fScope"), [["", "全部"]].concat(scopes.map((s) => [s, scopeName(s) + " " + forScope.filter((r) => scopeOf(r) === s).length])), flt, "sc", render);
+
+    const shown = rows.filter((r) => inState(r) && inScope(r) && okText(r));
+    $("count").textContent = shown.length + " / " + rows.length + " 个";
+    $("list").innerHTML = shown.length ? P.tableHtml(["名称", "类型", "范围", "最近采集", "状态", "线索数", "启用", ""], shown.map((r) => {
+      const s = state(r), url = g(r, "url"), on = !!g(r, "enabled");
+      const name = "<b>" + P.esc(g(r, "name") || g(r, "key") || "") + "</b>" + (url ? '<br><a class="small" href="' + P.esc(url) + '" target="_blank" rel="noopener">' + P.esc(String(url).replace(/^https?:\/\//, "").slice(0, 48)) + " ↗</a>" : "");
+      const st = '<span class="' + (s.bad ? "over" : s.key === "off" ? "muted" : "") + '"' + (s.tip ? ' title="' + P.esc(s.tip) + '"' : "") + ">" + P.esc(s.text) + "</span>";
+      const sw = writable
+        ? '<span class="it-act" style="min-width:0"><button type="button" data-id="' + r.id + '" class="chip-btn' + (on ? " on" : "") + '" title="' + (on ? "点一下停用:下一次采集起不再抓它" : "点一下重新启用") + '">' + (on ? "✓ 启用" : "已停用") + "</button></span>"
+        : (on ? "启用" : '<span class="muted">停用</span>');
+      return [P.raw(name), g(r, "kind") || "", scopeName(scopeOf(r)), when(g(r, "last_run")), P.raw(st), String(Number(g(r, "lead_count")) || 0), P.raw(sw), P.raw(P.open("source", r.id))];
+    })) : '<p class="muted">' + (rows.length ? "没有符合筛选的。" : "表里还没有信源:后台第一次采集时会按采集清单建好。") + "</p>";
+    $("list").querySelectorAll("tbody tr").forEach((tr, i) => { if (state(shown[i]).bad) tr.classList.add("bad"); });
+    $("list").querySelectorAll("button[data-id]").forEach((b) => { b.onclick = () => toggle(b.dataset.id, b); });
+  }
+  function kpis() {
+    const on = rows.filter((r) => g(r, "enabled")), bad = rows.filter((r) => state(r).bad);
+    const leads = rows.reduce((s, r) => s + (Number(g(r, "lead_count")) || 0), 0);
+    const last = rows.map((r) => g(r, "last_run")).filter(Boolean).sort().pop();
+    $("kpis").innerHTML = P.kpiHtml([
+      { label: "信源", value: rows.length + " 个", note: "启用 " + on.length + " · 停用 " + (rows.length - on.length) },
+      { label: "有问题", value: bad.length + " 个", note: bad.length ? "出错、被拒或多日未采集" : "全部正常" },
+      { label: "带来的线索", value: leads.toLocaleString("en-US") + " 条" },
+      { label: "最近一次采集", value: last ? ago(last) : "还没有", note: last ? when(last) : "" },
+    ]);
+    if (bad.length) { const k = $("kpis").querySelectorAll(".kpi")[1]; k.classList.add("bad"); }
+  }
+  async function load() {
+    rows = await P.records("source", { props: ["name", "key", "url", "kind", "scope", "enabled", "last_run", "last_status", "lead_count"] });
+    rows.sort((a, b) => state(a).order - state(b).order || (Number(g(b, "lead_count")) || 0) - (Number(g(a, "lead_count")) || 0) || String(g(a, "name") || "").localeCompare(String(g(b, "name") || "")));
+    kpis(); render();
+  }
+  async function toggle(rid, btn) {
+    const r = rows.find((x) => x.id === rid); if (!r) return;
+    const on = !!g(r, "enabled");
+    btn.disabled = true;
+    /* 停用写空(表格的勾选框不勾就是空),不写 false */
+    try { await P.send("PATCH", "/table/" + P.t("source").id + "/record", { fieldKeyType: "id", records: [{ id: rid, fields: { [P.f("source", "enabled")]: on ? null : true } }] }); P.toast(on ? "已停用:下一次采集起不再抓它" : "已启用:下一次采集起照常抓"); await load(); }
+    catch (e) { P.toast(e.message, true); btn.disabled = false; }
+  }
+  try {
+    await P.load();
+    writable = !P.isGuest && (await P.canWrite());
+    if (P.isGuest) $("tblp").style.display = "none"; else $("tbl").href = P.tableUrl("source");
+    if (!writable) P.guest();
+    (await P.records("country", { props: ["name_zh", "key"] })).forEach((c) => { cname[String(P.get("country", c, "key") || "").toUpperCase()] = P.get("country", c, "name_zh"); });
+    $("fText").oninput = render;
+    await load();
+  } catch (e) { P.fail($("list"), e); }
+})();
+</script>
+</body>
+</html>

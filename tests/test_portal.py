@@ -19,10 +19,10 @@ KIT = ROOT / "deploy" / "teable"
 ONTO, TMAP = ontology.load(), ontology.load_map()
 ONTO_RAW = ontology.raw()
 # 菜单(使用方 2026-10-08 定,10-09 加「市场背景」):首页 + 四组,组内顺序也按这个;「后台数据表格」是表格本身
-MENU_SPEC = [("工作原理", ["工作流程", "本体", "后台数据表格 ↗"]), ("市场背景", ["国别概况", "城市概况", "趋势机会"]), ("项目线索", ["线索总览", "线索分析", "线索处理"]), ("商机跟进", ["商机总览", "日历", "报告"])]
+MENU_SPEC = [("工作原理", ["工作流程", "本体", "信源", "后台数据表格 ↗"]), ("市场背景", ["国别概况", "城市概况", "趋势机会"]), ("项目线索", ["线索总览", "线索分析", "线索处理"]), ("商机跟进", ["商机总览", "日历", "报告"])]
 NEW = "水务项目机会 新版"
 READ_PAGES = ("calendar.html", "country.html", "city.html", "trend.html", "analysis.html", "ontology.html")  # 只读
-WRITE_PAGES = ("index.html", "overview.html", "opps.html", "opp.html", "inbox.html", "reports.html")  # 以登录人身份写(跟进、报告申请、阶段、归属;首页只在看完一条链接后按「收进线索库」建一行线索;线索总览只有清单里的「转为商机」)
+WRITE_PAGES = ("index.html", "overview.html", "opps.html", "opp.html", "inbox.html", "reports.html", "sources.html")  # 信源页只改「启用」; 以登录人身份写(跟进、报告申请、阶段、归属;首页只在看完一条链接后按「收进线索库」建一行线索;线索总览只有清单里的「转为商机」)
 PAGES = READ_PAGES + WRITE_PAGES
 
 
@@ -1757,3 +1757,65 @@ def test_home_link_gets_analysis_and_can_be_saved_as_a_lead():
             browser.close()
     finally:
         srv.shutdown()
+
+
+def test_sources_page_flags_problems_and_toggles_enabled():
+    """信源页(使用方 2026-10-12 找不到管信源的地方):全部信源的状态、最近采集、线索数;出错、被拒、启用着却多日没采集的整行标红排最前,
+    卡片数出有问题的几个;筛选项上的数跟着其他筛选走;编辑者点「启用」停用、再点重新启用,只改这一个字段(停用写空)。"""
+    from datetime import datetime, timedelta, timezone
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    now = datetime.now(timezone.utc)
+    iso = lambda d: d.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    b.create("source", [
+        {"key": "ok_src", "name": "世行采购公告(全球)", "kind": "接口", "scope": "全球", "enabled": True, "last_run": iso(now - timedelta(hours=3)), "last_status": "正常", "url": "https://example.org/wb"},
+        {"key": "blocked_src", "name": "GDELT 新闻", "kind": "接口", "scope": "AZE", "enabled": True, "last_run": iso(now - timedelta(hours=3)), "last_status": "被拒"},
+        {"key": "stale_src", "name": "MEED 水务", "kind": "网页列表", "scope": "全球", "enabled": True, "last_run": iso(now - timedelta(days=9)), "last_status": "正常"},
+        {"key": "off_src", "name": "旧 EBRD 采购平台", "kind": "网页列表", "scope": "AZE", "last_run": iso(now - timedelta(days=16)), "last_status": "正常"},
+    ])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    shots = Path(os.environ.get("PORTAL_SHOTS", "")) if os.environ.get("PORTAL_SHOTS") else None
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/sources.html")
+            page.wait_for_selector("#list table", timeout=15000)
+            assert page.locator("#nav .groups a.on").inner_text() == "工作原理" and page.locator("#nav .pagetabs a.on").inner_text() == "信源"
+            rows = page.locator("#list tbody tr").all_inner_texts()
+            assert len(rows) == 4 and rows[0].startswith("GDELT") and "被拒" in rows[0] and rows[1].startswith("MEED") and "多日未采集" in rows[1]
+            assert rows[2].startswith("世行") and rows[3].startswith("旧 EBRD") and "已停用" in rows[3] and "阿塞拜疆" in rows[0]
+            assert page.locator("#list tbody tr.bad").count() == 2 and page.locator("#kpis .kpi.bad").count() == 1 and "2\n个\n有问题" in page.inner_text("#kpis") and "今天" in page.inner_text("#kpis")
+            assert page.locator("#fState .chip-btn").all_inner_texts() == ["全部 4", "有问题 2", "正常 1", "已停用 1"]
+            page.click("#fScope .chip-btn:has-text('阿塞拜疆')")  # 筛了范围,状态上的数跟着变
+            assert page.locator("#fState .chip-btn").all_inner_texts() == ["全部 2", "有问题 1", "正常 0", "已停用 1"] and page.locator("#list tbody tr").count() == 2
+            page.click("#fScope .chip-btn:has-text('全部')")
+            if shots:
+                page.screenshot(path=str(shots / "sources.png"), full_page=True)
+            ok = next(r for r in b.rows("source", props=["key", "enabled"]) if b.get("source", r, "key") == "ok_src")
+            page.click(f"#list button[data-id='{ok['id']}']")
+            page.wait_for_function("document.querySelector('#fState').innerText.includes('已停用 2')", timeout=15000)
+            assert not b.get("source", b.record("source", ok["id"]), "enabled")
+            page.click(f"#list button[data-id='{ok['id']}']")
+            page.wait_for_function("document.querySelector('#fState').innerText.includes('已停用 1')", timeout=15000)
+            assert b.get("source", b.record("source", ok["id"]), "enabled") is True
+            phone = browser.new_page(viewport={"width": 390, "height": 760})
+            phone.goto(base + "/sources.html")
+            phone.wait_for_selector("#list table", timeout=15000)
+            if shots:
+                phone.screenshot(path=str(shots / "sources_phone.png"), full_page=False)
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    writes = [x for x in fake.calls if x[0] != "GET"][-2:]
+    assert all(m == "PATCH" for m, _ in writes)
