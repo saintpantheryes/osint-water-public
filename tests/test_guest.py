@@ -30,7 +30,7 @@ def _base_with_reports():
 def test_policy_follows_the_ontology_guest_section():
     fake, b, bot_base, c, o, ld = _base_with_reports()
     p = guest_mod.Policy(bot_base)
-    assert set(p.by_oid) == {"lead", "country", "opportunity", "milestone", "source", "city", "report", "supply_plant", "sewage_plant", "award"}  # 跟进记录、成员、报告模板不在
+    assert set(p.by_oid) == {"lead", "country", "opportunity", "milestone", "source", "city", "report", "supply_plant", "sewage_plant", "award", "contractor"}  # 跟进记录、成员、报告模板不在
     e = p.by_oid["opportunity"]
     assert e["id"] == b.t["opportunity"] and b.fid("opportunity", "internal_note") in e["deny"] and b.fid("opportunity", "owner") in e["deny"]
     assert b.fid("opportunity", "code") in e["allowed"] and b.fid("opportunity", "internal_note") not in e["allowed"]
@@ -92,7 +92,7 @@ def test_server_guest_routes_need_login_mark(monkeypatch):
         base, H = f"http://127.0.0.1:{srv.server_port}", {"X-Portal-Auth": "1"}
         assert httpx.get(base + "/guest/policy").status_code == 403  # 没有登录标记(没经 Caddy)
         pol = httpx.get(base + "/guest/policy", headers=H).json()
-        assert set(pol["objects"]) == {"lead", "country", "opportunity", "milestone", "source", "city", "report", "supply_plant", "sewage_plant", "award"} and pol["objects"]["opportunity"]["id"] == b.t["opportunity"]
+        assert set(pol["objects"]) == {"lead", "country", "opportunity", "milestone", "source", "city", "report", "supply_plant", "sewage_plant", "award", "contractor"} and pol["objects"]["opportunity"]["id"] == b.t["opportunity"]
         r = httpx.get(base + f"/guest/table/{b.t['opportunity']}/record", headers=H, params=[("fieldKeyType", "id"), ("projection", b.fid("opportunity", "code")), ("projection", b.fid("opportunity", "internal_note"))])
         assert r.status_code == 200 and len(r.json()["records"]) == 2 and all(b.fid("opportunity", "internal_note") not in x["fields"] for x in r.json()["records"])
         assert httpx.get(base + f"/guest/table/{b.t['followup']}/record", headers=H).status_code == 403

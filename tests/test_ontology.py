@@ -91,7 +91,7 @@ def test_rule_r5_machine_creates_opportunities_only_as_suggestions():
     assert all(t["by"] == "human" for t in opp["states"]["transitions"])
 
 
-@pytest.mark.parametrize("obj", ["lead", "opportunity", "followup", "country", "milestone", "report", "template", "source", "member", "city", "company", "preference", "supply_plant", "sewage_plant", "term", "award"])
+@pytest.mark.parametrize("obj", ["lead", "opportunity", "followup", "country", "milestone", "report", "template", "source", "member", "city", "company", "preference", "supply_plant", "sewage_plant", "term", "award", "contractor"])
 def test_every_object_has_its_current_storage_listed(obj):
     assert ONTO["as_is"][obj], obj
 

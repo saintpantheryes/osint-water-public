@@ -4,6 +4,7 @@
 公开接口 datacatalogapi.worldbank.org,一页 1000 条,全量约 30 万条、300 MB,取一次几分钟。
 挑法:项目属水务实践(project_global_practice 含 Water)、合同名称归得进一个类别(core.jobs.awards.classify)、金额 ≥ --min-usd(缺省 10 万美元)、
 不是个人咨询顾问合同;同一合同号的多行(联合体各家)并成一行,金额相同的只算一次、不同的相加。国别按借款国(地区性项目没有国别的丢掉)。
+每家中标单位另记进 winners 列(名称、注册国、世行供应商编号),导入时建成「中标单位」;合同类型按 awards.contract_type(运营维护类合同记「运营」)。
 
 python scripts/fetch_wb_awards.py [--out private/data/awards.csv.gz] [--min-usd 100000] [--cache 目录]
 """
@@ -95,17 +96,25 @@ def pick(raw: list[dict], min_usd: float = 100_000) -> list[dict]:
         if price < min_usd:
             continue
         winners = list(dict.fromkeys(" ".join(str(x.get("supplier") or "").split()) for x in rs if x.get("supplier")))
+        firms: dict[str, dict] = {}
+        for x in rs:
+            nm = " ".join(str(x.get("supplier") or "").split())
+            if nm and nm not in firms:
+                iso_w = geo.iso3(x.get("supplier_country_code")) if x.get("supplier_country_code") else None
+                sid = str(x.get("supplier_id") or "").strip()
+                firms[nm] = {"name": nm, "iso3": iso_w or "", "country_zh": _country_zh(x.get("supplier_country_code"), x.get("supplier_country")),
+                             "ext": f"WB:{sid}" if sid else ""}
         wc = list(dict.fromkeys(_country_zh(x.get("supplier_country_code"), x.get("supplier_country")) for x in rs))
         method = " ".join(str(r0.get("procurement_method") or "").split())
         pid = str(r0.get("project_id") or "").strip()
         out.append({"key": f"WB-{no}", "iso3": iso, "name": name, "sector": sector,
-                    "contract_type": awards.TYPE_ZH.get(str(r0.get("procurement_category") or ""), ""),
+                    "contract_type": awards.contract_type(r0.get("procurement_category"), name),
                     "price": f"{price:.2f}", "currency": "USD", "awarded": _day(r0.get("contract_signing_date")), "quantity": awards.quantity(name),
                     "winner": "、".join(winners), "winner_country": "、".join(x for x in wc if x),
                     "project": f"{pid} {str(r0.get('project_name') or '').strip()}".strip(), "funder": "世界银行",
                     "method": awards.METHOD_ZH.get(method, method),
                     "source": f"世界银行合同授予数据(STEP,{_day(r0.get('as_of_date')) or '取数日'} 取)",
-                    "url": PROJECT_URL.format(pid) if pid else ""})
+                    "url": PROJECT_URL.format(pid) if pid else "", "winners": json.dumps(list(firms.values()), ensure_ascii=False)})
     out.sort(key=lambda x: (x["iso3"], x["awarded"]), reverse=False)
     return out
 

@@ -6,7 +6,7 @@
 schema: osint-water/teable-map@1
 base: 水务项目机会 新版
 timezone: Asia/Shanghai
-order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, award]   # 建表顺序(关联字段在所有表建好后再加)
+order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award]   # 建表顺序(关联字段在所有表建好后再加)
 
 tables:
   lead:
@@ -39,6 +39,12 @@ tables:
     key: {name: 编号, note: 来源缩写 + 原合同号(WB-1543858);去重按它,人补录的可空}
     default_sort: [[中标时间, desc]]
     optional: true   # 2026-10-12 新加的表:库里还没建时后台与页面跳过
+  contractor:
+    table: 中标单位
+    primary: name
+    key: {name: 标识, note: 名称规范化(大写、去标点与公司后缀);去重按它}
+    default_sort: [[中标数, desc]]
+    optional: true
   opportunity:
     table: 商机
     primary: name_zh
@@ -124,6 +130,7 @@ links:
   sewage_plant.city: {reverse: 污水厂}
   award.country: {one_way: true}   # 国别表不要几千条的反向字段
   award.city: {reverse: 已中标项目}
+  award.winners: {reverse: 中标项目}
   company.countries: {one_way: true}
   preference.countries: {one_way: true}
 
@@ -153,6 +160,8 @@ derived:
   city.opp_count: {rollup: {via: 商机, field: <primary>, expression: "countall({values})"}}
   city.supply_count: {rollup: {via: 自来水厂, field: <primary>, expression: "countall({values})"}}
   city.sewage_count: {rollup: {via: 污水厂, field: <primary>, expression: "countall({values})"}}
+  contractor.award_count: {rollup: {via: 中标项目, field: <primary>, expression: "countall({values})"}}
+  contractor.award_cny: {rollup: {via: 中标项目, field: 折合人民币(万元), expression: "sum({values})"}}
 
 # 表格里的视图(架构方案第 3 节)。每张表建表时有一个「全部」;条件里写字段名,schema 换成编号。
 views:

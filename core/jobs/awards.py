@@ -1,6 +1,8 @@
 """A28 导入已中标项目:按私有配置仓的 data/awards.csv.gz 把已授出的合同建进「已中标项目」表;只新建、只填空(R2),去重按编号。
 首批数据由 scripts/fetch_wb_awards.py 从世界银行公开的合同授予数据取(那个脚本用这里的 classify / quantity 归类、摘工程量);
 别的来源整理成同样的列(COLS)也能导入。城市:合同名称(或所属项目名)里出现了该国某座规模以上城市的英文名才挂,几座都出现取人口最多的。
+中标单位(v2.15):winners 列是 JSON 列表 [{name, iso3, country_zh, ext}],每家一行建进「中标单位」表(标识 = contractor_key(名称),同名的并成一家),
+再把合同的「中标方」关联到这几家;同样只新建、只填空。
 后台每个周期另有 translate:给没有中文名的行请模型译中文名(配了模型时,一次 TRANSLATE_BATCH 条)。
 命令行:python -m core.jobs.awards [--file 路径] [--dry-run]。库里还没建这张表时跳过。"""
 from __future__ import annotations
@@ -22,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "private" / "data" / "awards.csv.gz"
 OID = "award"
 COLS = ["key", "iso3", "name", "sector", "contract_type", "price", "currency", "awarded", "quantity", "winner", "winner_country",
-        "project", "funder", "method", "source", "url"]
+        "project", "funder", "method", "source", "url", "winners"]
 TEXT = ("name", "sector", "contract_type", "currency", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "source", "url")
 
 # 类别(lead_sectors):按合同名称里的词归,先中先得(海水淡化 → 污水 → 雨水排涝 → 供水 → 水利 → 水环境);英、法、西、葡、越南文都认。
@@ -47,6 +49,10 @@ _QTY = re.compile(r"(?<![\w.+/:-])(\d[\d,.]*\s?(?:km|kms|kilom[eè]tres?|kilomet
                   r"ha\b|hectares?|tube ?wells?|boreholes?|wells?|forages?|connections?|branchements?|latrines?|villages?|reservoirs?|"
                   r"(?:water )?tanks?|pumping stations?|stations? de pompage|bornes? fontaines?|(?:water )?kiosks?|meters?|m[eè]tres|lm\b|rm\b|m\b))", re.I)
 
+# 合同类型「运营」:工程、非咨询服务类合同里,名称写明是运营维护、委托运营、管理合同、租赁经营的(咨询、货物不算)
+_OPS = re.compile(r"operation(?:s)? (?:and|&) maintenance|\bO ?& ?M\b|\bO&M\b|management contract|affermage|gestion d[ée]l[ée]gu[ée]e|"
+                  r"exploitation et (?:de )?maintenance|operaci[oó]n y mantenimiento|opera[çc][ãa]o e manuten[çc][ãa]o|"
+                  r"performance[- ]based (?:contract|management|operation)|lease contract|operate and maintain", re.I)
 TYPE_ZH = {"Works": "工程", "Goods": "货物", "Consultant Services": "咨询服务", "Non-consulting Services": "非咨询服务"}
 METHOD_ZH = {"Request for Bids": "公开招标(RFB)", "Request for Quotations": "询价(RFQ)", "Direct Selection": "直接选定",
              "Quality And Cost-Based Selection": "质量和费用选择(QCBS)", "Consultant Qualification Selection": "咨询顾问资格选择(CQS)",
@@ -82,6 +88,47 @@ def quantity(text: str | None, most: int = 4) -> str:
         if len(out) >= most:
             break
     return "、".join(out)
+
+
+def contract_type(category: str | None, name: str | None) -> str:
+    """世行采购类别 + 合同名称 → 合同类型(award_contract_type);认不出的类别返回空串。"""
+    zh = TYPE_ZH.get(str(category or "").strip(), "")
+    t = str(name or "")
+    side = re.search(r"(?:includ\w*|with|plus|and)\s+(?:the\s+)?(?:O ?& ?M|operation)|\b(?:design|build|construct|fabricat|install)", t, re.I)  # 设计建设(含运维)仍是工程
+    return "运营" if zh in ("工程", "非咨询服务") and _OPS.search(t) and not side else zh
+
+
+# 中标单位标识:名称大写、去标点、去开头的 M/S 与结尾的公司后缀(可连着几个),空白并成一个
+_SUFFIX = {"LLC", "LTD", "LIMITED", "CO", "COMPANY", "CORP", "CORPORATION", "INC", "INCORPORATED", "JSC", "OJSC", "CJSC", "PJSC", "OAO", "ZAO",
+           "OOO", "TOO", "SA", "SAS", "SARL", "SRL", "SPA", "SAU", "SL", "SAC", "LTDA", "LDA", "CIA", "PVT", "PRIVATE", "PLC", "LLP", "GMBH",
+           "AG", "BV", "NV", "AB", "AS", "PTY", "PT", "TBK", "BHD", "SDN", "KG", "EIRL", "SE", "AND", "Ş", "ŞTI", "STI", "AŞ", "A", "S", "L", "C"}
+_PREFIX = {"LLC", "OOO", "TOO", "JSC", "OJSC", "CJSC", "PT", "CV", "SARL", "SA", "ETS", "STE"}
+_PHRASES = re.compile(r"\b(?:GESELLSCHAFT MIT BESCHR[ÄA]NKTER HAFTUNG|LIMITED LIABILITY (?:COMPANY|PARTNERSHIP)|(?:OPEN |CLOSED |PUBLIC )?JOINT[ -]STOCK COMPANY|"
+                      r"ANON[İI]M [ŞS][İI]RKET[İI]|L[İI]M[İI]TED [ŞS][İI]RKET[İI]|SANAY[İI] VE T[İI]CARET|C[ÔO]NG TY (?:C[ỔO] PH[ẦA]N|TNHH(?: MTV)?)|"
+                      r"PRIVATE LIMITED|SOCI[ÉE]T[ÉE] ANONYME|SOLE PROPRIETORSHIP)\b")
+
+
+def contractor_key(name: str | None) -> str:
+    t = str(name or "").upper().replace("&", " AND ")
+    t = re.sub(r"^\s*(?:M\s*[/.]?\s*S\b\.?|MESSRS\.?)\s*", "", t)  # M/S、M/s.、Messrs
+    t = re.sub(r"\b([A-Z])\.(?=[A-Z]\.)", r"\1", t)  # S.A. / P.L.C. → SA / PLC
+    t = re.sub(r"(?<=\b[A-Z])\.(?=\s|$)", "", t)
+    t = _PHRASES.sub(" ", t)
+    words = re.sub(r"[^\w]+", " ", t).split()
+    while len(words) > 1 and words[0] in _PREFIX:
+        words.pop(0)
+    while len(words) > 1 and words[-1] in _SUFFIX:
+        words.pop()
+    return " ".join(words)
+
+
+def winners_of(row: dict) -> list[dict]:
+    """数据文件一行的 winners 列 → [{name, iso3, country_zh, ext}];没有或读不了时为空。"""
+    try:
+        xs = json.loads(row.get("winners") or "[]")
+    except ValueError:
+        return []
+    return [x for x in xs if isinstance(x, dict) and str(x.get("name") or "").strip()] if isinstance(xs, list) else []
 
 
 def read_rows(path: Path) -> list[dict]:
@@ -152,9 +199,11 @@ def run(b: tstore.Base, path: Path | None = None, dry_run: bool = False, log=pri
     rows = read_rows(path)
     countries = {str(b.get("country", r, "key")): r["id"] for r in b.rows("country", props=["key"]) if b.get("country", r, "key")}
     cities = CityIndex(b)
-    props = ["key", "country", "city", *[p for p in (*TEXT, "price") if b.has(OID, p)]]
+    props = ["key", "country", "city", *[p for p in (*TEXT, "price", "winners") if b.has(OID, p)]]
     have = {str(b.get(OID, r, "key")): r for r in b.rows(OID, props=props) if b.get(OID, r, "key")}
     allowed = {p: {c["name"] for c in (b.field(OID, p).get("options") or {}).get("choices") or []} for p in ("sector", "contract_type", "currency") if b.has(OID, p)}
+    with_firms = b.has(OID, "winners") and "contractor" in b.t
+    firms, n_firm_new, n_firm_fill = _contractors(b, rows, countries, dry_run) if with_firms else ({}, 0, 0)
     new, ups, n_city, skipped, seen = [], [], 0, 0, set()
     for row in rows:
         key = str(row.get("key") or "").strip()
@@ -167,6 +216,9 @@ def run(b: tstore.Base, path: Path | None = None, dry_run: bool = False, log=pri
             continue
         city = cities.find(crid, row.get("name"), (row.get("project") or "").split(" ", 1)[-1])
         want = {k: x for k, x in values(row, crid, city).items() if k in ("country", "city") or b.has(OID, k)}
+        ids = list(dict.fromkeys(firms[k] for k in (contractor_key(w["name"]) for w in winners_of(row)) if firms.get(k)))
+        if ids:
+            want["winners"] = ids
         for p, ok in allowed.items():  # 选项里没有的值不写(建表时选项来自本体)
             if p in want and want[p] not in ok:
                 want.pop(p)
@@ -176,7 +228,7 @@ def run(b: tstore.Base, path: Path | None = None, dry_run: bool = False, log=pri
             n_city += bool(city)
             continue
         cur = {p: b.get(OID, rec, p) for p in want}
-        changes, _ = tstore.fill_empty(cur, want)
+        changes, _ = tstore.fill_empty({**cur, "winners": tstore.link_ids(cur.get("winners"))} if "winners" in cur else cur, want)
         if changes:
             ups.append((rec["id"], changes))
             n_city += "city" in changes
@@ -184,8 +236,50 @@ def run(b: tstore.Base, path: Path | None = None, dry_run: bool = False, log=pri
         b.create(OID, new)
         b.update_many(OID, ups)
     out = {"新建": len(new), "补空": len(ups), "挂上城市": n_city, "国别表里没有": skipped}
-    log(f"  award:新建 {len(new)},补空 {len(ups)},挂上城市 {n_city},国别表里没有的跳过 {skipped}" + ("(只算,没写)" if dry_run else ""))
+    if with_firms:
+        out.update({"新建中标单位": n_firm_new, "中标单位补空": n_firm_fill})
+    log(f"  award:新建 {len(new)},补空 {len(ups)},挂上城市 {n_city},国别表里没有的跳过 {skipped}"
+        + (f";中标单位新建 {n_firm_new},补空 {n_firm_fill}" if with_firms else "") + ("(只算,没写)" if dry_run else ""))
     return out
+
+
+def _contractors(b: tstore.Base, rows: list[dict], countries: dict, dry_run: bool) -> tuple[dict[str, str | None], int, int]:
+    """把数据文件里出现的中标单位建进「中标单位」表(国别表里没有的合同也不建它的单位)。
+    → ({标识: 记录编号(只算不写时新建的是 None)}, 新建几家, 补空几家)"""
+    C = "contractor"
+    want: dict[str, dict] = {}
+    for row in rows:
+        if not countries.get(str(row.get("iso3") or "").strip()):
+            continue
+        for w in winners_of(row):
+            k = contractor_key(w["name"])
+            if not k:
+                continue
+            v = want.setdefault(k, {"name": " ".join(str(w["name"]).split()), "ext": [], "nationality": None, "nationality_code": None})
+            v["nationality"] = v["nationality"] or str(w.get("country_zh") or "").strip() or None
+            v["nationality_code"] = v["nationality_code"] or str(w.get("iso3") or "").strip() or None
+            if w.get("ext") and w["ext"] not in v["ext"]:
+                v["ext"].append(str(w["ext"]))
+    props = [p for p in ("key", "name", "nationality", "nationality_code", "ext_ids") if b.has(C, p)]
+    have = {str(b.get(C, r, "key")): r for r in b.rows(C, props=props) if b.get(C, r, "key")}
+    new, ups = [], []
+    for k, v in want.items():
+        vals = {"name": v["name"], "nationality": v["nationality"], "nationality_code": v["nationality_code"], "ext_ids": ",".join(v["ext"][:20]) or None}
+        vals = {p: x for p, x in vals.items() if x and b.has(C, p)}
+        rec = have.get(k)
+        if rec is None:
+            new.append({"key": k, **vals})
+            continue
+        changes, _ = tstore.fill_empty({p: b.get(C, rec, p) for p in vals}, vals)
+        if changes:
+            ups.append((rec["id"], changes))
+    ids: dict[str, str | None] = {k: r["id"] for k, r in have.items()}
+    if dry_run:
+        ids.update({x["key"]: None for x in new})
+    else:
+        ids.update({x["key"]: r["id"] for x, r in zip(new, b.create(C, new))})
+        b.update_many(C, ups)
+    return ids, len(new), len(ups)
 
 
 ZH_SYSTEM = ("你是水务与国际工程领域的翻译。每份合同:zh 把名称译成简洁准确的中文(一般 40 字以内),工程内容、地名、标段号照译,"
