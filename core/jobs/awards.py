@@ -44,6 +44,33 @@ SECTOR_WORDS: list[tuple[str, str]] = [
 ]
 _SECTOR_RE = [(s, re.compile(p, re.I)) for s, p in SECTOR_WORDS]
 
+# 世行归在农业、防灾、城市等非水务实践的项目里也有水务合同(灌渠、输水管道、防洪堤):这类合同要过更严的词(STRICT_WORDS),
+# 而且名称里不能有道路、学校、医院、电力、种子化肥之类明显不是水务工程的字样(NOT_WATER)。「其他」「水环境」两类在这里不收。
+STRICT_WORDS: list[tuple[str, str]] = [
+    ("海水淡化", r"\bdesalinat|\bdessalement|\bdesalaci[oó]n|\bdessaliniza"),
+    ("污水", r"sewer|sewage|waste ?water|\bw?wtp\b|\bfstp\b|fa?ecal sludge|eaux us[ée]es|assainissement liquide|alcantarillado|aguas residuales|esgoto|nước thải"),
+    ("雨水排涝", r"storm ?water|eaux pluviales|assainissement pluvial|drenaje pluvial|urban drainage|drainage (?:system|network|master ?plan) of (?:the )?(?:city|town)"),
+    ("供水", r"water supply|drinking water|potable|\bwtp\b|water treatment plant|piped water|water (?:storage|tank|kiosk|scheme|network|pipeline|transmission|distribution)|"
+            r"\baep\b|adduction d.eau|eau potable|agua potable|abastecimiento de agua|abastecimento de [áa]gua|cấp nước|nước sạch|boreholes?\b|tube ?wells?"),
+    ("水利", r"irrigat|irriga[çc]|\briego\b|thủy lợi|canal (?:principal|secondaire|lining|rehabilitation)|(?:main|secondary|tertiary|feeder|irrigation) canal|"
+            r"\b(?:earth |small |check )?dams?\b(?!\s+(?:road|route))|barrage|\bweirs?\b|\bdykes?\b|\bdikes?\b|river ?bank protection|river embankment|flood (?:protection|control|defen[cs]e|wall|mitigation)|"
+            r"protection contre les (?:crues|inondations)|périmètres? irrigu|reservoir"),
+]
+_STRICT_RE = [(s, re.compile(p, re.I)) for s, p in STRICT_WORDS]
+NOT_WATER = re.compile(r"\broads?\b|\broute\b|voirie|rodaje|pavement|bitum|culvert|\bbridges?\b|\bpont\b|school|classroom|salles? de classe|\b[ée]cole|"
+                       r"health|hospital|clinic|\bsant[ée]\b|\bRHCs?\b|abattoir|slaughter|\bmarkets?\b|march[ée] (?:central|municipal)|seeds?\b|semences?|fertili[sz]|engrais|"
+                       r"floodlight|\bpark\b|electricity|[ée]lectricit|power (?:line|plant|distribution|supply)|\bkv\b|substation|transmission line|street ?light|"
+                       r"fodder|vehicle|v[ée]hicule|trucks?\b|camions?|tractors?|computer|furniture|mobilier|textbook|teacher|airport|runway|housing|logements?|"
+                       r"research station|\bsalles?\b|b[âa]timents?|\bbuildings?\b|warehouse|entrep[ôo]t|plomberie", re.I)
+
+
+def classify_strict(text: str | None) -> str | None:
+    """非水务实践项目里的合同 → 类别;拿不准的返回 None(宁缺毋滥)。"""
+    t = str(text or "")
+    if NOT_WATER.search(t):
+        return None
+    return next((s for s, rx in _STRICT_RE if rx.search(t)), None)
+
 # 工程量:合同名称里带单位的数量(原文照摘,最多 4 处)
 _QTY = re.compile(r"(?<![\w.+/:-])(\d[\d,.]*\s?(?:km|kms|kilom[eè]tres?|kilometers?|m3/d(?:ay)?|m³/d(?:ay)?|m3/j|m3/h|m3\b|m³|cubic met(?:er|re)s?|mld|ml/d|l/s|"
                   r"ha\b|hectares?|tube ?wells?|boreholes?|wells?|forages?|connections?|branchements?|latrines?|villages?|reservoirs?|"

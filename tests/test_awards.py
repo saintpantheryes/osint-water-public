@@ -28,6 +28,19 @@ def test_classify_and_quantity():
     assert awards.quantity("pipe network about 17071m and 2 tanks of 6,000m3") == "17071m、2 tanks、6,000m3"
 
 
+def test_strict_classify_for_contracts_outside_water_projects():
+    s = awards.classify_strict
+    assert s("Construction of Main Canal 1 and Main canal 2") == "水利" and s("Rehabilitation of Lugu dam embankment") == "水利"
+    assert s("Construction of Yedigoze Water Treatment Plant") == "供水" and s("Travaux d'AEP des douars de Tazarine") == "供水"
+    assert s("Rehabilitation of Storm Water Drainage System in the City of Beira") == "雨水排涝"
+    assert s("Planta de tratamiento de aguas residuales Los Merinos") == "污水"
+    assert s("Traitement des points critiques sur le tronçon Marchand Dessalines") is None  # 地名,不是海水淡化
+    assert s("Construction of drainage and road improvement") is None and s("Classrooms and latrines") is None
+    assert s("Acquisition de semences pluviales") is None and s("Community park with floodlights") is None
+    assert s("Dam road rehabilitation") is None and s("Procurement of 10 tractors for irrigation farmers") is None
+    assert s("Water body cleaning") is None  # 泛泛的「水」在这里不收
+
+
 def test_contract_type_operations_and_contractor_key():
     assert awards.contract_type("Works", "Operation and Maintenance of Kality WWTP") == "运营"
     assert awards.contract_type("Non-consulting Services", "Contrat d'affermage du service de l'eau") == "运营"
@@ -52,10 +65,12 @@ def test_fetch_pick_merges_joint_ventures_and_drops_non_water():
     raw = [_raw("1", "Water supply network in Osh, 30 km", 2_000_000, "A Co", "CN", sid="7"), _raw("1", "Water supply network in Osh, 30 km", 2_000_000, "B Co", "TR"),  # 联合体:同额只算一次
            _raw("2", "Sewer lots", 300_000, "C Co", "IN"), _raw("2", "Sewer lots", 200_000, "D Co", "IN"),  # 金额不同的相加
            _raw("3", "Office furniture", 900_000, "E"), _raw("4", "Water supply", 50_000, "F"),  # 不是水务、太小
-           _raw("5", "Water supply", 900_000, "G", practice="Education"), _raw("6", "Water supply", 900_000, "H", method="Individual Consultant Selection"),
+           _raw("5", "Water supply for 12 schools", 900_000, "G", practice="Education"), _raw("6", "Water supply", 900_000, "H", method="Individual Consultant Selection"),
+           _raw("8", "Rehabilitation of the main canal of Massa irrigated perimeter", 3_000_000, "J", practice="Agriculture"),  # 农业项目里的灌渠:收
+           _raw("9", "Seeds for irrigated wheat", 900_000, "K", practice="Agriculture"), _raw("10", "Office water dispenser", 900_000, "L", practice=None),  # 种子、泛泛的「水」:不收
            _raw("7", "Water supply", 900_000, "I", country="3E")]  # 地区性项目没有国别
     rows = {r["key"]: r for r in fetch_wb_awards.pick(raw)}
-    assert set(rows) == {"WB-1", "WB-2"}
+    assert set(rows) == {"WB-1", "WB-2", "WB-8"} and rows["WB-8"]["sector"] == "水利"
     one = rows["WB-1"]
     assert one["iso3"] == "KGZ" and one["price"] == "2000000.00" and one["winner"] == "A Co、B Co" and one["winner_country"] == "中国、土耳其"
     assert one["sector"] == "供水" and one["contract_type"] == "工程" and one["awarded"] == "2022-05-19" and one["quantity"] == "30 km" and one["method"] == "公开招标(RFB)"

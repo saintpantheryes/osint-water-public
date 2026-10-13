@@ -2,7 +2,9 @@
 
 数据:世界银行 Finances One「Contract Awards in Investment Project Financing」(DS00005,STEP 系统,借款国录入,2019 年起),
 公开接口 datacatalogapi.worldbank.org,一页 1000 条,全量约 30 万条、300 MB,取一次几分钟。
-挑法:项目属水务实践(project_global_practice 含 Water)、合同名称归得进一个类别(core.jobs.awards.classify)、金额 ≥ --min-usd(缺省 10 万美元)、
+挑法:项目属水务实践(project_global_practice 含 Water)的,合同名称归得进一个类别(core.jobs.awards.classify);别的项目(农业、防灾、城市等,
+世行把灌溉、防洪、农村供水常归在这些下面)里的合同要过更严的 awards.classify_strict(只收供水、污水、海水淡化、水利、雨水排涝,道路、学校等字样的不收);
+金额 ≥ --min-usd(缺省 10 万美元)、
 不是个人咨询顾问合同;同一合同号的多行(联合体各家)并成一行,金额相同的只算一次、不同的相加。国别按借款国(地区性项目没有国别的丢掉)。
 每家供应商另记进 winners 列(名称、注册国、世行供应商编号),导入时建成「供应商」;合同类型按 awards.contract_type(运营维护类合同记「运营」)。
 
@@ -76,8 +78,6 @@ def pick(raw: list[dict], min_usd: float = 100_000) -> list[dict]:
     """原始行 → 数据文件的行(一份合同一行)。"""
     groups: dict[str, list[dict]] = {}
     for r in raw:
-        if "Water" not in str(r.get("project_global_practice") or ""):
-            continue
         if " ".join(str(r.get("procurement_method") or "").split()) == "Individual Consultant Selection":
             continue
         no = str(r.get("wb_contract_number") or "").strip()
@@ -87,7 +87,8 @@ def pick(raw: list[dict], min_usd: float = 100_000) -> list[dict]:
     for no, rs in groups.items():
         r0 = rs[0]
         name = " ".join(str(r0.get("contract_description") or "").split())
-        sector = awards.classify(name)
+        water = "Water" in str(r0.get("project_global_practice") or "")
+        sector = awards.classify(name) if water else awards.classify_strict(name)
         iso = geo.iso3(r0.get("borrower_country_code"))
         if not sector or not iso:
             continue
