@@ -181,7 +181,8 @@ def test_award_questions_go_to_the_award_object():
     assert p["filters"]["countries"][0]["iso3"] == "CHN" and p["scope_note"]
     assert A.rules_parse("中标单位是POWERCHINA的项目", TODAY)["filters"]["winners"] == ["POWERCHINA"]
     # 合同类型、分组、时间、资金来源
-    assert A.rules_parse("规模不超过 2 万吨/日的 EPC 中标", TODAY)["filters"]["contract_types"] == ["工程"]
+    f = A.rules_parse("规模不超过 2 万吨/日的 EPC 中标", TODAY)["filters"]
+    assert f["contract_types"] == [] and f["deliveries"] == ["设计施工"]  # EPC 是承包模式(10-13 起),不再算成合同类型「工程」
     assert A.rules_parse("摩洛哥的设计监理中标", TODAY)["filters"]["contract_types"] == ["咨询服务"]
     assert A.rules_parse("摩洛哥非咨询服务的中标", TODAY)["filters"]["contract_types"] == ["非咨询服务"]
     assert A.rules_parse("摩洛哥设备采购的中标", TODAY)["filters"]["contract_types"] == ["货物"]
@@ -194,6 +195,39 @@ def test_award_questions_go_to_the_award_object():
     p = A.rules_parse("世界银行出资的供水中标有多少份", TODAY)
     assert p["intent"] == "count" and p["filters"]["funders"] == ["世界银行"] and p["filters"]["sectors"] == ["供水"] and dict(p["understood"])["类别"] == "供水"
     assert A.rules_parse("三年内吉尔吉斯斯坦的中标", TODAY)["filters"]["days"] == 1095  # 「三年内」对中标记录说的是过去
+
+
+def test_delivery_and_price_conditions():
+    """10-13 使用方问「摩洛哥近三年的 DBO 项目或者运营项目的招标结果」(只按运营查了)、「污水处理厂 DBO 项目,中标金额大于 5000 万迪拉姆的」(DBO、金额都没认):
+    DBO、EPC、PPP 这类是承包模式;同一句里还说了运营的,两样按「或」查(都进承包模式);金额按原币记,页面同币种比原币、别的折人民币比。"""
+    p = A.rules_parse("摩洛哥近三年的DBO项目或者运营项目的招标结果", TODAY)
+    assert p["object"] == "award" and _on(p) == {"countries": [{"iso3": "MAR", "name": "摩洛哥"}], "deliveries": ["DBO", "运营"], "days": 1095}
+    assert dict(p["understood"])["承包模式"] == "DBO、运营(几样都算)"
+    p = A.rules_parse("摩洛哥近三年的污水处理厂DBO项目招标中，中标金额大于5000万迪拉姆的", TODAY)
+    f = p["filters"]
+    assert p["object"] == "award" and f["deliveries"] == ["DBO"] and f["contract_types"] == [] and f["sectors"] == ["污水"] and f["days"] == 1095
+    assert f["price"]["min"] == 5e7 and f["price"]["max"] is None and f["price"]["currency"] == "MAD" and f["price"]["rate"] > 0
+    assert dict(p["understood"])["中标价"].startswith("≥ 5,000 万迪拉姆(约 ")
+    assert A.rules_parse("近三年摩洛哥运营维护的中标", TODAY)["filters"]["contract_types"] == ["运营"]  # 只说运营的仍按合同类型
+    assert A.rules_parse("印度的 PPP 和 BOT 中标", TODAY)["filters"]["deliveries"] == ["BOT/PPP"]
+    assert A.rules_parse("设计建设运营一体的中标", TODAY)["filters"]["deliveries"] == ["DBO"]  # 不再算成设计施工
+    pr = A.parse_price
+    assert pr("中标价在1000到5000万元之间") == {"min": 1e7, "max": 5e7, "currency": "CNY", "rate": 1.0}
+    assert pr("100 万美元以下的")["max"] == 1e6 and pr("100 万美元以下的")["currency"] == "USD" and pr("合同额 2-3 亿美元")["min"] == 2e8
+    assert pr("超过 1 亿元")["min"] == 1e8 and pr("金额不到 300 万")["max"] == 3e6
+    assert pr("规模在5000m3/d以上") is None and pr("2025年以来") is None and pr("近三年 50 份") is None  # 不是金额
+    old, A.RATES_FILE = A.RATES_FILE, None
+    try:
+        assert pr("5000万迪拉姆以上")["rate"] == A.fx.STATIC["MAD"]  # 没有后台的汇率缓存时用近似表
+    finally:
+        A.RATES_FILE = old
+    data = {"object": "award", "intent": "list", "countries": ["摩洛哥"], "deliveries": ["DBO", "运营"], "contract_types": ["工程"], "keywords": ["DBO", "5000万迪拉姆"]}
+    p = A.from_model(data, TODAY, "摩洛哥 DBO 或运营项目,中标金额大于5000万迪拉姆的")
+    f = p["filters"]
+    assert f["deliveries"] == ["DBO", "运营"] and f["contract_types"] == [] and f["keywords"] == [] and f["price"]["min"] == 5e7
+    s = A.system_prompt(TODAY)
+    assert "deliveries(承包模式)施工、设计施工、DBO、BOT/PPP、运营" in s and "deliveries" in A.SCHEMA["required"] and "contract_type / delivery" in s
+    assert A.rules_parse("摩洛哥的中标按承包模式分", TODAY)["group_by"] == "delivery"
 
 
 def test_capacity_phrases():
@@ -266,14 +300,16 @@ def test_portal_answers_award_questions():
     b = tstore.Base(admin)
     mar = b.create("country", [{"name_zh": "摩洛哥", "ISO3": "MAR"}])[0]
     y = _today().year
-    row = lambda key, name, **kw: dict({"key": key, "name": name, "sector": "供水", "contract_type": "运营", "currency": "MAD", "awarded": f"{y - 1}-06-01", "country": mar["id"], "funder": "世界银行"}, **kw)  # noqa: E731
+    row = lambda key, name, **kw: dict({"key": key, "name": name, "sector": "供水", "contract_type": "运营", "delivery": "运营", "currency": "MAD", "awarded": f"{y - 1}-06-01", "country": mar["id"], "funder": "世界银行"}, **kw)  # noqa: E731
     b.create("award", [
         row("MA-1", "Gestion déléguée du service d'eau potable de Rabat", name_zh="拉巴特供水委托运营", quantity="净水厂 2 万吨/日", price=120_000_000, price_cny=8_500,
             winner="China Sample Water Co、Société Exemple", winner_country="中国、法国", url="https://example.org/ma1"),
         row("MA-2", "Management, Operation and Maintenance of Water Supply System in Fes", name_zh="非斯供水系统运营维护", price=30_000_000, price_cny=2_100, winner="Sample O&M SARL", winner_country="摩洛哥"),
         row("MA-3", "Exploitation de la station de traitement 3 000 m3/j de Taza", name_zh="塔扎水厂运营", price=5_000_000, price_cny=350, winner="Petite SARL", winner_country="摩洛哥"),
-        row("MA-4", "Construction de la station 100 000 m3/j", contract_type="工程", price=900_000_000, price_cny=63_000, winner="Big Builder", winner_country="西班牙"),
+        row("MA-4", "Construction de la station 100 000 m3/j", contract_type="工程", delivery="施工", price=900_000_000, price_cny=63_000, winner="Big Builder", winner_country="西班牙"),
         row("MA-5", "Operation of WTP 50,000 m3/day (old)", awarded=f"{y - 5}-01-01", price=1_000_000, price_cny=70, winner="Old Co", winner_country="法国"),
+        row("MA-6", "Conception, réalisation et exploitation de la STEP de Tanger", sector="污水", contract_type="工程", delivery="DBO", price=60_000_000, price_cny=4_100,
+            winner="Waterleau Sample", winner_country="比利时"),
         row("AZ-1", "Operation of Baku WTP 50,000 m3/day", country=c["id"], currency="USD", price=2_000_000, price_cny=1_420, winner="Az Co", winner_country="阿塞拜疆"),
     ])
     cfg = schema.read_config(admin, NEW, ONTO)
@@ -314,10 +350,17 @@ def test_portal_answers_award_questions():
             # 数一下 / 分组统计
             page.goto(base + "/index.html?q=" + quote("摩洛哥近三年的中标有多少份"))
             page.wait_for_selector(".answer .card .n", timeout=15000)
-            assert page.locator(".answer .card .n").inner_text() == "4" and "份已中标项目" in page.inner_text(".answer")
+            assert page.locator(".answer .card .n").inner_text() == "5" and "份已中标项目" in page.inner_text(".answer")
             page.goto(base + "/index.html?q=" + quote("摩洛哥近三年的中标按合同类型统计"))
             page.wait_for_selector(".answer .chart canvas", timeout=15000)
-            assert "共 4 份已中标项目" in page.inner_text(".answer") and "按合同类型分" in page.inner_text(".answer")
+            assert "共 5 份已中标项目" in page.inner_text(".answer") and "按合同类型分" in page.inner_text(".answer")
+            # 承包模式与金额(10-13 使用方问):DBO 或运营两样都算,5000 万迪拉姆以上按原币比;合同类型列下面标出 DBO
+            page.goto(base + "/index.html?q=" + quote("摩洛哥近三年的DBO项目或者运营项目，中标金额大于5000万迪拉姆的"))
+            page.wait_for_selector(".answer table", timeout=15000)
+            und = page.locator(".answer .understood").first.inner_text()
+            assert "承包模式:DBO、运营(几样都算)" in und and "中标价:≥ 5,000 万迪拉姆(约 " in und
+            rows = page.locator(".answer .a-body > .panel table tbody tr").all_inner_texts()
+            assert len(rows) == 2 and "Rabat" in rows[0] + rows[1] and "Tanger" in rows[0] + rows[1] and "DBO" in next(r for r in rows if "Tanger" in r)
             assert not errors, errors
             browser.close()
     finally:

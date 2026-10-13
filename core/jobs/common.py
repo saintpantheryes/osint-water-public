@@ -244,6 +244,11 @@ class Ctx:
         return nos, urls
 
 
+def cache_root(profile: Profile) -> Path:
+    """后台的本机缓存目录(网页正文、已见条目在 watch/ 下,汇率在 fx/ 下)。"""
+    return Path(os.environ.get("OW_CACHE") or (profile.data_dir or storage.DATA_DIR) / "cache")
+
+
 TRANSLATE_MAX_TOKENS = 8_000  # 一批 40 个名称的中文译名约两三千 token,留足余量
 
 
@@ -254,7 +259,7 @@ def connect(profile: Profile, today: date | None = None, use_llm: bool = True, l
         url, token = tstore.credentials()
         api = tstore.Client(url, token)
     base = base or tstore.Base(api)
-    cache = Store(cache_dir or Path(os.environ.get("OW_CACHE") or (profile.data_dir or storage.DATA_DIR) / "cache"))
+    cache = Store(cache_dir or cache_root(profile))
     cfg = (profile.watch or {}).get("llm")
     clf = Classifier(LLMConfig.from_profile(cfg)) if use_llm else None
     light = Classifier(LLMConfig.for_assistant(cfg, {"max_tokens": TRANSLATE_MAX_TOKENS})) if use_llm else None

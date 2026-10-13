@@ -144,6 +144,36 @@ def contract_type(category: str | None, name: str | None) -> str:
     return "运营" if zh in ("工程", "非咨询服务") and _OPS.search(t) and not side else zh
 
 
+# 承包模式(award_delivery,使用方 2026-10-13 要能单独查 DBO、EPC):合同类型说买的是什么(工程、货物、服务),承包模式说怎么包。
+# 按名称(与采购方式)认,先中先得:DBO(一份合同里既建或改造、又负责建成后的运营维护,含 DBOT、施工加若干年运维)→ BOT/PPP(特许经营、混合年金)
+# → 设计施工(EPC、交钥匙)→ 按合同类型(工程 = 施工,运营 = 运营)。咨询服务不分,名称是咨询、监理、技术援助的也不分(给 DBO 合同做监理、给 PPP 做顾问的不算);
+# 货物、非咨询服务名称里没写明的留空。法文「forages d'exploitation」是生产井,不算运营
+DELIVERY_WORDS: list[tuple[str, str]] = [
+    ("DBO", r"\bD\.?B\.?O\.?(?:T|M)?\b|design[\s,/&-]*(?:and\s+)?build[\s,/&-]*(?:and\s+)?operat|design,?\s+(?:construct\w*|build\w*),?\s+(?:and\s+)?operat|"
+            r"(?:conception|r[ée]alisation|construction|mise [àa] niveau|r[ée]habilitation|extension|renforcement)[\s,-]+(?:et\s+)?(?:l['’]\s*)?exploitation(?!\s+(?:d['’]|de |des )?forages?)|"
+            r"(?:build|construct(?:ion)?|rehabilitat(?:e|ion)|upgrad(?:e|ing|ation)|expansion)[\s,]+(?:and\s+)?operat(?:e|ion)\b|"
+            r"(?:design|build|construct|rehabilit|upgrad|expan|réalis|realis)\w*\b.{0,200}?(?:includ\w*|with|plus|and|&)\s+(?:(?:the|its|\d+|five|ten|three|seven)\s+)*"
+            r"(?:years?\s+(?:of\s+)?)?(?:O ?& ?M|operations?)\b(?!\s+(?:room|cent(?:er|re)|building|office|of (?:the )?(?:gates?|barrage)))|"
+            r"проектир\w*[^.;]{0,60}эксплуатац|строительств\w*[^.;]{0,30}эксплуатац|设计.{0,6}(?:建设|建造|施工).{0,6}运营"),
+    ("BOT/PPP", r"\bB\.?O\.?O?\.?T\b|\bBOO\b|\bPPP\b|public[- ]private[- ]partnership|partenariat public[- ]priv|hybrid annuity|\bconcession\b|"
+                r"build[\s,-]+(?:own[\s,-]+)?operat\w*[\s,-]+(?:and\s+)?transfer|公私合营|特许经营"),
+    ("设计施工", r"\bEPC\b|design[\s,/&-]*(?:and\s+)?build|design[\s,&-]+(?:and\s+)?construct|design,?\s+suppl\w*,?\s+(?:and\s+)?install|turn-?key|"
+                 r"cl[ée]s? en main|conception[\s,-]+(?:et\s+)?(?:r[ée]alisation|construction)|проектир\w*\s+и\s+строительств|设计施工|工程总承包|交钥匙"),
+]
+_DELIVERY_RE = [(v, re.compile(p, re.I)) for v, p in DELIVERY_WORDS]
+_ADVICE = re.compile(r"^\W*(?:\w+\s+){0,3}?(?:consult(?:ant|ancy|ancies|ing)|supervis|advis|assistance|conseil|[ée]tude|audit|independent (?:engineer|verification))|"
+                     r"\b(?:transaction advis|assistance technique|assistance relative|ing[ée]nieur ind[ée]pendant)", re.I)
+
+
+def delivery(contract_type: str | None, name: str | None, method: str | None = None) -> str:
+    """合同类型 + 名称(+ 采购方式)→ 承包模式;咨询服务、认不出的返回空串。"""
+    if contract_type == "咨询服务":
+        return ""
+    t = f"{name or ''} {method or ''}"
+    hit = None if _ADVICE.search(str(name or "")) else next((v for v, rx in _DELIVERY_RE if rx.search(t)), None)
+    return hit or {"工程": "施工", "运营": "运营"}.get(contract_type or "", "")
+
+
 # 供应商标识:名称大写、去标点、去开头的 M/S 与结尾的公司后缀(可连着几个),空白并成一个
 _SUFFIX = {"LLC", "LTD", "LIMITED", "CO", "COMPANY", "CORP", "CORPORATION", "INC", "INCORPORATED", "JSC", "OJSC", "CJSC", "PJSC", "OAO", "ZAO",
            "OOO", "TOO", "SA", "SAS", "SARL", "SRL", "SPA", "SAU", "SL", "SAC", "LTDA", "LDA", "CIA", "PVT", "PRIVATE", "PLC", "LLP", "GMBH",
@@ -253,9 +283,9 @@ def run(b: tstore.Base, path: Path | list[Path] | None = None, dry_run: bool = F
     rows = [r for p in paths for r in read_rows(p)]
     countries = {str(b.get("country", r, "key")): r["id"] for r in b.rows("country", props=["key"]) if b.get("country", r, "key")}
     cities = CityIndex(b)
-    props = ["key", "country", "city", *[p for p in (*TEXT, "price", "winners") if b.has(OID, p)]]
+    props = ["key", "country", "city", *[p for p in (*TEXT, "price", "winners", "delivery") if b.has(OID, p)]]
     have = {str(b.get(OID, r, "key")): r for r in b.rows(OID, props=props) if b.get(OID, r, "key")}
-    allowed = {p: {c["name"] for c in (b.field(OID, p).get("options") or {}).get("choices") or []} for p in ("sector", "contract_type", "currency") if b.has(OID, p)}
+    allowed = {p: {c["name"] for c in (b.field(OID, p).get("options") or {}).get("choices") or []} for p in ("sector", "contract_type", "currency", "delivery") if b.has(OID, p)}
     with_firms = b.has(OID, "winners") and "contractor" in b.t
     firms, n_firm_new, n_firm_fill = _contractors(b, rows, countries, dry_run) if with_firms else ({}, 0, 0)
     new, ups, n_city, skipped, seen = [], [], 0, 0, set()
@@ -273,10 +303,15 @@ def run(b: tstore.Base, path: Path | list[Path] | None = None, dry_run: bool = F
         ids = list(dict.fromkeys(firms[k] for k in (contractor_key(w["name"]) for w in winners_of(row)) if firms.get(k)))
         if ids:
             want["winners"] = ids
+        rec = have.get(key)
+        if b.has(OID, "delivery"):  # 承包模式按库里现在的合同类型认(人改过的以人为准)
+            ct = (b.get(OID, rec, "contract_type") if rec else None) or want.get("contract_type")
+            want["delivery"] = delivery(ct, row.get("name"), row.get("method")) or None
+            if want["delivery"] is None:
+                want.pop("delivery")
         for p, ok in allowed.items():  # 选项里没有的值不写(建表时选项来自本体)
             if p in want and want[p] not in ok:
                 want.pop(p)
-        rec = have.get(key)
         if rec is None:
             new.append({"key": key, **want})
             n_city += bool(city)

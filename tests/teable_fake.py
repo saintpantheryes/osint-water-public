@@ -574,6 +574,13 @@ class FakeTeable:
                 res.append(want is not None and str(want).casefold() in str(v or "").casefold())
             elif op == "doesNotContain":
                 res.append(want is None or str(want).casefold() not in str(v or "").casefold())
+            elif op in ("isGreater", "isGreaterEqual", "isLess", "isLessEqual"):
+                try:
+                    x, w = float(v), float(want)
+                except (TypeError, ValueError):
+                    res.append(False)
+                    continue
+                res.append({"isGreater": x > w, "isGreaterEqual": x >= w, "isLess": x < w, "isLessEqual": x <= w}[op])
             elif op in ("isBefore", "isAfter", "isOnOrBefore", "isOnOrAfter") and isinstance(want, dict) and want.get("mode"):
                 today = self.today(want.get("timeZone") or "Asia/Shanghai")
                 anchor = {"today": today, "tomorrow": today + timedelta(days=1), "yesterday": today - timedelta(days=1)}.get(want["mode"])

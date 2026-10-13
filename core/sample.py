@@ -17,6 +17,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from core import tstore
+from core.jobs.awards import delivery
 
 TZ = ZoneInfo("Asia/Shanghai")
 USD_CNY, EUR_CNY = 7.1, 7.7  # 示例里折合人民币用的固定汇率
@@ -132,7 +133,7 @@ def build(today: date) -> dict[str, list[dict]]:
                "level": "二级" if i % 2 else "深度", "process": "A2/O 生物处理", "upgrades": "2019 | 提标改造 | 增加深度过滤(示例)" if i == 0 else None, "coords": c["coords"], "source": "示例数据"}
               for i, c in enumerate(cities)]
     # 已中标项目:每个示例国家 4 份(三份在示例城市,一份只挂国别),类别、年份错开,好演示筛选
-    kinds = [("供水", "工程", "配水管网改造", "Water Distribution Network Rehabilitation", "配水管网 42 km"), ("污水", "工程", "污水处理厂扩建", "WWTP Expansion", "污水厂 8 万吨/日"),
+    kinds = [("供水", "工程", "配水管网改造", "Water Distribution Network Rehabilitation", "配水管网 42 km"), ("污水", "工程", "污水处理厂扩建并运营", "Design, Build and Operate of WWTP Expansion", "污水厂 8 万吨/日"),
              ("水利", "工程", "灌渠衬砌", "Irrigation Canal Lining", "渠道 65 km"), ("供水", "货物", "智能水表采购", "Supply of Smart Water Meters", "水表 3 万只"),
              ("雨水排涝", "工程", "城区排水改造", "Urban Drainage Improvement", "排水管涵 18 km"), ("污水", "咨询服务", "污水管网设计与监理", "Design and Supervision of Sewer Network", ""),
              ("供水", "运营", "供水系统委托运营", "Management, Operation and Maintenance of Water Supply System", "")]
@@ -152,7 +153,7 @@ def build(today: date) -> dict[str, list[dict]]:
             ws = winners[(i + j) % len(winners)]
             win, wc = "、".join(name_of[k]["name"] for k in ws), "、".join(name_of[k]["nationality"] for k in ws)
             awards.append({"_k": f"AW-{c['country']}-{j}", "key": f"sample-aw-{i}-{j}", "name": f"{en} in {c['name_en']} (sample)", "name_zh": f"{c['name_zh']}{zh}(示例)",
-                           "sector": sec, "contract_type": ctype, "price": price, "currency": "USD", "price_cny": _cny_wan(price, "USD"),
+                           "sector": sec, "contract_type": ctype, "delivery": delivery(ctype, en) or None, "price": price, "currency": "USD", "price_cny": _cny_wan(price, "USD"),
                            "awarded": today.replace(month=1, day=1) - d(days=365 * (j % 3) + 40 * i + 15 * j), "quantity": qty or None, "winner": win, "winner_country": wc, "winners": ws,
                            "project": f"P9{i}{j}000 {c['name_en']} Water Security Project (sample)", "funder": FUNDERS[j % 2], "method": "公开招标(RFB)",
                            "country": c["country"], "city": c["_k"] if j < 3 else None, "source": "示例数据", "url": f"https://example.org/award/{i}{j}"})

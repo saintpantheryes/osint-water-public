@@ -203,15 +203,22 @@
       return true;
     });
   }
-  /* 已中标项目(本体 award):国别、类别、合同类型、资金来源(文字,按本体归组的样式包含即算)、中标单位及其国别(文字,包含即算)、
-     关键词与行业术语(名称、中文名、中标单位、所属项目),时间按中标时间。规模表格筛不了,见 awRows */
+  /* 已中标项目(本体 award):国别、类别、合同类型、承包模式、资金来源(文字,按本体归组的样式包含即算)、中标单位及其国别(文字,包含即算)、
+     关键词与行业术语(名称、中文名、中标单位、所属项目),时间按中标时间。金额:同币种的按原币比中标价,别的按当天汇率折人民币比折合人民币(万元)。
+     规模表格筛不了,见 awRows */
   const hasAw = () => !!(P.cfg.tables && P.cfg.tables.award);
-  const AW_PROPS = ["name", "name_zh", "sector", "contract_type", "price", "currency", "price_cny", "awarded", "quantity", "winner", "winners", "winner_country", "project", "funder", "country", "city", "url"];
+  const AW_PROPS = ["name", "name_zh", "sector", "contract_type", "delivery", "price", "currency", "price_cny", "awarded", "quantity", "winner", "winners", "winner_country", "project", "funder", "country", "city", "url"];
   function awConds(f) {
     const c = [], cids = countryIds(f), any = (prop, ws) => P.or(...ws.map((w) => P.cond("award", prop, "contains", w)));
     if (f.countries.length || (f.regions || []).length) c.push(cids.length ? P.cond("award", "country", "isAnyOf", cids) : P.cond("award", "country", "is", "__none__"));
     if (f.sectors.length) c.push(P.cond("award", "sector", "isAnyOf", f.sectors));
     if ((f.contract_types || []).length) c.push(P.cond("award", "contract_type", "isAnyOf", f.contract_types));
+    if ((f.deliveries || []).length) c.push(P.has("award", "delivery") ? P.cond("award", "delivery", "isAnyOf", f.deliveries) : P.cond("award", "name", "is", "__none__"));  // 没建这个字段时一份也不给,不悄悄放宽
+    if (f.price) {
+      const p = f.price, rng = (prop, k) => [p.min ? P.cond("award", prop, "isGreaterEqual", p.min * k) : null, p.max ? P.cond("award", prop, "isLessEqual", p.max * k) : null];
+      const other = P.and(p.currency === "CNY" ? null : P.cond("award", "currency", "isNot", p.currency), ...rng("price_cny", p.rate / 1e4));
+      c.push(p.currency === "CNY" ? other : P.or(P.and(P.cond("award", "currency", "is", p.currency), ...rng("price", 1)), other));
+    }
     if (f.funders.length) c.push(P.or(...f.funders.map((g) => P.funderCond("award", "funder", g))));
     if ((f.winner_countries || []).length) c.push(any("winner_country", f.winner_countries));
     if ((f.winners || []).length) c.push(any("winner", f.winners));
@@ -304,7 +311,8 @@
       const where = [iso ? '<a class="nw" href="country.html?' + new URLSearchParams({ iso, t: "awards" }) + '">' + P.esc(cname) + "</a>" : P.esc(cname),
         ct ? '<a class="nw" href="city.html?id=' + encodeURIComponent(ct) + '">' + P.esc(P.text(g("city"))) + "</a>" : ""].filter(Boolean).join(" · ");
       const qty = P.esc(g("quantity") || "") + (r._cap ? (g("quantity") ? "<br>" : "") + '<span class="muted small">读出规模约 ' + P.esc(capText(r._cap)) + "</span>" : "");
-      return [P.raw('<span class="nw">' + P.esc(P.day(g("awarded")) || "") + "</span>"), P.raw(nm), g("sector") || "", g("contract_type") || "", P.raw(awPrice(r)), P.raw(qty), P.raw(win), P.raw(where),
+      const dv = g("delivery"), ctype = P.esc(g("contract_type") || "") + (dv && !["施工", "运营"].includes(dv) ? '<br><span class="tag" title="承包模式">' + P.esc(dv) + "</span>" : "");
+      return [P.raw('<span class="nw">' + P.esc(P.day(g("awarded")) || "") + "</span>"), P.raw(nm), g("sector") || "", P.raw(ctype), P.raw(awPrice(r)), P.raw(qty), P.raw(win), P.raw(where),
         g("funder") || "", P.raw(P.open("award", r.id))];
     })) + "</div>";
   }
@@ -340,13 +348,14 @@
     if (gb === "kind") return [g("kind") || "未填"];
     if (gb === "sector") return [g("sector") || "未填"];  // 已中标项目的「类别」
     if (gb === "contract_type") return [g("contract_type") || "未填"];
+    if (gb === "delivery") return [g("delivery") || "货物、咨询等"];
     if (gb === "winner_country") { const s = [...new Set(String(g("winner_country") || "").split(/[、,，;；/]+/).map((x) => x.trim()).filter(Boolean))]; return s.length ? s : ["未填"]; }  // 联合体各国各算一份
     if (gb === "year") return [(P.day(g("awarded")) || "").slice(0, 4) || "未填"];
     return ["全部"];
   }
   const GROUP_PROP = { lead: { country: "country", category: "category", sectors: "sectors", funder: "funder", day: "found_at", status: "status", source: "source" },
     milestone: { country: "country", kind: "kind", day: "day" }, report: { country: "country", kind: "kind" },
-    award: { country: "country", sector: "sector", contract_type: "contract_type", winner_country: "winner_country", funder: "funder", year: "awarded" } };
+    award: { country: "country", sector: "sector", contract_type: "contract_type", delivery: "delivery", winner_country: "winner_country", funder: "funder", year: "awarded" } };
 
   function understoodHtml(plan) {
     const tag = plan.parsed_by === "model" ? '<span class="tag intel" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
