@@ -54,6 +54,14 @@ def test_contract_type_operations_and_contractor_key():
     assert awards.contract_type("Works", "Design, build and operation & maintenance of WTP") == "工程"
     assert awards.contract_type("Consultant Services", "Operation and maintenance support") == "咨询服务"  # 咨询不算
     assert awards.contract_type("Goods", "Pipes") == "货物" and awards.contract_type("Other", "x") == ""
+    # 摩洛哥采购网的法文运维合同(2026-10-13:问「运营维护的中标」查不到,这类都记成了工程、非咨询服务)
+    assert awards.contract_type("Non-consulting Services", "Exploitation de la station d’épuration des eaux usées de la ville de Fès") == "运营"
+    assert awards.contract_type("Non-consulting Services", "Gestion et exploitation des stations monoblocs de dessalement") == "运营"
+    assert awards.contract_type("Non-consulting Services", "CO-exploitation de la station d'épuration des eaux usées de la ville d’Essaouira") == "运营"
+    assert awards.contract_type("Works", "Travaux d’entretien et de maintenance du réseau d’eau potable au niveau de la province d’Essaouira") == "运营"
+    assert awards.contract_type("Works", "Travaux d'entretien et réparation du réseau d'assainissement") == "工程"  # 修理工程
+    assert awards.contract_type("Works", "TRAVAUX DE REALISATION DES FORAGES D’EXPLOITATION POUR L’AEP") == "工程"  # 生产井
+    assert awards.contract_type("Works", "Fourniture, installation et mise en service de débitmètres d’exploitation") == "工程"
     k = awards.contractor_key
     assert k("China Gezhouba Group Co., Ltd.") == k("CHINA GEZHOUBA GROUP COMPANY LIMITED") == "CHINA GEZHOUBA GROUP"
     assert k("M/S. AIRES INGEGNERIA") == "AIRES INGEGNERIA" and k("Veolia Eau S.A.") == "VEOLIA EAU" and k("Larsen & Toubro Limited") == "LARSEN AND TOUBRO"

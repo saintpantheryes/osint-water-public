@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import date
+from pathlib import Path
 
 import httpx
 
@@ -151,6 +153,170 @@ def test_data_scope_note_when_the_question_is_about_china():
 def test_portal_searches_keywords_and_terms_in_title_and_chinese_summary():
     html = (A.ROOT / "portal" / "index.html").read_text(encoding="utf-8")
     assert 'P.cond("lead", "summary_zh", "contains", k)' in html and "(f.terms || []).forEach((t) => c.push(text(t.match)))" in html
+
+
+def test_award_questions_go_to_the_award_object():
+    """「近三年摩洛哥地区运营维护的项目中标信息,规模在5000m3/d以上」(10-13 使用方问,模型理解成商机 + 我方阶段「中标」+ 关键词,0 条):
+    问中标记录的是已中标项目,不是商机;合同类型、中标时间、规模按词表认,规模交给页面按工程量与名称里写明的数比。"""
+    q = "近三年摩洛哥地区运营维护的项目中标信息，规模在5000m3/d以上"
+    p = A.rules_parse(q, TODAY)
+    assert p["object"] == "award" and p["intent"] == "list" and p["parsed_by"] == "rules"
+    assert _on(p) == {"countries": [{"iso3": "MAR", "name": "摩洛哥"}], "contract_types": ["运营"], "days": 1095, "capacity": {"min": 5000.0, "max": None}}
+    chip = dict(p["understood"])
+    assert chip["对象"] == "已中标项目" and chip["合同类型"] == "运营" and chip["中标时间"] == "最近 3 年(1095 天)" and chip["规模"].startswith("≥ 5000 m³/日")
+    assert A.plan(q, TODAY)["object"] == "award"  # 没配模型:只用词表
+    # 我方的「中标」仍是商机阶段;线索的「中标公告」仍是线索类别
+    for q2 in ("我们中标的商机", "中标的商机有哪些", "我们去年在摩洛哥中标的项目"):
+        p = A.rules_parse(q2, TODAY)
+        assert p["object"] == "opportunity" and p["filters"]["stages"] == ["中标"], q2
+    p = A.rules_parse("最近 30 天的中标公告", TODAY)
+    assert p["object"] == "lead" and p["filters"]["categories"] == ["授标或短名单"]
+    assert A.rules_parse("帮我们查一下摩洛哥的中标信息", TODAY)["object"] == "award" and A.rules_parse("awards in Kenya", TODAY)["object"] == "award"
+    # 中标单位国别:「中国企业」「中资」不是项目所在国;「国内」的才是(并带数据范围说明)
+    p = A.rules_parse("中国企业在摩洛哥中标的项目", TODAY)
+    assert p["filters"]["countries"] == [{"iso3": "MAR", "name": "摩洛哥"}] and p["filters"]["winner_countries"] == ["中国"] and p["scope_note"] == ""
+    assert A.rules_parse("中资企业在埃及的中标记录", TODAY)["filters"]["winner_countries"] == ["中国"]
+    assert A.rules_parse("国内企业在埃及中标", TODAY)["filters"]["countries"] == [{"iso3": "EGY", "name": "埃及"}]
+    p = A.rules_parse("国内的中标信息", TODAY)
+    assert p["filters"]["countries"][0]["iso3"] == "CHN" and p["scope_note"]
+    assert A.rules_parse("中标单位是POWERCHINA的项目", TODAY)["filters"]["winners"] == ["POWERCHINA"]
+    # 合同类型、分组、时间、资金来源
+    assert A.rules_parse("规模不超过 2 万吨/日的 EPC 中标", TODAY)["filters"]["contract_types"] == ["工程"]
+    assert A.rules_parse("摩洛哥的设计监理中标", TODAY)["filters"]["contract_types"] == ["咨询服务"]
+    assert A.rules_parse("摩洛哥非咨询服务的中标", TODAY)["filters"]["contract_types"] == ["非咨询服务"]
+    assert A.rules_parse("摩洛哥设备采购的中标", TODAY)["filters"]["contract_types"] == ["货物"]
+    assert A.rules_parse("中标项目按工程量排", TODAY)["filters"]["contract_types"] == []  # 「工程量」不是工程
+    p = A.rules_parse("2023年以来埃及的中标记录按合同类型分", TODAY)
+    assert p["intent"] == "chart" and p["group_by"] == "contract_type" and (p["filters"]["from"], p["filters"]["to"]) == ("2023-01-01", "2026-10-08")
+    assert A.rules_parse("按中标单位国别统计阿塞拜疆的中标", TODAY)["group_by"] == "winner_country"
+    assert A.rules_parse("摩洛哥每年的中标金额", TODAY)["group_by"] == "year"
+    assert A.rules_parse("亚行资金的中标按类别统计", TODAY)["group_by"] == "sector"
+    p = A.rules_parse("世界银行出资的供水中标有多少份", TODAY)
+    assert p["intent"] == "count" and p["filters"]["funders"] == ["世界银行"] and p["filters"]["sectors"] == ["供水"] and dict(p["understood"])["类别"] == "供水"
+    assert A.rules_parse("三年内吉尔吉斯斯坦的中标", TODAY)["filters"]["days"] == 1095  # 「三年内」对中标记录说的是过去
+
+
+def test_capacity_phrases():
+    c = A.parse_capacity
+    assert c("规模在5000m3/d以上") == {"min": 5000.0, "max": None} and c("日处理 1 万吨以上") == {"min": 10000.0, "max": None}
+    assert c("超过 50 MLD") == {"min": 50000.0, "max": None} and c("不低于200 l/s") == {"min": 17280.0, "max": None}
+    assert c("5万立方米/日以下") == {"min": None, "max": 50000.0} and c("不超过 2 万吨/日") == {"min": None, "max": 20000.0}
+    assert c("3000~8000 m³/d") == {"min": 3000.0, "max": 8000.0} and c("日处理 3-5 万吨的污水厂") == {"min": 30000.0, "max": 50000.0}
+    assert c("五千吨/日") == {"min": 5000.0, "max": None} and c("1,500 m3/h") == {"min": 36000.0, "max": None}
+    assert c("规模最大的") is None and c("近三年") is None and c("水池 5000 m3") is None  # 不带「/日」的立方米是池容
+    assert A.cap_label({"min": 30000.0, "max": 50000.0}) == "3 万–5 万 m³/日" and A.cap_label({"min": None, "max": 5000.0}) == "≤ 5000 m³/日"
+
+
+def test_from_model_validates_award_fields():
+    """模型给的已中标项目字段按词表校验:合同类型认同义说法、中标单位国别要是国名、规模以提问里写的为准;认不出的进 unresolved。
+    模型把「中标信息」理解成商机 + 我方阶段「中标」的,按提问纠正成已中标项目,合同类型、规模从提问补,不当关键词。"""
+    q = "近三年摩洛哥地区运营维护的项目中标信息，规模在5000m3/d以上"
+    bad = {"object": "opportunity", "intent": "list", "countries": ["摩洛哥"], "stages": ["中标"], "keywords": ["运营维护", "5000m3/d"], "days": 1095, "unresolved": ["规模5000m3/d以上"]}
+    p = A.from_model(bad, TODAY, q)
+    assert p["object"] == "award" and p["parsed_by"] == "model" and p["unresolved"] == []
+    assert _on(p) == {"countries": [{"iso3": "MAR", "name": "摩洛哥"}], "contract_types": ["运营"], "days": 1095, "capacity": {"min": 5000.0, "max": None}}
+    assert dict(p["understood"])["中标时间"] == "最近 3 年(1095 天)"
+    data = {"object": "award", "intent": "chart", "countries": ["摩洛哥", "中国"], "sectors": ["供水", "核电"], "categories": ["招标"], "stages": ["中标"], "funders": ["亚行"],
+            "contract_types": ["O&M", "工程", "外包"], "winner_countries": ["China", "火星"], "winners": ["POWERCHINA", "中国企业"], "capacity_min": 5000, "capacity_max": "大",
+            "keywords": ["运营维护", "Casablanca", "中标信息"], "group_by": "sectors", "days": 365, "future_days": 30, "limit": 20}
+    p = A.from_model(data, TODAY, "摩洛哥中国企业中标的供水项目按类别")
+    f = p["filters"]
+    assert p["object"] == "award" and p["intent"] == "chart" and p["group_by"] == "sector" and p["limit"] == 20
+    assert f["countries"] == [{"iso3": "MAR", "name": "摩洛哥"}] and f["winner_countries"] == ["中国"] and f["winners"] == ["POWERCHINA"]  # 中国是中标单位的国别
+    assert f["sectors"] == ["供水"] and f["contract_types"] == ["运营", "工程"] and f["funders"] == ["亚洲开发银行"] and f["capacity"] == {"min": 5000.0, "max": None}
+    assert f["categories"] == [] and f["stages"] == [] and f["future_days"] is None and f["days"] == 365 and f["keywords"] == ["Casablanca"]
+    assert p["unresolved"] == ["外包", "火星", "核电"]
+    assert A.from_model({"object": "award", "group_by": "stage"}, TODAY)["group_by"] is None  # 不是它的分组维度
+    s = A.system_prompt(TODAY)
+    assert "award 已中标项目" in s and "工程、货物、运营、咨询服务、非咨询服务" in s and "capacity_min" in A.GUIDE and "winner_country / funder / year" in s
+    assert {"contract_types", "winner_countries", "winners", "capacity_min", "capacity_max"} <= set(A.SCHEMA["required"]) and "award" in A.SCHEMA["properties"]["object"]["enum"]
+
+
+def test_portal_reads_award_capacity_from_quantity_and_name():
+    """规模表格筛不了:页面(index.html 的 capM3d)从工程量、中文名、原名里读带单位的数折成 m³/日,几处取最大;读不出是 null(另列,不丢)。"""
+    import shutil
+    import subprocess
+    if shutil.which("node") is None:
+        import pytest
+        pytest.skip("没有 node")
+    run = r"""
+const fs = require("fs");
+const src = fs.readFileSync(process.argv[1], "utf8").match(/\n  function capM3d\(text\) \{[\s\S]*?\n  \}\n/)[0];
+const capM3d = new Function(src + "; return capM3d;")();
+console.log(JSON.stringify(JSON.parse(process.argv[2]).map(capM3d)));
+"""
+    cases = {"配水管网 17 km、净水厂 5 万吨/日": 50000, "Construction of 10,000 m3/day WTP": 10000, "station de traitement 5 000 m3/j": 5000, "20 MLD STP": 20000,
+             "200 l/s pumping": 17280, "capacidad 10.000 m3/día": 10000, "мощностью 10 тыс. м3/сут": 10000, "日处理 2 万立方米": 20000, "水厂规模 5000 吨": 5000,
+             "120 m3/h": 2880, "两座水厂 3 万吨/日、2 万吨/日": 30000, "reservoir 5000 m3": None, "Management, Operation and Maintenance of Water Supply System": None, "": None}
+    out = subprocess.run(["node", "-e", run, str(A.ROOT / "portal" / "index.html"), json.dumps(list(cases), ensure_ascii=False)], capture_output=True, text=True, check=True).stdout
+    assert dict(zip(cases, json.loads(out))) == cases
+
+
+def test_portal_answers_award_questions():
+    """首页问已中标项目:按国别、合同类型、中标时间向表格要行,规模由页面读工程量与名称再筛;没写规模的折在下面另列;
+    中标价写原币并给约合人民币;只问一国的给到国别概况「已中标项目」页签的链接。只读。"""
+    import pytest
+    pytest.importorskip("playwright.sync_api", reason="没有 Playwright")
+    from urllib.parse import quote
+    from playwright.sync_api import Error as PWError, sync_playwright
+    from core import schema, tstore
+    from tests.test_portal import NEW, ONTO, _fake_with_schema, _seed, _serve, _today
+    fake, admin = _fake_with_schema()
+    c, _, _ = _seed(admin, fake)
+    b = tstore.Base(admin)
+    mar = b.create("country", [{"name_zh": "摩洛哥", "ISO3": "MAR"}])[0]
+    y = _today().year
+    row = lambda key, name, **kw: dict({"key": key, "name": name, "sector": "供水", "contract_type": "运营", "currency": "MAD", "awarded": f"{y - 1}-06-01", "country": mar["id"], "funder": "世界银行"}, **kw)  # noqa: E731
+    b.create("award", [
+        row("MA-1", "Gestion déléguée du service d'eau potable de Rabat", name_zh="拉巴特供水委托运营", quantity="净水厂 2 万吨/日", price=120_000_000, price_cny=8_500,
+            winner="China Sample Water Co、Société Exemple", winner_country="中国、法国", url="https://example.org/ma1"),
+        row("MA-2", "Management, Operation and Maintenance of Water Supply System in Fes", name_zh="非斯供水系统运营维护", price=30_000_000, price_cny=2_100, winner="Sample O&M SARL", winner_country="摩洛哥"),
+        row("MA-3", "Exploitation de la station de traitement 3 000 m3/j de Taza", name_zh="塔扎水厂运营", price=5_000_000, price_cny=350, winner="Petite SARL", winner_country="摩洛哥"),
+        row("MA-4", "Construction de la station 100 000 m3/j", contract_type="工程", price=900_000_000, price_cny=63_000, winner="Big Builder", winner_country="西班牙"),
+        row("MA-5", "Operation of WTP 50,000 m3/day (old)", awarded=f"{y - 5}-01-01", price=1_000_000, price_cny=70, winner="Old Co", winner_country="法国"),
+        row("AZ-1", "Operation of Baku WTP 50,000 m3/day", country=c["id"], currency="USD", price=2_000_000, price_cny=1_420, winner="Az Co", winner_country="阿塞拜疆"),
+    ])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    seeded = len(fake.calls)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/index.html?q=" + quote("近三年摩洛哥地区运营维护的项目中标信息，规模在5000m3/d以上"))
+            page.wait_for_selector(".answer table", timeout=15000)
+            ans = page.locator(".answer").first
+            und = ans.locator(".understood").inner_text()
+            assert "对象:已中标项目" in und and "国别:摩洛哥" in und and "合同类型:运营" in und and "规模:≥ 5000 m³/日" in und and "中标时间:最近 3 年" in und
+            rows = ans.locator(".a-body > .panel table tbody tr").all_inner_texts()
+            assert len(rows) == 1 and "拉巴特供水委托运营" in rows[0] and "Gestion déléguée" in rows[0] and "读出规模约 2 万 m³/日" in rows[0]
+            assert "1.20 亿 MAD" in rows[0] and "约 8,500 万元" in rows[0] and "中国、法国" in rows[0] and "世界银行" in rows[0]  # 本币金额旁边给约合人民币
+            note = ans.locator(".a-body").inner_text()
+            assert "符合的 1 份" in note and "不在范围的 1 份" in note and "另有 1 份没写规模" in note  # 塔扎 3000 m³/日 不够;非斯没写规模
+            assert ans.locator("details summary").inner_text().startswith("没写规模的 1 份") and ans.locator("details").get_attribute("open") is None  # 有符合的:没写的先折着
+            ans.locator("details summary").click()
+            assert "非斯供水系统运营维护" in ans.locator("details tbody").inner_text()
+            assert ans.locator("a[href='country.html?iso=MAR&t=awards']").count() >= 1
+            if os.environ.get("PORTAL_SHOTS"):
+                ans.screenshot(path=str(Path(os.environ["PORTAL_SHOTS"]) / "assistant_awards.png"))
+            # 数一下 / 分组统计
+            page.goto(base + "/index.html?q=" + quote("摩洛哥近三年的中标有多少份"))
+            page.wait_for_selector(".answer .card .n", timeout=15000)
+            assert page.locator(".answer .card .n").inner_text() == "4" and "份已中标项目" in page.inner_text(".answer")
+            page.goto(base + "/index.html?q=" + quote("摩洛哥近三年的中标按合同类型统计"))
+            page.wait_for_selector(".answer .chart canvas", timeout=15000)
+            assert "共 4 份已中标项目" in page.inner_text(".answer") and "按合同类型分" in page.inner_text(".answer")
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    assert all(m == "GET" for m, _ in fake.calls[seeded:]), "助手只读"
 
 
 def _deepseek(reply: dict | str, seen: list):
