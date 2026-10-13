@@ -99,10 +99,11 @@ def test_pages_are_local_static_and_read_only():
 def test_caddy_route_asks_the_table_who_you_are_then_serves_files():
     c = (KIT / "portal.caddy").read_text(encoding="utf-8")
     assert "forward_auth teable:3000" in c and "uri /api/auth/user" in c and "redir * /auth/login?redirect=%2Fportal%2F 302" in c
-    # 程序文件过了登录检查后让浏览器缓存(点下一页不再逐个问「这是谁」);转登录页的跳转不缓存;页面与 config.json 不缓存
+    # 程序文件过了登录检查后让浏览器缓存(点下一页不再逐个问「这是谁」);转登录页的跳转不缓存;页面与 config.json 每次带 ETag 再问
     assert 'header @ow_code Cache-Control "private, max-age=300"' in c and 'header @ow_lib Cache-Control "private, max-age=86400"' in c
     assert c.index('header Cache-Control "no-store"') < c.index("redir * /auth/login?redirect=%2Fportal%2F 302") and c.index("forward_auth teable:3000") < c.index("header @ow_code")
     assert re.search(r"@ow_code path ([^\n]+)", c).group(1).split() == ["/portal.js", "/portal.css", "/ontology.json", "/zh_terms.json"]
+    assert re.search(r"@ow_page path ([^\n]+)", c).group(1).split() == ["/", "/*.html", "/config.json"] and 'header @ow_page Cache-Control "private, no-cache"' in c
     assert "root * /srv/portal" in c and "file_server" in c and "uri strip_prefix /portal" in c
     assert re.search(r"handle / \{\s*redir \* /portal/ 302\s*\}", c)
     compose = yaml.safe_load((KIT / "docker-compose.yml").read_text(encoding="utf-8"))

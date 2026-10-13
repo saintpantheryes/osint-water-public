@@ -62,11 +62,15 @@ handle @ow_portal {
 		}
 		# 程序文件让浏览器缓存:每个文件都要先过上面的登录检查(那一问 0.4–0.8 秒),不缓存的话点一页就要再问十来遍,页面慢两三秒。
 		# 常改的(脚本、样式、本体、词表)5 分钟内直接用缓存,过了带 ETag 再问;图表库、世界地图、字体一天。只在登录检查通过后才加,
-		# 没登录时的转登录页另设 no-store(上面),不会把跳转缓存下来;页面本身、config.json、助手接口不加
+		# 没登录时的转登录页另设 no-store(上面),不会把跳转缓存下来;助手接口不加
 		@ow_code path /portal.js /portal.css /ontology.json /zh_terms.json
 		header @ow_code Cache-Control "private, max-age=300"
 		@ow_lib path /echarts.min.js /world.geo.json /fonts/*
 		header @ow_lib Cache-Control "private, max-age=86400"
+		# 页面本身与 config.json 每次都带 ETag 再问(没改过回 304,不重传):不写的话浏览器会按修改时间自己估一段缓存期,
+		# 更新部署后还拿旧页面配新的助手接口(问已中标项目时报过「[oid] is not a function」)
+		@ow_page path / /*.html /config.json
+		header @ow_page Cache-Control "private, no-cache"
 		# 「助手」页的提问解析:转给后台任务进程里的助手接口(core/assistant_server.py,容器内网 worker:8765,不对外开端口)。
 		# 走到这里的请求已经过了上面的登录检查;后台任务没起时这里是 502,页面会提示「助手服务未就绪」,其余页面不受影响。
 		handle_path /api/assistant/* {
