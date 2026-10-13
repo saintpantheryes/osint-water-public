@@ -2,7 +2,9 @@
 
 数据:世界银行 Finances One「Contract Awards in Investment Project Financing」(DS00005,STEP 系统,借款国录入,2019 年起),
 公开接口 datacatalogapi.worldbank.org,一页 1000 条,全量约 30 万条、300 MB,取一次几分钟。
-挑法:项目属水务实践(project_global_practice 含 Water)、合同名称归得进一个类别(core.jobs.awards.classify)、金额 ≥ --min-usd(缺省 10 万美元)、
+挑法:项目属水务实践(project_global_practice 含 Water)的,合同名称归得进一个类别(core.jobs.awards.classify);别的项目(农业、防灾、城市等,
+世行把灌溉、防洪、农村供水常归在这些下面)里的合同要过更严的 awards.classify_strict(只收供水、污水、海水淡化、水利、雨水排涝,道路、学校等字样的不收);
+金额 ≥ --min-usd(缺省 10 万美元)、
 不是个人咨询顾问合同;同一合同号的多行(联合体各家)并成一行,金额相同的只算一次、不同的相加。国别按借款国(地区性项目没有国别的丢掉)。
 每家供应商另记进 winners 列(名称、注册国、世行供应商编号),导入时建成「供应商」;合同类型按 awards.contract_type(运营维护类合同记「运营」)。
 
@@ -66,6 +68,16 @@ def _day(s: str | None) -> str:
         return ""
 
 
+def _supplier_code(x: dict) -> str:
+    """供应商国别码。世行不和朝鲜往来,数据里写成朝鲜(KP)的都是录错的:多是韩国公司,
+    也有刚果(金)、刚果(布)本地的单位被选成了「Korea, Democratic People's Republic of」,这种按借款国记。"""
+    code = str(x.get("supplier_country_code") or "").strip()
+    if code.upper() in ("KP", "PRK"):
+        borrower = geo.iso3(x.get("borrower_country_code"))
+        return borrower if borrower in ("COD", "COG") else "KOR"
+    return code
+
+
 def _country_zh(code: str | None, name: str | None) -> str:
     iso = geo.iso3(code) if code else None
     zh = geo.name_zh(iso) if iso else ""
@@ -76,8 +88,6 @@ def pick(raw: list[dict], min_usd: float = 100_000) -> list[dict]:
     """原始行 → 数据文件的行(一份合同一行)。"""
     groups: dict[str, list[dict]] = {}
     for r in raw:
-        if "Water" not in str(r.get("project_global_practice") or ""):
-            continue
         if " ".join(str(r.get("procurement_method") or "").split()) == "Individual Consultant Selection":
             continue
         no = str(r.get("wb_contract_number") or "").strip()
@@ -87,7 +97,8 @@ def pick(raw: list[dict], min_usd: float = 100_000) -> list[dict]:
     for no, rs in groups.items():
         r0 = rs[0]
         name = " ".join(str(r0.get("contract_description") or "").split())
-        sector = awards.classify(name)
+        water = "Water" in str(r0.get("project_global_practice") or "")
+        sector = awards.classify(name) if water else awards.classify_strict(name)
         iso = geo.iso3(r0.get("borrower_country_code"))
         if not sector or not iso:
             continue
@@ -100,11 +111,12 @@ def pick(raw: list[dict], min_usd: float = 100_000) -> list[dict]:
         for x in rs:
             nm = " ".join(str(x.get("supplier") or "").split())
             if nm and nm not in firms:
-                iso_w = geo.iso3(x.get("supplier_country_code")) if x.get("supplier_country_code") else None
+                code = _supplier_code(x)
+                iso_w = geo.iso3(code) if code else None
                 sid = str(x.get("supplier_id") or "").strip()
-                firms[nm] = {"name": nm, "iso3": iso_w or "", "country_zh": _country_zh(x.get("supplier_country_code"), x.get("supplier_country")),
+                firms[nm] = {"name": nm, "iso3": iso_w or "", "country_zh": _country_zh(code, x.get("supplier_country")),
                              "ext": f"WB:{sid}" if sid else ""}
-        wc = list(dict.fromkeys(_country_zh(x.get("supplier_country_code"), x.get("supplier_country")) for x in rs))
+        wc = list(dict.fromkeys(_country_zh(_supplier_code(x), x.get("supplier_country")) for x in rs))
         method = " ".join(str(r0.get("procurement_method") or "").split())
         pid = str(r0.get("project_id") or "").strip()
         out.append({"key": f"WB-{no}", "iso3": iso, "name": name, "sector": sector,

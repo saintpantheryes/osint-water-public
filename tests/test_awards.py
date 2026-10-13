@@ -1,6 +1,7 @@
 """已中标项目(core/jobs/awards.py,A28;scripts/fetch_wb_awards.py):类别按关键词归、工程量从名称里摘、运营维护合同记「运营」;
 供应商按规范化名称并成一家、建行并挂到合同的「中标方」;世行原始行并成一份合同一行;
-导入按编号去重、只填空,城市按英文名对上;后台译中文名(顺带摘工程量)只填空;A21 折算中标价。不联网。"""
+导入按编号去重、只填空,城市按英文名对上;后台译中文名(顺带摘工程量)只填空;A21 折算中标价;
+摩洛哥采购网、EBRD 授标公告、亚行已授合同、吉尔吉斯采购网中标单位表各自整理成同样的行。不联网。"""
 from __future__ import annotations
 
 import json
@@ -12,6 +13,10 @@ from core.jobs import awards, fx
 from tests.test_jobs import env  # noqa: F401
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import fetch_adb_awards as adb  # noqa: E402
+import fetch_ebrd_awards as ebrd  # noqa: E402
+import fetch_kg_awards as kg  # noqa: E402
+import fetch_ma_awards as ma  # noqa: E402
 import fetch_wb_awards  # noqa: E402
 
 
@@ -26,6 +31,19 @@ def test_classify_and_quantity():
     assert awards.quantity("drilling of 120 boreholes and 35 water kiosks") == "120 boreholes、35 water kiosks"
     assert awards.quantity("Feeder Canal from 8+000 to 33+288 Km, Lot 5m wide") == ""  # 桩号、宽度不算
     assert awards.quantity("pipe network about 17071m and 2 tanks of 6,000m3") == "17071m、2 tanks、6,000m3"
+
+
+def test_strict_classify_for_contracts_outside_water_projects():
+    s = awards.classify_strict
+    assert s("Construction of Main Canal 1 and Main canal 2") == "水利" and s("Rehabilitation of Lugu dam embankment") == "水利"
+    assert s("Construction of Yedigoze Water Treatment Plant") == "供水" and s("Travaux d'AEP des douars de Tazarine") == "供水"
+    assert s("Rehabilitation of Storm Water Drainage System in the City of Beira") == "雨水排涝"
+    assert s("Planta de tratamiento de aguas residuales Los Merinos") == "污水"
+    assert s("Traitement des points critiques sur le tronçon Marchand Dessalines") is None  # 地名,不是海水淡化
+    assert s("Construction of drainage and road improvement") is None and s("Classrooms and latrines") is None
+    assert s("Acquisition de semences pluviales") is None and s("Community park with floodlights") is None
+    assert s("Dam road rehabilitation") is None and s("Procurement of 10 tractors for irrigation farmers") is None
+    assert s("Water body cleaning") is None  # 泛泛的「水」在这里不收
 
 
 def test_contract_type_operations_and_contractor_key():
@@ -52,10 +70,12 @@ def test_fetch_pick_merges_joint_ventures_and_drops_non_water():
     raw = [_raw("1", "Water supply network in Osh, 30 km", 2_000_000, "A Co", "CN", sid="7"), _raw("1", "Water supply network in Osh, 30 km", 2_000_000, "B Co", "TR"),  # 联合体:同额只算一次
            _raw("2", "Sewer lots", 300_000, "C Co", "IN"), _raw("2", "Sewer lots", 200_000, "D Co", "IN"),  # 金额不同的相加
            _raw("3", "Office furniture", 900_000, "E"), _raw("4", "Water supply", 50_000, "F"),  # 不是水务、太小
-           _raw("5", "Water supply", 900_000, "G", practice="Education"), _raw("6", "Water supply", 900_000, "H", method="Individual Consultant Selection"),
+           _raw("5", "Water supply for 12 schools", 900_000, "G", practice="Education"), _raw("6", "Water supply", 900_000, "H", method="Individual Consultant Selection"),
+           _raw("8", "Rehabilitation of the main canal of Massa irrigated perimeter", 3_000_000, "J", practice="Agriculture"),  # 农业项目里的灌渠:收
+           _raw("9", "Seeds for irrigated wheat", 900_000, "K", practice="Agriculture"), _raw("10", "Office water dispenser", 900_000, "L", practice=None),  # 种子、泛泛的「水」:不收
            _raw("7", "Water supply", 900_000, "I", country="3E")]  # 地区性项目没有国别
     rows = {r["key"]: r for r in fetch_wb_awards.pick(raw)}
-    assert set(rows) == {"WB-1", "WB-2"}
+    assert set(rows) == {"WB-1", "WB-2", "WB-8"} and rows["WB-8"]["sector"] == "水利"
     one = rows["WB-1"]
     assert one["iso3"] == "KGZ" and one["price"] == "2000000.00" and one["winner"] == "A Co、B Co" and one["winner_country"] == "中国、土耳其"
     assert one["sector"] == "供水" and one["contract_type"] == "工程" and one["awarded"] == "2022-05-19" and one["quantity"] == "30 km" and one["method"] == "公开招标(RFB)"
@@ -63,6 +83,14 @@ def test_fetch_pick_merges_joint_ventures_and_drops_non_water():
     assert rows["WB-2"]["price"] == "500000.00" and rows["WB-2"]["winner_country"] == "印度"
     assert json.loads(one["winners"]) == [{"name": "A Co", "iso3": "CHN", "country_zh": "中国", "ext": "WB:7"},
                                           {"name": "B Co", "iso3": "TUR", "country_zh": "土耳其", "ext": ""}]
+
+
+def test_fetch_pick_fixes_north_korea_supplier_codes():
+    raw = [_raw("1", "Water supply network", 2_000_000, "DOHWA ENGINEERING CO., LTD.", "KP", country="TZ"),  # 世行数据录错:韩国公司
+           _raw("2", "Water supply network", 2_000_000, "FPM ASBL", "KP", country="CD")]  # 刚果(金)本地单位
+    rows = {r["key"]: r for r in fetch_wb_awards.pick(raw)}
+    assert rows["WB-1"]["winner_country"] == "韩国" and json.loads(rows["WB-1"]["winners"])[0]["iso3"] == "KOR"
+    assert json.loads(rows["WB-2"]["winners"])[0]["iso3"] == "COD"
 
 
 def test_import_links_cities_fills_blanks_and_skips_unknown_countries(env, tmp_path):
@@ -145,3 +173,238 @@ def test_translate_fills_chinese_name_and_quantity_only_when_blank(env):
     assert b.get("award", got["A"], "name_zh") == "中文:Baku pipes" and b.get("award", got["A"], "quantity") == "管网 9 km"
     assert b.get("award", got["B"], "quantity") == "6 万吨/日" and b.get("award", got["C"], "name_zh") == "已译"
     assert awards.translate(b, clf, log=lambda *a: None) == 0 and awards.translate(b, None) == 0
+
+
+# ---------- 摩洛哥公共采购网(scripts/fetch_ma_awards.py)----------
+
+
+def test_ma_classify_water_titles_only():
+    c = ma.classify
+    assert c("Assainissement liquide du centre TAHANAOUT - Station d'épuration") == "污水"
+    assert c("Construction d'un réservoir semi-enterré de capacité 5 000 m3 Ouled Mbarek") == "供水"
+    assert c("TRAVAUX D'AMENAGEMENT DE LA SEGUIA JDIDA TAKDIMT") == "水利" and c("Travaux d'aménagement hydro-agricole du périmètre PMH Aghbalou") == "水利"
+    assert c("LUTTE CONTRE LES INONDATIONS - SALE: collecteur pluvial avenue Annasr") == "雨水排涝"
+    assert c("Travaux de protection du centre de Jorf contre les inondations de l'oued Elbatha") == "水利"
+    assert c("Programme de mise à niveau des infrastructures routières (Province de Taroudant)") is None
+    assert c("L'acquisition de berce d'intervention contre les inondations pour la Protection Civile") is None  # 救生艇
+    assert c("L'exécution des travaux de reboisement dans le périmètre Rouached II") is None
+    assert c("TRAVAUX DE CONSTRUCTION DE LA VOIE DE CONTOURNEMENT DU BARRAGE BIN EL OUIDANE") is None  # 路
+    assert c("Contrôle technique des travaux pour les opérations AL MANZAH à Oued Zem") is None  # 地名里的 oued 不算
+
+
+def test_ma_amounts_and_what_is_worth_reading():
+    assert ma.amounts("STE F.S IDIVA |2.086.236,00 Dhs TTC") == [2086236.0]
+    assert ma.amounts("ART STAM SARL AU | 520 518,00") == [520518.0] and ma.amounts("Montant : 1 772 820 DH TTC") == [1772820.0]
+    assert ma.amounts("STE HMM TRAVAUX  I 772 820,00 DH TTC") == [1772820.0]  # 识别把 1 认成了 I
+    assert ma.amounts("Estimation (en Dhs TTC) : 3.000.000,00 ; caution provisoire 30.000,00") == []
+    assert ma.amounts("Date 08/10/2026, ICE 003659661000046") == []
+    body = "Résultat définitif de l'appel d'offres ouvert n° 302/26/EAU. Maître d'ouvrage : SRM-MS. Concurrent retenu : "
+    assert ma.worth_reading(body + "UBAC 17 533 473,60 DH TTC")
+    assert not ma.worth_reading(body + "ALITFAI SARL 520 518,00 DH TTC")  # 不够 100 万迪拉姆
+    assert not ma.worth_reading(body + "Appel d'offres infructueux, néant") and ma.worth_reading(body + "XYZ (montant illisible)")
+    assert not ma.worth_reading("illisible")
+
+
+def _notice(ref, title, buyer="SRM RABAT - SALE - KENITRA SA", category="Travaux", published="07/10/2026", place="KENITRA"):
+    return {"ref_cons": ref, "org": "g3h", "title": title, "buyer": buyer, "procedure": "Appel d'offres ouvert", "category": category,
+            "place": place, "published": published}
+
+
+def test_ma_rows_keep_awarded_lots_above_threshold_once():
+    notices = [_notice("1", "Construction d'un réservoir 5 000 m3 Ouled Mbarek"), _notice("2", "Construction d'un réservoir 4 000 m3 Ahmed Taleb"),
+               _notice("3", "Réservoir 5 000 m3 Ouled Mbarek (même PV)"), _notice("4", "Etude d'AEP des douars de Saada", category="Services"),
+               _notice("5", "Assainissement liquide en deux lots"), _notice("6", "Programme routier"), _notice("7", "Entretien du réseau d'eau potable")]
+    lot = lambda w, a, n="unique": {"lot": n, "winner": w, "amount": a, "tax": "TTC", "currency": "MAD"}
+    reads = {"1": {"status": "awarded", "lots": [lot("UBAC", 17533473.6)]}, "2": {"status": "awarded", "lots": [lot("UBAC", 17698520.4)]},
+             "3": {"status": "awarded", "lots": [lot("UBAC", 17533473.6)]},  # 同一张结果表挂在两条公告上
+             "4": {"status": "awarded", "lots": [lot("China Gezhouba Group Maroc / CID SARL", 2500000)]},
+             "5": {"status": "awarded", "lots": [lot("STE A", 3000000, "1"), lot("STE B", 900000, "2")]},
+             "6": {"status": "awarded", "lots": [lot("ROUTES SA", 5000000)]}, "7": {"status": "no_award", "lots": []}}
+    rows = {r["key"]: r for r in ma.rows_from(notices, reads, {"4": "Le projet est financé par la KfW."}, today=awards_today())}
+    assert set(rows) == {"MA-1", "MA-2", "MA-4", "MA-5-1"}  # 3 重复;5 的标段 2 不够门槛;6 不是水务;7 流标
+    r1 = rows["MA-1"]
+    assert r1["iso3"] == "MAR" and r1["price"] == "17533473.60" and r1["currency"] == "MAD" and r1["awarded"] == "2026-10-07" and r1["sector"] == "供水"
+    assert r1["contract_type"] == "工程" and r1["buyer"] == "SRM RABAT - SALE - KENITRA SA" and r1["place"] == "KENITRA" and r1["method"].startswith("公开招标")
+    assert r1["url"].endswith("refConsultation=1&orgAcronyme=g3h") and r1["source"] == "摩洛哥公共采购网结果公告(2026-10-13 取)"
+    r4 = rows["MA-4"]
+    assert r4["contract_type"] == "咨询服务" and r4["funder"] == "德国复兴信贷银行" and r4["winner"] == "China Gezhouba Group Maroc、CID SARL"
+    assert r4["winner_country"] == "中国、摩洛哥" and [w["iso3"] for w in json.loads(r4["winners"])] == ["CHN", "MAR"]
+    assert rows["MA-5-1"]["name"] == "Assainissement liquide en deux lots(Lot 1)"
+
+
+def awards_today():
+    from datetime import date
+    return date(2026, 10, 13)
+
+
+class _ReadClf:
+    enabled, label = True, "测试模型"
+
+    def __init__(self, out):
+        self.out = out
+
+    def ask(self, system, user, schema, guide):
+        return self.out
+
+
+def test_ma_read_drops_amounts_not_in_the_text():
+    text = "Concurrent retenu: CAP TP | 18 311 355,58 ; TELSEL 4 170 000,00"
+    good = {"lot": "1", "winner": "CAP TP", "amount": 18311355.58, "tax": "TTC", "currency": "MAD"}
+    made_up = {"lot": "2", "winner": "TELSEL", "amount": 4710000, "tax": "TTC", "currency": "MAD"}
+    r = ma.read_one(_ReadClf({"status": "awarded", "lots": [good, made_up]}), _notice("1", "x"), text)
+    assert r["status"] == "awarded" and r["lots"] == [good] and r["by"] == "测试模型"
+    assert ma.read_one(_ReadClf({"status": "awarded", "lots": [made_up]}), _notice("1", "x"), text)["status"] == "unclear"
+    assert ma.read_one(_ReadClf({"_error": "x"}), _notice("1", "x"), text) is None
+
+
+def test_import_reads_every_data_file_and_matches_cities_without_accents(env, tmp_path, monkeypatch):
+    fake, admin, b, ctx = env
+    mar = b.create("country", [{"name_zh": "摩洛哥", "ISO3": "MAR"}])[0]
+    ken = b.create("city", [{"key": "2544248", "name_zh": "盖尼特拉", "name_en": "Kenitra", "country": mar["id"], "population": 431282}])[0]
+    monkeypatch.setattr(awards, "DATA", tmp_path / "awards.csv.gz")
+    awards.write_rows(tmp_path / "awards.csv.gz", [{"key": "WB-1", "iso3": "AZE", "name": "Ganja water", "sector": "供水", "source": "测试"}])
+    awards.write_rows(tmp_path / "awards_mar.csv.gz", [
+        {"key": "MA-1", "iso3": "MAR", "name": "Réservoir 5 000 m3 à Kénitra", "sector": "供水", "price": "17533473.60", "currency": "MAD", "buyer": "SRM-RSK",
+         "source": "测试"},
+        {"key": "MA-2", "iso3": "MAR", "name": "Station de pompage", "sector": "供水", "place": "KENITRA", "buyer": "ONEE", "source": "测试"}])
+    got = awards.run(b, log=lambda *a: None)
+    assert got["新建"] == 3 and got["挂上城市"] == 2
+    rows = {b.get("award", r, "key"): r for r in b.rows("award")}
+    assert tstore.link_id(b.get("award", rows["MA-1"], "city")) == ken["id"] and tstore.link_id(b.get("award", rows["MA-2"], "city")) == ken["id"]
+    assert b.get("award", rows["MA-1"], "buyer") == "SRM-RSK" and b.get("award", rows["MA-1"], "currency") == "MAD"
+
+
+def test_short_city_names_only_match_a_place_that_names_them(env, tmp_path):
+    fake, admin, b, ctx = env
+    kgz = b.create("country", [{"name_zh": "吉尔吉斯斯坦", "ISO3": "KGZ"}])[0]
+    osh = b.create("city", [{"key": "1527534", "name_zh": "奥什", "name_en": "Osh", "country": kgz["id"], "population": 322164}])[0]
+    awards.write_rows(tmp_path / "a.csv.gz", [
+        {"key": "KG-1", "iso3": "KGZ", "name": "Канализация в г. Ош", "sector": "污水", "place": kg.city_of("Канализация в г. Ош"), "source": "测试"},
+        {"key": "KG-2", "iso3": "KGZ", "name": "Водопровод в Ошской области", "sector": "供水", "place": kg.city_of("Водопровод в Ошской области"), "source": "测试"},
+        {"key": "KG-3", "iso3": "KGZ", "name": "Josh water osh", "sector": "供水", "source": "测试"}])  # 短名不在长文字里乱认
+    awards.run(b, tmp_path / "a.csv.gz", log=lambda *a: None)
+    rows = {b.get("award", r, "key"): r for r in b.rows("award")}
+    assert tstore.link_id(b.get("award", rows["KG-1"], "city")) == osh["id"]
+    assert not b.get("award", rows["KG-2"], "city") and not b.get("award", rows["KG-3"], "city")
+
+
+_EBRD_HEAD = ("<b>Project Name:</b><br /> {project} <br /><b>EBRD Project ID:</b><br />{pid}<br /><b>Country:</b><br />{country}<br />"
+              "<b>Client Name:</b><br />{client}<br /><b>Type of Procurement:</b><br /> {type}<br /><b>Procurement Method:</b><br /> Open Tender Single Stage<br />"
+              "<b>1. Contract Details</b><br /><br /><b>Contract Title:</b> {title}<br /><br /><b>Contract Description:</b> {title}<br /><br />"
+              "<b>Date of Contract Signature:</b> 25/02/2025  <br /><br /><b>Signed Contract Value:</b><br />{value}<br /><br /><b>Lot(s):</b><br />")
+
+
+def _ebrd(body, **kw):
+    kw = {"project": "Naryn Water and Wastewater", "pid": "48707", "country": "Kyrgyz Republic", "client": "Naryn Water Company",
+          "type": "Works", "title": "Extension of main sewer network", "value": "2,352,875.53 EUR", **kw}
+    return _EBRD_HEAD.format(**kw) + body + "<b>3. Other Information</b>"
+
+
+_EBRD_JV = ("No lots for this contract. <br /><br /><br /><b>2. Contracting Party</b><br />CRBC&amp;TJRT Joint Venture<br /><address>Tianjin, <br />China</address>"
+            "<br /><br /><b>JVCA Partners:</b><br /><br /><br />Lead Partner:  No <br />China Road and Bridge Corporation<br /><address>manas 155b, <br />Chui, <br />"
+            "720014, <br />Kyrgyz Republic</address><br /><br />Lead Partner:  Yes <br />Tianjin RongTai Water Co.,Ltd<br /><address>No.16 Bixiang Road, <br />"
+            "300300, <br />China</address><br /><br /><b>2. Contracting Party</b><br />")
+_EBRD_LOTS = ("<span>Lot Number:</span> 2<br /><b>2. Contracting Party</b><br />SNCE - SOGEA MAROC<br /><address>Rabat</address><br /><br />"
+              "<b>JVCA Partners:</b><br />x<br /> <br /><b>Lot 1</b><br /><br />SNCE - SOGEA MAROC<br />		<br />Contract Price: MAD 471,913,890<br />"
+              "Contract Price (Euro Equivalent): &#8364; 43,746,417.6<br /><br />JVCA? Yes<br /><br />JVCA Details:<br />Lead Partner Details:<br />"
+              "	SNCE<br />	Résidence Kays, place Rabia, Agdal<br />	Rabat, Morocco, 10090<br /><br />Other Partner Details:<br />	SOGEA MAROC<br />"
+              "	BP 81 Quartier industriel, Had Soualem 26400 Maroc<br />	Témara, Morocco, 12040<br /><br /><b>Lot 2</b><br /><br />	CMGP<br />"
+              "	Parc Industriel SAPINO<br />	Nouaceur<br />	20240<br />	Morocco<br />		<br />Contract Price: MAD 345,498,628.8<br />"
+              "Contract Price (Euro Equivalent): &#8364; 32,027,722.88<br /><br />JVCA? No<br /><br /><br /><br /><b>2. Contracting Party</b><br />")
+
+
+class _Rates:
+    def to_usd(self, value, currency):
+        return {"EUR": 1.1, "USD": 1.0, "MAD": 0.1}.get(currency, 0) * value if value else None
+
+
+def test_ebrd_detail_reads_jv_partners_and_lots():
+    d = ebrd.parse_detail(_ebrd(_EBRD_JV))
+    assert d["project_id"] == "48707" and d["client"] == "Naryn Water Company" and d["signed"] == "25/02/2025"
+    (lot,) = d["lots"]
+    assert lot["price"] == 2352875.53 and lot["currency"] == "EUR"
+    assert [(f["name"], f["iso3"]) for f in lot["firms"]] == [("Tianjin RongTai Water Co.,Ltd", "CHN"), ("China Road and Bridge Corporation", "KGZ")]
+    d = ebrd.parse_detail(_ebrd(_EBRD_LOTS, project="Saiss III water conservation project", value="393,261,575.00 MAD", title="PP1W"))
+    assert [(x["lot"], x["price"], x["currency"], [f["name"] for f in x["firms"]]) for x in d["lots"]] == [
+        ("1", 471913890.0, "MAD", ["SNCE", "SOGEA MAROC"]), ("2", 345498628.8, "MAD", ["CMGP"])]
+    assert [f["iso3"] for x in d["lots"] for f in x["firms"]] == ["MAR", "MAR", "MAR"]
+
+
+def test_ebrd_rows_water_only_above_threshold_once():
+    notices = [{"id": "37014120", "title": "Kyrgyz Republic: Extension of main sewer network", "pub": "27/02/2025 10:00 UK Time"},
+               {"id": "37014121", "title": "Kyrgyz Republic: same contract again", "pub": "28/02/2025 10:00 UK Time"},
+               {"id": "40000000", "title": "Kyrgyz Republic: Supply of Special Vehicles", "pub": "01/03/2025 10:00 UK Time"},
+               {"id": "40000001", "title": "Ukraine: Trolleybuses", "pub": "01/03/2025 10:00 UK Time"},
+               {"id": "40000002", "title": "Kyrgyz Republic: Water specialist", "pub": "01/03/2025 10:00 UK Time"}]
+    details = {"37014120": ebrd.parse_detail(_ebrd(_EBRD_JV)), "37014121": ebrd.parse_detail(_ebrd(_EBRD_JV)),
+               "40000000": ebrd.parse_detail(_ebrd(_EBRD_JV, title="Supply of Special Vehicles")),
+               "40000001": ebrd.parse_detail(_ebrd(_EBRD_JV, project="Kryvyi Rih Trolleybus", client="City Trolleybus", country="Ukraine",
+                                                    title="Supply of trolleybuses")),
+               "40000002": ebrd.parse_detail(_ebrd(_EBRD_JV, title="Water and Wastewater Technical Specialist", value="25,672.00 EUR"))}
+    rows = ebrd.rows_from(notices, details, rates=_Rates(), today=awards_today())
+    assert [r["key"] for r in rows] == ["EBRD-37014120"]  # 重登的只收一次;车辆、无轨电车不是水务;个人小合同不够门槛
+    r = rows[0]
+    assert r["iso3"] == "KGZ" and r["sector"] == "污水" and r["contract_type"] == "工程" and r["currency"] == "EUR" and r["awarded"] == "2025-02-25"
+    assert r["winner"] == "Tianjin RongTai Water Co.,Ltd、China Road and Bridge Corporation" and r["winner_country"] == "中国"  # CRBC 按名称认作中国企业
+    assert r["funder"] == "欧洲复兴开发银行" and r["buyer"] == "Naryn Water Company" and r["project"] == "48707 Naryn Water and Wastewater"
+    assert r["url"].endswith("displayNoticeId=37014120") and r["source"].endswith("(2026-10-13 取)")
+
+
+def _adb(node, title, project, price, name, country="Kyrgyz Republic", group="goods", loc="BISHKEK, KYRGYZ REPUBLIC", pno="55250-001"):
+    return {"id": f"x-entity:node/{node}:en", "tm_X3b_en_title": [title], "tm_X3b_en_project_title": [project], "sm_price": [str(price)],
+            "tm_X3b_en_contractor_name": [name], "tm_X3b_en_country": [country], "ss_fct_group": group, "tm_X3b_en_location": [loc],
+            "tm_X3b_en_project_number": [pno], "tm_X3b_en_executing_agency": ["Bishkek Vodokanal"], "ds_date_posted": "2025-07-02T12:00:00Z"}
+
+
+def test_adb_rows_split_joint_ventures_and_skip_individuals():
+    assert adb.split_firms("CRBC, TJRT, AND TJMM (JV)") == ["CRBC", "TJRT", "TJMM"]
+    assert adb.split_firms("JV of HAYAT GROUP LLC and BIOWORKS Verfahrenstechnik GmbH") == ["HAYAT GROUP LLC", "BIOWORKS Verfahrenstechnik GmbH"]
+    assert adb.split_firms("Zhejiang Post, Telecommunication Construction Co., Ltd. (PRC) in association with Egis Eau (FRANCE)") == [
+        "Zhejiang Post, Telecommunication Construction Co., Ltd. (PRC)", "Egis Eau (FRANCE)"]
+    assert adb.split_firms("China Road and Bridge Corporation") == ["China Road and Bridge Corporation"]
+    docs = [_adb(1, "Wastewater Treatment Plant Pumping Stations: Lot 1", "Bishkek Water Supply and Wastewater", 12845224.83, "CRBC, TJRT, AND TJMM (JV)"),
+            _adb(2, "Wastewater Treatment Plant Pumping Stations Lot 1 (repost)", "Bishkek Water Supply and Wastewater", 12845224.83, "CRBC & TJRT"),
+            _adb(3, "Chief Technical Advisor", "Bishkek Water Supply and Wastewater", 310000, "WOUTER J. LAMBRECHTSEN", group="consulting"),
+            _adb(4, "Rehabilitation of school buildings", "Bishkek Water Supply and Wastewater", 900000, "ABC LLC"),
+            _adb(5, "Construction of irrigation canal", "Rural Roads Improvement", 900000, "Kanalet Insaat A.S. (TURKEY)", pno="1"),
+            _adb(6, "Road works", "Rural Roads Improvement", 900000, "XYZ LLC", pno="1")]
+    rows = adb.rows_from(docs, today=awards_today())
+    assert [r["key"] for r in rows] == ["ADB-1", "ADB-5"]  # 重登的、个人顾问、学校、道路都不收;道路项目里的灌渠过严筛
+    r = rows[0]
+    assert r["sector"] == "污水" and r["contract_type"] == "工程" and r["currency"] == "USD" and r["funder"] == "亚洲开发银行"
+    assert r["winner"] == "CRBC、TJRT、TJMM" and json.loads(r["winners"])[0]["iso3"] == "CHN" and r["buyer"] == "Bishkek Vodokanal"
+    assert r["url"] == "https://www.adb.org/projects/55250-001/main" and r["awarded"] == "2025-07-02"
+    assert rows[1]["sector"] == "水利" and rows[1]["winner_country"] == "土耳其"
+
+
+def test_kg_classify_russian_and_kyrgyz_titles():
+    assert kg.classify("Строительство водопроводных сетей в жилом массиве") == "供水"
+    assert kg.classify("Канализационный коллектор по ул. Элебесова") == "污水"
+    assert kg.classify("Реконструкция ирригационного канала Кара-Кол") == "水利"
+    assert kg.classify("Строительство защитной дамбы, селезащитные работы") == "水利"
+    assert kg.classify("Асфальтирование в селе Кара-Суу") is None  # 「в селе」是村里,不是泥石流
+    assert kg.classify("Ремонт школы в селе Жаңы-Арык") is None
+    assert kg.classify("МРТ аппарат 48 канальный") is None
+    assert kg.classify("Ичүүчү суу түтүгүн куруу") == "供水"
+    assert kg.classify("Услуги по предоставлению каналов передачи данных") is None  # 数据、电视通道
+    assert kg.classify("Трансляция телепрограмм 6 каналов") is None
+
+
+def test_kg_rows_threshold_plausible_amounts_and_buyer():
+    def row(no, name, price, plan, winner="Общество с ограниченной ответственностью ”Бекстрой”", contract="12", signed="2019-09-20"):
+        return {"notice_no": no, "purchase_name": name, "winner": winner, "contract_no": contract, "signed_date": signed,
+                "lots": [{"lot_name": name, "planned": plan, "contract": price}], "planned_total": plan, "contract_total": price}
+    rows = [row("190905000000001", "Строительство канал село Кабык", 43801161.0, 45000000.0),
+            row("190905000000001", "Строительство канал село Кабык", 43801161.0, 45000000.0),  # 表里重了一行
+            row("190905000000002", "Строительство водопровода", 2000000.0, 2100000.0),  # 不够门槛
+            row("190905000000003", "Поставка труб для водопровода", 21450.0, 15000000.0),  # 多半是单价或外币
+            row("190905000000004", "Строительство дороги", 50000000.0, 50000000.0),
+            row("261002000000005", "Бурение скважин", 10000000.0, 11000000.0, winner="China Railway 21st Bureau", signed="1011-01-01")]
+    out = kg.rows_from(rows, {"190905000000001": {"buyer": "Айыл окмоту Кабык", "address": "Чуйская область"}}, 8_750_000,
+                       today=awards_today())
+    assert [r["key"] for r in out] == ["KG-190905000000001-12", "KG-261002000000005-12"]
+    r = out[0]
+    assert r["iso3"] == "KGZ" and r["sector"] == "水利" and r["contract_type"] == "工程" and r["currency"] == "KGS" and r["price"] == "43801161.00"
+    assert r["winner"] == 'ОсОО "Бекстрой"' and r["winner_country"] == "吉尔吉斯斯坦" and r["buyer"] == "Айыл окмоту Кабык"
+    assert r["url"] == "https://zakupki.gov.kg/popp/view/order/view.xhtml?id=000000001" and r["awarded"] == "2019-09-20"
+    assert out[1]["awarded"] == "2026-10-02" and out[1]["winner_country"] == "中国"  # 签约日期写错的按公告日期
