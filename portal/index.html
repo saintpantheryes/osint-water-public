@@ -312,8 +312,12 @@
   function capNote(plan, a, withList) {
     if (!plan.filters.capacity) return "";
     const lab = ((plan.understood || []).find((x) => x[0] === "规模") || ["", ""])[1].split("(")[0], n = a.unknown.length;
-    let h = '<p class="muted small">规模 ' + P.esc(lab) + ":按工程量、中文名与原名里写明的日处理能力(万吨/日、m³/日、MLD、L/s 等折成 m³/日)比,符合的 " + a.rows.length + " 份" +
-      (a.out ? ";写了规模但不在范围的 " + a.out + " 份没列" : "") + (n ? ";另有 " + n + " 份没写规模,没算进来" + (withList ? ",列在下面请人看" : "") : "") + (a.capped ? "(只读了最新 3000 份)" : "") + "。</p>";
+    const how = "按工程量、中文名与原名里写明的日处理能力(万吨/日、m³/日、MLD、L/s 等折成 m³/日)比";
+    let h = withList && n && !a.rows.length  // 没有符合的:先直说,再说没写规模的有几份
+      ? "<p>写明规模且 " + P.esc(lab) + " 的:<b>0 份</b>" + (a.out ? "(写了规模但不在范围的 " + a.out + " 份没列)" : "") + "。另有 <b>" + n + " 份</b>没写规模,列在下面请人看。</p>" +
+        '<p class="muted small">规模' + how + (a.capped ? "(只读了最新 3000 份)" : "") + "。</p>"
+      : '<p class="muted small">规模 ' + P.esc(lab) + ":" + how + ",符合的 " + a.rows.length + " 份" +
+        (a.out ? ";写了规模但不在范围的 " + a.out + " 份没列" : "") + (n ? ";另有 " + n + " 份没写规模,没算进来" + (withList ? ",列在下面请人看" : "") : "") + (a.capped ? "(只读了最新 3000 份)" : "") + "。</p>";
     if (withList && n) h += '<details class="sec"' + (a.rows.length ? "" : " open") + "><summary>没写规模的 " + n + " 份" + (n > 200 ? "(列最新 200 份)" : "") + "</summary>" + awTable(a.unknown.slice(0, 200)) + "</details>";
     return h;
   }
@@ -471,6 +475,7 @@
     const f = plan.filters, oid = plan.object;
     if (oid === "award") {  // 问了规模的:符合的列在前,没写规模的折在下面
       const a = await awRows(f, AW_PROPS, limit), rows = a.rows.slice(0, limit);
+      if (f.capacity && !rows.length && a.unknown.length) return capNote(plan, a, true);  // 一份都对不上规模:不摆空表,说明里直说,没写规模的直接摊开
       return '<p class="muted small">' + (a.rows.length > limit || (!f.capacity && rows.length >= limit) ? "最新 " + rows.length + " 份(只显示前 " + limit + ")" : rows.length + " 份") + "</p>" + awTable(rows) + capNote(plan, a, true);
     }
     let rows;
