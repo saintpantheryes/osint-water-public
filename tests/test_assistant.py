@@ -305,6 +305,12 @@ def test_portal_answers_award_questions():
             assert ans.locator("a[href='country.html?iso=MAR&t=awards']").count() >= 1
             if os.environ.get("PORTAL_SHOTS"):
                 ans.screenshot(path=str(Path(os.environ["PORTAL_SHOTS"]) / "assistant_awards.png"))
+            # 一份都对不上规模:不摆空表,先直说 0 份,没写规模的直接摊开
+            page.goto(base + "/index.html?q=" + quote("近三年摩洛哥运营维护的中标，规模在10万m3/d以上"))
+            page.wait_for_selector(".answer details[open] table", timeout=15000)
+            body = page.locator(".answer .a-body").first.inner_text()
+            assert "写明规模且 ≥ 10 万 m³/日 的:0 份(写了规模但不在范围的 2 份没列)。另有 1 份没写规模" in body and "(无)" not in body
+            assert "非斯供水系统运营维护" in page.locator(".answer details tbody").inner_text()
             # 数一下 / 分组统计
             page.goto(base + "/index.html?q=" + quote("摩洛哥近三年的中标有多少份"))
             page.wait_for_selector(".answer .card .n", timeout=15000)
