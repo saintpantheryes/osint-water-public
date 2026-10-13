@@ -29,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from core import geo  # noqa: E402
+from core import geo, ontology  # noqa: E402
 from core.jobs import awards  # noqa: E402
 
 BASE = "https://ecepp.ebrd.com/delta/"
@@ -219,11 +219,14 @@ def rows_from(notices: list[dict], details: dict[str, dict], min_usd: float = 10
                 if awards.CHINESE_FIRM.search(f["name"]):
                     f["iso3"] = "CHN"
                 f["country_zh"], f["ext"] = _country_zh(f.get("iso3")), ""
+            price, cur = lot["price"], lot["currency"] or "EUR"
+            if cur not in ontology.values("currency"):  # 货币选项里没有的(波黑马克等)记公告给的欧元折算,没给的折成美元
+                price, cur = (lot["eur"], "EUR") if lot["eur"] else (usd, "USD")
             method = str(d.get("method") or "").strip()
             pid, pname = str(d.get("project_id") or "").strip(), str(d.get("project") or "").strip()
             out.append({"key": f"EBRD-{n['id']}" + (f"-{lot['lot']}" if many and lot["lot"] else ""), "iso3": iso, "name": name, "sector": sector,
                         "contract_type": awards.contract_type(TYPE_EN.get(str(d.get("type") or "").strip(), ""), name),
-                        "price": f"{lot['price']:.2f}", "currency": lot["currency"] or "EUR",
+                        "price": f"{price:.2f}", "currency": cur,
                         "awarded": _day(d.get("signed")) or _day(str(n.get("pub") or "")[:10]), "quantity": awards.quantity(name),
                         "winner": "、".join(f["name"] for f in firms),
                         "winner_country": "、".join(dict.fromkeys(f["country_zh"] for f in firms if f["country_zh"])),
