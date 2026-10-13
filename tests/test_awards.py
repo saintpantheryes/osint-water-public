@@ -274,6 +274,20 @@ def test_import_reads_every_data_file_and_matches_cities_without_accents(env, tm
     assert b.get("award", rows["MA-1"], "buyer") == "SRM-RSK" and b.get("award", rows["MA-1"], "currency") == "MAD"
 
 
+def test_short_city_names_only_match_a_place_that_names_them(env, tmp_path):
+    fake, admin, b, ctx = env
+    kgz = b.create("country", [{"name_zh": "吉尔吉斯斯坦", "ISO3": "KGZ"}])[0]
+    osh = b.create("city", [{"key": "1527534", "name_zh": "奥什", "name_en": "Osh", "country": kgz["id"], "population": 322164}])[0]
+    awards.write_rows(tmp_path / "a.csv.gz", [
+        {"key": "KG-1", "iso3": "KGZ", "name": "Канализация в г. Ош", "sector": "污水", "place": kg.city_of("Канализация в г. Ош"), "source": "测试"},
+        {"key": "KG-2", "iso3": "KGZ", "name": "Водопровод в Ошской области", "sector": "供水", "place": kg.city_of("Водопровод в Ошской области"), "source": "测试"},
+        {"key": "KG-3", "iso3": "KGZ", "name": "Josh water osh", "sector": "供水", "source": "测试"}])  # 短名不在长文字里乱认
+    awards.run(b, tmp_path / "a.csv.gz", log=lambda *a: None)
+    rows = {b.get("award", r, "key"): r for r in b.rows("award")}
+    assert tstore.link_id(b.get("award", rows["KG-1"], "city")) == osh["id"]
+    assert not b.get("award", rows["KG-2"], "city") and not b.get("award", rows["KG-3"], "city")
+
+
 _EBRD_HEAD = ("<b>Project Name:</b><br /> {project} <br /><b>EBRD Project ID:</b><br />{pid}<br /><b>Country:</b><br />{country}<br />"
               "<b>Client Name:</b><br />{client}<br /><b>Type of Procurement:</b><br /> {type}<br /><b>Procurement Method:</b><br /> Open Tender Single Stage<br />"
               "<b>1. Contract Details</b><br /><br /><b>Contract Title:</b> {title}<br /><br /><b>Contract Description:</b> {title}<br /><br />"
@@ -372,6 +386,8 @@ def test_kg_classify_russian_and_kyrgyz_titles():
     assert kg.classify("Ремонт школы в селе Жаңы-Арык") is None
     assert kg.classify("МРТ аппарат 48 канальный") is None
     assert kg.classify("Ичүүчү суу түтүгүн куруу") == "供水"
+    assert kg.classify("Услуги по предоставлению каналов передачи данных") is None  # 数据、电视通道
+    assert kg.classify("Трансляция телепрограмм 6 каналов") is None
 
 
 def test_kg_rows_threshold_plausible_amounts_and_buyer():

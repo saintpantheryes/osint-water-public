@@ -100,7 +100,7 @@ METHOD_ZH = {"Request for Bids": "公开招标(RFB)", "Request for Quotations": 
 CHINESE_FIRM = re.compile(r"\bCHINA\b|\bSINO|\bCHINESE\b|POWERCHINA|HYDROCHINA|\bCSCEC\b|\bCRCC\b|\bCRBC\b|\bCHEC\b|\bCAMCE\b|\bCMEC\b|\bCGGC\b|"
                           r"\bCAMC\b|\bCNEEC\b|\bCITIC\b|\bCREC\b|\bCR\d{1,2}G\b|\bTBEA\b|\(P\.?R\.?C\.?\)|\bPRC\b", re.I)
 
-CITY_MIN_LEN = 5  # 城市英文名短于这个的不认(Ica、Bo 这类会误中)
+CITY_MIN_LEN = 5  # 城市英文名短于这个的只在整段文字就是这个名字时才认(Ica、Bo 这类会误中;Osh 由来源写明)
 
 
 def classify(text: str | None) -> str | None:
@@ -208,8 +208,9 @@ class CityIndex:
             return
         for r in b.rows("city", props=["name_en", "country", "population"]):
             name, crid = str(b.get("city", r, "name_en") or "").strip(), tstore.link_id(b.get("city", r, "country"))
-            if crid and len(name) >= CITY_MIN_LEN:
-                rx = re.compile(r"(?<!\w)" + re.escape(_fold(name)) + r"(?!\w)", re.I)
+            if crid and name:
+                rx = re.compile((r"(?<!\w)" if len(name) >= CITY_MIN_LEN else r"^\s*") + re.escape(_fold(name))
+                                + (r"(?!\w)" if len(name) >= CITY_MIN_LEN else r"\s*$"), re.I)
                 self.by_country.setdefault(crid, []).append((rx, float(b.get("city", r, "population") or 0), r["id"]))
         for v in self.by_country.values():
             v.sort(key=lambda x: -x[1])

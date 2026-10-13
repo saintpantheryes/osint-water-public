@@ -59,7 +59,8 @@ _WORDS = [(s, re.compile(p, re.I)) for s, p in WORDS]
 NOT = re.compile(r"школ|мектеп|мектеб|больниц|оорукан|\bФАП\b|детск\w* (?:сад|площад|игр)|дорог|асфальт|улиц|тротуар|\bмост|сквер|парк\b|"
                  r"канцеляр|\bГСМ\b|топлив|бензин|компьютер|автомоб|автотранспорт|мебел|продукт|питани|медикамент|лекарств|одежд|спорт|"
                  r"электроснабж|электрич|\bЛЭП\b|освещен|газоснаб|газопровод|МРТ|аппарат\w* (?:МРТ|рентген)|котельн|отоплен|"
-                 r"здани|отделени|корпус|общежит|кабинет|жарыктандыр|көчө|кочо", re.I)
+                 r"здани|отделени|корпус|общежит|кабинет|жарыктандыр|көчө|кочо|"
+                 r"передач\w* данных|интернет|телеви|телепрограмм|телеканал|радио|канал\w* связи|видеонаблюд|программн\w* обеспеч", re.I)  # 「канал」也是电视、数据通道
 _FORMS = [(r"Общество с ограниченной ответственностью", "ОсОО"), (r"Открытое акционерное общество", "ОАО"),
           (r"Закрытое акционерное общество", "ЗАО"), (r"Индивидуальный предприниматель", "ИП")]
 _KG_FORM = re.compile(r"\bОсОО\b|\bОАО\b|\bЗАО\b|\bИП\b|\bГП\b|\bМП\b|\bОсОО\b|Общество с ограниченной ответственностью|"
@@ -267,13 +268,25 @@ def buyer(cli: _Client, notice_no: str) -> dict:
             "address": p.get("Actual address") or p.get("Фактический адрес") or ""}
 
 
+# 城市表里吉尔吉斯斯坦的城市(按 GeoNames 英文名);「Ошской области」「Жалал-Абадской области」是州,不算
+CITIES = [("Bishkek", re.compile(r"Бишкек", re.I)), ("Osh", re.compile(r"(?:\bг\.|\bгород\w*|\bшаар\w*)\s*Ош\b(?!ск)", re.I)),
+          ("Manas", re.compile(r"(?:\bг\.|\bгород\w*|\bшаар\w*)\s*(?:Манас|Жалал-?\s?Абад\b(?!ск))", re.I))]
+
+
+def city_of(*texts: str) -> str:
+    """采购名称、业主、地址里写明的城市 → 英文名(给 A28 认城市);没写的空。"""
+    t = " ".join(x for x in texts if x)
+    return next((en for en, rx in CITIES if rx.search(t)), "")
+
+
 def contract_type(text: str) -> str:
     """采购名称 → 合同类型:设计、监理、咨询算咨询服务,采购、供货算货物,建设、改造、修缮算工程;认不出的留空。"""
     if re.search(r"\bПСД\b|проектн|проектирован|технадзор|технического надзор|авторск\w* надзор|консультац|экспертиз|изыскан", text, re.I):
         return "咨询服务"
     if re.search(r"приобретен|покупк|поставк|закупк|сатып алуу", text, re.I) and not re.search(r"строительств|реконструкц|ремонт", text, re.I):
         return "货物"
-    if re.search(r"строительств|реконструкц|ремонт|устройств|прокладк|бурени|восстановлен|расширен|курулуш|оңдоо", text, re.I):
+    if re.search(r"строительств|реконструкц|ремонт|устройств|прокладк|бурени|восстановлен|расширен|реабилит|ребилит|сооружен|монтаж|модерниз|"
+                 r"\bработ|дамб|курулуш|оңдоо", text, re.I):
         return "工程"
     return ""
 
@@ -334,7 +347,7 @@ def rows_from(rows: list[dict], buyers: dict[str, dict], min_kgs: float, today: 
         out.append({"key": f"KG-{r['notice_no']}-{tail}", "iso3": "KGZ", "name": name, "sector": classify(text),
                     "contract_type": contract_type(text), "price": f"{r['contract_total']:.2f}", "currency": "KGS", "awarded": signed,
                     "quantity": "", "winner": winner, "winner_country": zh, "project": "", "funder": "", "method": "",
-                    "buyer": b.get("buyer") or "", "place": f"{b.get('buyer') or ''} {b.get('address') or ''} {text}".strip(),
+                    "buyer": b.get("buyer") or "", "place": city_of(text, b.get("buyer") or "", b.get("address") or ""),
                     "source": stamp, "url": VIEW.format(str(r["notice_no"])[-9:]),
                     "winners": json.dumps([{"name": winner, "iso3": iso, "country_zh": zh, "ext": ""}], ensure_ascii=False)})
     out.sort(key=lambda x: x["awarded"])
