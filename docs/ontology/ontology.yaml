@@ -405,7 +405,7 @@ objects:
     definition: 一国规模以上的城市(人口达到门槛，缺省 10 万):所属国别、所在行政区、坐标、人口、面积、密度、地区生产总值。机器按 GeoNames 等公开数据建行、填空，人可改、可补;线索与商机可选择关联到一座城市。国别页「规模以上城市」页签列出。
     key: 城市码(GeoNames 编号;去重按它)
     properties:
-      - {id: name_zh, name: 中文名, type: text, by: ai, required: true, note: GeoNames 的中文别名;没有的用英文名}
+      - {id: name_zh, name: 中文名, type: text, by: ai, required: true, note: 维基数据的简体中文名(reference/city_zh.tsv);没有的取 GeoNames 中文别名转简体,再没有用英文名}
       - {id: name_en, name: 英文名, type: text, by: ai}
       - {id: country, name: 所属国别, type: "link:country", by: ai, required: true}
       - {id: admin, name: 所在行政区, type: text, by: ai, note: 一级行政区(省、州、大区)}

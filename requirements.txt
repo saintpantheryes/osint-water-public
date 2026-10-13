@@ -10,3 +10,4 @@ beautifulsoup4>=4.12    # 监测:网页与 RSS 解析
 lxml>=5
 pdfplumber>=0.11        # 监测:PDF 附件转文本
 anthropic>=1.8          # 监测:Claude 判定与抽取(无 API key 时不调用)
+opencc-python-reimplemented>=0.1.7  # 城市中文名:繁体转简体(纯 Python)
