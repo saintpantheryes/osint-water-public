@@ -35,6 +35,10 @@ BATCH = 300
 FIXES = {
     "1710544": "伊里加",  # Iriga City,维基数据简体标签误作「阿里卡」
     "3462672": "加马",  # Gama(巴西利亚),简体标签误作旧名「圣玛丽亚」
+    "586523": "甘贾",  # Ganja(阿塞拜疆),标签作「占贾」,新华社等通用「甘贾」
+    "745028": "伊兹密特",  # İzmit(土耳其),标签是古名「尼科米底亚」
+    "3658666": "昆卡",  # Cuenca(厄瓜多尔),标签是古名「图米班巴」
+    "1529363": "库车",  # Xincheng(库车),标签是古名「龟兹」
 }
 
 
@@ -51,60 +55,60 @@ def _get(url: str, data: bytes | None = None) -> bytes:
     raise RuntimeError("unreachable")
 
 
-def labels(cities: dict[str, tuple[list[str], float, float]]) -> dict[str, dict[str, str]]:
-    """按 GeoNames 编号查 → GeoNames 编号 → {语言: 标签}。条目坐标离 GeoNames 坐标超过 30 公里的不要(维基数据偶有编号记错,
-    如智利阿里卡记成了菲律宾伊里加的编号);一个编号对上几个条目取最近的。"""
+def labels(cities: dict[str, tuple[list[str], float, float]]) -> dict[str, list[tuple[int, dict[str, str]]]]:
+    """按 GeoNames 编号查 → GeoNames 编号 → [(维基百科条目数, {语言: 标签})]。条目坐标离 GeoNames 坐标超过 30 公里的不要(维基数据偶有编号记错,
+    如智利阿里卡记成了菲律宾伊里加的编号);一个编号可能对上几个条目(城市本身、同名的医院、车站、旧府治),由 choose 挑。"""
     ids = sorted(cities, key=int)
-    best: dict[str, tuple[float, dict[str, str]]] = {}
+    best: dict[str, list[tuple[int, dict[str, str]]]] = {}
     for i in range(0, len(ids), BATCH):
         vals = " ".join(f'"{g}"' for g in ids[i:i + BATCH])
         langs = ",".join(f'"{x}"' for x in (*LANGS, "zh"))
-        q = (f"SELECT ?i ?g ?c ?l WHERE {{ VALUES ?g {{{vals}}} ?i wdt:P1566 ?g; rdfs:label ?l. OPTIONAL {{ ?i wdt:P625 ?c }} "
+        q = (f"SELECT ?i ?g ?c ?n ?l WHERE {{ VALUES ?g {{{vals}}} ?i wdt:P1566 ?g; wikibase:sitelinks ?n; rdfs:label ?l. OPTIONAL {{ ?i wdt:P625 ?c }} "
              f"FILTER(LANG(?l) IN ({langs})) }}")
         res = json.loads(_get(SPARQL, urllib.parse.urlencode({"query": q}).encode()))
-        found: dict[tuple[str, str], tuple[float, dict[str, str]]] = {}
+        found: dict[tuple[str, str], tuple[float, int, dict[str, str]]] = {}
         for b in res["results"]["bindings"]:
             g = b["g"]["value"]
             d = 0.0
             m = re.match(r"Point\(([-\d.eE]+) ([-\d.eE]+)\)", (b.get("c") or {}).get("value", ""))
             if m:
                 d = _km(float(m[2]), float(m[1]), cities[g][1], cities[g][2])
-            found.setdefault((b["i"]["value"], g), (d, {}))[1][b["l"]["xml:lang"]] = b["l"]["value"].strip()
-        for (_, g), (d, labs) in found.items():
-            if d <= 30 and (g not in best or d < best[g][0]):
-                best[g] = (d, labs)
+            found.setdefault((b["i"]["value"], g), (d, int(b["n"]["value"]), {}))[2][b["l"]["xml:lang"]] = b["l"]["value"].strip()
+        for (_, g), (d, n, labs) in found.items():
+            if d <= 30:
+                best.setdefault(g, []).append((n, labs))
         print(f"  按编号 {min(i + BATCH, len(ids))}/{len(ids)}", file=sys.stderr)
-    return {g: labs for g, (_, labs) in best.items()}
+    return best
 
 
-def by_name(cities: dict[str, tuple[list[str], float, float]]) -> dict[str, dict[str, str]]:
-    """按英文名(含 ASCII 写法)查有坐标的条目,取离 GeoNames 坐标 30 公里内最近的 → GeoNames 编号 → {语言: 标签}。"""
+def by_name(cities: dict[str, tuple[list[str], float, float]]) -> dict[str, list[tuple[int, dict[str, str]]]]:
+    """按英文名(含 ASCII 写法)查有坐标、离 GeoNames 坐标 30 公里内的条目 → GeoNames 编号 → [(维基百科条目数, {语言: 标签})]。"""
     want: dict[str, list[str]] = {}
     for g, (names, _, _) in cities.items():
         for n in names:
             want.setdefault(n, []).append(g)
-    best: dict[str, tuple[float, dict[str, str]]] = {}
+    best: dict[str, list[tuple[int, dict[str, str]]]] = {}
     names = sorted(want)
     for i in range(0, len(names), BATCH):
         vals = " ".join(json.dumps(n, ensure_ascii=False) + "@en" for n in names[i:i + BATCH])
         langs = ",".join(f'"{x}"' for x in (*LANGS, "zh"))
-        q = (f"SELECT ?i ?n ?c ?l WHERE {{ VALUES ?n {{{vals}}} ?i rdfs:label ?n; wdt:P625 ?c; rdfs:label ?l. "
+        q = (f"SELECT ?i ?n ?c ?k ?l WHERE {{ VALUES ?n {{{vals}}} ?i rdfs:label ?n; wdt:P625 ?c; wikibase:sitelinks ?k; rdfs:label ?l. "
              f"FILTER(LANG(?l) IN ({langs})) }}")
         res = json.loads(_get(SPARQL, urllib.parse.urlencode({"query": q}).encode()))
-        found: dict[tuple[str, str], tuple[float, float, dict[str, str]]] = {}
+        found: dict[tuple[str, str], tuple[float, float, int, dict[str, str]]] = {}
         for b in res["results"]["bindings"]:
             m = re.match(r"Point\(([-\d.eE]+) ([-\d.eE]+)\)", b["c"]["value"])
             if not m:
                 continue
             k = (b["i"]["value"], b["n"]["value"])
-            found.setdefault(k, (float(m[2]), float(m[1]), {}))[2][b["l"]["xml:lang"]] = b["l"]["value"].strip()
-        for (_, n), (lat, lon, labs) in found.items():
+            found.setdefault(k, (float(m[2]), float(m[1]), int(b["k"]["value"]), {}))[3][b["l"]["xml:lang"]] = b["l"]["value"].strip()
+        for (_, n), (lat, lon, links, labs) in found.items():
             for g in want.get(n, []):
                 d = _km(lat, lon, cities[g][1], cities[g][2])
-                if d <= 30 and (g not in best or d < best[g][0]):
-                    best[g] = (d, labs)
+                if d <= 30:
+                    best.setdefault(g, []).append((links, labs))
         print(f"  按名 {min(i + BATCH, len(names))}/{len(names)}", file=sys.stderr)
-    return {g: labs for g, (_, labs) in best.items()}
+    return best
 
 
 def _km(a1: float, o1: float, a2: float, o2: float) -> float:
@@ -114,6 +118,18 @@ def _km(a1: float, o1: float, a2: float, o2: float) -> float:
 
 
 _QUALIFIER = re.compile(r"\s*([(（][^)）]*[)）]|[,，].*)$")
+
+
+_NOT_CITY = re.compile(r"(站|学校|中学|小学|大学|医院|语|选区|练兵场|议会)$")  # 同名的车站、学校、医院、语言、选区等条目
+_WIDER = re.compile(r"(省|县|岛)$")  # 同名的省、县、岛:没有别的候选时才用
+
+
+def choose(cands: list[tuple[int, dict[str, str]]]) -> str | None:
+    """几个候选条目里,去掉车站、学校等;同名的省、县、岛排在后面;其余取各语种维基百科条目最多的(城市本身通常最多)。"""
+    ok = [(2 - bool(_WIDER.search(name)), n, name) for n, labs in cands if (name := pick(labs)) and not _NOT_CITY.search(name)]
+    # 只有同名车站时(圣保罗、埃里温的区常以地铁站条目出现),去掉「站」字用
+    ok += [(0, n, name[:-1]) for n, labs in cands if (name := pick(labs)) and name.endswith("站") and len(name) > 2]
+    return max(ok)[2] if ok else None
 
 
 def pick(langs: dict[str, str]) -> str | None:
@@ -142,9 +158,9 @@ def main() -> None:
         if len(c) >= 19 and c[14].isdigit() and int(c[14]) >= a.min_population:
             en[c[0]] = c[1]
             geo[c[0]] = (sorted({c[1], c[2]}), float(c[4]), float(c[5]))
-    got = {g: v for g, v in labels(geo).items() if pick(v)}
-    got.update(by_name({g: v for g, v in geo.items() if g not in got}))
-    rows = [(g, name, en[g]) for g in sorted(en, key=int) if (name := FIXES.get(g) or pick(got.get(g, {})))]
+    got = {g: name for g, v in labels(geo).items() if (name := choose(v))}
+    got.update({g: name for g, v in by_name({g: v for g, v in geo.items() if g not in got}).items() if (name := choose(v))})
+    rows = [(g, name, en[g]) for g in sorted(en, key=int) if (name := FIXES.get(g) or got.get(g))]
     with open(ZH_TABLE, "w", encoding="utf-8") as f:
         f.write("# GeoNames 编号\t简体中文名\t英文名(对照用)。由 scripts/build_city_zh.py 从维基数据生成;人工改正直接改这里。\n")
         for g, name, e in rows:

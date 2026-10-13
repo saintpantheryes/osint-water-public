@@ -495,15 +495,15 @@
 425378	布琼布拉	Bujumbura
 449504	埃斯兰夏尔	Eslamshahr
 456172	里加	Riga
-461740	久济诺站	Zyuzino
-461835	贾布利科沃站	Zyablikovo
+461740	久济诺	Zyuzino
+461835	贾布利科沃	Zyablikovo
 462444	兹拉托乌斯特	Zlatoust
-462745	茹列宾诺站	Zhulebino
+462745	茹列宾诺	Zhulebino
 463355	热烈兹诺多罗日内	Zheleznodorozhnyy
 463829	泽列诺格勒	Zelenograd
 466806	约什卡尔奥拉	Yoshkar-Ola
 467978	叶列茨	Yelets
-468809	亚先涅沃站	Yasenevo
+468809	亚先涅沃	Yasenevo
 468902	雅罗斯拉夫尔	Yaroslavl
 470451	维欣诺-茹列宾诺区	Vykhino-Zhulebino
 472045	沃罗涅日	Voronezh
@@ -521,17 +521,17 @@
 480060	特维尔	Tver
 480562	图拉	Tula
 482283	陶里亚蒂	Tolyatti
-483551	暖营站	Tyoply Stan
+483551	暖营	Tyoply Stan
 484646	坦波夫	Tambov
 484907	塔甘罗格	Taganrog
 484912	塔甘卡区	Taganskiy
 484972	塞兹兰	Syzran
 485239	瑟克特夫卡尔	Syktyvkar
-487150	斯特罗金诺站	Strogino
+487150	斯特罗金诺	Strogino
 487495	斯捷尔利塔马克	Sterlitamak
 487846	斯塔夫罗波尔	Stavropol
 487928	旧奥斯科尔	Staryy Oskol
-490971	太阳站	Solntsevo
+490971	太阳	Solntsevo
 491023	索利卡姆斯克	Solikamsk
 491422	索契	Sochi
 491687	斯摩棱斯克	Smolensk
@@ -569,7 +569,7 @@
 516215	奥金佐沃	Odintsovo
 516264	奥恰科沃-马特韦埃夫斯基区	Ochakovo-Matveyevskoye
 516436	奥布宁斯克	Obninsk
-517161	新稠李站	Novyye Cherëmushki
+517161	新稠李	Novyye Cherëmushki
 517836	新特罗伊茨克	Novotroitsk
 518255	新罗西斯克	Novorossiysk
 518557	新莫斯科斯克	Novomoskovsk
@@ -594,7 +594,7 @@
 529237	马里诺区	Mar’ino
 532096	马哈奇卡拉	Makhachkala
 532288	马格尼托哥尔斯克	Magnitogorsk
-532535	柳布林诺站	Lyublino
+532535	柳布林诺	Lyublino
 532615	柳别尔齐	Lyubertsy
 535121	利佩茨克	Lipetsk
 536164	察里津公园	Tsaritsyno
@@ -615,7 +615,7 @@
 553287	卡梅申	Kamyshin
 553915	卡卢加	Kaluga
 554233	科罗廖夫	Korolev
-554234	柯尼斯堡	Kaliningrad
+554234	加里宁格勒	Kaliningrad
 554787	伊斯梅洛沃庄园	Izmaylovo
 554840	伊热夫斯克	Izhevsk
 555312	伊万诺沃	Ivanovo
@@ -633,7 +633,7 @@
 569696	切博克萨雷	Cheboksary
 571476	布良斯克	Bryansk
 571741	布拉特耶沃区	Brateyevo
-576432	比比列沃站	Bibirevo
+576432	比比列沃	Bibirevo
 577206	别列兹尼基	Berezniki
 578072	别尔哥罗德	Belgorod
 578740	巴泰斯克	Bataysk
@@ -648,7 +648,7 @@
 584923	苏姆盖特	Sumgayit
 585514	明盖恰乌尔	Mingachevir
 585915	黑尔达兰	Khirdalan
-586523	占贾	Ganja
+586523	甘贾	Ganja
 587084	巴库	Baku
 588409	塔林	Tallinn
 590775	拉斯纳迈埃	Lasnamäe
@@ -780,7 +780,7 @@
 742394	小切克梅杰	Küçükçekmece
 743882	卡斯塔莫努	Kastamonu
 744562	卡拉比克	Karabük
-745028	尼科米底亚	İzmit
+745028	伊兹密特	İzmit
 745044	伊斯坦布尔	Istanbul
 745169	伊内格尔	İnegol
 746881	吉雷松	Giresun
@@ -1120,7 +1120,7 @@
 1252948	瓦朗加尔	Warangal
 1253084	维济亚讷格勒姆	Vizianagaram
 1253102	维沙卡帕特南	Visakhapatnam
-1253133	维拉尔	Virār
+1253133	瓦塞维拉尔	Virār
 1253184	维杰亚瓦达	Vijayawada
 1253200	毗底沙	Vidisha
 1253237	韦拉沃尔	Verāval
@@ -1710,7 +1710,7 @@
 1529102	乌鲁木齐市	Ürümqi
 1529114	高昌区	Turpan
 1529167	塔城市	Tacheng
-1529195	石河子	Shihezi
+1529195	石河子镇	Shihezi
 1529363	库车	Xincheng
 1529376	库尔勒市	Korla
 1529401	克拉玛依市	Karamay
@@ -1720,7 +1720,7 @@
 1529569	昌吉市	Changji
 1529641	阿拉尔市	Ālā'ĕr
 1529651	阿勒泰市	Jinshanlu
-1529660	阿克苏	Aqsu
+1529660	阿克苏市	Aqsu
 1538637	谢韦尔斯克	Seversk
 1560349	安沛市	Yên Bái
 1560565	春禄县	Xuân Lộc
@@ -1737,7 +1737,7 @@
 1564046	盏盘市社	Trảng Bàng
 1564555	静边市镇	Tịnh Biên
 1565019	守德郡	Thủ Đức
-1565022	富强	Thủ Dầu Một
+1565022	土龙木市	Thủ Dầu Một
 1565136	秃衂郡	Thốt Nốt
 1565157	泰来市镇	Thới Lai
 1566083	胡志明市	Ho Chi Minh City
@@ -1747,7 +1747,7 @@
 1566566	西湖郡	Tây Hồ
 1567032	新洲市社	Tân Châu
 1567069	新安市	Tân An
-1567148	安美坊	Tam Kỳ
+1567148	三岐市	Tam Kỳ
 1567621	山西市社	Sơn Tây
 1567681	山罗市	Sơn La
 1567788	朔庄市	Sóc Trăng
@@ -1817,7 +1817,7 @@
 1587976	槟椥市	Bến Tre
 1588129	巴位县	Ba Vì
 1588275	保禄市	Bảo Lộc
-1591440	北光县	Bắc Quang
+1591440	越光市镇	Bắc Quang
 1591449	北宁市	Bắc Ninh
 1591474	薄寮市	Bạc Liêu
 1591527	北江市	Bắc Giang
@@ -1854,7 +1854,7 @@
 1622786	望加锡	Makassar
 1623502	托利托利县	Toli-Toli
 1623834	蒂米卡	Timika
-1624041	特尔纳特语	Ternate
+1624041	特尔纳特	Ternate
 1624494	直葛	Tegal
 1624647	打横	Tasikmalaya
 1624725	塔拉卡恩	Tarakan
@@ -1867,7 +1867,7 @@
 1625958	烈港	Sungailiat
 1626103	双木丹	Sumedang
 1626381	苏加武眉	Sukabumi
-1626444	梳邦县	Subang
+1626444	苏横	Subang
 1626542	索龙	Sorong
 1626560	梭里昂	Soreang
 1626801	诗都文罗县	Situbondo
@@ -1912,7 +1912,7 @@
 1637158	卢布林高	Lubuklinggau
 1638063	伦邦	Lembang
 1638868	拉布安巴佐	Labuan Bajo
-1639094	库宁岸县	Kuningan
+1639094	库宁岸	Kuningan
 1639500	哥打莫巴谷	Kotamobagu
 1639850	克隆孔县	Klungkung
 1639900	克拉登	Klaten
@@ -1952,7 +1952,7 @@
 1649378	勿加泗	Bekasi
 1649541	巴务巴务市	Baubau
 1649824	巴都	Batu
-1650077	外南梦县	Banyuwangi
+1650077	外南梦	Banyuwangi
 1650213	马辰	Banjarmasin
 1650217	邦加巴鲁	Banjarbaru
 1650357	万隆	Bandung
@@ -1962,7 +1962,7 @@
 1653316	凯山丰威汉市	Savannakhet
 1665196	斗六市	Douliu
 1667982	淡水区	Danshui
-1668295	台东车站	Taitung
+1668295	台东车	Taitung
 1668341	台北市	Taipei
 1668355	台南市	Tainan
 1668399	台中市	Taichung
@@ -2137,13 +2137,13 @@
 1769014	依约	Ijok
 1777077	无拉港	Cheras
 1783621	遵义市	Zunyi
-1783683	雁江	Ziyang
+1783683	资阳市	Ziyang
 1783745	自贡市	Zigong
 1783763	株洲市	Zhuzhou
 1783873	驻马店市	Zhumadian
 1783903	朱泾镇	Zhujing
 1783940	诸暨市	Zhuji
-1783988	密州	Zhucheng
+1783988	诸城市	Zhucheng
 1784055	庄河市	Zhuanghe
 1784130	周口市	Zhoukou
 1784185	玉溪市	Yuxi
@@ -2198,7 +2198,7 @@
 1787746	盐城市	Yancheng
 1787765	延安市	Yan’an
 1787816	雅安市	Ya'an
-1787824	铜山区	Tongshan
+1787824	徐州市	Tongshan
 1787858	上饶市	Shangrao
 1788046	许昌市	Xuchang
 1788081	宣城市	Xuancheng
@@ -2216,7 +2216,7 @@
 1789137	新堤街道	Xindi
 1789176	肥城市	Feicheng
 1789262	新沂市	Xinyi
-1789273	三水	Sanshui
+1789273	三水区	Sanshui
 1789496	习岗	Xigang
 1789647	西昌市	Xichang
 1790254	孝感市	Xiaogan
@@ -2281,7 +2281,7 @@
 1794479	莱西市	Laixi
 1794794	寿光市	Shouguang
 1794903	十堰市	Shiyan
-1795055	市桥	Shiqiao
+1795055	番禺区	Shiqiao
 1795060	石岐街道	Shiqi
 1795184	石龙镇	Shilong
 1795196	铜川市	Tongchuanshi
@@ -2290,13 +2290,13 @@
 1795842	沙坪街道	Shaping
 1795855	绍兴市	Shaoxing
 1795857	邵武市	Shaowu
-1795860	韶山乡	Shaoshan
+1795860	韶山市	Shaoshan
 1795874	韶关市	Shaoguan
 1795928	汕尾市	Shanwei
 1795940	汕头市	Shantou
 1796068	商洛市	Shangluo
 1796134	商丘市	Shangqiu
-1796236	复旦大学附属眼耳鼻喉科医院	Shanghai
+1796236	上海市	Shanghai
 1796376	沙井街道	Shajing
 1796556	三亚市	Sanya
 1796663	三明市	Sanming
@@ -2319,7 +2319,7 @@
 1798097	七宝镇	Qibao
 1798131	桥头镇	Qiaotou
 1798422	城关镇	Puyang Chengguanzhen
-1798425	浦阳	Puyang
+1798425	浦阳街道	Puyang
 1798449	莆田市	Putian
 1798490	普兰店区	Pulandian
 1798524	浦东新区	Pudong
@@ -2349,7 +2349,7 @@
 1800627	绵阳市	Mianyang
 1800657	门头沟	Mentougou
 1800779	梅州市	Meizhou
-1800818	眉山	Meishan
+1800818	眉山市	Meishan
 1800829	吴川市	Wuchuan
 1801180	茂名市	Maoming
 1801401	马街	Majie
@@ -2376,19 +2376,19 @@
 1803331	临夏市	Linxia Chengguanzhen
 1803334	林西	Linxi
 1803352	临水镇	Linshui
-1803367	青年	Qingnian
+1803367	临清市	Qingnian
 1803551	北流市	Beiliu
-1803567	临汾	Linfen
+1803567	临汾市	Linfen
 1803590	临沧市	Lincang
 1803782	利川市	Lichuan
-1803791	荔城	Licheng
+1803791	增城区	Licheng
 1803834	聊城市	Liaocheng
 1803842	廉州	Hepu
 1803886	连然街道	Anning
 1803936	武威市	Wuwei
 1804120	廉江市	Lianjiang
-1804153	乐山	Leshan
-1804169	冷水江	Lengshuijiang
+1804153	乐山市	Leshan
+1804169	冷水江市	Lengshuijiang
 1804208	耒阳市	Leiyang
 1804252	乐城街道	Lecheng
 1804386	老河口市	Laohekou
@@ -2412,11 +2412,11 @@
 1805611	荆门市	Jingmen
 1805618	竟陵街道	Jingling
 1805680	景德镇	Jingdezhen
-1805704	井岸	Jing’an
+1805704	斗门区	Jing’an
 1805733	金昌市	Jinchang
 1805741	晋城市	Jincheng
 1805753	济南市	Jinan
-1805798	几江	Jijiang
+1805798	江津区	Jijiang
 1805833	介休市	Jiexiu
 1805844	界首市	Jieshou
 1805857	碣石镇	Jieshi
@@ -2458,7 +2458,7 @@
 1808722	合肥市	Hefei
 1808770	鹤壁市	Hebi
 1808857	汉中市	Hanzhong
-1808872	城阳	Fu’an
+1808872	福安市	Fu’an
 1808926	杭州市	Hangzhou
 1808931	汉沽区	Hangu
 1808956	长治市	Changzhi
@@ -2518,7 +2518,7 @@
 1814786	阳春市	Yangchun
 1814870	义乌市	Yiwu
 1814906	重庆主城区	Chongqing
-1814934	池州	Chizhou
+1814934	池州市	Chizhou
 1815059	郴州	Chenzhou
 1815251	江阴市	Jiangyin
 1815276	城固	Chenggu
@@ -2537,7 +2537,7 @@
 1816336	滨州市	Binzhou
 1816373	毕节市	Bijie
 1816440	蚌埠市	Bengbu
-1816670	顺天府	Beijing
+1816670	北京市	Beijing
 1816705	北海市	Beihai
 1816790	北碚	Beibei
 1816858	东方市	Basuo
@@ -2548,7 +2548,7 @@
 1817720	上虞区	Shangyu
 1817968	安顺市	Anshun
 1817990	安丘市	Anqiu
-1817993	安庆	Anqing
+1817993	安庆市	Anqing
 1818020	安流镇	Anliu
 1818116	庵埠镇	Anbu
 1818209	荃湾	Tsuen Wan
@@ -2655,7 +2655,7 @@
 1851100	高松市	Takamatsu
 1851193	多治见市	Tajimi
 1851348	铃鹿市	Suzuka
-1851454	墨田	Sumida
+1851454	墨田区	Sumida
 1851483	吹田市	Suita
 1851717	静冈市	Shizuoka
 1852225	下关市	Shimonoseki
@@ -2665,7 +2665,7 @@
 1852964	佐野市	Sano
 1853008	三田市	Sandachō
 1853140	酒田市	Sakata
-1853195	堺	Sakai
+1853195	堺市	Sakai
 1853209	坂户市	Sakado
 1853303	佐贺市	Saga
 1853483	小山市	Oyama
@@ -2681,7 +2681,7 @@
 1854703	大垣市	Ōgaki
 1854747	小田原市	Odawara
 1854902	沼津市	Numazu
-1855078	野田町	Noda
+1855078	野田市	Noda
 1855095	延冈市	Nobeoka
 1855189	西尾市	Nishio
 1855207	西宫滨	Nishinomiya
@@ -2727,7 +2727,7 @@
 1859393	木更津市	Kisarazu
 1859405	桐生市	Kiryū
 1859586	加须市	Kazo
-1859642	川崎町	Kawasaki
+1859642	川崎市	Kawasaki
 1859675	川西市	Kawanishi
 1859730	川口市	Kawaguchi
 1859740	川越市	Kawagoe
@@ -2753,7 +2753,7 @@
 1861171	磐田市	Iwata
 1861212	岩国市	Iwakuni
 1861310	伊丹市	Itami
-1861321	板桥	Itabashi
+1861321	板桥区	Itabashi
 1861436	伊势崎市	Isesaki
 1861449	伊势原市	Isehara
 1861450	伊势市	Ise
@@ -2807,25 +2807,24 @@
 1877030	兴南区域	Hŭngnam
 1877449	咸兴市	Hamhŭng
 1877615	海州市	Haeju
-1880176	公立培群学校	Toa Payoh New Town
 1880252	新加坡	Singapore
 1880271	实龙岗	Serangoon
-1880283	三巴旺站	Sembawang Estate
+1880283	三巴旺	Sembawang Estate
 1880348	榜鹅	Punggol
 1880594	景万岸	Kembangan
 1880628	加冷规划区	Kallang
 1880668	芽笼	Geylang
-1881921	武吉巴督站	Bukit Batok New Town
+1881921	武吉巴督	Bukit Batok New Town
 1881948	后港	Hougang New Town
 1881953	裕廊	Jurong Town
 1881955	裕廊西	Jurong West
 1882101	实龙岗	Serangoon New Town
 1882115	淡滨尼	Tampines New Town
-1882316	兀兰站	Woodlands
+1882316	兀兰	Woodlands
 1884138	丽水市	Yeosu
 1884178	光阳市	Gwangyang
 1884737	蔡厝港	Choa Chu Kang New Town
-1885823	江油	Jiangyou
+1885823	江油市	Jiangyou
 1886760	苏州市	Suzhou
 1886762	舟山市	Zhoushan
 1892823	东海市	Donghae City
@@ -2883,7 +2882,7 @@
 2034414	通化市	Tonghua
 2034439	铁岭市	Tieling
 2034440	铁力市	Tieli
-2034497	光明	Taonan
+2034497	洮南市	Taonan
 2034655	绥化市	Suihua
 2034657	绥芬河市	Suifenhe
 2034714	四平市	Siping
@@ -2915,7 +2914,7 @@
 2036434	连山	Lianshan
 2036458	平地泉镇	Jining
 2036502	吉林市	Jilin
-2036536	民主	Jiaohe
+2036536	蛟河市	Jiaohe
 2036581	佳木斯市	Jiamusi
 2036595	扎赉诺尔区	Jalai Nur
 2036597	加格达奇区	Jiagedaqi
@@ -2969,7 +2968,7 @@
 2050970	昆都仑区	Hondlon
 2050971	青山区	Qingshan
 2051523	布拉茨克	Bratsk
-2057087	古邦县	Kupang
+2057087	古邦	Kupang
 2063523	珀斯	Perth
 2067119	曼杜拉	Mandurah
 2073124	达尔文市	Darwin
@@ -3006,7 +3005,7 @@
 2129537	北见市	Kitami
 2130057	弘前市	Hirosaki
 2130188	函馆市	Hakodate
-2130203	八户町	Hachinohe
+2130203	八户市	Hachinohe
 2130404	江别市	Ebetsu
 2130629	旭川市	Asahikawa
 2130658	青森市	Aomori
@@ -3090,7 +3089,7 @@
 2262963	塞图巴尔	Setúbal
 2264268	克卢什	Queluz
 2267057	里斯本	Lisbon
-2267095	莱里亚区	Leiria
+2267095	莱里亚	Leiria
 2267827	丰沙尔	Funchal
 2271772	阿马多拉	Amadora
 2274895	蒙罗维亚	Monrovia
@@ -3331,7 +3330,7 @@
 2513076	奥里韦拉	Orihuela
 2513416	穆尔西亚	Murcia
 2514169	马尔韦利亚	Marbella
-2514256	马拉加选区	Málaga
+2514256	马拉加	Málaga
 2515270	拉斯帕尔马斯	Las Palmas de Gran Canaria
 2516326	赫雷斯-德拉弗龙特拉	Jerez de la Frontera
 2516395	哈恩	Jaén
@@ -3518,7 +3517,7 @@
 2732265	维塞乌	Viseu
 2735943	波尔图	Porto
 2740637	科英布拉	Coimbra
-2742032	布拉加区	Braga
+2742032	布拉加	Braga
 2743477	兹沃勒	Zwolle
 2743856	祖特梅尔	Zoetermeer
 2744114	赞斯塔德	Zaanstad
@@ -3551,10 +3550,10 @@
 2774326	克拉根福	Klagenfurt am Wörthersee
 2775220	因斯布鲁克	Innsbruck
 2778067	内城区	Graz
-2779469	弗洛里茨多夫站	Floridsdorf
+2779469	弗洛里茨多夫	Floridsdorf
 2787149	斯哈尔贝克	Schaerbeek
 2790471	那慕尔	Namur
-2792413	列日省	Liège
+2792413	列日	Liège
 2792482	鲁汶	Leuven
 2800866	布鲁塞尔	Brussels
 2800931	布鲁日	Brugge
@@ -3574,7 +3573,7 @@
 2842150	萨尔茨吉特	Salzgitter
 2842647	萨尔布吕肯	Saarbrücken
 2844588	罗斯托克	Rostock
-2847736	罗伊特林根县	Reutlingen
+2847736	罗伊特林根	Reutlingen
 2848273	雷姆沙伊德	Remscheid
 2849483	雷根斯堡	Regensburg
 2849647	雷克灵豪森	Recklinghausen
@@ -3594,7 +3593,7 @@
 2867543	明斯特	Münster
 2867714	慕尼黑	Munich
 2869894	门兴格拉德巴赫	Mönchengladbach
-2870221	莫尔斯	Moers
+2870221	默尔斯	Moers
 2873074	马尔灿	Marzahn
 2873891	曼海姆	Mannheim
 2874225	美因茨	Mainz
@@ -3767,7 +3766,7 @@
 3114472	潘普洛纳	Pamplona
 3114711	奥维耶多	Oviedo
 3114965	欧伦塞	Ourense
-3116025	莫斯托莱斯中央站	Móstoles
+3116025	莫斯托莱斯	Móstoles
 3116156	莫拉塔拉斯区	Moratalaz
 3117164	马塔罗	Mataró
 3117735	马德里	Madrid
@@ -3783,7 +3782,7 @@
 3121437	赫塔费	Getafe
 3121456	赫罗纳	Girona
 3121960	丰拉夫拉达	Fuenlabrada
-3121969	富恩卡拉尔站	Fuencarral
+3121969	富恩卡拉尔	Fuencarral
 3124964	休达利内亚尔区	Ciudad Lineal
 3125239	查马丁区	Chamartín
 3127461	布尔戈斯	Burgos
@@ -3795,7 +3794,7 @@
 3130616	埃纳雷斯堡	Alcalá de Henares
 3133880	特隆赫姆	Trondheim
 3137115	斯塔万格	Stavanger
-3143244	克里斯蒂安尼亚	Oslo
+3143244	奥斯陆	Oslo
 3159016	德拉门	Drammen
 3161732	卑尔根	Bergen
 3164419	维琴察	Vicenza
@@ -4043,6 +4042,7 @@
 3452925	阿雷格里港	Porto Alegre
 3453186	蓬塔格罗萨	Ponta Grossa
 3453406	波阿	Poá
+3453420	普拉纳蒂纳	Planaltina
 3453535	皮拉夸拉	Piraquara
 3453643	皮拉西卡巴	Piracicaba
 3453837	平达莫尼扬加巴	Pindamonhangaba
@@ -4229,7 +4229,7 @@
 3515302	托卢卡	Toluca
 3515428	特拉尔潘	Tlalpan
 3515431	特拉尔内潘特拉	Tlalnepantla
-3515463	特拉华克站	Tláhuac
+3515463	特拉瓦克	Tláhuac
 3515696	特休特兰	Teziutlan
 3515715	特斯科科	Texcoco de Mora
 3515807	库奥蒂特兰伊斯卡伊	Cuautitlán Izcalli
@@ -4418,7 +4418,7 @@
 3657990	埃斯梅拉达斯	Esmeraldas
 3658192	杜兰	Eloy Alfaro
 3658501	道莱	Daule
-3658666	图米班巴	Cuenca
+3658666	昆卡	Cuenca
 3660689	安巴托	Ambato
 3662574	里奥布朗库	Rio Branco
 3662762	波多韦柳	Porto Velho
@@ -4505,7 +4505,7 @@
 3827408	米格尔-伊达尔戈	Miguel Hidalgo
 3827409	考乌特莫克联邦区	Cuauhtémoc
 3827598	奥霍-德阿瓜庄园	Ojo de Agua
-3827606	布埃纳维斯塔站	Buenavista
+3827606	布埃纳维斯塔	Buenavista
 3835869	圣地亚哥-德尔埃斯特罗	Santiago del Estero
 3835994	圣罗莎	Santa Rosa
 3836277	圣菲	Santa Fe
@@ -4722,7 +4722,7 @@
 4544349	俄克拉何马城	Oklahoma City
 4553433	塔尔萨	Tulsa
 4560349	费城	Philadelphia
-4562831	巴亚蒙站	Bayamón
+4562831	巴亚蒙	Bayamón
 4563243	卡罗利纳	Carolina
 4566880	庞塞	Ponce
 4568127	圣胡安	San Juan
@@ -5188,7 +5188,7 @@
 7281017	拉平塔纳	La Pintana
 7281020	洛普拉多	Lo Prado
 7281838	洛根市	Logan City
-7283386	常熟	Changshu
+7283386	常熟市	Changshu
 7284820	贾伊加奥恩	Jaigaon
 7284824	布达佩斯第十一区	Budapest XI. kerület
 7284830	布达佩斯第十三区	Budapest XIII. kerület
@@ -5236,7 +5236,7 @@
 8223943	库马拉帕拉耶姆	Kumarapalayam
 8285534	芙恩卡拉尔-埃尔帕尔多区	Fuencarral-El Pardo
 8307074	穆伦沃什	Mulenvos
-8310663	中央海岸议会	Central Coast
+8310663	中海岸	Central Coast
 8335361	乌兰察布市	Ulanqab
 8347656	拉马古恩达姆	Ramagundam
 8354626	汉堡北区	Hamburg-Nord
@@ -5264,13 +5264,13 @@
 8521718	博乐市	Bole
 8533133	六盘水市	Liupanshui
 8533870	伊夫林地区圣康坦	Saint-Quentin-en-Yvelines
-8535094	桑塔纳站	Santana
+8535094	桑塔纳	Santana
 8537264	黄冈市	Huanggang
 8544703	东城街道	Nanchuan
 8555643	塞尔吉-蓬图瓦兹	Cergy-Pontoise
 8556295	奥尔良	Orléans
 8556321	拉塞瓦	La Ceiba
-8572994	丰岛	Toshima
+8572994	丰岛区	Toshima
 8581443	南唐格朗	South Tangerang
 8593863	罗登基兴	Rodenkirchen
 8594670	兴宁市	Xingning
@@ -5282,7 +5282,7 @@
 8616127	二征夫人郡	Hai Bà Trưng
 8629640	杜蒂戈林	Thoothukudi
 8656376	清溪郡	Thanh Khê
-8715035	中野	Nakano
+8715035	中野区	Nakano
 8740017	嘎达格贝塔基里	Gadag-Betageri
 8740322	鲁德拉普尔	Rudrapur
 9072919	日照市	Rizhao
@@ -5308,8 +5308,8 @@
 10942283	晋中市	Jinzhong
 10942359	宝鸡市	Baoji
 10943053	南沙	Nansana
-10968247	荒川	Arakawa
-10987897	足立	Adachi
+10968247	荒川区	Arakawa
+10987897	足立区	Adachi
 11048317	第1区	Sector 1
 11048319	布加勒斯特第3区	Sector 3
 11048320	第四区	Sector 4
@@ -5318,7 +5318,7 @@
 11054411	双威镇	Bandar Sunway
 11101593	东涌	Tung Chung
 11101805	巨济市	Geoje
-11111027	申加维特站	Shengavit
+11111027	申加维特	Shengavit
 11127930	普斯罗	Phusro
 11184422	普拉纳蒂纳	Planaltina
 11185299	中新天津生态城	Sino-Singapore Tianjin Eco-city
@@ -5337,19 +5337,19 @@
 11611632	府中市	Fuchū
 11611930	小平市	Kodaira
 11611942	镰谷市	Kamagaya
-11612347	陆军习志野练兵场	Narashino
+11612347	习志野市	Narashino
 11612579	小金井市	Koganei
 11695689	井邑市	Jeongeup
 11777624	拱门	Archway
 11778464	博尔什恰希夫卡	Borshchahivka
-11790342	世田谷	Setagaya
-11790353	新宿	Shinjuku
-11790374	目黑	Meguro
-11808021	涩谷	Shibuya
-11837657	市川町	Ichikawa
+11790342	世田谷区	Setagaya
+11790353	新宿区	Shinjuku
+11790374	目黑区	Meguro
+11808021	涩谷区	Shibuya
+11837657	市川市	Ichikawa
 11903636	多瑙城	Donaustadt
-11962390	雅巴夸拉站	Jabaquara
-11962429	萨科马站	Sacomã
+11962390	雅巴夸拉	Jabaquara
+11962429	萨科马	Sacomã
 11995100	巴中市	Bazhong
 12022102	图木舒克市	Tumxuk
 12032137	拘尸那揭罗	Kushinagar
