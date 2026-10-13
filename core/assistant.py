@@ -1,8 +1,9 @@
 """助手(门户「助手」页的后端):把一句中文提问解析成页面能执行的「查询计划」。
 
-只做理解,不碰数据:计划里是对象(线索 / 商机 / 时间节点 / 报告)、意图(数一下 / 列清单 / 分组统计 / 要报告)、
-筛选条件(国别、领域、类别、资金来源、我方阶段、处理状态、时间范围、关键词)与分组维度;页面拿着计划、带着登录人的 cookie
-去查表格并呈现,数字全部来自表格,模型不写数字、也看不到表里的数据(送给模型的只有问题本身)。
+只做理解,不碰数据:计划里是对象(线索 / 商机 / 时间节点 / 报告 / 已中标项目)、意图(数一下 / 列清单 / 分组统计 / 要报告)、
+筛选条件(国别、领域、类别、资金来源、我方阶段、处理状态、时间范围、关键词;已中标项目另有合同类型、中标单位及其国别、规模)与分组维度;
+页面拿着计划、带着登录人的 cookie 去查表格并呈现,数字全部来自表格,模型不写数字、也看不到表里的数据(送给模型的只有问题本身)。
+已中标项目的规模表格筛不了:计划里只给下限 / 上限(m³/日),页面读工程量与名称里写明的规模再筛,没写规模的另列。
 
 两种解析:
 - 规则:词表(本体的枚举值 + 口语同义词)、国名(reference/countries.yaml)、时间短语。没配模型密钥时只有它;配了也先跑一遍兜底。
@@ -24,14 +25,16 @@ from core import geo
 ROOT = Path(__file__).resolve().parent.parent
 ONTO_PATH = ROOT / "docs" / "ontology" / "ontology.yaml"
 
-OBJECTS = ("lead", "opportunity", "milestone", "report")
-OBJECT_ZH = {"lead": "线索", "opportunity": "商机", "milestone": "时间节点", "report": "报告"}
+OBJECTS = ("lead", "opportunity", "milestone", "report", "award")
+OBJECT_ZH = {"lead": "线索", "opportunity": "商机", "milestone": "时间节点", "report": "报告", "award": "已中标项目"}
 INTENTS = ("count", "list", "chart", "report", "help")
 GROUPS = {"lead": ("country", "category", "sectors", "funder", "day", "status", "source"),
           "opportunity": ("country", "stage", "sectors", "funder"),
-          "milestone": ("country", "kind", "day"), "report": ("kind", "country")}
+          "milestone": ("country", "kind", "day"), "report": ("kind", "country"),
+          "award": ("country", "sector", "contract_type", "winner_country", "funder", "year")}
 GROUP_ZH = {"country": "国别", "category": "类别", "sectors": "领域", "funder": "资金来源", "day": "按天", "status": "处理状态",
-            "source": "信源", "stage": "我方阶段", "kind": "类型"}
+            "source": "信源", "stage": "我方阶段", "kind": "类型", "sector": "类别", "contract_type": "合同类型", "winner_country": "中标单位国别", "year": "年份"}
+GROUP_ALIAS = {"award": {"category": "sector", "sectors": "sector", "kind": "contract_type", "day": "year"}}  # 别的对象的分组说法 → 已中标项目的(它的「类别」就是领域)
 MAX_Q = 400
 DEFAULT_LIMIT, MAX_LIMIT = 50, 200
 DEFAULT_FUTURE_DAYS = 30
@@ -72,7 +75,40 @@ DEADLINE_WORDS = ["截止", "到期", "deadline", "截标", "收标"]
 NUM_ZH = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10, "十五": 15, "二十": 20, "三十": 30, "半": 0.5}
 UNIT_DAYS = {"天": 1, "日": 1, "周": 7, "星期": 7, "礼拜": 7, "个月": 30, "月": 30, "年": 365}
 EXAMPLES = ["最近 7 天埃及有哪些新线索", "世界银行出资的供水项目有多少条", "最近 30 天的招标按国家分", "在跟踪的商机有哪些",
-            "未来 30 天有哪些投标截止", "海水淡化的线索按资金来源统计", "最近的周报"]
+            "未来 30 天有哪些投标截止", "海水淡化的线索按资金来源统计", "摩洛哥近三年运营维护的中标信息", "最近的周报"]
+
+# 已中标项目(本体 award):别人已经拿到的合同(谁中了什么标、中标价多少)。提问里有「中标」「授予」「award」就是它;
+# 说的是我方的(我们中标的、中标的商机、阶段)是商机的我方阶段「中标」;说线索、公告的是线索类别「授标或短名单」
+AWARD_RE = re.compile(r"中标|中了.{0,6}?标|中的标|授予|已授合同|(?<![a-z])award(?:s|ed)?(?![a-z])")
+OURS_RE = re.compile(r"(?<![帮给替为让请])(?:我们|我方|我司|咱们|本公司|我公司)[^,，。;；?？]{0,12}?(?:中标|中了|拿下|赢)|商机|项目机会|在跟|跟踪|跟进|投标的|阶段")
+CONTRACT_WORDS = {  # 合同类型(本体 award_contract_type)的口语;按 CONTRACT_ORDER 认,认到的词先划掉:「非咨询」不算咨询,「设计施工」「EPC」算工程
+    "非咨询服务": ["非咨询服务", "非咨询", "non-consulting"],
+    "运营": ["运营维护", "运维", "运营", "委托运营", "托管运营", "管理合同", "o&m", "o & m", "operation and maintenance", "operation & maintenance", "operations",
+             "operation", "affermage"],
+    "工程": ["设计施工", "设计建设", "设计采购施工", "工程总承包", "总承包", "epc", "dbo", "施工", "土建", "工程", "works", "construction"],
+    "货物": ["货物", "设备", "供货", "物资", "goods", "equipment"],
+    "咨询服务": ["咨询服务", "咨询", "设计", "监理", "可研", "可行性研究", "consulting", "consultancy", "consultant", "supervision", "design"],
+}
+CONTRACT_ORDER = ("非咨询服务", "运营", "工程", "货物", "咨询服务")
+FIRM_RE = re.compile(r"\s*的?\s*(?:企业|公司|承包商|厂商|单位|企|联合体|团队|集团|firms?|compan(?:y|ies)|contractors?)")  # 国名后面跟这些:说的是中标单位的国别
+CN_FIRM_WORDS = ("中资", "中企", "中方", "chinese")  # 不带国名的「中国企业」说法
+# 规模(日处理 / 供水能力):提问里的「5000 m³/d 以上」「日处理 5 万吨」→ m³/日。页面(index.html 的 capM3d)按同一套单位读工程量与名称
+CAP_NUM = r"(\d+(?:[.,]\d+)*|[一二两三四五六七八九十百千]+)\s*(万|千|k|thousand|million|百万|亿|тыс\.?)?\s*"
+CAP_UNITS = [  # 单位 → 折成 m³/日 的倍数;「吨」按水算 1 吨 = 1 m³;只写「m³」不带「/日」的多半是池容、方量,不算(前面写了规模、水厂的除外,见 CAP_DAILY)
+    (r"(?:m3|m³|立方米?|方|吨|t|cbm)\s*(?:/|每|per|a)\s*(?:d|day|j|jour|d[ií]a|日|天)(?![a-z])|m3pd|cmd(?![a-z])|cubic met(?:er|re)s? (?:per|a) day|(?:м3|м³)\s*/\s*сут", 1),
+    (r"(?:m3|m³|立方米?|方|吨|t)\s*(?:/|每|per)\s*(?:h|hour|小时|时)(?![a-z])", 24),
+    (r"(?:m3|m³|立方米?)\s*(?:/|每|per)\s*(?:s|sec|second|秒)(?![a-z])", 86400),
+    (r"(?:l|升)\s*(?:/|每|per)\s*(?:s|sec|second|秒)(?![a-z])|lps(?![a-z])", 86.4),
+    (r"mld(?![a-z])|ml\s*/\s*d(?:ay)?(?![a-z])|megalit(?:er|re)s? (?:per|a) day", 1000),
+    (r"mgd(?![a-z])", 3785.41),
+]
+CAP_DAILY = r"(?:规模|能力|处理量|供水量|产水量|日处理|日供水|日产水?|水厂|处理厂|淡化厂)[^\d一二两三四五六七八九十]{0,4}?(?:\d+(?:[.,]\d+)*\s*(?:万|千)?\s*(?:-|–|—|~|～|至|到)\s*)?"
+CAP_MULT = {"万": 1e4, "千": 1e3, "k": 1e3, "thousand": 1e3, "million": 1e6, "百万": 1e6, "亿": 1e8, "тыс": 1e3, "тыс.": 1e3}
+AWARD_GROUPS = [  # 已中标项目的分组说法,先于通用的认(通用的「按类别 / 领域」「按天」再经 GROUP_ALIAS 换成它的)
+    (r"(?:按|各|分)(?:中标)?(?:单位|方|企业|公司|承包商)的?(?:国别|国家)|中标(?:单位|方|企业|公司)的?(?:国别|国家)|(?:哪些|哪个|哪国|各国)的?(?:企业|公司|承包商)", "winner_country"),
+    (r"按合同|按类型|(?:各|分)(?:合同)?类型", "contract_type"),
+    (r"按年|每年|逐年|各年|历年|年度|趋势|走势", "year"),
+]
 
 
 def _words(x) -> list[str]:
@@ -120,6 +156,7 @@ class Vocab:
     milestone_kinds: list[str]
     deadline_kinds: list[str]
     report_kinds: list[str]
+    contract_types: list[str] = field(default_factory=list)  # 已中标项目的合同类型(本体 award_contract_type)
     terms: list[dict] = field(default_factory=list)
     not_collected: list[dict] = field(default_factory=list)  # 本体 data_scope.not_collected:不在采集范围的国家(iso3、口语 words、说明 note)  # 本体 terms:行业术语(triggers = 词本身 + 同义说法,小写、长的在前)
     words: dict[str, dict[str, list[str]]] = field(default_factory=dict)  # 维度 → 值 → 触发词(小写)
@@ -146,6 +183,7 @@ def vocab() -> Vocab:
         milestone_kinds=[x["v"] for x in _values(tax["milestone_kind"])],
         deadline_kinds=[x["v"] for x in tax["milestone_kind"]["groups"][0]["values"]],
         report_kinds=[x["v"] for x in _values(tax["report_kind"])],
+        contract_types=[x["v"] for x in _values(tax["award_contract_type"])],
         terms=[x for x in (make_term(t) for t in o.get("terms") or []) if x],
         not_collected=list((o.get("data_scope") or {}).get("not_collected") or []),
     )
@@ -164,11 +202,13 @@ def vocab() -> Vocab:
         "statuses": merge(v.statuses, STATUS_WORDS),
         "milestone_kinds": merge([k for k in v.milestone_kinds if k != "其他"], {}),
         "report_kinds": merge(v.report_kinds, {}),
+        "contract_types": merge(v.contract_types, CONTRACT_WORDS),
     }
     # 太短、太泛的英文词不要(「plan」「law」会误伤),资金来源里长度 ≤ 2 的拉丁缩写(WB、EU)只在整词时才认,见 _hit
     for dim in v.words.values():
         for val, ws in dim.items():
-            dim[val] = [w for w in ws if not (w.isascii() and len(w) <= 3 and w not in ("eoi", "spn", "gpn", "adb", "eib", "afd", "kfw", "idb", "dfc", "pq", "wb", "eu", "ida"))]
+            dim[val] = [w for w in ws if not (w.isascii() and len(w) <= 3 and w not in ("eoi", "spn", "gpn", "adb", "eib", "afd", "kfw", "idb", "dfc", "pq", "wb", "eu", "ida",
+                                                                                       "epc", "dbo", "o&m"))]
     return v
 
 
@@ -176,7 +216,8 @@ def empty_plan() -> dict:
     return {"intent": "list", "object": "lead",
             "filters": {"countries": [], "regions": [], "sectors": [], "sectors_fine": [], "categories": [], "funders": [], "stages": [],
                         "tracked": None, "status": [], "relevant": None, "days": None, "from": None, "to": None, "future_days": None,
-                        "kinds": [], "keywords": [], "terms": []},
+                        "kinds": [], "keywords": [], "terms": [],
+                        "contract_types": [], "winner_countries": [], "winners": [], "capacity": None},  # 后四项只对已中标项目;capacity = {min, max}(m³/日)
             "group_by": None, "limit": DEFAULT_LIMIT, "understood": [], "unresolved": [], "parsed_by": "rules", "model": None, "note": ""}
 
 
@@ -226,13 +267,27 @@ def _monday(d: date) -> date:
 
 
 def parse_time(text: str, today: date) -> tuple[dict, str | None]:
-    """时间短语 → {days | from,to | future_days},附带给人看的说明。先看相对窗口,再看本周 / 上周 / 本月 / 上月 / 今年 / 某月。"""
+    """时间短语 → {days | from,to | future_days},附带给人看的说明。先看写明的年份(2024 年、2022–2024 年、2023 年以来),
+    再看相对窗口,再看本周 / 上周 / 本月 / 上月 / 今年 / 某月。"""
+    y4 = r"((?:19|20)\d\d)"
+    if m := re.search(y4 + r"\s*年\s*(\d{1,2})\s*月", text):
+        y, mo = int(m.group(1)), int(m.group(2))
+        if 1 <= mo <= 12:
+            a = date(y, mo, 1)
+            return {"from": a.isoformat(), "to": ((a.replace(month=mo + 1) if mo < 12 else date(y + 1, 1, 1)) - timedelta(days=1)).isoformat()}, f"{y} 年 {mo} 月"
+    if m := re.search(y4 + r"\s*年?\s*(?:-|–|—|~|～|至|到)\s*" + y4 + r"\s*年", text):
+        a, b = sorted((m.group(1), m.group(2)))
+        return {"from": f"{a}-01-01", "to": f"{b}-12-31"}, f"{a}–{b} 年"
+    if m := re.search(y4 + r"\s*年?\s*(?:以来|至今|以后|之后|起)", text):
+        return {"from": f"{m.group(1)}-01-01", "to": today.isoformat()}, f"{m.group(1)} 年以来"
+    if m := re.search(y4 + r"\s*年(?!代)", text):
+        return {"from": f"{m.group(1)}-01-01", "to": f"{m.group(1)}-12-31"}, f"{m.group(1)} 年"
     m = re.search(r"(最近|近|过去|这)\s*(\d+|[一二两三四五六七八九十]+|半)\s*(个月|天|日|周|星期|礼拜|月|年)", text)
     if m:
         n = _num(m.group(2))
         if n:
             days = max(1, round(n * UNIT_DAYS[m.group(3)]))
-            return {"days": days}, f"最近 {days} 天"
+            return {"days": days}, (f"最近 {n:g} 年({days} 天)" if m.group(3) == "年" and n == int(n) else f"最近 {days} 天")
     m = re.search(r"(未来|今后|接下来|之后|后|内)\s*(\d+|[一二两三四五六七八九十]+|半)\s*(个月|天|日|周|星期|礼拜|月|年)", text) \
         or re.search(r"(\d+|[一二两三四五六七八九十]+|半)\s*(个月|天|日|周|星期|礼拜|月|年)\s*(内|之内|以内)", text)
     if m:
@@ -271,13 +326,145 @@ def parse_time(text: str, today: date) -> tuple[dict, str | None]:
     return {}, None
 
 
+# ---------------------------------------------------------------- 已中标项目
+
+
+def is_award_q(text: str) -> bool:
+    """问的是已中标项目(别人拿到的合同):有「中标 / 授予 / award」,不是说我方的(我们中标的、商机、阶段),也不是线索或公告。"""
+    t = _norm(text)
+    return bool(AWARD_RE.search(t)) and not OURS_RE.search(t) and not re.search(r"线索|公告", t)
+
+
+def contract_types(text: str) -> list[str]:
+    """提问里的合同类型(按本体的顺序);「工程量」不算「工程」。"""
+    v = vocab()
+    rest, out = _norm(text).replace("工程量", " "), []
+    for val in [c for c in CONTRACT_ORDER if c in v.contract_types] + [c for c in v.contract_types if c not in CONTRACT_ORDER]:
+        ws = v.words["contract_types"].get(val, [])
+        if any(_hit(rest, w) for w in ws):
+            out.append(val)
+            for w in ws:
+                rest = rest.replace(w, " ")
+    return [c for c in v.contract_types if c in out]
+
+
+def _firm_only(q: str, words: list[str]) -> bool:
+    """这些词(国名、「国内」)在提问里每一处后面都跟着「企业 / 公司」:说的是中标单位的国别,不是项目所在国。"""
+    t = _norm(q)
+    ends = [m.end() for w in words if w for m in re.finditer(re.escape(w.lower()), t)]
+    return bool(ends) and all(FIRM_RE.match(t, e) for e in ends)
+
+
+def _names(iso: str) -> list[str]:
+    c = geo.countries().get(iso) or {}
+    return [n for n in [c.get("name_zh"), c.get("name_en"), *(c.get("aliases") or [])] if n]
+
+
+def _country_word(w: str) -> str | None:
+    """「中国」「China」「中国企业」这类只是国名(加企业、公司)的词 → ISO3;「中国电建」这样的单位名 → None。"""
+    iso = geo.iso3(w)
+    if not iso:
+        return None
+    rest = _norm(w)
+    for n in sorted(_names(iso), key=len, reverse=True):
+        rest = rest.replace(n.lower(), "")
+    return iso if not rest.strip() or rest.strip() == iso.lower() or re.fullmatch(FIRM_RE.pattern + r"\s*", rest) else None
+
+
+def winner_countries(q: str) -> tuple[list[str], set[str]]:
+    """提问里的中标单位国别 → (中文国名, 只当中标单位国别讲的 ISO3)。「中国企业 / 中资 / 我国企业」→ 中国;已中标项目不收中国国内的合同,
+    提问里的中国除非写明「中国国内 / 在中国」,都当中标单位的国别。"""
+    t = _norm(q)
+    out, only = [], set()
+    for iso in geo.detect(q):
+        firm = _firm_only(q, _names(iso)) or (iso == "CHN" and not re.search(r"中国(?:国内|境内|大陆)|在中国", t))
+        if firm:
+            out.append(geo.name_zh(iso))
+            only.add(iso)
+    if any(w in t for w in CN_FIRM_WORDS) or any(_firm_only(q, [w]) for x in vocab().not_collected if x["iso3"] == "CHN" for w in x.get("words") or []):
+        if "中国" not in out:
+            out.insert(0, "中国")
+    return out, only
+
+
+def _cap_num(s: str) -> float | None:
+    """「5,000」「1.5」「10.000.000」「五千」→ 数。"""
+    if re.fullmatch(r"\d{1,3}(?:,\d{3})+", s):
+        s = s.replace(",", "")
+    elif re.fullmatch(r"\d{1,3}(?:\.\d{3}){2,}", s):
+        s = s.replace(".", "")
+    try:
+        return float(s.replace(",", "."))
+    except ValueError:
+        pass
+    total, cur = 0, 0
+    for ch in s:
+        if ch in "十百千":
+            total, cur = total + (cur or 1) * {"十": 10, "百": 100, "千": 1000}[ch], 0
+        elif ch in NUM_ZH:
+            cur = NUM_ZH[ch]
+        else:
+            return None
+    return float(total + cur) or None
+
+
+def capacity_hits(text: str) -> list[tuple[int, int, float, float]]:
+    """一段文字里写明的规模 → [(数字起点, 终点, m³/日, 单位倍数(不含「万」这类数量级))],按位置排。"""
+    t = str(text or "").lower()
+    out: dict[int, tuple[int, int, float, float]] = {}
+    pats = [(CAP_NUM + "(?:" + u + ")", k) for u, k in CAP_UNITS] + [(CAP_DAILY + CAP_NUM + r"(?:吨|立方米?|方|m3|m³)(?!\s*(?:/|每|per))", 1)]
+    for pat, k in pats:
+        for m in re.finditer(pat, t):
+            v = _cap_num(m.group(1))
+            if v:
+                out.setdefault(m.start(1), (m.start(1), m.end(), v * CAP_MULT.get(m.group(2) or "", 1) * k, k))
+    return sorted(out.values())
+
+
+def parse_capacity(text: str) -> dict | None:
+    """提问里的规模条件 → {"min", "max"}(m³/日,没有的为 None):「以上 / 超过 / 不低于」是下限,「以下 / 不超过」是上限,
+    「3–5 万吨/日」是区间,只写一个数按下限。没写带单位的规模 → None。"""
+    t = _norm(text)
+    hits = capacity_hits(t)
+    if not hits:
+        return None
+    a, b, v, k = hits[0]
+    before, after = t[max(0, a - 10):a], t[b:b + 4]
+    m = re.search(r"(\d+(?:[.,]\d+)*|[一二两三四五六七八九十百千]+)\s*(万|千|k)?\s*(?:-|–|—|~|～|至|到)\s*$", before)
+    if m and _cap_num(m.group(1)):  # 区间:前一个数没写「万」的跟后一个数走(3–5 万吨/日)
+        lo = _cap_num(m.group(1)) * k * (CAP_MULT[m.group(2)] if m.group(2) else v / k / _cap_num(re.match(CAP_NUM, t[a:]).group(1)))
+        return {"min": round(min(lo, v), 2), "max": round(max(lo, v), 2)}
+    if re.match(r"\s*(?:及|或)?(?:以下|以内|之内)", after) or re.search(r"(?:(?<!不)(?:小于|低于|少于)|不超过|不到|不足|最多|≤|<=|<)\s*$", before):
+        return {"min": None, "max": round(v, 2)}
+    return {"min": round(v, 2), "max": None}  # 「以上 / 超过 / 不低于」与只写一个数的,都按下限
+
+
+def cap_label(c: dict | None) -> str:
+    """{min, max} → 「≥ 5000 m³/日」「3 万–5 万 m³/日」。"""
+    if not c:
+        return ""
+    n = lambda x: f"{round(x / 1e4, 2):g} 万" if x >= 1e4 else f"{round(x, 1):g}"  # noqa: E731
+    if c.get("min") and c.get("max"):
+        return f"{n(c['min'])}–{n(c['max'])} m³/日"
+    return (f"≥ {n(c['min'])}" if c.get("min") else f"≤ {n(c['max'])}") + " m³/日"
+
+
+def _award_noise(k: str) -> bool:
+    """模型放进关键词的、其实是已中标项目别的条件的词(合同类型、规模、类别、「中标信息」这类):不当名称关键词。"""
+    v, t = vocab(), _norm(k)
+    return bool(contract_types(t) or capacity_hits(t) or _pick(t, v.words["sectors"]) or AWARD_RE.search(t) or "规模" in t
+                or re.fullmatch(r"的?(?:项目|信息|记录|结果|情况|合同)", t))
+
+
 def rules_parse(q: str, today: date) -> dict:
     v = vocab()
     text = _norm(q)
     p = empty_plan()
     f = p["filters"]
-    # 对象
-    if re.search(r"商机|项目机会|在跟|跟踪|投标的|中标的", text) and "线索" not in text:
+    # 对象:已中标项目先认(「中标信息」不是商机阶段;「我们中标的商机」仍是商机,见 is_award_q)
+    if is_award_q(text):
+        p["object"] = "award"
+    elif re.search(r"商机|项目机会|在跟|跟踪|投标的|中标的", text) and "线索" not in text:
         p["object"] = "opportunity"
     elif re.search(r"节点|开标|截止日|截止|到期|时间表|日程", text) and "线索" not in text and "商机" not in text:
         p["object"] = "milestone"
@@ -292,8 +479,10 @@ def rules_parse(q: str, today: date) -> dict:
     elif re.search(r"按|分布|统计|占比|趋势|走势|分组|排名|排行|最多|图|哪些国家|哪个国家|各国", text):
         p["intent"] = "chart"
     # 分组维度
-    gb = None
-    if re.search(r"按(国家|国别|国)|分国|各国|哪些国家|哪个国家", text):
+    gb = next((g for pat, g in AWARD_GROUPS if re.search(pat, text)), None) if p["object"] == "award" else None
+    if gb:
+        pass  # 已中标项目自己的说法(按中标单位国别、按合同类型、按年)
+    elif re.search(r"按(国家|国别|国)|分国|各国|哪些国家|哪个国家", text):
         gb = "country"
     elif re.search(r"按(类别|类型|种类)|分类别|各类别", text):
         gb = "kind" if p["object"] in ("milestone", "report") else "category"
@@ -309,16 +498,21 @@ def rules_parse(q: str, today: date) -> dict:
         gb = "status"
     elif re.search(r"按信源|各信源|按来源", text):
         gb = "source"
+    gb = GROUP_ALIAS.get(p["object"], {}).get(gb, gb)
     if gb and gb in GROUPS[p["object"]]:
         p["group_by"] = gb
         p["intent"] = "chart"
     elif p["intent"] == "chart" and not gb:
         p["group_by"] = "country" if "country" in GROUPS[p["object"]] else GROUPS[p["object"]][0]
-    # 国别(几个都认;国名也可能是「中标」之类词的一部分,geo 只认国名词表)
+    # 国别(几个都认;国名也可能是「中标」之类词的一部分,geo 只认国名词表)。已中标项目:「中国企业」「土耳其公司」说的是中标单位的国别
+    award = p["object"] == "award"
+    win, win_iso = winner_countries(q) if award else ([], set())
     for iso in geo.detect(q):
-        f["countries"].append({"iso3": iso, "name": geo.name_zh(iso)})
-    for x in v.not_collected:  # 「国内」「我国」这类口语指本体 data_scope 里写的国家
-        if not f["countries"] and not re.search(r"国内外|国外", text) and any(w in text for w in x.get("words") or []):
+        if iso not in win_iso:
+            f["countries"].append({"iso3": iso, "name": geo.name_zh(iso)})
+    for x in v.not_collected:  # 「国内」「我国」这类口语指本体 data_scope 里写的国家(「国内企业中标」除外)
+        ws = [w for w in x.get("words") or [] if w in text]
+        if not f["countries"] and not re.search(r"国内外|国外", text) and ws and not (award and _firm_only(q, ws)):
             f["countries"].append({"iso3": x["iso3"], "name": geo.name_zh(x["iso3"])})
     # 领域 / 类别 / 资金来源 / 阶段 / 状态 / 节点与报告类型
     f["sectors"] = _pick(text, v.words["sectors"])
@@ -353,8 +547,15 @@ def rules_parse(q: str, today: date) -> dict:
             f["kinds"] = list(v.deadline_kinds)
     if p["object"] == "report":
         f["kinds"] = _pick(text, v.words["report_kinds"])
+    if award:  # 合同类型、中标单位(「中标单位是 X」)、规模(页面读工程量与名称再筛)
+        f["contract_types"] = contract_types(text)
+        f["winner_countries"] = win
+        f["winners"] = [w for w in re.findall(r"中标(?:单位|方|企业|公司|人)\s*(?:是|为|含|包括|有|:|：)\s*[「“\"']?([^\s,，。;；、的」”\"'?？]{2,40})", q) if not _country_word(w)]
+        f["capacity"] = parse_capacity(text)
     # 时间
     t, label = parse_time(text, today)
+    if t and award and t.get("future_days"):  # 「三年内」对已中标项目说的是过去
+        t, label = {"days": t["future_days"]}, label.replace("未来", "最近")
     if t:
         f.update(t)
         p["understood"].append(["时间", label])
@@ -377,7 +578,7 @@ def rules_parse(q: str, today: date) -> dict:
         p["intent"] = "chart"
     apply_terms(p, q)
     if not any([f["countries"], f["sectors"], f["categories"], f["funders"], f["stages"], f["tracked"], f["status"], f["relevant"] is not None,
-                f["days"], f["from"], f["future_days"], f["kinds"], f["keywords"], f["terms"], p["group_by"]]) \
+                f["days"], f["from"], f["future_days"], f["kinds"], f["keywords"], f["terms"], p["group_by"], award]) \
             and not re.search(r"线索|商机|节点|报告|全部|所有|都|清单|列表|多少", text):
         p["intent"] = "help"
     return finish(p)
@@ -388,11 +589,14 @@ def rules_parse(q: str, today: date) -> dict:
 
 SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器。用户用中文(偶尔夹英文)提问,你只负责把问题翻译成一个查询计划(JSON),不回答问题、不编造数据。
 
-系统里有四类对象:
+系统里有五类对象:
 - lead 线索:从公开信源采集的公告与新闻,字段有国别、领域(粗分)、类别、出资方、发现时间、处理状态、是否相关。
-- opportunity 商机:人在跟的项目,字段有国别、领域(细分)、我方阶段、资金。
+- opportunity 商机:我方在跟的项目,字段有国别、领域(细分)、我方阶段、资金。「我们 / 我方中标的」「中标的商机」= 商机 + 阶段「中标」。
 - milestone 时间节点:投标截止、开标、授标等日期,挂在商机或线索下。
 - report 报告:国别报告、项目报告、周报、月报、日报。
+- award 已中标项目:开发银行与各国采购网公开的中标记录(一份已授出的合同:谁中了什么标、中标价多少),字段有国别、类别(即领域粗分)、合同类型、
+  中标价、中标时间、工程量(含规模,如「净水厂 5 万吨/日」)、中标单位及其国别、资金来源。问「中标信息 / 中标记录 / 中标结果 / 谁中标 / 中标单位 /
+  中标价 / 合同授予 / awards」的都是它,不是商机(除非明说是我方的)。
 
 字段取值(只能用这些,别的词放进 unresolved):
 - sectors(领域,粗分):{sectors}
@@ -401,12 +605,17 @@ SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器�
 - stages(商机我方阶段):{stages};「在跟踪 / 在跟的商机」= tracked: true(阶段 ∈ {tracked});「AI 推荐」= 阶段「建议」
 - status(线索处理状态):{statuses}
 - kinds:时间节点类型 {milestone_kinds};报告类型 {report_kinds}
-- countries:国名用中文或 ISO3 三字母代码,可多个
-- 时间:相对窗口用 days(最近 N 天,按发现时间 / 日期)或 future_days(未来 N 天,只对时间节点有意义);绝对区间用 from / to(YYYY-MM-DD)。今天是 {today}。
-- keywords:用户明确要在标题里找的词(机构名、项目名、地名),不要把领域 / 类别词重复放进来。
+- countries:项目所在国,国名用中文或 ISO3 三字母代码,可多个
+- 已中标项目另有:contract_types(合同类型){contract_types}(运营维护、运维、委托运营、O&M → 运营;施工、EPC、设计施工 → 工程;设备、供货 → 货物;
+  咨询、设计、监理 → 咨询服务);winner_countries(中标单位国别,中文国名;「中国企业中标 / 中资」= ["中国"],这时中国不进 countries);
+  winners(中标单位名称里要含的词);capacity_min / capacity_max(规模即日处理或供水能力的下限 / 上限,一律折成 m³/日:1 万吨/日 = 10000,1 MLD = 1000,
+  1 L/s = 86.4;「5000m3/d 以上」= capacity_min 5000);sectors 就是它的「类别」;时间按中标时间。合同类型、规模不要放进 keywords。
+- 时间:相对窗口用 days(最近 N 天,按发现时间 / 日期;「近三年」= 1095)或 future_days(未来 N 天,只对时间节点有意义);绝对区间用 from / to(YYYY-MM-DD)。今天是 {today}。
+- keywords:用户明确要在标题(已中标项目是名称)里找的词(机构名、项目名、地名),不要把领域 / 类别词重复放进来。
 - 行业术语(跨领域的词,按这里理解;提问里出现时不要据此填 sectors,也不要放进 keywords,系统按术语自己的相关词去找):{terms}
 - intent:count 问数量;list 要清单(缺省);chart 要分组统计 / 分布 / 趋势 / 哪些国家最多;report 要生成一份新报告;help 看不懂或与系统无关。
-- group_by:chart 时的分组维度,线索可选 country / category / sectors / funder / day / status / source,商机 country / stage / sectors / funder,时间节点 country / kind / day,报告 kind / country。
+- group_by:chart 时的分组维度,线索可选 country / category / sectors / funder / day / status / source,商机 country / stage / sectors / funder,时间节点 country / kind / day,报告 kind / country,
+  已中标项目 country / sector / contract_type / winner_country / funder / year。
 - limit:要几条(1–200),没说就 50。
 
 {guide}"""
@@ -414,8 +623,9 @@ SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器�
 GUIDE = """输出格式:只输出一个 JSON 对象,不要任何其他文字。字段与示例:
 {"object": "lead", "intent": "chart", "countries": ["埃及"], "sectors": ["供水"], "categories": ["招标"], "funders": ["世界银行"],
  "stages": [], "tracked": null, "status": [], "relevant": null, "days": 30, "from": null, "to": null, "future_days": null,
- "kinds": [], "keywords": [], "group_by": "country", "limit": 50, "unresolved": []}
-没有的字段给空数组或 null;object 只能取 lead / opportunity / milestone / report;intent 只能取 count / list / chart / report / help。"""
+ "kinds": [], "keywords": [], "contract_types": [], "winner_countries": [], "winners": [], "capacity_min": null, "capacity_max": null,
+ "group_by": "country", "limit": 50, "unresolved": []}
+没有的字段给空数组或 null;object 只能取 lead / opportunity / milestone / report / award;intent 只能取 count / list / chart / report / help。"""
 
 SCHEMA = {
     "type": "object",
@@ -428,11 +638,15 @@ SCHEMA = {
         "days": {"anyOf": [{"type": "integer"}, {"type": "null"}]}, "from": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "to": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "future_days": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
         "kinds": {"type": "array", "items": {"type": "string"}}, "keywords": {"type": "array", "items": {"type": "string"}},
+        "contract_types": {"type": "array", "items": {"type": "string"}}, "winner_countries": {"type": "array", "items": {"type": "string"}},
+        "winners": {"type": "array", "items": {"type": "string"}}, "capacity_min": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+        "capacity_max": {"anyOf": [{"type": "number"}, {"type": "null"}]},
         "group_by": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "limit": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
         "unresolved": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["object", "intent", "countries", "sectors", "categories", "funders", "stages", "tracked", "status", "relevant", "days", "from",
-                 "to", "future_days", "kinds", "keywords", "group_by", "limit", "unresolved"],
+                 "to", "future_days", "kinds", "keywords", "contract_types", "winner_countries", "winners", "capacity_min", "capacity_max",
+                 "group_by", "limit", "unresolved"],
     "additionalProperties": False,
 }
 
@@ -441,7 +655,7 @@ def system_prompt(today: date) -> str:
     v = vocab()
     return SYSTEM.format(sectors="、".join(v.sectors), categories="、".join(v.categories), funders="、".join(v.funders), stages="、".join(v.stages),
                          tracked="、".join(v.tracked), statuses="、".join(v.statuses), milestone_kinds="、".join(v.milestone_kinds),
-                         report_kinds="、".join(v.report_kinds), terms="、".join(_term_brief(t) for t in terms()) or "无",
+                         report_kinds="、".join(v.report_kinds), contract_types="、".join(v.contract_types), terms="、".join(_term_brief(t) for t in terms()) or "无",
                          today=today.isoformat(), guide=GUIDE)
 
 
@@ -496,6 +710,9 @@ def from_model(data: dict, today: date, q: str = "") -> dict:
     p["parsed_by"] = "model"
     p["model"] = data.get("_model")
     p["object"] = data.get("object") if data.get("object") in OBJECTS else "lead"
+    if p["object"] in ("lead", "opportunity") and is_award_q(q):  # 模型把「中标信息」当成商机阶段「中标」(10-13 用户反映 0 条):按提问纠正
+        p["object"] = "award"
+    award = p["object"] == "award"
     p["intent"] = data.get("intent") if data.get("intent") in INTENTS else "list"
     unresolved = _strs(data.get("unresolved"))
 
@@ -515,6 +732,21 @@ def from_model(data: dict, today: date, q: str = "") -> dict:
             f["countries"].append({"iso3": iso, "name": geo.name_zh(iso)})
         elif not iso:
             unresolved.append(c)
+    if award:  # 已中标项目:合同类型、中标单位及其国别、规模;模型漏了的按提问补(规模以提问里写的为准,不靠模型换算)
+        win, win_iso = winner_countries(q)
+        f["countries"] = [c for c in f["countries"] if c["iso3"] not in win_iso]
+        f["contract_types"] = keep(_strs(data.get("contract_types")), v.contract_types, v.words["contract_types"]) or contract_types(q)
+        named = _strs(data.get("winners"))
+        for c in _strs(data.get("winner_countries")) + win + [w for w in named if _country_word(w)]:  # 模型把「中国企业」写进 winners 的也算国别
+            iso = geo.iso3(c)
+            if iso and geo.name_zh(iso) not in f["winner_countries"]:
+                f["winner_countries"].append(geo.name_zh(iso))
+            elif not iso:
+                unresolved.append(c)
+        f["winners"] = [k[:60] for k in named if not _country_word(k)][:5]
+        num = lambda x: float(x) if isinstance(x, (int, float)) and not isinstance(x, bool) and 0 < x < 1e9 else None  # noqa: E731
+        lo, hi = num(data.get("capacity_min")), num(data.get("capacity_max"))
+        f["capacity"] = parse_capacity(q) or ({"min": lo, "max": hi} if lo or hi else None)
     f["sectors"] = keep(_strs(data.get("sectors")), v.sectors, v.words["sectors"])
     f["categories"] = keep(_strs(data.get("categories")), v.categories, v.words["categories"]) if p["object"] == "lead" else []
     f["funders"] = keep(_strs(data.get("funders")), v.funders, v.words["funders"])
@@ -533,13 +765,17 @@ def from_model(data: dict, today: date, q: str = "") -> dict:
         f["days"] = int(min(data["days"], 3660))
     if isinstance(data.get("future_days"), (int, float)) and data["future_days"] > 0 and p["object"] == "milestone":
         f["future_days"] = int(min(data["future_days"], 3660))
+    elif isinstance(data.get("future_days"), (int, float)) and data["future_days"] > 0 and award and not f["days"]:  # 「三年内」对已中标项目说的是过去
+        f["days"] = int(min(data["future_days"], 3660))
     if _iso(data.get("from")) or _iso(data.get("to")):
         f["from"], f["to"] = _iso(data.get("from")), _iso(data.get("to"))
         f["days"] = None
     if p["object"] == "milestone" and not (f["days"] or f["from"] or f["future_days"]):
         f["future_days"] = DEFAULT_FUTURE_DAYS
-    f["keywords"] = [k[:60] for k in _strs(data.get("keywords"))][:5]
-    gb = data.get("group_by")
+    f["keywords"] = [k[:60] for k in _strs(data.get("keywords")) if not (award and (_award_noise(k) or _country_word(k)))][:5]
+    if award:
+        unresolved = [u for u in unresolved if not _award_noise(u)]
+    gb = GROUP_ALIAS.get(p["object"], {}).get(data.get("group_by"), data.get("group_by"))
     if gb in GROUPS[p["object"]]:
         p["group_by"] = gb
         if p["intent"] in ("list", "count"):
@@ -568,8 +804,9 @@ def finish(p: dict) -> dict:
         u.append(["国别", "、".join(c["name"] for c in f["countries"])])
     if f["regions"]:
         u.append(["区域", "、".join(f["regions"])])
+    award = p["object"] == "award"
     if f["sectors"]:
-        u.append(["领域", "、".join(f["sectors"])])
+        u.append(["类别" if award else "领域", "、".join(f["sectors"])])  # 已中标项目的「类别」就是领域(本体 award.sector)
     if f["categories"]:
         u.append(["类别", "、".join(f["categories"])])
     if f["funders"]:
@@ -587,15 +824,25 @@ def finish(p: dict) -> dict:
     for t in f.get("terms") or []:
         span = "只看" + "、".join(t["sectors"]) if t["sectors"] else ("跨" + "、".join(t["covers"]) + "," if t["covers"] else "") + "不限领域"
         u.append(["术语", f"{t['term']}({span};按 {len(t['match'])} 个相关词查标题和中文摘要)"])
+    if f.get("contract_types"):
+        u.append(["合同类型", "、".join(f["contract_types"])])
+    if f.get("winner_countries"):
+        u.append(["中标单位国别含", "、".join(f["winner_countries"])])
+    if f.get("winners"):
+        u.append(["中标单位含", "、".join(f["winners"])])
+    if f.get("capacity"):
+        u.append(["规模", cap_label(f["capacity"]) + "(按工程量与名称里写明的日处理能力比;没写规模的另列)"])
     if f["keywords"]:
-        u.append(["标题或摘要含", "、".join(f["keywords"])])
+        u.append(["名称或中标单位含" if award else "标题或摘要含", "、".join(f["keywords"])])
     if not any(x[0] == "时间" for x in u):
         if f["days"]:
-            u.append(["时间", f"最近 {f['days']} 天"])
+            u.append(["时间", f"最近 {f['days'] // 365} 年({f['days']} 天)" if f["days"] % 365 == 0 else f"最近 {f['days']} 天"])
         elif f["from"] or f["to"]:
             u.append(["时间", f"{f['from'] or '…'} 至 {f['to'] or '…'}"])
         elif f["future_days"]:
             u.append(["时间", f"未来 {f['future_days']} 天"])
+    if award:  # 已中标项目的时间是中标时间
+        u = [["中标时间", x[1]] if x[0] == "时间" else x for x in u]
     if p["group_by"]:
         u.append(["分组", GROUP_ZH[p["group_by"]]])
     u.append(["呈现", {"count": "数一下", "list": f"清单(最多 {p['limit']} 条)", "chart": "分组统计", "report": "生成报告", "help": "帮助"}[p["intent"]]])

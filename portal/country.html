@@ -16,7 +16,7 @@
   <div class="toolbar"><h1 style="margin:0">国别概况</h1><select id="pick"></select><span id="rel"></span><span id="openRow"></span><span class="muted" style="margin-left:auto">在地图上点国家也行(滚轮缩放,<a href="#" id="mapReset">复位</a>)</span></div>
   <div class="panel"><div id="map" class="chart"></div></div>
   <div class="cards" id="cards"></div>
-  <div class="tabs" id="tabs"></div>
+  <div class="tabs grouped" id="tabs"></div>
   <div class="tab" data-t="info"><div id="info"></div></div>
   <div class="tab" data-t="inst"><div id="inst"></div></div>
   <div class="tab" data-t="opps">
@@ -38,14 +38,18 @@
     <div class="panel" id="cities"></div>
   </div>
   <div class="tab" data-t="docs"><section id="chron"></section><section id="studies"></section></div>
-  <section id="awBox"></section>
+  <div class="tab" data-t="awards"><section id="awBox"></section></div>
 </main>
 <script>
 (async function () {
   const $ = (id) => document.getElementById(id);
   let countries = [], mc = null, mapOption = null;
-  /* 页签:概况 / 机构与法规 / 水务历史资料 / 商机 / 线索 / 时间节点 / 城市;选中的记在网址 t= 里,数字是这个国家的条数 */
-  const TABS = [["info", "概况"], ["inst", "机构与法规"], ["docs", "水务历史资料"], ["opps", "商机"], ["leads", "最近 90 天线索"], ["ms", "未来 30 天节点"], ["cities", "规模以上城市"]];
+  /* 页签分三组(使用方 2026-10-13 要的):基本信息(概况、机构与法规、城市)→ 历史信息(水务历史资料、已中标项目)→ 动态信息(商机、线索、时间节点);
+     选中的记在网址 t= 里,数字是这个国家的条数 */
+  const GROUPS = [["基本信息", [["info", "概况"], ["inst", "机构与法规"], ["cities", "规模以上城市"]]],
+    ["历史信息", [["docs", "水务历史资料"], ["awards", "已中标项目"]]],
+    ["动态信息", [["opps", "商机"], ["leads", "最近 90 天线索"], ["ms", "未来 30 天节点"]]]];
+  const TABS = GROUPS.flatMap(([, ts]) => ts);
   const q0 = new URLSearchParams(location.search);
   let tab = TABS.some(([k]) => k === q0.get("t")) ? q0.get("t") : "info";
   function urlOf(iso) { return "country.html?" + new URLSearchParams({ iso, t: tab }); }
@@ -56,7 +60,7 @@
     history.replaceState(null, "", urlOf($("pick").value));
   }
   function drawTabs(counts) {
-    $("tabs").innerHTML = TABS.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + (counts && counts[k] !== undefined ? " <b>" + counts[k] + "</b>" : "") + "</button>").join("");
+    $("tabs").innerHTML = GROUPS.map(([g, ts]) => '<div class="tgrp"><span class="tg">' + g + '</span><div class="tb">' + ts.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + (counts && counts[k] !== undefined ? " <b>" + counts[k] + "</b>" : "") + "</button>").join("") + "</div></div>").join("");
     $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
     showTab(tab);
   }
@@ -106,7 +110,7 @@
       hasCity ? P.records("city", { filter: P.and(P.cond("city", "country", "is", c.id)), orderBy: [{ fieldId: P.f("city", "population"), order: "desc" }],
         props: ["name_zh", "name_en", "admin", "population", "area_km2", "density", "gdp", "gdp_year", "lead_count", "opp_count", "coords"] }) : Promise.resolve([]),
     ]);
-    P.awards($("awBox"), "country", c.id).catch((e) => P.fail($("awBox"), e));  /* 已中标项目(页面最下面):自己读自己画,不等别的 */
+    const awP = P.awards($("awBox"), "country", c.id).catch((e) => { P.fail($("awBox"), e); return 0; });  /* 已中标项目(历史信息里的一个页签):自己读自己画,不等别的 */
     /* 水务历史资料:大事记在上、研究资料在下,各自读各自画;页签上的数是研究资料份数 */
     const docsP = Promise.all([P.chronicle($("chron"), "country", c.id).catch((e) => { P.fail($("chron"), e); return 0; }),
       P.studies($("studies"), c.id).catch((e) => { P.fail($("studies"), e); return 0; })]);
@@ -181,8 +185,8 @@
       P.tableHtml(["城市", "行政区", "人口", "面积(km²)", "密度", "生产总值(亿美元)", "线索", "商机", ""], cities.map((ct) => { const q = (p) => P.get("city", ct, p);
         return [P.raw('<a href="city.html?id=' + encodeURIComponent(ct.id) + '"><b>' + P.esc(q("name_zh") || q("name_en") || "") + "</b></a>" + (q("name_en") && q("name_en") !== q("name_zh") ? ' <span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")), q("admin") || "", num(q("population")), num(q("area_km2")), num(q("density")),
           num(q("gdp")) + (q("gdp") && q("gdp_year") ? ' <span class="muted small">' + P.esc(String(q("gdp_year"))) + "</span>" : ""), String(q("lead_count") || 0), String(q("opp_count") || 0), P.raw(P.open("city", ct.id))]; }));
-    const [, nDoc] = await docsP;
-    drawTabs({ docs: nDoc || undefined, opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
+    const [[, nDoc], nAw] = await Promise.all([docsP, awP]);
+    drawTabs({ docs: nDoc || undefined, awards: nAw === undefined ? undefined : nAw, opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
   }
 
   try {

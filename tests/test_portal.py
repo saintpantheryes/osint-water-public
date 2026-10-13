@@ -392,7 +392,10 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             assert "阿塞拜疆" in txt and "GDP\n720 亿美元" in txt and "甲城项目采购已启动" in txt  # 默认页签「概况」:备注与指标
             assert page.locator(".facts a.src").count() >= 1 and "AI 推荐" in txt and "待人定" not in txt  # 指标成了「名称 / 数值 / 来源链接」,不再是一坨原文
             # 页签切换:商机 / 线索 / 节点各在自己的页签里,页签上带条数;其他页签的内容藏着
-            assert page.locator("#tabs button").count() == 7 and page.locator("#tabs button.on").inner_text() == "概况" and "AZE-001" not in txt
+            assert page.locator("#tabs button").count() == 8 and page.locator("#tabs button.on").inner_text() == "概况" and "AZE-001" not in txt
+            # 页签分三组:基本信息 → 历史信息 → 动态信息(使用方 2026-10-13 要的)
+            assert page.locator("#tabs .tg").all_inner_texts() == ["基本信息", "历史信息", "动态信息"]
+            assert [page.locator("#tabs button").nth(i).get_attribute("data-t") for i in range(8)] == ["info", "inst", "cities", "docs", "awards", "opps", "leads", "ms"]
             assert page.inner_text("#tabs button:has-text('商机')").split()[-1] == "2" and page.inner_text("#tabs button:has-text('线索')").split()[-1] == "3"
             page.click("#tabs button:has-text('商机')")
             assert "AZE-001" in page.inner_text("main") and "GDP" not in page.inner_text("main")
@@ -1821,9 +1824,9 @@ def test_sources_page_flags_problems_and_toggles_enabled():
     assert all(m == "PATCH" for m, _ in writes)
 
 
-def test_awards_table_at_the_bottom_of_country_and_city_pages():
-    """已中标项目(使用方 2026-10-12 要的):国别概况、城市一页最下面一张表,按类别、年份筛选(多选,筛选项上的数跟着另一项走),
-    卡片是份数、合计中标价(折合人民币)、最大一笔、中国企业中标;城市页只列挂在这座城市的。只读。"""
+def test_awards_tab_on_country_page_and_table_on_city_page():
+    """已中标项目(使用方 2026-10-12 要的;10-13 起在国别概况是「历史信息」里的一个页签,排在水务历史资料后面,页签上是份数;城市页仍在最下面):
+    一张表,按类别、年份筛选(多选,筛选项上的数跟着另一项走),卡片是份数、合计中标价(折合人民币)、最大一笔、中国企业中标;城市页只列挂在这座城市的。只读。"""
     from playwright.sync_api import Error as PWError, sync_playwright
     fake, admin = _fake_with_schema()
     c, o, ld = _seed(admin, fake)
@@ -1852,8 +1855,10 @@ def test_awards_table_at_the_bottom_of_country_and_city_pages():
             page = browser.new_page(viewport={"width": 1366, "height": 900})
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(base + "/country.html?iso=AZE")
+            page.goto(base + "/country.html?iso=AZE&t=awards")
             page.wait_for_selector("#awBox table", timeout=15000)
+            assert page.locator(".tab.on").get_attribute("data-t") == "awards"
+            page.wait_for_function("document.querySelector('#tabs').innerText.includes('已中标项目 3')", timeout=15000)
             rows = page.locator("#awBox tbody tr").all_inner_texts()
             assert len(rows) == 3 and rows[0].startswith("2024-05-10") and "甘贾供水管网 42 公里" in rows[0] and "甘贾" in rows[0] and "2,500 万美元" in rows[0]
             assert rows[1].startswith("2022-11-20") and rows[2].startswith("2022-03-01")  # 中标时间从新到旧
@@ -1879,7 +1884,7 @@ def test_awards_table_at_the_bottom_of_country_and_city_pages():
             page.wait_for_selector("#awBox table", timeout=15000)
             assert page.locator("#awBox tbody tr").count() == 1 and "甘贾供水管网" in page.inner_text("#awBox tbody")
             phone = browser.new_page(viewport={"width": 390, "height": 760})
-            phone.goto(base + "/country.html?iso=AZE")
+            phone.goto(base + "/country.html?iso=AZE&t=awards")
             phone.wait_for_selector("#awBox table", timeout=15000)
             assert phone.evaluate("document.documentElement.scrollWidth") <= 400
             if shots:
@@ -1889,6 +1894,22 @@ def test_awards_table_at_the_bottom_of_country_and_city_pages():
     finally:
         srv.shutdown()
     assert all(m == "GET" for m, _ in fake.calls[seeded:]), "已中标项目只读"
+
+
+SUMMARY = """文件简称：24报告=[世行水务行业报告（2024）](https://example.org/24.pdf)；07PAD=国家供水与卫生项目评估文件（2007）。页码均为 PDF 页。
+
+## 要点速览
+- !**51.5%** 巴库漏损，一年漏掉约 1.88 亿 m³（24报告 p36–37）
+- **0.70 马纳特/m³** 全国统一水价，约合 0.41 美元（24报告 p28）
+
+## 1. 关键数字
+- 巴库漏损：51.5%（24报告 p36），早期约 70%（07PAD p13；p14）。管网 10,200 km。
+- 出资方：
+  - 世界银行：2.3 亿美元（07PAD p78，2007年时的数字）
+
+## 2. 对中国承包商的意义（推断）
+- 推断：24报告 p41 说业主付款慢，要设计付款保障。
+"""
 
 
 def test_water_history_tab_and_city_chronicle():
@@ -1908,7 +1929,7 @@ def test_water_history_tab_and_city_chronicle():
                         "winner": "Sample JV", "winner_country": "中国", "country": c["id"], "city": city["id"]}])
     b.create("study", [
         {"key": "SUM-AZE", "name": "阿塞拜疆水务综述", "name_zh": "阿塞拜疆水务综述", "kind": "综述", "published": "2026-10-13", "country": c["id"],
-         "summary": "## 关键数字\n- 巴库漏损 **51.5%**(24报告 p36)\n- 管网 10,200 km"},
+         "summary": SUMMARY},
         {"key": "WB-1", "name": "Azerbaijan - National Water Supply and Sanitation Project", "kind": "项目评估", "published": "2007-05-01", "country": c["id"], "url": "https://example.org/1.pdf"},
         {"key": "WB-2", "name": "Azerbaijan - Transitioning to Efficient Water Sector Institutions", "name_zh": "阿塞拜疆水务机构转型", "kind": "行业研究", "published": "2024-08-31", "country": c["id"]},
     ])
@@ -1937,7 +1958,21 @@ def test_water_history_tab_and_city_chronicle():
             assert page.locator("#chron .ch-k .chip-btn").all_inner_texts() == ["全部 4", "项目批准 1", "机构改革 1", "水价调整 1", "中标 1"]
             page.click("#chron .ch-k .chip-btn[data-v='项目批准']")
             assert page.locator(".cyl").all_inner_texts() == ["2007"]
-            assert "51.5%" in page.inner_text("#studies details.sec .md") and page.locator("#studies .md li").count() == 2
+            # 综述(10-13 使用方嫌排版单调、出处是一串字符):出处变小角标,要点速览是指标卡,标签单列,推断一节换底色,出处表收到最后
+            secs = "\n".join(page.locator("#studies .dg-sec").all_inner_texts())
+            assert "文件简称" not in secs and "24报告" not in secs and "07PAD" not in secs and " p36" not in secs and "推断：" not in secs
+            assert page.locator("#studies .dg-toc a").all_inner_texts() == ["要点速览", "1 关键数字", "2 对中国承包商的意义"]
+            assert page.locator("#studies .dg-kpi .kpi").count() == 2 and page.locator("#studies .dg-kpi .kpi.bad .kn").inner_text() == "51.5"
+            assert page.locator("#studies .dg-k").all_inner_texts() == ["巴库漏损", "出资方"] and page.locator("#studies .dg-v p").count() == 3  # 一句一行
+            assert page.locator("#studies sup.sref a").all_inner_texts() == ["1", "1", "1", "2", "2", "2", "1"]  # 按第一次引用编号;只写 p14 的算前一个出处
+            assert "（2007年时的数字）" in secs and "世行水务行业报告（2024）" in page.inner_text("#studies .dg-sec.infer")  # 括号外的「24报告 p41」换成全称
+            page.locator("#studies .dg-sec").nth(1).locator("sup.sref a").first.click()
+            assert "PDF 第 36 页" in page.inner_text(".sref-pop") and page.get_attribute(".sref-pop a[target]", "href") == "https://example.org/24.pdf#page=36"
+            page.click("h1")
+            assert page.locator(".sref-pop").count() == 0
+            page.click("#studies .dg-src summary")
+            srcs = page.locator("#studies .dg-src li").all_inner_texts()
+            assert len(srcs) == 2 and "引用 PDF 第 28、36–37、36、41 页" in srcs[0] and page.get_attribute("#studies .dg-src li a", "href") == "https://example.org/24.pdf"
             assert page.locator("#studies tbody tr").count() == 2 and page.locator("#studies tbody tr").first.inner_text().startswith("2024-08-31")
             assert page.locator("#studies .sd-k .chip-btn").all_inner_texts() == ["全部 2", "行业研究 1", "项目评估 1"]
             assert "水务历史资料 3" in page.inner_text("#tabs")
@@ -2052,7 +2087,7 @@ def test_contractor_page_lists_its_awards_and_winner_names_link_to_it():
             page = browser.new_page(viewport={"width": 1366, "height": 900})
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(base + "/country.html?iso=AZE")
+            page.goto(base + "/country.html?iso=AZE&t=awards")
             page.wait_for_selector("#awBox table", timeout=15000)
             assert page.locator("#awBox tbody a[href^='contractor.html?id=']").count() == 2  # 联合体两家各一个链接
             page.click(f"#awBox tbody a[href='contractor.html?id={cg['id']}']")

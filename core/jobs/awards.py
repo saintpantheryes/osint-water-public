@@ -84,10 +84,17 @@ _QTY = re.compile(r"(?<![\w.+/:-])(\d[\d,.]*\s?(?:km|kms|kilom[eè]tres?|kilomet
                   r"ha\b|hectares?|tube ?wells?|boreholes?|wells?|forages?|connections?|branchements?|latrines?|villages?|reservoirs?|"
                   r"(?:water )?tanks?|pumping stations?|stations? de pompage|bornes? fontaines?|(?:water )?kiosks?|meters?|m[eè]tres|lm\b|rm\b|m\b))", re.I)
 
-# 合同类型「运营」:工程、非咨询服务类合同里,名称写明是运营维护、委托运营、管理合同、租赁经营的(咨询、货物不算)
+# 合同类型「运营」:工程、非咨询服务类合同里,名称写明是运营维护、委托运营、管理合同、租赁经营的(咨询、货物不算)。
+# 法文的「Exploitation de la STEP」「Gestion et exploitation」「Entretien et maintenance」「Entretien courant」也算(摩洛哥采购网的运维合同多这样写;
+# 「forages d'exploitation」是生产井、「Travaux d'entretien et réparation」是修理工程,不算);俄文的「эксплуатация и обслуживание」同理
 _OPS = re.compile(r"operation(?:s)? (?:and|&) maintenance|\bO ?& ?M\b|\bO&M\b|management contract|affermage|gestion d[ée]l[ée]gu[ée]e|"
                   r"exploitation et (?:de )?maintenance|operaci[oó]n y mantenimiento|opera[çc][ãa]o e manuten[çc][ãa]o|"
-                  r"performance[- ]based (?:contract|management|operation)|lease contract|operate and maintain", re.I)
+                  r"performance[- ]based (?:contract|management|operation)|lease contract|operate and maintain|"
+                  r"\bco-?exploitation\b|exploitation(?:,| et)\s*(?:de |d['’]|l['’]|la )?(?:entretien|maintenance|gestion|surveillance)|"
+                  r"(?:gestion|surveillance)(?:,| et)\s*(?:de |d['’]|l['’])?(?:entretien|exploitation)|"
+                  r"exploitation (?:des|du|de la|de l['’])\s*(?:STEP|stations?|r[ée]seaux?|syst[èe]mes?|ouvrages?|installations?|usines?|unit[ée]s?)|"
+                  r"entretien (?:et |& )?(?:de (?:la )?)?maintenance|maintenance (?:et |& )?(?:d['’])?entretien|entretien courant|"
+                  r"эксплуатаци\w* и (?:техническ\w* )?обслуживани|техническ\w* обслуживани", re.I)
 TYPE_ZH = {"Works": "工程", "Goods": "货物", "Consultant Services": "咨询服务", "Non-consulting Services": "非咨询服务"}
 METHOD_ZH = {"Request for Bids": "公开招标(RFB)", "Request for Quotations": "询价(RFQ)", "Direct Selection": "直接选定",
              "Quality And Cost-Based Selection": "质量和费用选择(QCBS)", "Consultant Qualification Selection": "咨询顾问资格选择(CQS)",
