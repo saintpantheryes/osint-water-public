@@ -24,6 +24,7 @@
     <div class="hero-card">
       <form class="askbox hero-ask" id="askForm">
         <button type="button" class="att" id="att" aria-label="上传 PDF、Word 或截图" title="上传 PDF、Word 或截图(网站打不开时用)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></button>
+        <button type="button" class="att" id="histBtn" aria-label="问过的话" title="问过的话(记在这台设备的浏览器里)" aria-haspopup="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4.5h4.5"/><path d="M12 7.5V12l3 2"/></svg></button>
         <input type="file" id="file" accept=".pdf,.docx,image/*,application/pdf" hidden>
         <span class="file-chip" id="fileChip" hidden></span>
         <input id="q" type="text" autocomplete="off" placeholder="试试「最近 7 天埃及有哪些新线索」" maxlength="6000" aria-label="向助手提问">
@@ -35,6 +36,7 @@
       </div>
     </div>
     <div class="frow hero-examples" id="examples"></div>
+    <div class="frow hero-examples hero-recent" id="recent" hidden></div>
     <p class="muted small" id="llmNote"></p>
   </section>
   <div id="answers" class="hero-answers"></div>
@@ -140,7 +142,7 @@
 (async function () {
   const $ = (id) => document.getElementById(id);
   const PAL = ["#0e6ba8", "#15803d", "#b45309", "#6d28d9", "#be185d", "#0f766e", "#64748b", "#ca8a04", "#1d4ed8", "#9f1239", "#4d7c0f", "#7c3aed"];
-  let countries = [], byIso = {}, nameOfCid = {}, isoOfCid = {}, seq = 0, ready = null;
+  let countries = [], byIso = {}, nameOfCid = {}, isoOfCid = {}, seq = 0, ready = null, lastPlan = null;
   const charts = [];
 
   /* ---------- 计划 → 表格的条件 ---------- */
@@ -204,16 +206,17 @@
     });
   }
   /* 已中标项目(本体 award):国别、类别、合同类型、承包模式、资金来源(文字,按本体归组的样式包含即算)、中标单位及其国别(文字,包含即算)、
-     关键词与行业术语(名称、中文名、中标单位、所属项目),时间按中标时间。金额:同币种的按原币比中标价,别的按当天汇率折人民币比折合人民币(万元)。
+     主体工程(污水处理厂、供水厂、管网……)、关键词与行业术语(名称、中文名、中标单位、所属项目),时间按中标时间。金额:同币种的按原币比中标价,别的按当天汇率折人民币比折合人民币(万元)。
      规模表格筛不了,见 awRows */
   const hasAw = () => !!(P.cfg.tables && P.cfg.tables.award);
-  const AW_PROPS = ["name", "name_zh", "sector", "contract_type", "delivery", "price", "currency", "price_cny", "awarded", "quantity", "winner", "winners", "winner_country", "project", "funder", "country", "city", "url"];
+  const AW_PROPS = ["name", "name_zh", "sector", "contract_type", "delivery", "asset", "price", "currency", "price_cny", "estimate", "awarded", "eval_days", "bidders", "quantity", "winner", "winners", "winner_country", "project", "funder", "country", "city", "source", "url"];
   function awConds(f) {
     const c = [], cids = countryIds(f), any = (prop, ws) => P.or(...ws.map((w) => P.cond("award", prop, "contains", w)));
     if (f.countries.length || (f.regions || []).length) c.push(cids.length ? P.cond("award", "country", "isAnyOf", cids) : P.cond("award", "country", "is", "__none__"));
     if (f.sectors.length) c.push(P.cond("award", "sector", "isAnyOf", f.sectors));
     if ((f.contract_types || []).length) c.push(P.cond("award", "contract_type", "isAnyOf", f.contract_types));
     if ((f.deliveries || []).length) c.push(P.has("award", "delivery") ? P.cond("award", "delivery", "isAnyOf", f.deliveries) : P.cond("award", "name", "is", "__none__"));  // 没建这个字段时一份也不给,不悄悄放宽
+    if ((f.assets || []).length) c.push(P.has("award", "asset") ? P.cond("award", "asset", "isAnyOf", f.assets) : P.cond("award", "name", "is", "__none__"));
     if (f.price) {
       const p = f.price, rng = (prop, k) => [p.min ? P.cond("award", prop, "isGreaterEqual", p.min * k) : null, p.max ? P.cond("award", prop, "isLessEqual", p.max * k) : null];
       const other = P.and(p.currency === "CNY" ? null : P.cond("award", "currency", "isNot", p.currency), ...rng("price_cny", p.rate / 1e4));
@@ -286,7 +289,8 @@
       return [P.day(g("day")), g("kind") || "", P.raw(oid ? '<a href="' + P.oppUrl(oid) + '">' + P.esc(P.text(g("opportunity"))) + "</a>" : P.esc(P.text(g("lead")))), P.text(g("country")), g("status") || "", (g("label") || "").slice(0, 60), P.raw(P.open("milestone", m.id))]; }));
   }
   const NOUN = { lead: "条线索", opportunity: "个商机", milestone: "个时间节点", report: "份报告", award: "份已中标项目" };
-  /* 已中标项目的表(与国别概况「已中标项目」页签同样的列):中标价写原币,旁边给约合人民币(后台按汇率折的「折合人民币(万元)」);问了规模的,工程量下面写读出的规模 */
+  /* 已中标项目的表(与国别概况「已中标项目」页签同样的列):中标价写原币,旁边给约合人民币(后台按汇率折的「折合人民币(万元)」);问了规模的,工程量下面写读出的规模;
+     有招标估价的,中标价下面写「招标估价的 87%」;中标时间下面写评标天数与投标家数(有的才写) */
   const CUR_ZH = { USD: "美元", EUR: "欧元", CNY: "元" };
   const bigNum = (n) => (n >= 1e8 ? (n / 1e8).toFixed(n >= 1e10 ? 0 : 2) + " 亿" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString("zh-CN") + " 万" : Math.round(n).toLocaleString("zh-CN"));
   const wanCny = (w) => (w >= 1e4 ? (Math.round(w / 100) / 100).toFixed(2) + " 亿元" : Math.round(w).toLocaleString("zh-CN") + " 万元");
@@ -312,7 +316,7 @@
         ct ? '<a class="nw" href="city.html?id=' + encodeURIComponent(ct) + '">' + P.esc(P.text(g("city"))) + "</a>" : ""].filter(Boolean).join(" · ");
       const qty = P.esc(g("quantity") || "") + (r._cap ? (g("quantity") ? "<br>" : "") + '<span class="muted small">读出规模约 ' + P.esc(capText(r._cap)) + "</span>" : "");
       const dv = g("delivery"), ctype = P.esc(g("contract_type") || "") + (dv && !["施工", "运营"].includes(dv) ? '<br><span class="tag" title="承包模式">' + P.esc(dv) + "</span>" : "");
-      return [P.raw('<span class="nw">' + P.esc(P.day(g("awarded")) || "") + "</span>"), P.raw(nm), g("sector") || "", P.raw(ctype), P.raw(awPrice(r)), P.raw(qty), P.raw(win), P.raw(where),
+      return [P.raw('<span class="nw">' + P.esc(P.day(g("awarded")) || "") + "</span>" + P.awEvalLine(r)), P.raw(nm), g("sector") || "", P.raw(ctype), P.raw(awPrice(r) + P.awEstimateLine(r)), P.raw(qty), P.raw(win), P.raw(where),
         g("funder") || "", P.raw(P.open("award", r.id))];
     })) + "</div>";
   }
@@ -349,13 +353,170 @@
     if (gb === "sector") return [g("sector") || "未填"];  // 已中标项目的「类别」
     if (gb === "contract_type") return [g("contract_type") || "未填"];
     if (gb === "delivery") return [g("delivery") || "货物、咨询等"];
+    if (gb === "asset") return [g("asset") || "未分"];
     if (gb === "winner_country") { const s = [...new Set(String(g("winner_country") || "").split(/[、,，;；/]+/).map((x) => x.trim()).filter(Boolean))]; return s.length ? s : ["未填"]; }  // 联合体各国各算一份
     if (gb === "year") return [(P.day(g("awarded")) || "").slice(0, 4) || "未填"];
     return ["全部"];
   }
   const GROUP_PROP = { lead: { country: "country", category: "category", sectors: "sectors", funder: "funder", day: "found_at", status: "status", source: "source" },
     milestone: { country: "country", kind: "kind", day: "day" }, report: { country: "country", kind: "kind" },
-    award: { country: "country", sector: "sector", contract_type: "contract_type", delivery: "delivery", winner_country: "winner_country", funder: "funder", year: "awarded" } };
+    award: { country: "country", sector: "sector", contract_type: "contract_type", delivery: "delivery", asset: "asset", winner_country: "winner_country", funder: "funder", year: "awarded" } };
+
+  /* 长清单收起(2026-10-13 使用方:169 份平铺开,往上翻半天翻不到提问):每张表先列 20 行,「再列」往下加、「全部列出」一次摊开;
+     表下面有「↑ 回到这一问」 */
+  const FOLD = 20;
+  function fold(box, el, unit) {
+    box.querySelectorAll("table").forEach((t) => {
+      if (t.dataset.fold) return;
+      t.dataset.fold = "1";
+      const trs = t.tBodies[0] ? [...t.tBodies[0].rows] : [];
+      if (trs.length <= 5) return;
+      const wrap = t.closest(".panel"), bar = document.createElement("p");
+      bar.className = "fold-bar";
+      (wrap && box.contains(wrap) ? wrap : t).insertAdjacentElement("afterend", bar);
+      let show = FOLD;
+      const paint = () => {
+        trs.forEach((tr, i) => { tr.hidden = i >= show; });
+        const left = trs.length - show;
+        bar.innerHTML = (left > 0 ? '<button type="button" class="chip-btn more" data-a="more">再列 ' + Math.min(FOLD, left) + " " + unit + "(已列 " + show + " / " + trs.length + ")</button>" +
+          '<button type="button" class="chip-btn more" data-a="all">全部列出</button>' : "") + '<a href="#" class="back-q">↑ 回到这一问</a>';
+      };
+      bar.onclick = (ev) => {
+        const a = ev.target.closest("[data-a], .back-q");
+        if (!a) return;
+        ev.preventDefault();
+        if (a.classList.contains("back-q")) { el.scrollIntoView({ block: "start", behavior: "smooth" }); return; }
+        show = a.dataset.a === "all" ? trs.length : show + FOLD;
+        paint();
+      };
+      paint();
+    });
+  }
+  const unitOf = (oid) => NOUN[oid].slice(0, 1);  // 份 / 条 / 个
+  /* 按年份分、时间又是「最近 N 天」「某天起」的:头一年与今年都不是整年,写明(免得把今年的矮柱读成下滑) */
+  function yearNote(plan) {
+    if (plan.group_by !== "year") return "";
+    const f = plan.filters, start = f.days ? P.addDays(P.today(), -f.days) : f.from, end = f.to || P.today(), out = [];
+    const md = (d) => +d.slice(5, 7) + " 月 " + +d.slice(8, 10) + " 日";
+    if (start && start.slice(5) !== "01-01") out.push(start.slice(0, 4) + " 年只算 " + md(start) + "以后的");
+    if (end && end.slice(5) !== "12-31") out.push(end.slice(0, 4) + " 年只算到 " + md(end));
+    return out.length ? out.join(",") + ",不是整年。" : "";
+  }
+
+  /* ---------- 指标(本体 semantic.measures;2026-10-13 使用方问「中标价是招标估价的几成」「平均评标时间」) ----------
+     按条件取行(3000 份以内)在页面上算:问的算法放最前,另给另一种算法与中间一半的范围;按几份算、其余几份为什么没有
+     (本体里每个指标的 missing,再按数据来源数一下)写在卡片下面,一份都没有时直说缺在哪,不显示成「0」 */
+  const AGG_OTHER = { median: "mean", mean: "median" };
+  function mValue(m, r) {
+    if (m.id === "price_ratio") return P.awRatio(r);
+    const f = [].concat(m.field || [])[0];
+    if (!f || !P.has("award", f)) return null;
+    const v = P.get("award", r, f);
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return isFinite(n) && !(m.id === "amount" && n <= 0) ? n : null;
+  }
+  function stats(vals) {
+    const s = vals.slice().sort((a, b) => a - b), n = s.length, sum = s.reduce((a, b) => a + b, 0);
+    const q = (k) => { if (!n) return null; const i = (n - 1) * k, lo = Math.floor(i); return s[lo] + (s[Math.min(lo + 1, n - 1)] - s[lo]) * (i - lo); };
+    return { n, sum, mean: n ? sum / n : null, median: q(0.5), q1: q(0.25), q3: q(0.75), min: s[0], max: s[n - 1] };
+  }
+  function mFmt(m, v) {  // → [数, 单位]
+    if (v === null || v === undefined) return ["—", ""];
+    if (m.id === "amount") return v >= 1e4 ? [(v / 1e4).toFixed(2), "亿元"] : [Math.round(v).toLocaleString("zh-CN"), "万元"];
+    if (m.unit === "%") return [String(Math.round(v)), "%"];
+    return [String(v >= 10 || Number.isInteger(v) ? Math.round(v) : Math.round(v * 10) / 10), m.unit || ""];
+  }
+  function mRange(m, lo, hi) {
+    if (m.id === "amount") return hi >= 1e4 ? [(lo / 1e4).toFixed(2) + "–" + (hi / 1e4).toFixed(2), "亿元"] : [Math.round(lo).toLocaleString("zh-CN") + "–" + Math.round(hi).toLocaleString("zh-CN"), "万元"];
+    return [mFmt(m, lo)[0] + "–" + mFmt(m, hi)[0], m.unit || ""];
+  }
+  const mText = (m, v) => mFmt(m, v).join(m.unit === "%" ? "" : " ");
+  const hasName = (m) => (m.id === "amount" ? "中标价" : P.propName("award", [].concat(m.needs || m.field || []).slice(-1)[0]));
+  function kpiCard(label, nu, note) {
+    return '<div class="kpi"><div class="kv"><span class="kn">' + P.esc(nu[0]) + "</span>" + (nu[1] ? '<span class="ku">' + P.esc(nu[1]) + "</span>" : "") + '</div><div class="kl">' + P.esc(label) + "</div>" +
+      (note ? '<div class="kx">' + P.esc(note) + "</div>" : "") + "</div>";
+  }
+  function metricCards(m, st, vals) {
+    const cards = [];
+    if (m.agg === "sum") {
+      cards.push(kpiCard(m.name + "合计", mFmt(m, st.sum), "按 " + st.n + " 份算"), kpiCard("中位数", mFmt(m, st.median), "一半比它高、一半比它低"), kpiCard("最大一笔", mFmt(m, st.max), ""));
+    } else {
+      const other = AGG_OTHER[m.agg];
+      cards.push(kpiCard(m.name + "(" + P.aggName(m.agg) + ")", mFmt(m, st[m.agg]), "按 " + st.n + " 份算"),
+        kpiCard(P.aggName(other), mFmt(m, st[other]), other === "median" ? "一半比它高、一半比它低" : "个别特别高或低的会把它拉偏"),
+        kpiCard("中间一半", mRange(m, st.q1, st.q3), "去掉最高、最低各四分之一"));
+      if (m.id === "price_ratio") { const lo = vals.filter((v) => v < 100).length; cards.push(kpiCard("低于招标估价", [String(lo), "份"], "占 " + Math.round(lo * 100 / st.n) + "%;最低 " + Math.round(st.min) + "%,最高 " + Math.round(st.max) + "%")); }
+      else cards.push(kpiCard("最少到最多", mRange(m, st.min, st.max), ""));
+    }
+    return '<div class="kpis' + (cards.length === 3 ? " n3" : "") + '">' + cards.join("") + "</div>";
+  }
+  function srcCount(rows) {  // 没有这项数据的,各来自哪里(「世界银行合同授予数据(STEP,…取)」→ 去掉括号)
+    const by = {};
+    rows.forEach((r) => { const s = String(P.get("award", r, "source") || "").replace(/[((].*$/, "").trim() || "未注明来源"; by[s] = (by[s] || 0) + 1; });
+    return Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => k + " " + n + " 份").join("、");
+  }
+  async function metricView(plan, body, el) {
+    const f = plan.filters, oid = plan.object, gb = plan.group_by, unit = unitOf(oid);
+    const ms = (plan.measures || []).map((x) => Object.assign({}, P.measure(x.id) || { id: x.id, name: x.id, unit: "" }, { agg: x.agg })).filter((m) => m.id !== "count");
+    const lacks = [...new Set(ms.flatMap((m) => [].concat(m.needs || [])).filter((x) => !P.has(oid, x)))];
+    const a = await awRows(f, AW_PROPS, 3000), rows = a.rows, total = rows.length, h = [];
+    if (lacks.length) h.push('<div class="warn small">表里还没有「' + lacks.map((x) => P.esc(P.propName(oid, x))).join("」「") + "」这几列(管理员更新一次表结构就有)。</div>");
+    if (!total) {
+      body.innerHTML = h.join("") + "<p>没有符合这些条件的" + P.esc(NOUN[oid].slice(1)) + ",算不出" + P.esc(ms.map((m) => m.name).join("、")) + "。</p>" + capNote(plan, a, true) + "<p>" + linkOut(plan) + "</p>";
+      fold(body, el, unit);
+      return;
+    }
+    ms.forEach((m, i) => {
+      const vals = rows.map((r) => mValue(m, r)).filter((v) => v !== null), st = stats(vals), miss = total - st.n;
+      if (ms.length > 1) h.push("<h2>" + P.esc(m.name) + "</h2>");
+      if (!st.n) {
+        h.push('<div class="warn">符合条件的 <b>' + total + " " + unit + "</b>里,没有一份有" + P.esc(hasName(m)) + ",算不出" + P.esc(m.name) + "。" + P.esc(m.missing || "") + "。" +
+          "这 " + total + " " + unit + "来自:" + P.esc(srcCount(rows)) + "。</div>");
+        return;
+      }
+      h.push(metricCards(m, st, vals));
+      h.push('<p class="small">按有' + P.esc(hasName(m)) + "的 <b>" + st.n + " " + unit + "</b>算(符合条件的共 " + total + " " + unit + ")" +
+        (miss ? ";其余 " + miss + " " + unit + "没有(" + P.esc(srcCount(rows.filter((r) => mValue(m, r) === null))) + "):" + P.esc(m.missing || "") : "") + "。</p>");
+      if (i === 0 && gb) h.push('<div class="panel"><div class="chart mchart"></div></div><p class="muted small mnote"></p><div class="drill"></div>');
+      if (i === 0) h.push('<details class="sec mlist"><summary>列出有' + P.esc(hasName(m)) + "的 " + st.n + " " + unit + "(按" + P.esc(m.name) + "从低到高)</summary><div></div></details>" +
+        (miss ? '<details class="sec mmiss"><summary>没有' + P.esc(hasName(m)) + "的 " + miss + " " + unit + "</summary><div></div></details>" : ""));
+    });
+    body.innerHTML = h.join("") + capNote(plan, a, false) + "<p>" + linkOut(plan) + "</p>";
+    const m0 = ms[0], withV = rows.filter((r) => mValue(m0, r) !== null).sort((x, y) => mValue(m0, x) - mValue(m0, y));
+    const lazy = (sel, list) => { const d = body.querySelector(sel); if (d) d.addEventListener("toggle", () => { const box = d.querySelector("div"); if (d.open && !box.innerHTML) { box.innerHTML = awTable(list); fold(box, el, unit); } }); };
+    lazy(".mlist", withV);
+    lazy(".mmiss", rows.filter((r) => mValue(m0, r) === null));
+    const box = body.querySelector(".mchart");
+    if (!box) return;
+    /* 按分组的柱图:柱高是问的算法(合计、平均或中位数),柱旁写数值与按几份算;点一柱列出那组 */
+    const timeline = gb === "day" || gb === "year", groups = {};
+    withV.forEach((r) => { const v = mValue(m0, r); groupOf(plan, r).forEach((g) => { (groups[g] = groups[g] || { vals: [], rows: [] }).vals.push(v); groups[g].rows.push(r); }); });
+    let pairs = Object.entries(groups).map(([k, x]) => [k, stats(x.vals), x.rows]);
+    pairs.sort(timeline ? (x, y) => (x[0] < y[0] ? -1 : 1) : (x, y) => y[1].n - x[1].n);
+    if (!timeline) pairs = pairs.slice(0, 15);
+    const val = (st) => (m0.agg === "sum" ? st.sum : st[m0.agg]), yu = m0.id === "amount" ? "万元" : m0.unit;
+    body.querySelector(".mnote").textContent = "柱高是每组的" + (m0.agg === "sum" ? "合计" : P.aggName(m0.agg)) + ",旁边写按几" + unit + "算;" + (timeline ? "" : "按份数多少排,最多列 15 组;") + "点一柱列出那组。" + yearNote(plan);
+    if (!timeline && pairs.length > 8) box.classList.add("tall");
+    const ch = echarts.init(box);
+    charts.push(ch);
+    const cats = pairs.map((x) => x[0]), data = pairs.map((x, i) => ({ value: Math.round(val(x[1]) * 10) / 10, n: x[1].n, itemStyle: { color: timeline ? PAL[0] : PAL[i % PAL.length] } }));
+    const lab = (p) => mText(m0, p.value) + " · " + p.data.n + " " + unit;
+    ch.setOption({
+      tooltip: { trigger: "item", formatter: (p) => P.esc(p.name) + "<br>" + P.esc(lab(p)) },
+      grid: { left: timeline ? 40 : 120, right: 90, top: 36, bottom: timeline ? 40 : 24, containLabel: timeline },
+      [timeline ? "xAxis" : "yAxis"]: { type: "category", data: timeline ? cats : cats.slice().reverse(), axisLabel: timeline ? {} : { width: 110, overflow: "truncate" } },
+      [timeline ? "yAxis" : "xAxis"]: { type: "value", name: yu, nameTextStyle: { color: "#64748b" } },
+      series: [{ type: "bar", data: timeline ? data : data.slice().reverse(), label: { show: true, position: timeline ? "top" : "right", formatter: lab } }],
+    });
+    ch.on("click", (p) => {
+      const g = pairs.find((x) => x[0] === p.name), d = body.querySelector(".drill");
+      if (!g) return;
+      d.innerHTML = "<h2>" + P.esc(p.name) + " · " + g[2].length + " " + unit + "(按" + P.esc(m0.name) + "从低到高)</h2>" + awTable(g[2]);
+      fold(d, el, unit);
+      d.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   function understoodHtml(plan) {
     const tag = plan.parsed_by === "model" ? '<span class="tag intel" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
@@ -445,9 +606,12 @@
     };
   }
 
-  async function answer(q, el) {
-    const plan = await P.ask(q);
+  /* prev:上一问(接着问时后台沿用它的对象、条件与指标;「理解为」里写明沿用了哪几项) */
+  async function answer(q, el, prev) {
+    const plan = await P.ask(q, prev);
     if (!plan) return;
+    lastPlan = ["help", "report"].includes(plan.intent) ? lastPlan : { q, object: plan.object, filters: plan.filters, measures: plan.measures || [], group_by: plan.group_by };
+    if (prev && (plan.understood || []).some((x) => x[0] === "沿用上一问")) notePrev(q, prev);  // 历史里记下它接的是哪一问,以后点它照样接上
     const f = plan.filters, body = document.createElement("div");
     el.querySelector(".a-body").replaceWith(body); body.className = "a-body";
     el.querySelector(".a-head").insertAdjacentHTML("beforeend", understoodHtml(plan));
@@ -455,7 +619,7 @@
     if (plan.scope_note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="warn small">' + P.esc(plan.scope_note) + "</div>");  // 本体 data_scope:不在采集范围的国家
     if (plan.intent === "help") {
       body.innerHTML = '<p>没听懂这句。可以这样问:</p><ul class="list">' + (plan.examples || []).map((e) => '<li><a href="#" class="ex">' + P.esc(e) + "</a></li>").join("") + "</ul>";
-      body.querySelectorAll(".ex").forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); submit(a.textContent); }; });
+      body.querySelectorAll(".ex").forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); submit(a.textContent, { fresh: true }); }; });
       return;
     }
     if (plan.intent === "report") {
@@ -467,6 +631,7 @@
     if (!NOUN[oid]) { body.innerHTML = '<p class="muted">系统刚更新过,这个页面还是旧的:请刷新页面后再问一次。</p>'; return; }  // 助手接口认得、旧页面不认得的对象
     if (oid === "award" && !hasAw()) { body.innerHTML = '<p class="muted">「已中标项目」表还没建(跑一次建表命令后就能问中标记录)。</p>'; return; }
     body.innerHTML = '<p class="muted">查表中…</p>';
+    if ((plan.measures || []).some((m) => m.id !== "count") && oid === "award") { await metricView(plan, body, el); return; }  // 问了平均、中位数、合计、比例这类指标
     if (plan.intent === "count") {
       let n, aw = null;
       if (oid === "lead") n = await P.count("lead", P.and(...leadConds(f)));
@@ -474,12 +639,13 @@
       else if (oid === "report") n = await P.count("report", P.and(...rpConds(f)));
       else if (oid === "award") { if (f.capacity) { aw = await awRows(f, [], 3000); n = aw.rows.length; } else n = await P.count("award", P.and(...awConds(f))); }  // 规模要读出来比,只能取行
       else n = (await oppRows(f)).length;
-      body.innerHTML = '<div class="cards"><div class="card"><div class="n">' + n + '</div><div class="l">' + P.esc(NOUN[oid]) + "</div></div></div>" + (aw ? capNote(plan, aw, false) : "") + '<p><a href="#" class="show-list">列出清单</a> · ' + linkOut(plan) + "</p>";
-      body.querySelector(".show-list").onclick = async (ev) => { ev.preventDefault(); const d = document.createElement("div"); body.appendChild(d); d.innerHTML = '<p class="muted">读取中…</p>'; try { d.innerHTML = await listHtml(plan, Math.min(plan.limit || 50, 200)); } catch (e) { P.fail(d, e); } };
+      body.innerHTML = '<div class="kpis">' + kpiCard(NOUN[oid].slice(1), [String(n), unitOf(oid)], "") + "</div>" + (aw ? capNote(plan, aw, false) : "") + '<p><a href="#" class="show-list">列出清单</a> · ' + linkOut(plan) + "</p>";
+      body.querySelector(".show-list").onclick = async (ev) => { ev.preventDefault(); const a = ev.currentTarget, d = document.createElement("div"); a.replaceWith(document.createTextNode("清单在下面")); body.appendChild(d); d.innerHTML = '<p class="muted">读取中…</p>'; try { d.innerHTML = await listHtml(plan, Math.min(plan.limit || 50, 200)); fold(d, el, unitOf(oid)); } catch (e) { P.fail(d, e); } };
       return;
     }
-    if (plan.intent === "chart") { await chart(plan, body); return; }
+    if (plan.intent === "chart") { await chart(plan, body, el); return; }
     body.innerHTML = await listHtml(plan, plan.limit || 50) + "<p>" + linkOut(plan) + "</p>";
+    fold(body, el, unitOf(oid));
   }
   async function listHtml(plan, limit) {
     const f = plan.filters, oid = plan.object;
@@ -496,8 +662,8 @@
     const head = '<p class="muted small">' + (rows.length >= limit ? "最新 " + rows.length + " 条(只显示前 " + limit + ")" : rows.length + " 条") + "</p>";
     return head + ({ lead: leadTable, opportunity: oppTable, milestone: msTable, report: rpTable }[oid])(rows);
   }
-  async function chart(plan, body) {
-    const f = plan.filters, oid = plan.object, gb = plan.group_by, timeline = gb === "day" || gb === "year";
+  async function chart(plan, body, el) {
+    const f = plan.filters, oid = plan.object, gb = plan.group_by, timeline = gb === "day" || gb === "year", unit = unitOf(oid);
     let rows, aw = null;
     if (oid === "opportunity") rows = await oppRows(f);
     else if (oid === "award") { aw = await awRows(f, [GROUP_PROP.award[gb]].filter(Boolean), 3000); rows = aw.rows; }
@@ -511,17 +677,17 @@
     pairs.sort(timeline ? (a, b) => (a[0] < b[0] ? -1 : 1) : (a, b) => b[1] - a[1]);
     if (!timeline && pairs.length > 20) { const rest = pairs.slice(19).reduce((s, x) => s + x[1], 0); pairs = pairs.slice(0, 19).concat([["其余", rest]]); }
     const total = rows.length;
-    body.innerHTML = '<p class="muted small">共 ' + total + " " + P.esc(NOUN[oid]) + (rows.length >= 3000 ? "(只统计了前 3000 条)" : "") + ",按" + P.esc((plan.understood.find((x) => x[0] === "分组") || ["", ""])[1]) + "分;点一柱列出那组" + (gb === "winner_country" ? "(联合体各国各算一份)" : "") + "。</p>" + (aw ? capNote(plan, aw, false) : "") +
+    body.innerHTML = '<p class="muted small">共 ' + total + " " + P.esc(NOUN[oid]) + (rows.length >= 3000 ? "(只统计了前 3000 条)" : "") + ",按" + P.esc((plan.understood.find((x) => x[0] === "分组") || ["", ""])[1]) + "分,柱旁是" + unit + "数;点一柱列出那组" + (gb === "winner_country" ? "(联合体各国各算一份)" : "") + "。" + P.esc(yearNote(plan)) + "</p>" + (aw ? capNote(plan, aw, false) : "") +
       '<div class="panel"><div class="chart' + (pairs.length > 8 && !timeline ? " tall" : "") + '"></div></div><div class="drill"></div><p>' + linkOut(plan) + "</p>";
     if (!pairs.length) { body.querySelector(".panel").innerHTML = '<p class="muted">(无)</p>'; return; }
     const ch = echarts.init(body.querySelector(".chart"));
     charts.push(ch);
     const horizontal = !timeline;
     ch.setOption({
-      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } }, grid: { left: horizontal ? 120 : 40, right: 24, top: 10, bottom: horizontal ? 24 : 60, containLabel: !horizontal },
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, valueFormatter: (v) => v + " " + unit }, grid: { left: horizontal ? 120 : 40, right: 48, top: 36, bottom: horizontal ? 24 : 60, containLabel: !horizontal },
       [horizontal ? "yAxis" : "xAxis"]: { type: "category", data: pairs.map((p) => p[0]).reverse(), axisLabel: horizontal ? { width: 110, overflow: "truncate" } : { rotate: 45 }, inverse: false },
-      [horizontal ? "xAxis" : "yAxis"]: { type: "value", minInterval: 1 },
-      series: [{ type: "bar", data: pairs.map((p, i) => ({ value: p[1], itemStyle: { color: timeline ? PAL[0] : PAL[i % PAL.length] } })).reverse(), label: { show: true, position: horizontal ? "right" : "top" } }],
+      [horizontal ? "xAxis" : "yAxis"]: { type: "value", minInterval: 1, name: unit, nameTextStyle: { color: "#64748b" } },  // 轴上写单位,柱旁写「169 份」(2026-10-13 使用方:图表没有单位)
+      series: [{ type: "bar", data: pairs.map((p, i) => ({ value: p[1], itemStyle: { color: timeline ? PAL[0] : PAL[i % PAL.length] } })).reverse(), label: { show: true, position: horizontal ? "right" : "top", formatter: (p) => p.value + " " + unit } }],
     });
     if (!horizontal) ch.setOption({ xAxis: { data: pairs.map((p) => p[0]) }, series: [{ data: pairs.map((p) => ({ value: p[1], itemStyle: { color: PAL[0] } })) }] });
     ch.on("click", async (p) => {
@@ -538,7 +704,8 @@
           const more = await P.records(oid, { filter: P.and(...conds), take: 3000, props: need, orderBy: [{ fieldId: P.f(oid, oid === "lead" ? "found_at" : "day"), order: oid === "lead" ? "desc" : "asc" }] });
           full = more.filter((r) => ids.has(r.id)).slice(0, 200);
         }
-        d.innerHTML = "<h2>" + P.esc(name) + " · " + full.length + (oid === "award" ? " 份" : " 条") + (sub.length > full.length ? "(只显示前 200)" : "") + "</h2>" + ({ lead: leadTable, opportunity: oppTable, milestone: msTable, report: rpTable, award: awTable }[oid])(full);
+        d.innerHTML = "<h2>" + P.esc(name) + " · " + full.length + " " + unit + (sub.length > full.length ? "(只取了前 200)" : "") + "</h2>" + ({ lead: leadTable, opportunity: oppTable, milestone: msTable, report: rpTable, award: awTable }[oid])(full);
+        fold(d, el, unit);
         d.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (e) { P.fail(d, e); }
     });
@@ -608,13 +775,70 @@
     return s.slice(s.indexOf(",") + 1);
   }
 
-  async function submit(q) {
+  /* 提问历史(2026-10-13 使用方:没有历史对话的选项):问过的话记在这台设备的浏览器里(最近 30 句,不上传);
+     提问框里的钟形按钮打开,点一句:这一页上问过的跳回那一问,别的重新问一遍。首屏示例下面列最近 4 句。读写不了(隐私模式)就不记 */
+  const HIST_KEY = "ow.askHistory", HIST_MAX = 30;
+  function hist() { try { const a = JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); return Array.isArray(a) ? a.filter((x) => x && typeof x.q === "string" && x.q) : []; } catch (e) { return []; } }
+  function remember(q) {
+    try { localStorage.setItem(HIST_KEY, JSON.stringify([{ q, t: Date.now() }].concat(hist().filter((x) => x.q !== q)).slice(0, HIST_MAX))); } catch (e) { /* 记不下就算了 */ }
+  }
+  function notePrev(q, prev) {  // 「那吉尔吉斯斯坦呢」这类接着问的:连同上一问一起记,单独点它也能接上
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(hist().map((x) => (x.q === q ? Object.assign({}, x, { prev }) : x)))); } catch (e) { /* 记不下就算了 */ }
+  }
+  function ago(t) {
+    const d = new Date(t), now = new Date(), hm = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    if (d.toDateString() === now.toDateString()) return "今天 " + hm;
+    if (d.toDateString() === new Date(now - 864e5).toDateString()) return "昨天 " + hm;
+    return (d.getMonth() + 1) + " 月 " + d.getDate() + " 日";
+  }
+  function again(q) {  // 这一页上问过的:跳回去;没有的:重新问
+    const on = [...document.querySelectorAll(".answer")].reverse().find((a) => a.dataset.q === q);
+    if (on) { on.scrollIntoView({ block: "start", behavior: "smooth" }); on.classList.remove("flash"); void on.offsetWidth; on.classList.add("flash"); }
+    else { const x = hist().find((h) => h.q === q); submit(q, x && x.prev ? { prev: x.prev } : { fresh: true }); }
+  }
+  function showRecent() {
+    const list = hist().slice(0, 4), box = $("recent");
+    box.hidden = !list.length;
+    box.innerHTML = list.length ? '<b class="muted small">最近问过</b>' + list.map((x) => '<button type="button" class="chip-btn">' + P.esc(x.q.length > 30 ? x.q.slice(0, 29) + "…" : x.q) + "</button>").join("") : "";
+    box.querySelectorAll(".chip-btn").forEach((b, i) => { const x = list[i]; b.title = x.q + (x.prev ? "\n接着「" + x.prev.q + "」" : ""); b.onclick = () => submit(x.q, x.prev ? { prev: x.prev } : { fresh: true }); });
+  }
+  function closeHist() { const pop = $("histPop"); if (pop) pop.remove(); $("histBtn").setAttribute("aria-expanded", "false"); }
+  function openHist() {
+    if ($("histPop")) { closeHist(); return; }
+    const list = hist(), r = $("askForm").getBoundingClientRect(), up = r.top > window.innerHeight / 2;
+    const pop = document.createElement("div");
+    pop.id = "histPop"; pop.className = "hist-pop";
+    pop.innerHTML = '<div class="hp-h"><b>问过的话</b><span class="muted small">记在这台设备的浏览器里</span>' + (list.length ? '<button type="button" class="hp-clear">清空</button>' : "") + "</div>" +
+      (list.length ? "<ul>" + list.map((x, i) => '<li><button type="button" data-i="' + i + '"><span>' + P.esc(x.q) + (x.prev && x.prev.q ? '<small class="muted">接着「' + P.esc(x.prev.q) + "」</small>" : "") + "</span><em>" + P.esc(ago(x.t)) + "</em></button></li>").join("") + "</ul>" : '<p class="muted small">还没有问过。</p>');
+    const w = Math.min(Math.max(r.width, 320), window.innerWidth - 32);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(16, Math.min(r.left, window.innerWidth - 16 - w)) + "px";
+    if (up) { pop.style.bottom = (window.innerHeight - r.top + 8) + "px"; pop.style.maxHeight = Math.max(160, r.top - 24) + "px"; }
+    else { pop.style.top = (r.bottom + 8) + "px"; pop.style.maxHeight = Math.max(160, window.innerHeight - r.bottom - 24) + "px"; }
+    document.body.appendChild(pop);
+    $("histBtn").setAttribute("aria-expanded", "true");
+    pop.onclick = (ev) => {
+      ev.stopPropagation();
+      if (ev.target.closest(".hp-clear")) { try { localStorage.removeItem(HIST_KEY); } catch (e) { /* 清不了就算了 */ } closeHist(); showRecent(); return; }
+      const b = ev.target.closest("li button");
+      if (b) { closeHist(); again(list[+b.dataset.i].q); }
+    };
+  }
+  $("histBtn").onclick = (ev) => { ev.stopPropagation(); openHist(); };
+  document.addEventListener("click", (ev) => { if ($("histPop") && !ev.target.closest("#histPop")) closeHist(); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeHist(); });
+  window.addEventListener("resize", closeHist);
+
+  /* opt.fresh:点示例、历史里的一句,是另起的问题,不接上一问;opt.prev:历史里记着它接的是哪一问的,照那一问接 */
+  async function submit(q, opt) {
     q = (q || "").trim();
     const file = picked;
     if (!q && !file) return;
     pick(null);
+    if (q) { remember(q); showRecent(); }
+    const prev = opt && opt.prev ? opt.prev : opt && opt.fresh ? null : lastPlan;
     const id = "a" + (++seq);
-    const el = document.createElement("section"); el.className = "answer"; el.id = id;
+    const el = document.createElement("section"); el.className = "answer"; el.id = id; el.dataset.q = q;
     el.innerHTML = '<div class="a-head"><div class="a-q">' + (file ? '<span class="a-file">📎 ' + P.esc(file.name) + "</span>" : "") + P.esc(q) + "</div></div>" + '<div class="a-body"><p class="muted">解析中…</p></div>';
     $("answers").append(el);
     asked();
@@ -624,21 +848,23 @@
     const link = q.match(URL_RE);
     try {
       await ready;
+      if (file || link) lastPlan = null;  // 看链接、看文件之后再问的,不接这一问
       if (file) await linkAnswer(link ? link[0].replace(/[.,;:!?]+$/, "") : "", link ? q.replace(link[0], " ").replace(/\s+/g, " ").trim() : q, el, file);
       else if (link) await linkAnswer(link[0].replace(/[.,;:!?]+$/, ""), q.replace(link[0], " ").replace(/\s+/g, " ").trim(), el);
-      else await answer(q, el);
+      else await answer(q, el, prev);
     } catch (e) { P.fail(el.querySelector(".a-body"), e); }
   }
 
   /* 首屏一次画好:示例与说明不等数据,一打开就画;助手说明、视频、读表三件事同时去取,谁先到谁先填。
      (以前排在「配置 → 角色 → 视频 → 词表 → 国别 → 助手」六次读服务器之后,线上要晚两秒才冒出来,视频卡还跟着再缩一次) */
   const EXAMPLES = ["最近 7 天埃及有哪些新线索", "世界银行出资的供水项目有多少条", "最近 30 天的招标按国家分", "在跟踪的商机有哪些",
-    "未来 30 天有哪些投标截止", "海水淡化的线索按资金来源统计", "摩洛哥近三年运营维护的中标信息", "最近的周报"];  // 与 core/assistant.py 的 EXAMPLES 一致(测试核对);后台给的不一样才换
+    "未来 30 天有哪些投标截止", "海水淡化的线索按资金来源统计", "摩洛哥近三年运营维护的中标信息", "摩洛哥近三年污水处理厂的中标价是招标估价的几成"];  // 与 core/assistant.py 的 EXAMPLES 一致(测试核对);后台给的不一样才换
   function showExamples(list) {
     $("examples").innerHTML = '<b class="muted small">试试</b>' + list.map((e) => '<button type="button" class="chip-btn">' + P.esc(e) + "</button>").join("");
-    $("examples").querySelectorAll(".chip-btn").forEach((b) => { b.onclick = () => submit(b.textContent); });
+    $("examples").querySelectorAll(".chip-btn").forEach((b) => { b.onclick = () => submit(b.textContent, { fresh: true }); });
   }
   showExamples(EXAMPLES);
+  showRecent();
   const over = '<a href="overview.html">看线索总览(漏斗、地图、最新报告)→</a> ';
   $("llmNote").innerHTML = over;
   $("askForm").onsubmit = (ev) => { ev.preventDefault(); submit($("q").value); };
@@ -689,7 +915,7 @@
   try {
     await ready;
     const q0 = new URLSearchParams(location.search).get("q");
-    if (q0) submit(q0);
+    if (q0) submit(q0, { fresh: true });
     let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => charts.forEach((c) => c.resize()), 150); });
   } catch (e) { P.fail($("answers"), e); }
 })();

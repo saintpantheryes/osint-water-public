@@ -138,11 +138,12 @@ class Assistant:
             self._terms_db = None
             self.log(f"读行业术语表出错,沿用上一次的:{type(e).__name__}: {e}")
 
-    def ask(self, q: str) -> dict:
+    def ask(self, q: str, prev: dict | None = None) -> dict:
+        """prev:页面带来的上一问的计划(接着问时沿用对象、条件;assistant.plan 逐项校验)。"""
         self._maybe_forgive()
         self.refresh_terms()
         try:
-            p = assistant.plan(q, self.today, self.clf)
+            p = assistant.plan(q, self.today, self.clf, prev)
         except Exception as e:  # noqa: BLE001  解析出错也要给页面一个能用的计划
             self.log(f"助手解析出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
             p = assistant.rules_parse(q, self.today) if q.strip() else assistant.finish(assistant.empty_plan())
@@ -307,7 +308,7 @@ def make_handler(bot: Assistant):
                     out = {"ok": False, "error": f"分析出错({type(e).__name__})"}
                 self._send(200, out)
                 return
-            out = bot.ask(q)
+            out = bot.ask(q, data.get("prev") if isinstance(data.get("prev"), dict) else None)
             out["ok"] = True
             self._send(200, out)
 

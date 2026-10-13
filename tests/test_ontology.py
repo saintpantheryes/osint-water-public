@@ -170,6 +170,34 @@ def test_industry_terms_are_well_formed():
         assert t["match"] and t["means"] and not [w for w in t["match"] if w.isascii() and len(w) < 4], t["term"]
 
 
+def test_semantic_layer_is_well_formed():
+    """语义层(semantic,v2.21):指标所属对象存在,要用的属性在每个所属对象上都有,算法取自 aggs、第一个是缺省;
+    一个说法只归一个指标(否则「评标」到底算哪个说不清);主体工程的说法只对 award_asset 里有的值,词不重名。"""
+    sem = ONTO["semantic"]
+    objs = {o["id"] for o in ONTO["objects"]}
+    aggs = {a["id"] for a in sem["aggs"]}
+    ids = [m["id"] for m in sem["measures"]]
+    assert len(ids) == len(set(ids)) and "count" in ids
+    seen: dict[str, str] = {}
+    for m in sem["measures"]:
+        assert set(m) <= {"id", "name", "of", "field", "unit", "aggs", "needs", "missing", "words"}, m["id"]
+        assert m["name"] and set(m["of"]) <= objs and m["aggs"] and set(m["aggs"]) <= aggs, m["id"]
+        if m["id"] == "count":
+            continue
+        assert m["unit"] and m["missing"] and m["words"], m["id"]
+        for oid in m["of"]:
+            for pid in m["needs"] + [f for f in ([m["field"]] if isinstance(m["field"], str) else m["field"])]:
+                assert (oid, pid) in PROPS and PROPS[(oid, pid)]["type"] == "number", (m["id"], oid, pid)
+        for w in m["words"]:
+            assert seen.setdefault(w, m["id"]) == m["id"], (w, seen[w], m["id"])
+    agg_words = [w for a in sem["aggs"] for w in a["words"]]
+    assert len(agg_words) == len(set(agg_words))  # 「总额」既说指标(金额)又说算法(合计):两边分开认,可以重
+    words = sem["words"]["award_asset"]
+    assert set(words) <= set(_tax_values("award_asset")) and all(words.values())
+    flat = [w for ws in words.values() for w in ws]
+    assert len(flat) == len(set(flat))
+
+
 def test_glossary_stage_sets_exist_and_tracked_is_the_in_tracking_group():
     stages = _tax_values("stage")
     for key, g in ONTO["glossary"].items():

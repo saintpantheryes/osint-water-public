@@ -47,6 +47,9 @@
     object(oid) { return (this.onto.objects || []).find((o) => o.id === oid) || null; },
     propDef(oid, pid) { const o = this.object(oid); return o ? (o.properties.find((p) => p.id === pid) || null) : null; },
     propName(oid, pid) { const p = this.propDef(oid, pid); return p ? p.name : pid; },
+    /* 语义层(本体 semantic):助手能算的指标(评标天数、中标价 / 招标估价……)与算法(平均、中位数、合计) */
+    measure(id) { return ((this.onto.semantic || {}).measures || []).find((m) => m.id === id) || null; },
+    aggName(id) { const a = ((this.onto.semantic || {}).aggs || []).find((x) => x.id === id); return a ? a.name : id; },
     t(oid) { const t = this.cfg.tables[oid]; if (!t) throw new Error("配置里没有表 " + oid); return t; },
     f(oid, prop) {
       const t = this.t(oid);
@@ -457,8 +460,8 @@
     },
     /* 「助手」页:把一句提问送给后台的助手接口(portal.caddy 转到后台任务进程里的 core/assistant_server.py),拿回查询计划;
        接口只做理解,数据仍由本页带着登录 cookie 向表格查。这不是写表格的操作。 */
-    async ask(q) {
-      const r = await fetch("api/assistant/ask", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ q }) });
+    async ask(q, prev) {  // prev:上一问的计划(接着问时后台沿用它的对象、条件与指标,见 core/assistant.py 的 plan)
+      const r = await fetch("api/assistant/ask", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(prev ? { q, prev } : { q }) });
       if (r.status === 401 || r.status === 403) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }
       if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪(后台任务没起来或还没更新到这一版);其余页面照常可用");
       if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
@@ -564,7 +567,30 @@
     },
     /* 已中标项目(本体 V7、V16;2026-10-12 使用方要):国别概况、城市一页最下面的同一块。prop = "country" 或 "city",rid = 那条记录。
        类别、合同类型、承包模式、金额(折合人民币分档)、年份可多选筛选(2026-10-13 使用方要合同类型、金额筛选与排序),筛选项上的数跟着别的项与搜索走;
-       卡片(份数、合计中标价、最大一笔、中国企业中标)与表只算筛出来的;表默认按中标时间从新到旧,可改按最早、金额最高、金额最低排。 */
+       卡片(份数、合计中标价、最大一笔、中国企业中标)与表只算筛出来的;表默认按中标时间从新到旧,可改按最早、金额最高、金额最低排。
+       v2.21(2026-10-13):多一组「主体工程」筛选(污水处理厂、供水厂、管网……);筛出来的有招标估价、评标天数、投标家数的,再加一排卡片(中位数,写明按几份算),
+       表里中标价下面写招标估价与比例,中标时间下面写评标天数与投标家数。 */
+    /* 已中标项目的几项过程数据(v2.21):招标估价(本国采购网才有)、评标天数、投标家数。首页助手的清单与这里的表同一写法 */
+    awRatio(r) { const p = Number(this.get("award", r, "price")), e = this.has("award", "estimate") ? Number(this.get("award", r, "estimate")) : 0; return p > 0 && e > 0 ? p / e * 100 : null; },
+    awEstimateLine(r) {
+      const k = this.awRatio(r);
+      return k === null ? "" : '<br><span class="muted small nw" title="中标价 ÷ 招标估价(同一币种)">招标估价的 ' + Math.round(k) + "%</span>";
+    },
+    awEvalLine(r) {
+      const n = (p) => { const v = this.has("award", p) ? this.get("award", r, p) : null; return v === null || v === undefined || v === "" ? null : Number(v); };
+      const d = n("eval_days"), b = n("bidders"), t = [d !== null ? "评标 " + d + " 天" : "", b !== null ? b + " 家投标" : ""].filter(Boolean);
+      return t.length ? '<br><span class="muted small nw">' + this.esc(t.join(" · ")) + "</span>" : "";
+    },
+    awExtraKpis(list) {  // 有数据的才出卡片;中位数,写明按几份算(其余的来源不公布)
+      const med = (a) => { const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+      const num = (r, p) => { const v = this.has("award", p) ? this.get("award", r, p) : null; return v === null || v === undefined || v === "" ? null : Number(v); };
+      const ks = list.map((r) => this.awRatio(r)).filter((v) => v !== null), ds = list.map((r) => num(r, "eval_days")).filter((v) => v !== null), bs = list.map((r) => num(r, "bidders")).filter((v) => v !== null);
+      const out = [];
+      if (ks.length) out.push({ label: "中标价 / 招标估价(中位数)", value: Math.round(med(ks)) + "%", note: "按 " + ks.length + " 份有估价的算,低于估价的 " + ks.filter((v) => v < 100).length + " 份" });
+      if (ds.length) out.push({ label: "评标天数(中位数)", value: Math.round(med(ds)) + " 天", note: "按 " + ds.length + " 份算" });
+      if (bs.length) out.push({ label: "投标家数(中位数)", value: (Math.round(med(bs) * 10) / 10) + " 家", note: "按 " + bs.length + " 份算" });
+      return out.length ? this.kpiHtml(out).replace('class="kpis"', 'class="kpis n' + out.length + '"') : "";
+    },
     async awards(el, prop, rid) {  // prop:country / city(国别、城市页) / winners(供应商页:多一组国别筛选、一列国别)
       const firm = prop === "winners";
       const head = firm ? '<h2 id="awards">中标记录</h2><p class="muted small">这家供应商在公开中标记录里的全部合同(联合体的合同全额计入每一家)。</p>' :
@@ -575,7 +601,7 @@
       const many = (this.t("award").links || {})[prop] === "many", hasW = this.has("award", "winners");
       const rows = await this.records("award", { filter: this.and(many ? this.cond("award", prop, "hasAnyOf", [].concat(rid)) : Array.isArray(rid) ? this.cond("award", prop, "isAnyOf", rid) : this.cond("award", prop, "is", rid)),
         props: ["name", "name_zh", "sector", "contract_type", "price", "currency", "price_cny", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "country", "city", "source", "url"]
-          .concat(hasW ? ["winners"] : [], this.has("award", "buyer") ? ["buyer"] : [], this.has("award", "delivery") ? ["delivery"] : []) });
+          .concat(hasW ? ["winners"] : [], ["buyer", "delivery", "asset", "estimate", "eval_days", "bidders"].filter((x) => this.has("award", x))) });
       const g = (r, p) => this.get("award", r, p);
       const isoOf = {};  // 供应商页的国别列点进国别概况的「已中标项目」页签(那页按国别码开)
       if (firm && rows.length) (await this.records("country", { props: ["key"] })).forEach((c) => { isoOf[c.id] = this.get("country", c, "key"); });
@@ -583,7 +609,7 @@
       const ctry = (r) => this.text(g(r, "country")) || "";
       rows.sort((a, b) => String(this.day(g(b, "awarded")) || "").localeCompare(String(this.day(g(a, "awarded")) || "")));
       if (!rows.length) { el.innerHTML = head + '<p class="muted">还没有记录。' + (prop === "city" ? "导入时合同名称里写了这座城市的才挂到城市上,其余只在国别概况里;" : "") + "别的来源的中标结果可以在表格「已中标项目」里补一行。</p>"; return 0; }
-      const st = { s: [], ct: [], d: [], m: [], y: [], c: [], q: "", o: "new" };
+      const st = { s: [], a: [], ct: [], d: [], m: [], y: [], c: [], q: "", o: "new" };
       const big = (n) => (n >= 1e8 ? (n / 1e8).toFixed(n >= 1e10 ? 0 : 2) + " 亿" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString("zh-CN") + " 万" : Math.round(n).toLocaleString("zh-CN"));
       const curZh = (c) => ({ USD: "美元", EUR: "欧元", CNY: "元" }[c] || (c ? " " + c : ""));
       const cny = (w) => (w >= 1e4 ? (Math.round(w / 100) / 100).toFixed(2) + " 亿元" : Math.round(w).toLocaleString("zh-CN") + " 万元");  // 万元 → 文字
@@ -594,13 +620,14 @@
       /* 各筛选项:取值、全部选项(本体的顺序,只列有的;空着的单列一项,让各项的数加起来等于全部) */
       const DIMS = [
         ["s", "类别", (r) => g(r, "sector") || "其他", this.values("lead_sectors")],
+        ["a", "主体工程", (r) => g(r, "asset") || "未分", this.has("award", "asset") ? this.values("award_asset").concat(["未分"]) : []],
         ["ct", "合同类型", (r) => g(r, "contract_type") || "未标", this.values("award_contract_type").concat(["未标"])],
         ["d", "承包模式", (r) => g(r, "delivery") || "货物、咨询等", this.has("award", "delivery") ? this.values("award_delivery").concat(["货物、咨询等"]) : []],
         ["m", "金额", band, BANDS.map((b) => b[0]).concat(["未折算"])],
         ["y", "年份", year, [...new Set(rows.map(year).filter(Boolean))].sort().reverse()],
         ["c", "国别", ctry, firm ? Object.entries(rows.reduce((m, r) => { const c = ctry(r); if (c) m[c] = (m[c] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).map((x) => x[0]) : []],
       ].map(([k, label, f, all]) => ({ k, label, f, opts: all.filter((v) => rows.some((r) => f(r) === v)) })).filter((x) => x.opts.length > (x.k === "c" ? 1 : 0));
-      const TIPS = { d: "合同怎么包:施工、设计施工(EPC)、DBO(建了还管运营)、BOT/PPP(承包方投资)、运营;货物、咨询服务等不按这个分", m: "按中标价折合人民币分档" };
+      const TIPS = { a: "按合同名称归的主要工程:水厂(污水处理厂、供水厂、海水淡化厂)、管网与配套、其他", d: "合同怎么包:施工、设计施工(EPC)、DBO(建了还管运营)、BOT/PPP(承包方投资)、运营;货物、咨询服务等不按这个分", m: "按中标价折合人民币分档" };
       const pass = (r, skip) => DIMS.every((x) => x.k === skip || !st[x.k].length || st[x.k].includes(x.f(r))) && (!st.q || words(r).includes(st.q.toLowerCase()));
       const SORTS = [["new", "最新"], ["old", "最早"], ["hi", "金额最高"], ["lo", "金额最低"]];
       const day = (r) => String(this.day(g(r, "awarded")) || ""), wan = (r) => Number(g(r, "price_cny")) || 0;
@@ -629,6 +656,7 @@
           { label: "最大一笔", value: max ? cny(max) : "—" },
           firm ? { label: "涉及国别", value: nC + " 个", note: list.length ? "最近一份 " + (this.day(g(list[0], "awarded")) || "—") : "" } :
             { label: "中国企业中标", value: cn + " 份", note: list.length ? "占 " + Math.round(cn * 100 / list.length) + "%" : "" }]);
+        $(".aw-k").insertAdjacentHTML("beforeend", this.awExtraKpis(list));
         $(".aw-n").textContent = "共 " + rows.length + " 份";
         const place = prop === "country" || Array.isArray(rid) ? "城市" : firm ? "国别" : "";
         $(".aw-t").innerHTML = !list.length ? '<p class="muted">没有符合条件的已中标项目。</p>' :
@@ -639,7 +667,7 @@
               (g(r, "buyer") ? '<br><span class="muted small">采购方:' + this.esc(g(r, "buyer")) + "</span>" : "") +
               (!g(r, "project") && u ? ' <a class="small" href="' + this.esc(u) + '" target="_blank" rel="noopener">公告原文 ↗</a>' : "");  // 本国采购网的记录没有所属项目,链到公告
             const p = Number(g(r, "price")), w = Number(g(r, "price_cny"));
-            const price = '<span class="nw">' + (p ? "<b>" + this.esc(big(p) + curZh(g(r, "currency"))) + "</b>" : "") + (w ? '<br><span class="muted small">≈ ' + this.esc(cny(w)) + "</span>" : "") + "</span>";
+            const price = '<span class="nw">' + (p ? "<b>" + this.esc(big(p) + curZh(g(r, "currency"))) + "</b>" : "") + (w ? '<br><span class="muted small">≈ ' + this.esc(cny(w)) + "</span>" : "") + "</span>" + this.awEstimateLine(r);
             const ws = hasW ? [].concat(g(r, "winners") || []).filter((x) => x && x.id) : [];  // 有「中标方」关联的,每家点进供应商页
             const link = (x) => '<a href="contractor.html?id=' + encodeURIComponent(x.id) + '">' + this.esc(x.title || "") + "</a>";
             const mates = ws.filter((x) => x.id !== rid);  // 供应商页只列联合体里的其他几家
@@ -648,7 +676,7 @@
             const at = (href, f) => href ? this.raw('<a class="nw" href="' + href + '">' + this.esc(this.text(g(r, f))) + "</a>") : this.text(g(r, f)) || "";
             const cid = this.linkId(g(r, "city")), iso = isoOf[this.linkId(g(r, "country"))];
             const dv = g(r, "delivery"), ct = this.esc(g(r, "contract_type") || "") + (dv && !["施工", "运营"].includes(dv) ? '<br><span class="tag" title="承包模式">' + this.esc(dv) + "</span>" : "");
-            return [this.raw('<span class="nw">' + this.esc(this.day(g(r, "awarded")) || "") + "</span>"), this.raw(nm), g(r, "sector") || "", this.raw(ct), this.raw(price), g(r, "quantity") || "", this.raw(win)]
+            return [this.raw('<span class="nw">' + this.esc(this.day(g(r, "awarded")) || "") + "</span>" + this.awEvalLine(r)), this.raw(nm), g(r, "sector") || "", this.raw(ct), this.raw(price), g(r, "quantity") || "", this.raw(win)]
               .concat(place ? [place === "城市" ? at(cid && "city.html?id=" + encodeURIComponent(cid), "city") : at(iso && "country.html?" + new URLSearchParams({ iso, t: "awards" }), "country")] : [], [g(r, "funder") || "", this.raw(this.open("award", r.id))]);
           })) + (list.length > show ? '<p><button type="button" class="chip-btn more aw-more">再列 ' + Math.min(PAGE, list.length - show) + " 份(已列 " + show + " / " + list.length + ")</button></p>" : "");
         const more = $(".aw-more"); if (more) more.onclick = () => { show += PAGE; render(); };

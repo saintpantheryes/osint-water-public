@@ -10,7 +10,7 @@
 
 挑法:采购名称与标段名称有俄文或吉尔吉斯文的水务词(WORDS:供水、污水、灌溉渠、防洪堤、泥石流……),没有学校、道路、
 电力、药品之类字样(NOT);合同金额折合 ≥ --min-usd(缺省 10 万美元,约 870 万索姆);合同金额不到计划金额 5% 或超过 5 倍的
-(多半是单价或外币)不收;同一公告、同一中标单位、同一合同号的只收一次。
+(多半是单价或外币)不收;同一公告、同一中标单位、同一合同号的只收一次。计划金额写进 estimate 列(招标估价)。
 
 python scripts/fetch_kg_awards.py crawl  --cache 目录 [--workers 3]
 python scripts/fetch_kg_awards.py buyers --cache 目录
@@ -346,6 +346,7 @@ def rows_from(rows: list[dict], buyers: dict[str, dict], min_kgs: float, today: 
         tail = re.sub(r"\W+", "", str(r.get("contract_no") or ""))[:20] or awards.contractor_key(winner)[:20]
         out.append({"key": f"KG-{r['notice_no']}-{tail}", "iso3": "KGZ", "name": name, "sector": classify(text),
                     "contract_type": contract_type(text), "price": f"{r['contract_total']:.2f}", "currency": "KGS", "awarded": signed,
+                    "estimate": f"{r['planned_total']:.2f}" if r.get("planned_total") else "",  # 计划金额 = 招标估价(本体 award.estimate)
                     "quantity": "", "winner": winner, "winner_country": zh, "project": "", "funder": "", "method": "",
                     "buyer": b.get("buyer") or "", "place": city_of(text, b.get("buyer") or "", b.get("address") or ""),
                     "source": stamp, "url": VIEW.format(str(r["notice_no"])[-9:]),
