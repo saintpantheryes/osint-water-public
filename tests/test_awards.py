@@ -68,6 +68,28 @@ def test_contract_type_operations_and_contractor_key():
     assert k("HYDROPLAN INGENIEUR GESELLSCHAFT MIT BESCHRÄNKTER HAFTUNG") == "HYDROPLAN INGENIEUR" and k("LLC Aqua Build") == "AQUA BUILD"
 
 
+def test_delivery_model_from_name():
+    """承包模式(2026-10-13 使用方要能单独查 DBO、EPC):按名称认,DBO(建了还管运营)→ BOT/PPP → 设计施工 → 按合同类型;咨询、监理不分。"""
+    d = awards.delivery
+    assert d("工程", "Design, Build and Operate of Eastern Catchment Wastewater Treatment Plants (WWTPs)") == "DBO"
+    assert d("工程", "Design, build, operate and transfer (DBOT) Drinking Water Supply System") == "DBO"  # 业主出钱:DBO,不是 BOT
+    assert d("货物", "DBO: Comprehensive Water Supply & Sanitation Improvement Works including STP of 2.5 MLD") == "DBO"  # 亚行记成货物的
+    assert d("工程", "Construction of Water Distribution Network including house connections with O&M at Rangamati") == "DBO"
+    assert d("运营", "MISE A NIVEAU ET EXPLOITATION DE LA STEP DE TAMESNA") == "DBO"  # 改造 + 运营
+    assert d("运营", "Exploitation de la station d’épuration des eaux usées de la ville de Fès") == "运营"
+    assert d("工程", "I&D and STP works at Saharanpur in Uttar Pradesh State under Hybrid Annuity PPP Mode") == "BOT/PPP"
+    assert d("工程", "Concession du service d'assainissement collectif dans le périmètre de Tunis nord") == "BOT/PPP"
+    assert d("工程", "STP works at Patna", "公私合营(PPP)") == "BOT/PPP"  # 采购方式写明 PPP
+    assert d("工程", "Design and Build of WWTP in Karakol") == "设计施工"
+    assert d("工程", "Contrato Turnkey para Sistema de Esgotamento Sanitário") == "设计施工"
+    assert d("工程", "Travaux de réalisation de la STEP mutualisée des villes de Larache et Ksar el Kebir") == "施工"
+    assert d("工程", "TRAVAUX DE REALISATION DES FORAGES D’EXPLOITATION POUR L’AEP") == "施工"  # 生产井不是运营
+    assert d("工程", "Construction, Interior Improvement and Related Works for the Flood Monitoring and Operations Room") == "施工"
+    assert d("咨询服务", "Construction Supervision of the Design, Build and Operate (DBO) Contract") == ""  # 给 DBO 做监理的不算
+    assert d("非咨询服务", "Assistance relative au volet technique dans le cadre d’un PPP de dessalement") == ""
+    assert d("货物", "Supply of water meters") == "" and d(None, "Pipes") == ""
+
+
 def _raw(no, desc, amount, supplier, sc="CN", country="KG", practice="Water/Sanit/Waste", cat="Works", method="Request for Bids", sid=""):
     return {"supplier_id": sid, "wb_contract_number": no, "contract_description": desc, "supplier_contract_amount_usd": amount, "supplier": supplier, "supplier_country_code": sc,
             "supplier_country": "", "borrower_country_code": country, "project_global_practice": practice, "procurement_category": cat, "procurement_method": method,
@@ -123,8 +145,25 @@ def test_import_links_cities_fills_blanks_and_skips_unknown_countries(env, tmp_p
     b.update("award", got["WB-1"]["id"], {"quantity": "配水管网 42 公里"})
     assert awards.run(b, path, log=lambda *a: None) == {"新建": 0, "补空": 0, "挂上城市": 0, "国别表里没有": 1, "新建供应商": 0, "供应商补空": 0}
     assert b.get("award", b.record("award", got["WB-1"]["id"]), "quantity") == "配水管网 42 公里"
+    assert b.get("award", got["WB-1"], "delivery") == "施工" and not b.get("award", got["WB-2"], "delivery")  # 承包模式按合同类型与名称认;没有合同类型的不分
     # A21:中标价按汇率折人民币
     assert fx.run(ctx).get("已中标项目折算") == 2 and b.get("award", b.record("award", got["WB-2"]["id"]), "price_cny") > 0
+
+
+def test_import_fills_delivery_on_rows_already_there(env, tmp_path):
+    """库里已有的合同(加「承包模式」之前导入的)再跑一次导入就补上;按库里现在的合同类型认(人改过的以人为准);人填过的承包模式不动。"""
+    fake, admin, b, ctx = env
+    crid = b.rows("country")[0]["id"]
+    base = {"iso3": "AZE", "sector": "污水", "contract_type": "工程", "source": "测试"}
+    path = tmp_path / "awards.csv.gz"
+    awards.write_rows(path, [{**base, "key": "A-1", "name": "Design, Build and Operate of Baku WWTP"}, {**base, "key": "A-2", "name": "Exploitation de la STEP de Baku"},
+                             {**base, "key": "A-3", "name": "Sewer network, lot 2"}])
+    b.create("award", [{"key": "A-1", "name": "Design, Build and Operate of Baku WWTP", "sector": "污水", "contract_type": "工程", "country": crid, "source": "测试"},
+                       {"key": "A-2", "name": "Exploitation de la STEP de Baku", "sector": "污水", "contract_type": "运营", "country": crid, "source": "测试"},  # 人改成了运营
+                       {"key": "A-3", "name": "Sewer network, lot 2", "sector": "污水", "contract_type": "工程", "delivery": "设计施工", "country": crid, "source": "测试"}])  # 人填过
+    assert awards.run(b, path, log=lambda *a: None)["补空"] == 2
+    got = {b.get("award", r, "key"): b.get("award", r, "delivery") for r in b.rows("award")}
+    assert got == {"A-1": "DBO", "A-2": "运营", "A-3": "设计施工"}
 
 
 def test_import_creates_contractors_and_links_winners(env, tmp_path):

@@ -30,6 +30,7 @@ from urllib.parse import parse_qs, quote
 from zoneinfo import ZoneInfo
 
 from core import assistant, calendar_feed, guest as guest_mod, link_check, tstore
+from core.jobs import common
 from core.profile import Profile, load_profile
 from core.watch.llm import Classifier, LLMConfig
 
@@ -51,6 +52,8 @@ class Assistant:
         self.guest = guest if guest is not None else (guest_mod.Guest(log=log) if profile is not None else None)
         # 游客(库外的登录账号)下载日历:示例数据(本体 guest.data: sample 时游客通道的库就是示例库)
         self.guest_feed = calendar_feed.Feed(base_factory=lambda: self.guest.base(), tz=tz, log=log) if self.guest is not None else None
+        if profile is not None:  # 问金额时按后台当天的汇率折人民币
+            assistant.RATES_FILE = common.cache_root(profile) / "fx" / "fx.json"
         self.clf: Classifier | None = None
         if profile is not None and use_llm:
             cfg = LLMConfig.for_assistant((profile.watch or {}).get("llm"), (getattr(profile, "assistant", None) or {}).get("llm"))

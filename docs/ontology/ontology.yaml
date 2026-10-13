@@ -16,7 +16,7 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.19
+version: 2.20
 date: 2026-10-13
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
@@ -106,6 +106,13 @@ changes_v2_11:   # 行业术语(2026-10-09):使用方反映助手把「智慧水
   - 新增 data_scope 节「数据范围」:写明本系统面向海外、不包含中国国内(大陆、港澳台)数据;助手的提问涉及中国(含「国内」「港澳台」等说法)时在答案上方显示这句说明
   - 要跑一次建表命令(新表「行业术语」)
 
+changes_v2_20:   # 承包模式、筛选与排序(2026-10-13):使用方问「DBO 项目算哪一类」(合同类型没有 DBO,助手问「DBO 或运营」时只按运营查了),要已中标项目能按合同类型、金额筛选和排序
+  - 已中标项目加属性「承包模式」(delivery,新分类体系 award_delivery:施工、设计施工、DBO、BOT/PPP、运营):合同类型说买的是什么,承包模式说怎么包;
+    A28 导入时按名称(与采购方式)认,只填空;咨询服务不分,货物、非咨询服务名称里没写明的留空
+  - 已中标项目页签(V7、V16、V19 同一块)的筛选加合同类型、承包模式、金额(折合人民币分五档),各项可多选,筛选项上的数跟着别的项走;
+    加排序:最新、最早、金额最高、金额最低;合同类型列下面标出设计施工、DBO、BOT/PPP
+  - 助手认承包模式(DBO、EPC、BOT、PPP 等说法);同一句里说了承包模式又说了运营的(「DBO 或运营项目」)两样按「或」查;可按承包模式分组
+  - 要跑一次建表命令(新字段、新选项)
 changes_v2_19:   # 国别概况页签、综述版式与助手问中标(2026-10-13):使用方嫌页签排列没有逻辑、已中标项目藏在页面最下面、综述排版单调且出处是一串字符,助手问不到中标信息
   - 国别概况(V7)页签分三组:基本信息(概况、机构与法规、规模以上城市)→ 历史信息(水务历史资料、已中标项目)→ 动态信息(商机、最近 90 天线索、未来 30 天节点);
     「已中标项目」从页面最下面挪成历史信息里的一个页签,页签上是份数;供应商页的国别列直接点进这个页签
@@ -566,7 +573,7 @@ objects:
     name: 已中标项目
     core: false
     band: public
-    definition: 一份已经授出的合同(中标结果):类别、中标价、中标时间、工程量、中标单位,属于哪个国家、哪座城市,数据从哪来。机器从开发银行和各国采购网公开的中标记录导入(A28),人可改,也可在表格里补录别的来源(A29)。国别概况「历史信息」里的「已中标项目」页签、城市概况页最下面列出,按类别、年份筛选,作报价与竞争对手的参考;不计入线索、商机的数。
+    definition: 一份已经授出的合同(中标结果):类别、中标价、中标时间、工程量、中标单位,属于哪个国家、哪座城市,数据从哪来。机器从开发银行和各国采购网公开的中标记录导入(A28),人可改,也可在表格里补录别的来源(A29)。国别概况「历史信息」里的「已中标项目」页签、城市概况页最下面列出,按类别、合同类型、承包模式、金额、年份筛选,可按时间或金额排序,作报价与竞争对手的参考;不计入线索、商机的数。
     key: 编号(来源缩写 + 原合同号,如 WB-1543858、MA-1048722;人补录的可留空)
     properties:
       - {id: name, name: 名称, type: text, by: ai, required: true, note: 合同名称原文(英、法、西等), example: "Construction of Water Supply System in Osh City"}
@@ -574,6 +581,8 @@ objects:
       - {id: sector, name: 类别, type: enum, enum: [供水, 污水, 水利, 海水淡化, 雨水排涝, 水环境, 其他], by: ai, required: true, taxonomy: lead_sectors,
          note: "导入时按合同名称里的关键词归一类:海水淡化 → 污水 → 雨水排涝 → 供水 → 水利 → 水环境,先中先得;都不中的算其他"}
       - {id: contract_type, name: 合同类型, type: enum, enum: [工程, 货物, 运营, 咨询服务, 非咨询服务], by: ai, taxonomy: award_contract_type}
+      - {id: delivery, name: 承包模式, type: enum, enum: [施工, 设计施工, DBO, BOT/PPP, 运营], by: ai, taxonomy: award_delivery,
+         note: "导入时按名称与采购方式认(A28),只填空;咨询服务不分,货物、非咨询服务名称里没写明的留空;人可改"}
       - {id: price, name: 中标价, type: number, by: ai, note: "合同金额(原币);联合体各家记同一金额的只算一次", example: 25720221}
       - {id: currency, name: 货币, type: enum, by: ai, taxonomy: currency, note: 中标价的币种(ISO 4217 代码;世行数据一律是美元),
          enum: [USD, EUR, CNY, GBP, JPY, CHF, AUD, CAD, SGD, HKD, AED, SAR, QAR, KWD, OMR, EGP, MAD, DZD, TND, NGN, GHS, KES, TZS, UGX, ETB, ZAR, XOF, XAF, INR, PKR, BDT, LKR, NPR, IDR, MYR, THB, VND, PHP, MMK, KHR, KZT, UZS, AZN, GEL, AMD, KGS, TJS, TMT, MNT, TRY, IQD, JOD, LBP, PLN, RON, HUF, CZK, RSD, UAH, RUB, BRL, MXN, COP, PEN, CLP, ARS, BOB, PYG, UYU, DOP, JMD, FJD, PGK, WST, TOP, SBD, VUV]}
@@ -991,7 +1000,7 @@ actions:
     trigger: 一次性(python -m core.jobs.awards;数据文件换了再跑一次);后台每个周期给没有中文名的补一批中文名
     reads: [country, city]
     creates: award
-    writes: [award.name, award.name_zh, award.sector, award.contract_type, award.price, award.currency, award.awarded, award.quantity, award.winner, award.winner_country,
+    writes: [award.name, award.name_zh, award.sector, award.contract_type, award.delivery, award.price, award.currency, award.awarded, award.quantity, award.winner, award.winner_country,
              award.project, award.funder, award.method, award.buyer, award.country, award.city, award.source, award.url, award.winners,
              contractor.name, contractor.nationality, contractor.nationality_code, contractor.ext_ids]
     note: "数据文件是私有配置仓 data/ 下的 awards*.csv.gz,一个来源一份,都读。awards.csv.gz 由 scripts/fetch_wb_awards.py 从世界银行 Finances One 的「投资项目合同授予」数据(STEP 系统,借款国录入)取:
@@ -1001,7 +1010,7 @@ actions:
       awards_adb.csv.gz 由 scripts/fetch_adb_awards.py 从亚行 adb.org 招标页的检索服务取「已授合同」(2015 年起,金额为美元),awards_ebrd.csv.gz 由 scripts/fetch_ebrd_awards.py 从 EBRD 采购门户 ECEPP 的授标公告取(2016 年起,各标段一行,金额按原币种):项目名称或业主像水务的(供水、污水、灌溉、防洪、各国水务公司),合同名称、说明或项目名称归得进类别、合同名称没有车辆房屋之类字样;别的项目过更严的词;折合 10 万美元以上;联合体拆成各家,注册国按地址(名称看得出是中国企业的记中国);同一合同登了几次的只收一次;亚行按「职位名 + 人名」剔除个人咨询顾问。
       awards_kgz.csv.gz 由 scripts/fetch_kg_awards.py 从吉尔吉斯斯坦国家采购门户的中标单位表取(2015 年起,整表翻页):采购名称、标段名称有俄文或吉尔吉斯文水务词、没有学校道路电力之类字样;折合 10 万美元以上;
       合同金额不到计划金额 5% 或超过 5 倍的不收(多半是单价);业主从公告详情页取。
-      只新建、只填空(R2),去重按编号;别的来源(非行等)整理成同样的列也能导入。城市名不计重音(Kénitra = Kenitra)。中文名:配了模型时后台每个周期译 40 条(工程量空着的顺带从名称里摘),没配就留空、人可补。"
+      只新建、只填空(R2),去重按编号;别的来源(非行等)整理成同样的列也能导入。城市名不计重音(Kénitra = Kenitra)。承包模式按名称与采购方式认(见 award_delivery),已有的行补空。中文名:配了模型时后台每个周期译 40 条(工程量空着的顺带从名称里摘),没配就留空、人可补。"
     rules: [R2]
   - id: A29
     name: 补录已中标项目
@@ -1009,7 +1018,7 @@ actions:
     channel: [表格]
     trigger: 随时(在表格「已中标项目」里加一行或改一行)
     creates: award
-    writes: [award.name, award.name_zh, award.sector, award.contract_type, award.price, award.currency, award.awarded, award.quantity, award.winner, award.winner_country,
+    writes: [award.name, award.name_zh, award.sector, award.contract_type, award.delivery, award.price, award.currency, award.awarded, award.quantity, award.winner, award.winner_country,
              award.project, award.funder, award.method, award.buyer, award.country, award.city, award.source, award.url, award.note]
     note: 至少填名称、类别、所属国别;中标价填了货币,折合人民币后台自动算;编号可空。
     rules: [R13]
@@ -1171,7 +1180,7 @@ views:
      query: "缺省:跟踪中商机(glossary.tracked)的时间节点(日期) ∪ 其跟进记录(日期、下一步到期) ∪ 报告(日期);勾「也显示未归商机的线索截止」才加上挂在线索或国别上的节点(灰色);一格最多直接显示 6 条。表格里的两个日历视图不过滤"}
   - {id: V6, name: 线索总览漏斗, of: [lead, opportunity, report], channel: [页面],
      query: "五级严格子集，每级数线索条数:信源采集(全部)→ 相关(是否相关 = 是)→ 归入商机(所属商机非空)→ 归入跟踪中的商机(所属商机 ∈ glossary.tracked)→ 写进报告(写进的报告非空);国别 / 领域 / 类别 / 发现时间筛选作用于每一级;点一级右边列出该级最新 100 条"}
-  - {id: V7, name: 国别概况, of: [country, opportunity, lead, milestone, city, award, study, water_event], channel: [页面, 表格], query: "页签分三组:基本信息(概况、机构与法规、规模以上城市)→ 历史信息(水务历史资料、已中标项目)→ 动态信息(商机、线索、时间节点)。一国的国别信息(指标表、机构 / 国企 / 法规表、带标签的备注)+ 该国商机按阶段 + 线索统计 + 国别级时间节点 + 规模以上城市(人口、面积、密度、生产总值、线索数、商机数)+ 水务历史资料(最上面「大事记」:水务事件.所属国别 = 它,加上每年最大的三笔已中标项目,按年份从新到旧、按类别筛选;下面研究资料.所属国别 = 它:综述展开在最前(要点速览指标卡、分节目录,出处是带序号的小角标,点开看全称、页码与原文),其余按类型筛选、从新到旧,标题点开看原文);引用角标 ①②③ 指向线索;「已中标项目」页签(所属国别 = 它):按类别、年份筛选(筛选项上的数跟着另一项走),卡片(项目数、合计中标价折合人民币、最大一笔、中国企业中标数),表按中标时间从新到旧"}
+  - {id: V7, name: 国别概况, of: [country, opportunity, lead, milestone, city, award, study, water_event], channel: [页面, 表格], query: "页签分三组:基本信息(概况、机构与法规、规模以上城市)→ 历史信息(水务历史资料、已中标项目)→ 动态信息(商机、线索、时间节点)。一国的国别信息(指标表、机构 / 国企 / 法规表、带标签的备注)+ 该国商机按阶段 + 线索统计 + 国别级时间节点 + 规模以上城市(人口、面积、密度、生产总值、线索数、商机数)+ 水务历史资料(最上面「大事记」:水务事件.所属国别 = 它,加上每年最大的三笔已中标项目,按年份从新到旧、按类别筛选;下面研究资料.所属国别 = 它:综述展开在最前(要点速览指标卡、分节目录,出处是带序号的小角标,点开看全称、页码与原文),其余按类型筛选、从新到旧,标题点开看原文);引用角标 ①②③ 指向线索;「已中标项目」页签(所属国别 = 它):按类别、合同类型、承包模式、金额(折合人民币分档)、年份筛选(各项可多选,筛选项上的数跟着别的项走),卡片(项目数、合计中标价折合人民币、最大一笔、中国企业中标数),表默认按中标时间从新到旧,可改按最早、金额最高、金额最低排"}
   - {id: V8, name: 线索处理, of: [lead, opportunity], channel: [页面],
      query: "两页带计数:待确认归属(= V2)/ AI 推荐的商机(= V3);待确认归属可按国别、类别、有无机器建议筛选，两页都可多选后批量归入 / 忽略 / 跟踪 / 不跟进(A20)。原名「待我处理」;v2.6 起下一步已逾期、待核更新两页在商机总览(V9)"}
   - {id: V9, name: 商机总览, of: [opportunity], channel: [页面], query: "三页:商机列表(缺省只列 glossary.tracked，可切到某一阶段或全部;按阶段顺序(跟踪中、准备投标、已投标、中标、建议、未中标、放弃、不跟进)再按编号;可按国别、负责人筛选;点进商机工作台)/ 下一步已逾期(glossary.overdue)/ 待核更新(商机.待核更新非空);后两页带计数，只列出来，点进商机工作台或表格去改，游客不显示。原名「商机列表」"}
@@ -1676,6 +1685,19 @@ taxonomies:
           - {v: 运营, code: operation, def: 运营维护、委托运营、管理合同、租赁经营(affermage)、绩效型减漏等以运营为主的合同, boundary: "设计建设运营(DBO)以建设为主的仍算工程;导入时名称里有 operation and maintenance、O&M、management contract、affermage、exploitation et entretien、gestion et exploitation、entretien et maintenance 等字样的归这里(修理工程 travaux d'entretien et réparation 不算)", example: "某市供水管网 5 年运维"}
           - {v: 咨询服务, code: consulting, def: 设计、监理、可研、技术咨询, boundary: "", example: "施工监理"}
           - {v: 非咨询服务, code: non_consulting, def: 运维、勘测、钻探等以产出计的服务, boundary: "", example: "管网检漏服务"}
+  award_delivery:
+    name: 承包模式
+    used_by: [award.delivery]
+    note: 合同怎么包(使用方 2026-10-13 要能单独查 DBO、EPC);与合同类型(买的是什么)分开记。导入时按名称与采购方式认,先中先得:DBO → BOT/PPP → 设计施工 → 按合同类型(工程 = 施工,运营 = 运营);咨询服务、名称是咨询监理顾问的不分。
+    groups:
+      - name: 全部
+        values:
+          - {v: 施工, code: build, def: 按业主的设计施工(工程合同的缺省), boundary: 名称里写明设计施工、运营或特许经营的归下面几类, example: "配水管网铺设"}
+          - {v: 设计施工, code: design_build, def: 设计加施工一并承包:EPC、设计建造(design-build)、交钥匙、conception-réalisation, boundary: 含建成后运营的算 DBO, example: "净水厂 EPC"}
+          - {v: DBO, code: dbo, def: 一份合同里既建(新建、扩建或改造)又负责建成后的运营维护:设计建造运营(DBO、DBOT)、施工加若干年运维、mise à niveau et exploitation,
+             boundary: 资金由业主出;承包方自己融资、靠收费回本的算 BOT/PPP;只运营不建的算运营, example: "污水厂设计建造并运营 10 年"}
+          - {v: BOT/PPP, code: bot_ppp, def: 承包方投资或融资、建成后经营一段时间回本:BOT、BOO、PPP、特许经营(concession)、印度的混合年金(hybrid annuity), boundary: "", example: "海水淡化厂 PPP"}
+          - {v: 运营, code: operation, def: 只管运营维护、不建:委托运营、管理合同、租赁经营等(即合同类型「运营」), boundary: 带改造的算 DBO, example: "某市供水管网 5 年运维"}
   contractor_kind:
     name: 供应商性质
     used_by: [contractor.kind]

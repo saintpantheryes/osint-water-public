@@ -1827,7 +1827,8 @@ def test_sources_page_flags_problems_and_toggles_enabled():
 
 def test_awards_tab_on_country_page_and_table_on_city_page():
     """已中标项目(使用方 2026-10-12 要的;10-13 起在国别概况是「历史信息」里的一个页签,排在水务历史资料后面,页签上是份数;城市页仍在最下面):
-    一张表,按类别、年份筛选(多选,筛选项上的数跟着另一项走),卡片是份数、合计中标价(折合人民币)、最大一笔、中国企业中标;城市页只列挂在这座城市的。只读。"""
+    一张表,按类别、合同类型、承包模式、金额、年份筛选(多选,筛选项上的数跟着别的项走;10-13 加合同类型、承包模式、金额与排序),
+    卡片是份数、合计中标价(折合人民币)、最大一笔、中国企业中标;城市页只列挂在这座城市的。只读。"""
     from playwright.sync_api import Error as PWError, sync_playwright
     fake, admin = _fake_with_schema()
     c, o, ld = _seed(admin, fake)
@@ -1835,9 +1836,9 @@ def test_awards_tab_on_country_page_and_table_on_city_page():
     city = b.create("city", [{"key": "586523", "name_zh": "甘贾", "name_en": "Ganja", "country": c["id"], "coords": "40.6828,46.3606", "population": 335600}])[0]
     b.create("award", [
         {"key": "WB-1", "name": "Ganja water supply network, 42 km", "name_zh": "甘贾供水管网 42 公里", "sector": "供水", "contract_type": "工程", "price": 25_000_000, "currency": "USD",
-         "price_cny": 17750, "awarded": "2024-05-10", "quantity": "42 km", "winner": "China Sample Engineering Co", "winner_country": "中国", "project": "P1 Ganja Water",
+         "price_cny": 17750, "awarded": "2024-05-10", "quantity": "42 km", "delivery": "施工", "winner": "China Sample Engineering Co", "winner_country": "中国", "project": "P1 Ganja Water",
          "funder": "世界银行", "country": c["id"], "city": city["id"], "url": "https://projects.worldbank.org/x"},
-        {"key": "WB-2", "name": "Baku WWTP rehabilitation", "sector": "污水", "contract_type": "工程", "price": 8_000_000, "currency": "USD", "price_cny": 5680,
+        {"key": "WB-2", "name": "Baku WWTP rehabilitation and operation", "sector": "污水", "contract_type": "工程", "delivery": "DBO", "price": 8_000_000, "currency": "USD", "price_cny": 5680,
          "awarded": "2022-03-01", "winner": "Sample JV", "winner_country": "土耳其、中国", "country": c["id"]},
         {"key": "WB-3", "name": "Supervision consultant", "sector": "供水", "contract_type": "咨询服务", "price": 400_000, "currency": "USD", "price_cny": 284,
          "awarded": "2022-11-20", "winner": "Sample Consult", "winner_country": "德国", "country": c["id"]},
@@ -1867,6 +1868,18 @@ def test_awards_tab_on_country_page_and_table_on_city_page():
             assert "3\n份" in k and "2.37\n亿元" in k and "1.78\n亿元" in k and "2\n份" in k and "占 67%" in k  # 合计、最大一笔、中国企业中标(联合体里有中国也算)
             assert page.locator("#awBox .aw-s .chip-btn").all_inner_texts() == ["全部 3", "供水 2", "污水 1"]
             assert page.locator("#awBox .aw-y .chip-btn").all_inner_texts() == ["全部 3", "2024 1", "2022 2"]
+            assert page.locator("#awBox .aw-ct .chip-btn").all_inner_texts() == ["全部 3", "工程 2", "咨询服务 1"]
+            assert page.locator("#awBox .aw-d .chip-btn").all_inner_texts() == ["全部 3", "施工 1", "DBO 1", "货物、咨询等 1"]  # 各项加起来等于全部
+            assert page.locator("#awBox .aw-m .chip-btn").all_inner_texts() == ["全部 3", "100–500 万 1", "2,000 万–1 亿 1", "1 亿元以上 1"]
+            assert "DBO" in rows[2] and "DBO" not in rows[0]  # 合同类型下面标出 DBO,施工不标
+            page.click("#awBox .aw-o .chip-btn[data-v='lo']")  # 排序:金额最低在前
+            assert page.locator("#awBox tbody tr").first.inner_text().startswith("2022-11-20")
+            page.click("#awBox .aw-o .chip-btn[data-v='hi']")
+            assert page.locator("#awBox tbody tr").first.inner_text().startswith("2024-05-10")
+            page.click("#awBox .aw-m .chip-btn[data-v='2,000 万–1 亿']")  # 金额一档:别的项上的数跟着变
+            assert page.locator("#awBox tbody tr").count() == 1 and page.locator("#awBox .aw-ct .chip-btn").all_inner_texts() == ["全部 1", "工程 1", "咨询服务 0"]
+            page.click("#awBox .aw-m .chip-btn[data-v='']")
+            page.click("#awBox .aw-o .chip-btn[data-v='new']")
             page.click("#awBox .aw-y .chip-btn[data-v='2022']")  # 选了年份,类别上的数跟着变
             assert page.locator("#awBox .aw-s .chip-btn").all_inner_texts() == ["全部 2", "供水 1", "污水 1"] and page.locator("#awBox tbody tr").count() == 2
             page.click("#awBox .aw-s .chip-btn[data-v='污水']")

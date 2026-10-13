@@ -563,7 +563,8 @@
         '<p class="muted small">分数 0–5:4 以上极高,3–4 高。来源:' + this.esc(this.get(oid, rec, "risk_source") || "WRI Aqueduct 4.0 等") + '。模型估计,作趋势参考' + (iso === "CHN" ? "(中国境内不做趋势机会分析)" : ';<a href="trend.html' + (iso ? "?" + new URLSearchParams({ c: iso }) : "") + '">看趋势机会 →</a>') + "</p>";
     },
     /* 已中标项目(本体 V7、V16;2026-10-12 使用方要):国别概况、城市一页最下面的同一块。prop = "country" 或 "city",rid = 那条记录。
-       类别、年份可多选筛选,筛选项上的数跟着另一项与搜索走;卡片(份数、合计中标价、最大一笔、中国企业中标)与表只算筛出来的;表按中标时间从新到旧。 */
+       类别、合同类型、承包模式、金额(折合人民币分档)、年份可多选筛选(2026-10-13 使用方要合同类型、金额筛选与排序),筛选项上的数跟着别的项与搜索走;
+       卡片(份数、合计中标价、最大一笔、中国企业中标)与表只算筛出来的;表默认按中标时间从新到旧,可改按最早、金额最高、金额最低排。 */
     async awards(el, prop, rid) {  // prop:country / city(国别、城市页) / winners(供应商页:多一组国别筛选、一列国别)
       const firm = prop === "winners";
       const head = firm ? '<h2 id="awards">中标记录</h2><p class="muted small">这家供应商在公开中标记录里的全部合同(联合体的合同全额计入每一家)。</p>' :
@@ -574,7 +575,7 @@
       const many = (this.t("award").links || {})[prop] === "many", hasW = this.has("award", "winners");
       const rows = await this.records("award", { filter: this.and(many ? this.cond("award", prop, "hasAnyOf", [].concat(rid)) : Array.isArray(rid) ? this.cond("award", prop, "isAnyOf", rid) : this.cond("award", prop, "is", rid)),
         props: ["name", "name_zh", "sector", "contract_type", "price", "currency", "price_cny", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "country", "city", "source", "url"]
-          .concat(hasW ? ["winners"] : [], this.has("award", "buyer") ? ["buyer"] : []) });
+          .concat(hasW ? ["winners"] : [], this.has("award", "buyer") ? ["buyer"] : [], this.has("award", "delivery") ? ["delivery"] : []) });
       const g = (r, p) => this.get("award", r, p);
       const isoOf = {};  // 供应商页的国别列点进国别概况的「已中标项目」页签(那页按国别码开)
       if (firm && rows.length) (await this.records("country", { props: ["key"] })).forEach((c) => { isoOf[c.id] = this.get("country", c, "key"); });
@@ -582,32 +583,47 @@
       const ctry = (r) => this.text(g(r, "country")) || "";
       rows.sort((a, b) => String(this.day(g(b, "awarded")) || "").localeCompare(String(this.day(g(a, "awarded")) || "")));
       if (!rows.length) { el.innerHTML = head + '<p class="muted">还没有记录。' + (prop === "city" ? "导入时合同名称里写了这座城市的才挂到城市上,其余只在国别概况里;" : "") + "别的来源的中标结果可以在表格「已中标项目」里补一行。</p>"; return 0; }
-      const SECT = this.values("lead_sectors"), st = { s: [], y: [], c: [], q: "" };
+      const st = { s: [], ct: [], d: [], m: [], y: [], c: [], q: "", o: "new" };
       const big = (n) => (n >= 1e8 ? (n / 1e8).toFixed(n >= 1e10 ? 0 : 2) + " 亿" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString("zh-CN") + " 万" : Math.round(n).toLocaleString("zh-CN"));
       const curZh = (c) => ({ USD: "美元", EUR: "欧元", CNY: "元" }[c] || (c ? " " + c : ""));
       const cny = (w) => (w >= 1e4 ? (Math.round(w / 100) / 100).toFixed(2) + " 亿元" : Math.round(w).toLocaleString("zh-CN") + " 万元");  // 万元 → 文字
       const words = (r) => [g(r, "name"), g(r, "name_zh"), g(r, "winner"), g(r, "winner_country"), g(r, "project"), g(r, "buyer"), firm ? ctry(r) : ""].join(" ").toLowerCase();
-      const pass = (r, skip) => (skip === "s" || !st.s.length || st.s.includes(g(r, "sector") || "其他")) && (skip === "y" || !st.y.length || st.y.includes(year(r))) &&
-        (skip === "c" || !st.c.length || st.c.includes(ctry(r))) && (!st.q || words(r).includes(st.q.toLowerCase()));
-      const years = [...new Set(rows.map(year).filter(Boolean))].sort().reverse();
-      const ctrys = firm ? Object.entries(rows.reduce((m, r) => { const c = ctry(r); if (c) m[c] = (m[c] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).map((x) => x[0]) : [];
-      el.innerHTML = head + '<div class="filters"><div class="frow"><b>类别</b><span class="frow aw-s" style="padding:0"></span></div>' +
-        '<div class="frow"><b>年份</b><span class="frow aw-y" style="padding:0"></span></div>' +
-        (ctrys.length > 1 ? '<div class="frow"><b>国别</b><span class="frow aw-c" style="padding:0"></span></div>' : "") +
+      /* 金额按折合人民币(万元)分五档;没折算的(没有金额或汇率)单列,数对得上 */
+      const BANDS = [["100 万元以下", 0, 100], ["100–500 万", 100, 500], ["500–2,000 万", 500, 2000], ["2,000 万–1 亿", 2000, 1e4], ["1 亿元以上", 1e4, Infinity]];
+      const band = (r) => { const w = Number(g(r, "price_cny")) || 0; return w ? (BANDS.find(([, lo, hi]) => w >= lo && w < hi) || BANDS[0])[0] : "未折算"; };
+      /* 各筛选项:取值、全部选项(本体的顺序,只列有的;空着的单列一项,让各项的数加起来等于全部) */
+      const DIMS = [
+        ["s", "类别", (r) => g(r, "sector") || "其他", this.values("lead_sectors")],
+        ["ct", "合同类型", (r) => g(r, "contract_type") || "未标", this.values("award_contract_type").concat(["未标"])],
+        ["d", "承包模式", (r) => g(r, "delivery") || "货物、咨询等", this.has("award", "delivery") ? this.values("award_delivery").concat(["货物、咨询等"]) : []],
+        ["m", "金额", band, BANDS.map((b) => b[0]).concat(["未折算"])],
+        ["y", "年份", year, [...new Set(rows.map(year).filter(Boolean))].sort().reverse()],
+        ["c", "国别", ctry, firm ? Object.entries(rows.reduce((m, r) => { const c = ctry(r); if (c) m[c] = (m[c] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).map((x) => x[0]) : []],
+      ].map(([k, label, f, all]) => ({ k, label, f, opts: all.filter((v) => rows.some((r) => f(r) === v)) })).filter((x) => x.opts.length > (x.k === "c" ? 1 : 0));
+      const TIPS = { d: "合同怎么包:施工、设计施工(EPC)、DBO(建了还管运营)、BOT/PPP(承包方投资)、运营;货物、咨询服务等不按这个分", m: "按中标价折合人民币分档" };
+      const pass = (r, skip) => DIMS.every((x) => x.k === skip || !st[x.k].length || st[x.k].includes(x.f(r))) && (!st.q || words(r).includes(st.q.toLowerCase()));
+      const SORTS = [["new", "最新"], ["old", "最早"], ["hi", "金额最高"], ["lo", "金额最低"]];
+      const day = (r) => String(this.day(g(r, "awarded")) || ""), wan = (r) => Number(g(r, "price_cny")) || 0;
+      const order = (list) => {  // 没有金额的排在最后
+        if (st.o === "old") return list.slice().sort((a, b) => (day(a) || "9").localeCompare(day(b) || "9"));
+        if (st.o === "hi" || st.o === "lo") return list.slice().sort((a, b) => (!wan(a) - !wan(b)) || (st.o === "hi" ? wan(b) - wan(a) : wan(a) - wan(b)));
+        return list;  // rows 已按中标时间从新到旧
+      };
+      el.innerHTML = head + '<div class="filters">' + DIMS.map((x) => '<div class="frow"><b' + (TIPS[x.k] ? ' title="' + this.esc(TIPS[x.k]) + '"' : "") + ">" + x.label +
+        '</b><span class="frow aw-' + x.k + '" style="padding:0"></span></div>').join("") +
+        '<div class="frow"><b>排序</b><span class="frow aw-o" style="padding:0"></span></div>' +
         '<div class="frow"><b>搜索</b><input class="aw-q" placeholder="' + (firm ? "搜名称、项目或国别" : "搜名称、中标单位或国别(如:中国)") + '" size="30" aria-label="搜已中标项目"><span class="muted small aw-n" style="margin-left:auto"></span></div></div>' +
         '<div class="aw-k"></div><div class="panel aw-t"></div>';
       const $ = (c) => el.querySelector(c), PAGE = 20;  // 表一次列 20 份,「再列」往下加
       let show = PAGE;
-      const refilter = () => { show = PAGE; render(); };  // 换了筛选从头列
+      const refilter = () => { show = PAGE; render(); };  // 换了筛选、排序从头列
+      this.chips($(".aw-o"), SORTS, st, "o", refilter);
       const render = () => {
-        const forS = rows.filter((r) => pass(r, "s")), forY = rows.filter((r) => pass(r, "y")), forC = rows.filter((r) => pass(r, "c")), list = rows.filter((r) => pass(r));
-        const cnt = (arr, f) => arr.filter(f).length;
-        this.chips($(".aw-s"), [["", "全部 " + forS.length]].concat(SECT.filter((s) => st.s.includes(s) || rows.some((r) => (g(r, "sector") || "其他") === s))
-          .map((s) => [s, s + " " + cnt(forS, (r) => (g(r, "sector") || "其他") === s)])), st, "s", refilter, true);
-        this.chips($(".aw-y"), [["", "全部 " + forY.length]].concat(years.map((y) => [y, y + " " + cnt(forY, (r) => year(r) === y)])), st, "y", refilter, true);
-        if ($(".aw-c")) this.chips($(".aw-c"), [["", "全部 " + forC.length]].concat(ctrys.map((c) => [c, c + " " + cnt(forC, (r) => ctry(r) === c)])), st, "c", refilter, true);
+        const list = order(rows.filter((r) => pass(r)));
+        DIMS.forEach((x) => { const base = rows.filter((r) => pass(r, x.k));
+          this.chips($(".aw-" + x.k), [["", "全部 " + base.length]].concat(x.opts.map((v) => [v, v + " " + base.filter((r) => x.f(r) === v).length])), st, x.k, refilter, true); });
         const sum = list.reduce((s, r) => s + (Number(g(r, "price_cny")) || 0), 0), max = Math.max(0, ...list.map((r) => Number(g(r, "price_cny")) || 0));
-        const cn = cnt(list, (r) => /中国/.test(String(g(r, "winner_country") || "")));
+        const cn = list.filter((r) => /中国/.test(String(g(r, "winner_country") || ""))).length;
         const nC = new Set(list.map(ctry).filter(Boolean)).size;
         $(".aw-k").innerHTML = this.kpiHtml([{ label: firm ? "中标" : "已中标项目", value: list.length + " 份" }, { label: "合计中标价(折合人民币)", value: sum ? cny(sum) : "—" },
           { label: "最大一笔", value: max ? cny(max) : "—" },
@@ -631,7 +647,8 @@
               (ws.length ? ws.map(link).join("、") : this.esc(g(r, "winner") || "")) + (g(r, "winner_country") ? '<br><span class="muted small">' + this.esc(g(r, "winner_country")) + "</span>" : "");
             const at = (href, f) => href ? this.raw('<a class="nw" href="' + href + '">' + this.esc(this.text(g(r, f))) + "</a>") : this.text(g(r, f)) || "";
             const cid = this.linkId(g(r, "city")), iso = isoOf[this.linkId(g(r, "country"))];
-            return [this.raw('<span class="nw">' + this.esc(this.day(g(r, "awarded")) || "") + "</span>"), this.raw(nm), g(r, "sector") || "", g(r, "contract_type") || "", this.raw(price), g(r, "quantity") || "", this.raw(win)]
+            const dv = g(r, "delivery"), ct = this.esc(g(r, "contract_type") || "") + (dv && !["施工", "运营"].includes(dv) ? '<br><span class="tag" title="承包模式">' + this.esc(dv) + "</span>" : "");
+            return [this.raw('<span class="nw">' + this.esc(this.day(g(r, "awarded")) || "") + "</span>"), this.raw(nm), g(r, "sector") || "", this.raw(ct), this.raw(price), g(r, "quantity") || "", this.raw(win)]
               .concat(place ? [place === "城市" ? at(cid && "city.html?id=" + encodeURIComponent(cid), "city") : at(iso && "country.html?" + new URLSearchParams({ iso, t: "awards" }), "country")] : [], [g(r, "funder") || "", this.raw(this.open("award", r.id))]);
           })) + (list.length > show ? '<p><button type="button" class="chip-btn more aw-more">再列 ' + Math.min(PAGE, list.length - show) + " 份(已列 " + show + " / " + list.length + ")</button></p>" : "");
         const more = $(".aw-more"); if (more) more.onclick = () => { show += PAGE; render(); };
