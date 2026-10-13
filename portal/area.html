@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 水务片区</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("area.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <!-- 两种样子(本体 V20):不带 id 是全部片区;带 ?id= 是一个片区(片区内城市的人口、商机、线索、大事记、中标与水厂一起看) -->
+  <section id="list" style="display:none">
+    <h1>水务片区</h1>
+    <p class="muted">共用一家水司、一批水源与干管的连片城市(大城市圈),例如大巴库。小国的水务市场按片区看:城市太碎,国别太粗。片区由人在表格「水务片区」里划定,商机可以挂到片区上。</p>
+    <div class="panel" id="rows">读取中…</div>
+  </section>
+  <section id="one" style="display:none">
+    <div class="toolbar"><a href="area.html" id="back">← 全部片区</a><h1 style="margin:0" id="aname"></h1><span class="muted" id="aname2"></span><span id="rel"></span><span id="openRow" style="margin-left:auto"></span></div>
+    <div id="cards"></div>
+    <div class="panel" id="info">读取中…</div>
+    <h2>包含城市</h2>
+    <div class="panel" id="cities">读取中…</div>
+    <h2>商机</h2>
+    <p class="muted small">挂在这个片区上的商机,加上所在城市在片区里的。</p>
+    <div class="panel" id="opps">读取中…</div>
+    <h2>线索</h2>
+    <p class="muted small">这些商机的线索,加上涉及城市在片区里的,最近的在前。</p>
+    <div class="panel" id="leads">读取中…</div>
+    <section id="chron"></section>
+    <h2>水厂</h2>
+    <div class="panel" id="plants">读取中…</div>
+    <section id="awBox"></section>
+  </section>
+  <script>document.getElementById(/[?&]id=/.test(location.search) ? "one" : "list").style.display = "";  /* 先露出要的那一种,不等读表 */</script>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const q0 = new URLSearchParams(location.search);
+  const g = (r, p) => P.get("water_area", r, p);
+  const num = (v) => (v === undefined || v === null || v === "" ? "" : Number(v).toLocaleString("zh-CN"));
+  const wan = (n) => (n >= 1e4 ? (Math.round(n / 1e3) / 10).toLocaleString("zh-CN") + " 万" : num(n));
+  const one = (oid, id) => P.api("/table/" + P.t(oid).id + "/record/" + id, { fieldKeyType: "id" });
+  /* 几座城市的整条记录(片区里一般三五座,一座一座取) */
+  const cityRecs = (ids) => Promise.all(ids.map((id) => one("city", id).catch(() => null))).then((rs) => rs.filter((r) => r && r.fields));
+  const pop = (recs) => recs.reduce((s, c) => s + (Number(P.get("city", c, "population")) || 0), 0);
+
+  /* ---------- 全部片区 ---------- */
+  async function list() {
+    const all = await P.records("water_area", { props: ["name", "name_en", "country", "cities", "utility"] });
+    if (!all.length) { $("rows").innerHTML = '<p class="muted">还没有片区。在表格「水务片区」里新建一行、选上包含的城市就有了。</p>'; return; }
+    const pops = await Promise.all(all.map((a) => cityRecs(P.linkIds(g(a, "cities"))).then(pop)));
+    const opps = P.has("opportunity", "area") ? await P.records("opportunity", { filter: P.and(P.cond("opportunity", "area", "isNotEmpty")), props: ["area"] }) : [];
+    const nOpp = {}; opps.forEach((o) => { const a = P.linkId(P.get("opportunity", o, "area")); if (a) nOpp[a] = (nOpp[a] || 0) + 1; });
+    $("rows").innerHTML = P.tableHtml(["片区", "国别", "包含城市", "合计人口", "服务水司", "挂上的商机", ""], all.map((a, i) => [
+      P.raw('<a href="area.html?id=' + encodeURIComponent(a.id) + '"><b>' + P.esc(g(a, "name") || "") + "</b></a>" + (g(a, "name_en") ? '<br><span class="muted small">' + P.esc(g(a, "name_en")) + "</span>" : "")),
+      P.text(g(a, "country")), P.text(g(a, "cities")), pops[i] ? wan(pops[i]) : "", g(a, "utility") || "", String(nOpp[a.id] || 0), P.raw(P.open("water_area", a.id))]));
+  }
+
+  /* ---------- 一个片区 ---------- */
+  async function show(id) {
+    const a = await one("water_area", id);
+    if (!a || !a.fields) { $("info").innerHTML = '<div class="err">没有这个片区</div>'; return; }
+    const cids = P.linkIds(g(a, "cities")), crid = P.linkId(g(a, "country"));
+    $("aname").textContent = g(a, "name") || "";
+    $("aname2").textContent = g(a, "name_en") || "";
+    document.title = "全球水务开源情报 · " + (g(a, "name") || "水务片区");
+    P.backLink($("back"), "area.html", "全部片区");
+    $("openRow").innerHTML = P.open("water_area", id, "在表格里打开这个片区 ↗");
+    P.chronicle($("chron"), "city", cids).catch((e) => P.fail($("chron"), e));  /* 大事记、中标:自己读自己画 */
+    P.awards($("awBox"), "city", cids).catch((e) => P.fail($("awBox"), e));
+    const anyCity = (oid, prop) => P.cond(oid, prop, "isAnyOf", cids.length ? cids : ["__none__"]);
+    const [cities, opps, country] = await Promise.all([
+      cityRecs(cids),
+      P.records("opportunity", { filter: P.or(P.has("opportunity", "area") ? P.cond("opportunity", "area", "is", id) : null, anyCity("opportunity", "city")),
+        props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "priority", "city"] }),
+      crid ? one("country", crid).catch(() => null) : null,
+    ]);
+    const oppIds = opps.map((o) => o.id);
+    const [leads, ...plants] = await Promise.all([
+      P.records("lead", { filter: P.and(P.cond("lead", "relevant", "is", true), P.or(oppIds.length ? P.cond("lead", "opportunity", "isAnyOf", oppIds) : null, anyCity("lead", "city"))),
+        take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "category", "published", "found_at", "summary_zh", "opportunity", "status"] }),
+      ...["supply_plant", "sewage_plant"].map((oid) => P.cfg.tables[oid] ? P.records(oid, { filter: P.and(anyCity(oid, "city")), props: ["name", "name_zh", "kind", "status", "city", "capacity", "pop_served", "built", "operator", "note"] }) : []),
+    ]);
+    /* 卡片:合计人口(占全国,国别指标里有总人口时)、城市、商机(跟踪中)、线索 */
+    const total = pop(cities);
+    const ind = country ? String((country.fields || {})[P.f("country", "indicators")] || "") : "";
+    const m = ind.match(/^总人口[::]\s*([\d.,]+)\s*(亿|万)?/m);
+    const nat = m ? Number(m[1].replace(/,/g, "")) * (m[2] === "亿" ? 1e8 : m[2] === "万" ? 1e4 : 1) : 0;
+    const tracked = P.tracked(opps).length;
+    $("cards").innerHTML = P.kpiHtml([
+      { label: "合计人口", value: total ? wan(total) : "—", note: nat && total ? "占全国 " + Math.round(total * 100 / nat) + "%" : "" },
+      { label: "包含城市", value: cities.length + " 座" },
+      { label: "商机", value: opps.length + " 个", note: tracked ? "跟踪中 " + tracked : "" },
+      { label: "线索", value: leads.length + (leads.length >= 200 ? "+" : "") + " 条" }]);
+    const lines = (v) => P.esc(String(v || "")).replace(/\n/g, "<br>");
+    const facts = [["所属国别", crid && country ? '<a href="country.html?' + new URLSearchParams({ iso: (country.fields || {})[P.t("country").key] || "" }) + '">' + P.esc(P.text(g(a, "country"))) + "</a>" : P.esc(P.text(g(a, "country")))],
+      ["服务水司", P.esc(g(a, "utility") || "")], ["主要水源", lines(g(a, "sources"))], ["范围说明", lines(g(a, "scope"))], ["划分依据", lines(g(a, "basis"))], ["备注", lines(g(a, "note"))]].filter(([, v]) => v);
+    $("info").innerHTML = '<div class="facts">' + facts.map(([k, v]) => "<div><b>" + k + "</b><span>" + v + "</span></div>").join("") + "</div>";
+    cities.sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0));
+    $("cities").innerHTML = !cities.length ? '<p class="muted">还没选包含的城市(在表格里选上)。</p>' : P.tableHtml(["城市", "行政区", "人口", "占片区", "总体水风险", "无安全饮用水"], cities.map((c) => { const q = (p) => P.get("city", c, p);
+      return [P.raw('<a href="city.html?id=' + encodeURIComponent(c.id) + '"><b>' + P.esc(q("name_zh") || q("name_en") || "") + "</b></a>" + (q("name_en") ? ' <span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")),
+        q("admin") || "", num(q("population")), total ? Math.round((Number(q("population")) || 0) * 100 / total) + "%" : "", q("water_risk") === undefined || q("water_risk") === null ? "" : Number(q("water_risk")).toFixed(2), q("no_drinking") === undefined || q("no_drinking") === null ? "" : q("no_drinking") + "%"]; }));
+    const tr = new Set(P.tracked(opps).map((o) => o.id));  // 跟踪中的排前,其余按阶段
+    opps.sort((x, y) => (tr.has(y.id) - tr.has(x.id)) || (P.STAGES.indexOf(P.get("opportunity", x, "stage") || "建议") - P.STAGES.indexOf(P.get("opportunity", y, "stage") || "建议")) || String(P.get("opportunity", x, "code")).localeCompare(String(P.get("opportunity", y, "code"))));
+    $("opps").innerHTML = !opps.length ? '<p class="muted">还没有商机挂在这个片区或片区里的城市上(在商机上选「所属片区」)。</p>' :
+      P.tableHtml(["编号", "名称", "我方阶段", "公开进度", "资金", ""], opps.map((o) => { const q = (p) => P.get("opportunity", o, p);
+        return [P.raw('<a class="nw" href="opp.html?id=' + encodeURIComponent(o.id) + '">' + P.esc(q("code") || "") + "</a>"), q("name_zh"), q("stage") || "建议", q("public_stage") || "", (q("financing") || "").split("\n")[0].replace(/\s*\[[0-9a-f]{8}\]/g, "").replace(/\s*〔R\d+〕/g, ""), P.raw(P.open("opportunity", o.id))]; }));
+    $("leads").innerHTML = !leads.length ? '<p class="muted">还没有。</p>' :
+      P.tableHtml(["标题", "类别", "发布", "所属商机", "处理状态", ""], leads.slice(0, 50).map((l) => { const q = (p) => P.get("lead", l, p);
+        return [P.titleCell(l), q("category") || "", P.day(q("published")) || P.day(q("found_at")) || "", P.text(q("opportunity")), q("status") || "", P.raw(P.open("lead", l.id))]; })) +
+      (leads.length > 50 ? '<p class="muted small">列出最近 50 条,共 ' + leads.length + (leads.length >= 200 ? "+" : "") + " 条。</p>" : "");
+    const pl = [].concat(...plants.map((rows, i) => rows.map((r) => ({ r, oid: i ? "sewage_plant" : "supply_plant" }))));
+    pl.sort((x, y) => (Number(P.get(y.oid, y.r, "capacity")) || 0) - (Number(P.get(x.oid, x.r, "capacity")) || 0));
+    $("plants").innerHTML = !pl.length ? '<p class="muted">片区里的城市还没有水厂记录。</p>' :
+      P.tableHtml(["名称", "类型", "城市", "规模(万吨/日)", "服务人口", "状态", ""], pl.map(({ r, oid }) => { const q = (p) => P.get(oid, r, p);
+        return [P.raw("<b>" + P.esc(q("name_zh") || q("name") || "") + "</b>" + (q("note") ? '<br><span class="muted small">' + P.esc(String(q("note")).split("\n")[0]) + "</span>" : "")), oid === "supply_plant" ? "自来水厂" : "污水厂",
+          P.text(q("city")), q("capacity") === undefined || q("capacity") === null ? "" : String(q("capacity")), num(q("pop_served")), q("status") || "", P.raw(P.open(oid, r.id))]; }));
+  }
+
+  try {
+    await P.load();
+    if (!(P.cfg.tables && P.cfg.tables.water_area)) {
+      $("one").style.display = "none"; $("list").style.display = "";
+      $("rows").innerHTML = '<p class="muted">「水务片区」表还没建(跑一次建表命令后这里就有)。</p>';
+      return;
+    }
+    const id = q0.get("id");
+    if (id) await show(id); else await list();
+  } catch (e) { P.fail($(q0.get("id") ? "info" : "rows"), e); }
+})();
+</script>
+</body>
+</html>

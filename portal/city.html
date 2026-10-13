@@ -38,6 +38,7 @@
     <div class="tab" data-t="opps"><div class="panel" id="opps">读取中…</div></div>
     <div class="tab" data-t="leads"><div class="panel" id="leads">读取中…</div></div>
     <div class="tab" data-t="plants"><div class="panel" id="pmapBox"><div id="pmap" class="chart"></div><p class="muted small" id="pmapNote"></p></div><h2>自来水厂</h2><div class="panel" id="supply">读取中…</div><h2>污水厂</h2><div class="panel" id="sewage">读取中…</div></div>
+    <section id="chron"></section>
     <section id="awBox"></section>
   </section>
   <script>document.getElementById(/[?&]id=/.test(location.search) ? "one" : "list").style.display = "";  /* 先露出要的那一种,不等读表 */</script>
@@ -183,6 +184,7 @@
         props: ["key", "title", "url", "category", "published", "found_at", "nearest_deadline", "summary_zh", "project_name", "opportunity", "status"] }) : Promise.resolve([]),
       plantsOf("supply_plant"), plantsOf("sewage_plant"),
     ]);
+    P.chronicle($("chron"), "city", id).catch((e) => P.fail($("chron"), e));  /* 水务大事记(在已中标项目上面) */
     P.awards($("awBox"), "city", id).catch((e) => P.fail($("awBox"), e));  /* 已中标项目(页面最下面) */
     const full = await P.api("/table/" + P.t("city").id + "/record/" + id, { fieldKeyType: "id" });
     if (!full || !full.fields) { $("info").innerHTML = '<div class="err">没有这座城市</div>'; return; }

@@ -37,14 +37,15 @@
     <p class="muted small">人口达到门槛(缺省 10 万)的城市,后台每月按 GeoNames 公开数据维护;面积、地区生产总值公开数据里没有,在城市表里补,密度随后自动算。</p>
     <div class="panel" id="cities"></div>
   </div>
+  <div class="tab" data-t="docs"><section id="chron"></section><section id="studies"></section></div>
   <section id="awBox"></section>
 </main>
 <script>
 (async function () {
   const $ = (id) => document.getElementById(id);
   let countries = [], mc = null, mapOption = null;
-  /* 页签:概况 / 机构与法规 / 商机 / 线索 / 时间节点;选中的记在网址 t= 里,数字是这个国家的条数 */
-  const TABS = [["info", "概况"], ["inst", "机构与法规"], ["opps", "商机"], ["leads", "最近 90 天线索"], ["ms", "未来 30 天节点"], ["cities", "规模以上城市"]];
+  /* 页签:概况 / 机构与法规 / 水务历史资料 / 商机 / 线索 / 时间节点 / 城市;选中的记在网址 t= 里,数字是这个国家的条数 */
+  const TABS = [["info", "概况"], ["inst", "机构与法规"], ["docs", "水务历史资料"], ["opps", "商机"], ["leads", "最近 90 天线索"], ["ms", "未来 30 天节点"], ["cities", "规模以上城市"]];
   const q0 = new URLSearchParams(location.search);
   let tab = TABS.some(([k]) => k === q0.get("t")) ? q0.get("t") : "info";
   function urlOf(iso) { return "country.html?" + new URLSearchParams({ iso, t: tab }); }
@@ -106,6 +107,9 @@
         props: ["name_zh", "name_en", "admin", "population", "area_km2", "density", "gdp", "gdp_year", "lead_count", "opp_count", "coords"] }) : Promise.resolve([]),
     ]);
     P.awards($("awBox"), "country", c.id).catch((e) => P.fail($("awBox"), e));  /* 已中标项目(页面最下面):自己读自己画,不等别的 */
+    /* 水务历史资料:大事记在上、研究资料在下,各自读各自画;页签上的数是研究资料份数 */
+    const docsP = Promise.all([P.chronicle($("chron"), "country", c.id).catch((e) => { P.fail($("chron"), e); return 0; }),
+      P.studies($("studies"), c.id).catch((e) => { P.fail($("studies"), e); return 0; })]);
     const full = await P.api("/table/" + P.t("country").id + "/record/" + c.id, { fieldKeyType: "id" });
     const f = (p) => (full && full.fields || {})[P.f("country", p)];
     /* 长文本按后台写入的格式整理:一行一条;「名称:数值(来源 网址)」→ 事实表;「· 」分隔 → 表格;[备注]/[情报]/[建议动作] → 标签;[8位引用键]、〔R012〕→ 小角标 */
@@ -177,7 +181,8 @@
       P.tableHtml(["城市", "行政区", "人口", "面积(km²)", "密度", "生产总值(亿美元)", "线索", "商机", ""], cities.map((ct) => { const q = (p) => P.get("city", ct, p);
         return [P.raw('<a href="city.html?id=' + encodeURIComponent(ct.id) + '"><b>' + P.esc(q("name_zh") || q("name_en") || "") + "</b></a>" + (q("name_en") && q("name_en") !== q("name_zh") ? ' <span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")), q("admin") || "", num(q("population")), num(q("area_km2")), num(q("density")),
           num(q("gdp")) + (q("gdp") && q("gdp_year") ? ' <span class="muted small">' + P.esc(String(q("gdp_year"))) + "</span>" : ""), String(q("lead_count") || 0), String(q("opp_count") || 0), P.raw(P.open("city", ct.id))]; }));
-    drawTabs({ opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
+    const [, nDoc] = await docsP;
+    drawTabs({ docs: nDoc || undefined, opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
   }
 
   try {

@@ -6,7 +6,7 @@
 schema: osint-water/teable-map@1
 base: 水务项目机会 新版
 timezone: Asia/Shanghai
-order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award]   # 建表顺序(关联字段在所有表建好后再加)
+order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award, study, water_event, water_area]   # 建表顺序(关联字段在所有表建好后再加)
 
 tables:
   lead:
@@ -45,6 +45,22 @@ tables:
     key: {name: 标识, note: 名称规范化(大写、去标点与公司后缀);去重按它}
     default_sort: [[中标数, desc]]
     optional: true
+  study:
+    table: 研究资料
+    primary: name
+    key: {name: 编号, note: 来源缩写 + 文件号(WB-34180924);综述为 SUM-国别码;去重按它,人补录的可空}
+    default_sort: [[发布日期, desc]]
+    optional: true   # 2026-10-13 新加的表:库里还没建时后台与页面跳过
+  water_event:
+    table: 水务事件
+    primary: title
+    key: {name: 编号, note: WB-项目编号-批准 / 关闭;摘自资料的 EV-国别码-序号;去重按它,人补录的可空}
+    default_sort: [[日期, desc]]
+    optional: true   # 2026-10-13 新加的表
+  water_area:
+    table: 水务片区
+    primary: name
+    optional: true   # 2026-10-13 新加的表
   opportunity:
     table: 商机
     primary: name_zh
@@ -131,6 +147,12 @@ links:
   award.country: {one_way: true}   # 国别表不要几千条的反向字段
   award.city: {reverse: 已中标项目}
   award.winners: {reverse: 中标项目}
+  study.country: {one_way: true}
+  water_event.country: {one_way: true}
+  water_event.city: {reverse: 水务事件}
+  water_area.country: {one_way: true}
+  water_area.cities: {reverse: 水务片区}
+  opportunity.area: {reverse: 商机}
   company.countries: {one_way: true}
   preference.countries: {one_way: true}
 
@@ -185,6 +207,10 @@ views:
     - {name: 重点国, filter: {and: [[市场分级, is, 重点]]}}
   award:
     - {name: 按国别, group: [[所属国别, asc]], sort: [[中标时间, desc]]}
+  water_event:
+    - {name: 按国别, group: [[所属国别, asc]], sort: [[日期, desc]]}
+  study:
+    - {name: 按国别, group: [[所属国别, asc]], sort: [[发布日期, desc]]}
   source:
     - {name: 异常, filter: {and: [[最近状态, isNotEmpty], [最近状态, isNot, 正常]]}}
   report:

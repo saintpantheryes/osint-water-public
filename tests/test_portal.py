@@ -19,9 +19,9 @@ KIT = ROOT / "deploy" / "teable"
 ONTO, TMAP = ontology.load(), ontology.load_map()
 ONTO_RAW = ontology.raw()
 # 菜单(使用方 2026-10-08 定,10-09 加「市场背景」):首页 + 四组,组内顺序也按这个;「后台数据表格」是表格本身
-MENU_SPEC = [("工作原理", ["工作流程", "本体", "信源", "后台数据表格 ↗"]), ("市场背景", ["国别概况", "城市概况", "趋势机会"]), ("项目线索", ["线索总览", "线索分析", "线索处理"]), ("商机跟进", ["商机总览", "日历", "报告"])]
+MENU_SPEC = [("工作原理", ["工作流程", "本体", "信源", "后台数据表格 ↗"]), ("市场背景", ["国别概况", "城市概况", "水务片区", "趋势机会"]), ("项目线索", ["线索总览", "线索分析", "线索处理"]), ("商机跟进", ["商机总览", "日历", "报告"])]
 NEW = "水务项目机会 新版"
-READ_PAGES = ("calendar.html", "country.html", "city.html", "trend.html", "analysis.html", "ontology.html", "contractor.html")  # 只读
+READ_PAGES = ("calendar.html", "country.html", "city.html", "trend.html", "analysis.html", "ontology.html", "contractor.html", "area.html")  # 只读
 WRITE_PAGES = ("index.html", "overview.html", "opps.html", "opp.html", "inbox.html", "reports.html", "sources.html")  # 信源页只改「启用」; 以登录人身份写(跟进、报告申请、阶段、归属;首页只在看完一条链接后按「收进线索库」建一行线索;线索总览只有清单里的「转为商机」)
 PAGES = READ_PAGES + WRITE_PAGES
 
@@ -392,7 +392,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             assert "阿塞拜疆" in txt and "GDP\n720 亿美元" in txt and "甲城项目采购已启动" in txt  # 默认页签「概况」:备注与指标
             assert page.locator(".facts a.src").count() >= 1 and "AI 推荐" in txt and "待人定" not in txt  # 指标成了「名称 / 数值 / 来源链接」,不再是一坨原文
             # 页签切换:商机 / 线索 / 节点各在自己的页签里,页签上带条数;其他页签的内容藏着
-            assert page.locator("#tabs button").count() == 6 and page.locator("#tabs button.on").inner_text() == "概况" and "AZE-001" not in txt
+            assert page.locator("#tabs button").count() == 7 and page.locator("#tabs button.on").inner_text() == "概况" and "AZE-001" not in txt
             assert page.inner_text("#tabs button:has-text('商机')").split()[-1] == "2" and page.inner_text("#tabs button:has-text('线索')").split()[-1] == "3"
             page.click("#tabs button:has-text('商机')")
             assert "AZE-001" in page.inner_text("main") and "GDP" not in page.inner_text("main")
@@ -1889,6 +1889,137 @@ def test_awards_table_at_the_bottom_of_country_and_city_pages():
     finally:
         srv.shutdown()
     assert all(m == "GET" for m, _ in fake.calls[seeded:]), "已中标项目只读"
+
+
+def test_water_history_tab_and_city_chronicle():
+    """水务历史资料(使用方 2026-10-13 要的,v2.17):国别概况多一个页签,上面是年度大事记(水务事件 + 每年最大三份中标,按年从新到旧,
+    类别可筛、数跟着走,只到年的不写月日),下面综述展开、研究资料按类型筛;城市页有只挂这座城市的大事记。只读。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    city = b.create("city", [{"key": "1", "name_zh": "巴库", "name_en": "Baku", "country": c["id"], "coords": "40.4,49.9", "population": 2300000}])[0]
+    b.create("water_event", [
+        {"key": "EV-1", "day": "2004-01-01", "日期原文": "2004", "title": "Azersu 成立,统管全国城市供排水", "kind": "机构改革", "country": c["id"], "source": "世行文件 第14页", "url": "https://example.org/a.pdf"},
+        {"key": "EV-2", "day": "2016-05-13", "日期原文": "2016-05-13", "title": "电价委员会批准上调水价和污水费", "kind": "水价调整", "country": c["id"], "city": city["id"]},
+        {"key": "WB-P1-批准", "day": "2007-06-14", "日期原文": "2007-06-14", "title": "世界银行批准「国家供水与卫生项目」,2.3 亿美元", "kind": "项目批准", "country": c["id"]},
+    ])
+    b.create("award", [{"key": "WB-9", "name": "Baku WWTP", "name_zh": "巴库污水厂改造", "sector": "污水", "price_cny": 5680, "awarded": "2016-03-01",
+                        "winner": "Sample JV", "winner_country": "中国", "country": c["id"], "city": city["id"]}])
+    b.create("study", [
+        {"key": "SUM-AZE", "name": "阿塞拜疆水务综述", "name_zh": "阿塞拜疆水务综述", "kind": "综述", "published": "2026-10-13", "country": c["id"],
+         "summary": "## 关键数字\n- 巴库漏损 **51.5%**(24报告 p36)\n- 管网 10,200 km"},
+        {"key": "WB-1", "name": "Azerbaijan - National Water Supply and Sanitation Project", "kind": "项目评估", "published": "2007-05-01", "country": c["id"], "url": "https://example.org/1.pdf"},
+        {"key": "WB-2", "name": "Azerbaijan - Transitioning to Efficient Water Sector Institutions", "name_zh": "阿塞拜疆水务机构转型", "kind": "行业研究", "published": "2024-08-31", "country": c["id"]},
+    ])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    seeded = len(fake.calls)
+    shots = Path(os.environ.get("PORTAL_SHOTS", "")) if os.environ.get("PORTAL_SHOTS") else None
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/country.html?iso=AZE&t=docs")
+            page.wait_for_selector("#chron .chron", timeout=15000)
+            page.wait_for_selector("#studies table", timeout=15000)
+            assert page.locator(".tab.on").get_attribute("data-t") == "docs"
+            assert page.locator(".cyl").all_inner_texts() == ["2016", "2007", "2004"]  # 按年从新到旧
+            y2016 = page.locator(".cy").first.inner_text()
+            assert "05-13" in y2016 and "巴库" in y2016 and "中标" in y2016 and "巴库污水厂改造" in y2016 and "5,680 万元" in y2016  # 当年最大的中标并进来
+            assert "Azersu 成立" in page.locator(".cy").last.inner_text() and "01-01" not in page.locator(".cy").last.inner_text()  # 只到年的不写月日
+            assert page.locator("#chron .ch-k .chip-btn").all_inner_texts() == ["全部 4", "项目批准 1", "机构改革 1", "水价调整 1", "中标 1"]
+            page.click("#chron .ch-k .chip-btn[data-v='项目批准']")
+            assert page.locator(".cyl").all_inner_texts() == ["2007"]
+            assert "51.5%" in page.inner_text("#studies details.sec .md") and page.locator("#studies .md li").count() == 2
+            assert page.locator("#studies tbody tr").count() == 2 and page.locator("#studies tbody tr").first.inner_text().startswith("2024-08-31")
+            assert page.locator("#studies .sd-k .chip-btn").all_inner_texts() == ["全部 2", "行业研究 1", "项目评估 1"]
+            assert "水务历史资料 3" in page.inner_text("#tabs")
+            if shots:
+                page.locator(".tab.on").screenshot(path=str(shots / "history_country.png"))
+            page.goto(base + f"/city.html?id={city['id']}")
+            page.wait_for_selector("#chron .chron", timeout=15000)
+            assert page.locator("#chron .cyl").all_inner_texts() == ["2016"] and page.locator("#chron li").count() == 2
+            phone = browser.new_page(viewport={"width": 390, "height": 760})
+            phone.goto(base + "/country.html?iso=AZE&t=docs")
+            phone.wait_for_selector("#studies table", timeout=15000)
+            assert phone.evaluate("document.documentElement.scrollWidth") <= 400
+            if shots:
+                phone.locator(".tab.on").screenshot(path=str(shots / "history_phone.png"))
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    assert all(m == "GET" for m, _ in fake.calls[seeded:]), "水务历史资料只读"
+
+
+def test_water_area_page_sums_its_cities():
+    """水务片区(使用方 2026-10-13 要的,v2.18):市场背景下新页;清单列片区、包含城市与合计人口;一个片区汇总包含城市的人口、
+    商机(挂片区的 + 城市在片区里的)、线索、大事记、水厂与中标,不在片区里的城市不算。只读。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    baku, sum_, ganja = b.create("city", [{"key": "1", "name_zh": "巴库", "name_en": "Baku", "country": c["id"], "population": 2351300, "water_risk": 4.24},
+                                          {"key": "2", "name_zh": "苏姆盖特", "name_en": "Sumgayit", "country": c["id"], "population": 427000},
+                                          {"key": "3", "name_zh": "甘贾", "name_en": "Ganja", "country": c["id"], "population": 330663}])
+    area = b.create("water_area", [{"name": "大巴库", "name_en": "Greater Baku", "country": c["id"], "cities": [baku["id"], sum_["id"]], "utility": "大城市联合供水局",
+                                    "sources": "奥古兹—盖贝莱—巴库线\n萨穆尔—阿布歇隆渠", "basis": "同一家水司供水"}])[0]
+    o2, o3 = b.create("opportunity", [{"code": "AZE-101", "name_zh": "阿布歇隆半岛 33 个居民点供水", "country": c["id"], "area": area["id"], "stage": "建议"},
+                                      {"code": "AZE-102", "name_zh": "甘贾污水厂", "country": c["id"], "city": ganja["id"], "stage": "建议"}])
+    b.create("opportunity", [{"code": "AZE-103", "name_zh": "苏姆盖特污水厂", "country": c["id"], "city": sum_["id"], "stage": "跟踪中"}])
+    b.create("sewage_plant", [{"name": "Hovsan WWTP", "name_zh": "霍夫桑污水厂", "kind": "污水厂", "country": c["id"], "city": baku["id"], "capacity": 64, "status": "运行"},
+                              {"name": "Ganja WWTP", "kind": "污水厂", "country": c["id"], "city": ganja["id"], "capacity": 5}])
+    b.create("water_event", [{"key": "E1", "day": "2000-01-01", "日期原文": "2000", "title": "成立阿布歇隆水务公司", "kind": "机构改革", "country": c["id"], "city": baku["id"]},
+                             {"key": "E2", "day": "2010-01-01", "日期原文": "2010", "title": "甘贾的事", "kind": "其他", "country": c["id"], "city": ganja["id"]}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    seeded = len(fake.calls)
+    shots = Path(os.environ.get("PORTAL_SHOTS", "")) if os.environ.get("PORTAL_SHOTS") else None
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/area.html")
+            page.wait_for_selector("#rows table", timeout=15000)
+            row = page.inner_text("#rows tbody tr")
+            assert "大巴库" in row and "巴库" in row and "苏姆盖特" in row and "277.8 万" in row and "\t1\t" in row  # 挂上的商机 1 个
+            assert "水务片区" in page.inner_text("#nav")
+            page.click("#rows a:has-text('大巴库')")
+            page.wait_for_selector("#chron .chron", timeout=15000)
+            page.wait_for_selector("#plants table", timeout=15000)
+            k = page.inner_text("#cards")
+            assert "277.8\n万" in k and "2\n座" in k and "2\n个" in k and "跟踪中 1" in k
+            assert page.locator("#cities tbody tr").count() == 2 and page.locator("#cities tbody tr").first.inner_text().startswith("巴库")
+            opps = page.inner_text("#opps")
+            assert "AZE-101" in opps and "AZE-103" in opps and "AZE-102" not in opps  # 甘贾不在片区里
+            assert page.inner_text("#opps tbody tr").startswith("AZE-103")  # 跟踪中的排前
+            assert "霍夫桑污水厂" in page.inner_text("#plants") and "Ganja" not in page.inner_text("#plants")
+            assert "成立阿布歇隆水务公司" in page.inner_text("#chron") and "甘贾的事" not in page.inner_text("#chron")
+            assert "奥古兹—盖贝莱—巴库线" in page.inner_text("#info") and "同一家水司供水" in page.inner_text("#info")
+            if shots:
+                page.screenshot(path=str(shots / "area.png"), full_page=True)
+            phone = browser.new_page(viewport={"width": 390, "height": 760})
+            phone.goto(base + f"/area.html?id={area['id']}")
+            phone.wait_for_selector("#plants table", timeout=15000)
+            assert phone.evaluate("document.documentElement.scrollWidth") <= 400
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    assert all(m == "GET" for m, _ in fake.calls[seeded:]), "水务片区页只读"
 
 
 def test_contractor_page_lists_its_awards_and_winner_names_link_to_it():

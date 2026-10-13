@@ -156,8 +156,29 @@ def build(today: date) -> dict[str, list[dict]]:
                            "awarded": today.replace(month=1, day=1) - d(days=365 * (j % 3) + 40 * i + 15 * j), "quantity": qty or None, "winner": win, "winner_country": wc, "winners": ws,
                            "project": f"P9{i}{j}000 {c['name_en']} Water Security Project (sample)", "funder": FUNDERS[j % 2], "method": "公开招标(RFB)",
                            "country": c["country"], "city": c["_k"] if j < 3 else None, "source": "示例数据", "url": f"https://example.org/award/{i}{j}"})
+    # 研究资料与水务事件(国别概况「水务历史资料」、城市大事记):每个示例国家一份综述、一份评估文件、五件大事(两件在示例城市)
+    studies, events = [], []
+    for i, c in enumerate(cities):
+        y = today.year - 12 + i
+        studies += [{"_k": f"ST-{c['country']}-0", "key": f"SUM-sample-{i}", "name": f"{c['name_zh']}所在国水务综述(示例)", "name_zh": f"{c['name_zh']}所在国水务综述(示例)",
+                     "kind": "综述", "publisher": "本系统整理", "published": today.replace(month=1, day=1), "language": "中文", "country": c["country"],
+                     "summary": f"## 关键数字\n- 城市供水覆盖率约 {80 + i}%,漏损率约 {35 + i}%(示例)\n- 主要资金来自开发银行贷款与国家预算(示例)\n\n## 主要机构\n- 国家水务公司负责{c['name_zh']}供排水(示例)"},
+                    {"_k": f"ST-{c['country']}-1", "key": f"WB-sample-{i}", "name": f"{c['name_en']} Water Security Project: Project Appraisal Document (sample)",
+                     "name_zh": f"{c['name_zh']}水安全项目评估文件(示例)", "kind": "项目评估", "publisher": "世界银行", "published": date(y, 5, 20), "language": "英文",
+                     "project": f"P9{i}0000 {c['name_en']} Water Security Project (sample)", "country": c["country"], "url": f"https://example.org/study/{i}"}]
+        for j, (kind, title, city) in enumerate([("项目批准", f"世界银行批准「{c['name_zh']}水安全项目」,1.2 亿美元(示例)", True),
+                                                  ("机构改革", "国家水务公司改组,城市供排水统一经营(示例)", False),
+                                                  ("规划与政策", "国家水战略发布,2030 年漏损率目标 20%(示例)", False),
+                                                  ("水价调整", "居民水价上调 10%(示例)", False),
+                                                  ("工程投运", f"{c['name_zh']}第二水厂投运,10 万吨/日(示例)", True)]):
+            day = date(y + j, 1, 1) if j % 2 else date(y + j, 3 + j, 1)  # 只到年的写区间起点
+            events.append({"_k": f"EV-{c['country']}-{j}", "key": f"EV-sample-{i}-{j}", "day": day, "日期原文": str(day.year) if j % 2 else day.isoformat(),
+                           "title": title, "kind": kind, "country": c["country"], "city": c["_k"] if city else None, "source": "示例数据", "url": f"https://example.org/event/{i}{j}"})
     data = {"country": countries, "city": cities, "source": sources, "opportunity": opps, "lead": leads, "milestone": ms, "report": reports,
-            "supply_plant": supply, "sewage_plant": sewage, "award": awards, "contractor": firms}
+            "supply_plant": supply, "sewage_plant": sewage, "award": awards, "contractor": firms, "study": studies, "water_event": events,
+            "water_area": [{"_k": f"WA-{c['country']}", "name": f"大{c['name_zh']}(示例)", "name_en": f"Greater {c['name_en']} (sample)", "country": c["country"], "cities": [c["_k"]],
+                            "utility": "国家水务公司(示例)", "sources": "示例水库\n示例输水干管", "scope": f"{c['name_zh']}市区及周边郊区居民点(示例)",
+                            "basis": "同一家水司、同一批水源供水(示例)"} for c in cities[:2]]}
     _derive(data, today)
     return data
 

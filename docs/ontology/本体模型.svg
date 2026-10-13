@@ -11,9 +11,9 @@
 <marker id="dK" viewBox="0 0 16 10" refX="1" refY="5" markerWidth="14" markerHeight="9" orient="auto-start-reverse"><path d="M0,5 L8,0 L16,5 L8,10 z" fill="#212121"/></marker>
 </defs>
 <rect x="0.0" y="0.0" width="1800.0" height="2990.0" rx="0" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
-<text x="40.0" y="50.0" font-size="28" fill="#212121" font-weight="bold" text-anchor="start">全球水务开源情报 本体模型 v2.16 · 对象 — 行为 — 规则</text>
-<text x="40.0" y="80.0" font-size="14" fill="#555555" font-weight="normal" text-anchor="start">SAM/SCBRD × OBR(对象 · 行为 · 规则)  |  4 个核心对象 + 13 个支撑对象  |  判定是行为、日历是查询  |  每个对象只存一处  |  每个口径只定一次</text>
-<text x="1760.0" y="50.0" font-size="15" fill="#1976D2" font-weight="bold" text-anchor="end">«system» Ontology · Global Water OSINT v2.16</text>
+<text x="40.0" y="50.0" font-size="28" fill="#212121" font-weight="bold" text-anchor="start">全球水务开源情报 本体模型 v2.18 · 对象 — 行为 — 规则</text>
+<text x="40.0" y="80.0" font-size="14" fill="#555555" font-weight="normal" text-anchor="start">SAM/SCBRD × OBR(对象 · 行为 · 规则)  |  4 个核心对象 + 16 个支撑对象  |  判定是行为、日历是查询  |  每个对象只存一处  |  每个口径只定一次</text>
+<text x="1760.0" y="50.0" font-size="15" fill="#1976D2" font-weight="bold" text-anchor="end">«system» Ontology · Global Water OSINT v2.18</text>
 <text x="1760.0" y="78.0" font-size="12.5" fill="#888888" font-weight="normal" text-anchor="end">2026-10-13 · 唯一业务库 Teable · 机器可读版 docs/ontology/ontology.yaml(分类体系与口径见 本体.md)</text>
 <line x1="40" y1="96" x2="1760" y2="96" stroke="#E0E0E0" stroke-width="1.5"/>
 <text x="40.0" y="124.0" font-size="14" fill="#D32F2F" font-weight="bold" text-anchor="start">关键路径 «keypath»:</text>
@@ -117,6 +117,47 @@
 <rect x="302.0" y="1355.5" width="298.0" height="45.5" rx="4" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1"/>
 <text x="310.0" y="1371.5" font-size="11.5" fill="#BDBDBD" font-weight="bold" text-anchor="start">派生(不存)</text>
 <text x="310.0" y="1390.0" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">线索数 · 商机数 · 自来水厂数 · 污水厂数</text>
+<rect x="56.0" y="925.0" width="196.0" height="210.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="57.5" y="926.5" width="193.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="68.0" y="943.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="68.0" y="962.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">研究资料</text>
+<rect x="62.0" y="975.0" width="184.0" height="101.0" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="70.0" y="991.0" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写(世行文件库,一次性导入)</text>
+<text x="70.0" y="1009.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">标题 · 中文标题 · 类型 ·</text>
+<text x="70.0" y="1028.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">发布机构 · 发布日期 · 语言 ·</text>
+<text x="70.0" y="1046.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">国别 · 相关项目 · 原文链接 ·</text>
+<text x="70.0" y="1065.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">要点</text>
+<rect x="62.0" y="1084.0" width="184.0" height="45.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="70.0" y="1100.0" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人补</text>
+<text x="70.0" y="1118.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">别的来源补录 · 备注</text>
+<rect x="56.0" y="1161.5" width="196.0" height="173.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="57.5" y="1163.0" width="193.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="68.0" y="1179.5" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="68.0" y="1198.5" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">水务事件</text>
+<rect x="62.0" y="1211.5" width="184.0" height="64.0" rx="4" fill="#D5E8D4" stroke="#82B366" stroke-width="1"/>
+<text x="70.0" y="1227.5" font-size="11.5" fill="#82B366" font-weight="bold" text-anchor="start">机器写(世行项目库、原文摘录)</text>
+<text x="70.0" y="1246.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">日期 · 事件 · 类别 · 国别 ·</text>
+<text x="70.0" y="1264.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">城市 · 出处 · 原文链接</text>
+<rect x="62.0" y="1283.5" width="184.0" height="45.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="70.0" y="1299.5" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人补</text>
+<text x="70.0" y="1318.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">别的事件 · 备注</text>
+<rect x="640.0" y="1158.5" width="240.0" height="280.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="641.5" y="1160.0" width="237.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="652.0" y="1176.5" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="652.0" y="1195.5" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">水务片区</text>
+<rect x="646.0" y="1208.5" width="228.0" height="82.5" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="654.0" y="1224.5" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人划定(表格,A35)</text>
+<text x="654.0" y="1243.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">名称 · 英文名 · 国别 · 包含城市 ·</text>
+<text x="654.0" y="1261.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">服务水司 · 主要水源 · 范围说明 ·</text>
+<text x="654.0" y="1280.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">划分依据 · 备注</text>
+<rect x="646.0" y="1299.0" width="228.0" height="82.5" rx="4" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1"/>
+<text x="654.0" y="1315.0" font-size="11.5" fill="#BDBDBD" font-weight="bold" text-anchor="start">派生(页面现算)</text>
+<text x="654.0" y="1333.5" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">合计人口 ·</text>
+<text x="654.0" y="1352.0" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">片区内商机、线索、大事记、中标、</text>
+<text x="654.0" y="1370.5" font-size="13" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">水厂</text>
+<rect x="646.0" y="1389.5" width="228.0" height="45.5" rx="4" fill="#FFFFFF" stroke="#90A4AE" stroke-width="1"/>
+<text x="654.0" y="1405.5" font-size="11.5" fill="#90A4AE" font-weight="bold" text-anchor="start">被谁挂</text>
+<text x="654.0" y="1424.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">商机.所属片区(可选,人选)</text>
 <polygon points="743,242 801,300 743,358 685,300" fill="#FFE0B2" stroke="#F57C00" stroke-width="2" stroke-dasharray="6 4"/>
 <text x="743.0" y="284.0" font-size="10.5" fill="#666666" font-weight="normal" text-anchor="middle" font-style="italic">«behavior» A03</text>
 <text x="743.0" y="305.0" font-size="17" fill="#212121" font-weight="bold" text-anchor="middle">判定</text>
@@ -411,6 +452,18 @@
 <path d="M296,1773.5 L232,1773.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
 <text x="264.0" y="1751.5" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">中标方</text>
 <text x="264.0" y="1765.5" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">*..*</text>
+<path d="M252,995.0 L296,995.0" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="274.0" y="1013.0" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">属于</text>
+<text x="274.0" y="1027.0" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">*..1</text>
+<path d="M640,1218.5 L606,1218.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="623.0" y="1210.5" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">包含</text>
+<text x="623.0" y="1236.5" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">*..*</text>
+<path d="M700,1158.5 L700.0,1082.5 Q700,1072.5 690.0,1072.5 L606,1072.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="708.0" y="1150.5" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">属于 *..1</text>
+<path d="M252,1211.5 L296,1211.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="274.0" y="1229.5" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">发生在</text>
+<text x="274.0" y="1243.5" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">*..0..1</text>
+<text x="56.0" y="1351.0" font-size="11.5" fill="#212121" font-weight="normal" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">属于国别 *..1</text>
 <path d="M606,979.0 L1320.0,979.0 Q1330,979.0 1330.0,969.0 L1330,495.0" fill="none" stroke="#1976D2" stroke-width="2" marker-end="url(#aB)" stroke-linecap="round"/>
 <text x="1170.0" y="971.0" font-size="12" fill="#1976D2" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">国别信息写进报告</text>
 <path d="M1230,2079.5 L1400.0,2079.5 Q1410,2079.5 1410.0,2069.5 L1410,495.0" fill="none" stroke="#1976D2" stroke-width="2" marker-end="url(#aB)" stroke-linecap="round"/>
