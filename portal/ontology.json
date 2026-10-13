@@ -1623,7 +1623,7 @@
      "type": "text",
      "by": "ai",
      "required": true,
-     "note": "GeoNames 的中文别名;没有的用英文名"
+     "note": "维基数据的简体中文名(reference/city_zh.tsv);没有的取 GeoNames 中文别名转简体;再没有用英文名"
     },
     {
      "id": "name_en",
