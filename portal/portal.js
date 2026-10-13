@@ -239,6 +239,7 @@
       { name: "市场背景", items: [
         ["country.html", "国别概况", "一国的指标、机构法规、城市、商机、线索与节点。"],
         ["city.html", "城市概况", "规模以上城市的人口、面积、分布,与关联的商机、线索。"],
+        ["area.html", "水务片区", "共用水司与水源的连片城市(如大巴库):人口、商机、线索、大事记、中标与水厂一起看。"],
         ["trend.html", "趋势机会", "按水风险、人均 GDP 与开发性贷款推算哪里缺水又有钱建:方向参考,不是具体项目。"],
       ] },
       { name: "项目线索", items: [
@@ -571,7 +572,7 @@
       if (!(this.cfg.tables && this.cfg.tables.award) || !this.has("award", prop)) { el.innerHTML = head + '<p class="muted">「已中标项目」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
       el.innerHTML = head + '<div class="panel">读取中…</div>';
       const many = (this.t("award").links || {})[prop] === "many", hasW = this.has("award", "winners");
-      const rows = await this.records("award", { filter: this.and(many ? this.cond("award", prop, "hasAnyOf", [rid]) : this.cond("award", prop, "is", rid)),
+      const rows = await this.records("award", { filter: this.and(many ? this.cond("award", prop, "hasAnyOf", [].concat(rid)) : Array.isArray(rid) ? this.cond("award", prop, "isAnyOf", rid) : this.cond("award", prop, "is", rid)),
         props: ["name", "name_zh", "sector", "contract_type", "price", "currency", "price_cny", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "country", "city", "source", "url"]
           .concat(hasW ? ["winners"] : [], this.has("award", "buyer") ? ["buyer"] : []) });
       const g = (r, p) => this.get("award", r, p);
@@ -613,7 +614,7 @@
           firm ? { label: "涉及国别", value: nC + " 个", note: list.length ? "最近一份 " + (this.day(g(list[0], "awarded")) || "—") : "" } :
             { label: "中国企业中标", value: cn + " 份", note: list.length ? "占 " + Math.round(cn * 100 / list.length) + "%" : "" }]);
         $(".aw-n").textContent = "共 " + rows.length + " 份";
-        const place = prop === "country" ? "城市" : firm ? "国别" : "";
+        const place = prop === "country" || Array.isArray(rid) ? "城市" : firm ? "国别" : "";
         $(".aw-t").innerHTML = !list.length ? '<p class="muted">没有符合条件的已中标项目。</p>' :
           this.tableHtml(["中标时间", "名称", "类别", "合同类型", "中标价", "工程量", firm ? "联合体伙伴" : "中标单位"].concat(place ? [place] : [], ["资金来源", ""]), list.slice(0, show).map((r) => {
             const zh = g(r, "name_zh"), en = g(r, "name") || "", u = g(r, "url");
@@ -631,11 +632,111 @@
             const at = (href, f) => href ? this.raw('<a class="nw" href="' + href + '">' + this.esc(this.text(g(r, f))) + "</a>") : this.text(g(r, f)) || "";
             const cid = this.linkId(g(r, "city")), iso = isoOf[this.linkId(g(r, "country"))];
             return [this.raw('<span class="nw">' + this.esc(this.day(g(r, "awarded")) || "") + "</span>"), this.raw(nm), g(r, "sector") || "", g(r, "contract_type") || "", this.raw(price), g(r, "quantity") || "", this.raw(win)]
-              .concat(place ? [prop === "country" ? at(cid && "city.html?id=" + encodeURIComponent(cid), "city") : at(iso && "country.html?" + new URLSearchParams({ iso }), "country")] : [], [g(r, "funder") || "", this.raw(this.open("award", r.id))]);
+              .concat(place ? [place === "城市" ? at(cid && "city.html?id=" + encodeURIComponent(cid), "city") : at(iso && "country.html?" + new URLSearchParams({ iso }), "country")] : [], [g(r, "funder") || "", this.raw(this.open("award", r.id))]);
           })) + (list.length > show ? '<p><button type="button" class="chip-btn more aw-more">再列 ' + Math.min(PAGE, list.length - show) + " 份(已列 " + show + " / " + list.length + ")</button></p>" : "");
         const more = $(".aw-more"); if (more) more.onclick = () => { show += PAGE; render(); };
       };
       let tt = 0; $(".aw-q").oninput = () => { clearTimeout(tt); tt = setTimeout(() => { st.q = $(".aw-q").value.trim(); show = PAGE; render(); }, 250); };
+      render();
+      return rows.length;
+    },
+    /* 简单 Markdown(综述要点用):## 小标题、- 列表、**粗体**、空行分段;别的原样转义 */
+    mdLite(src) {
+      const inl = (s) => this.esc(s).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+      const out = []; let list = false;
+      String(src || "").split(/\r?\n/).forEach((l) => {
+        const t = l.trim(), li = t.match(/^[-*]\s+(.*)$/), h = t.match(/^(#{1,4})\s+(.*)$/);
+        if (!li && list) { out.push("</ul>"); list = false; }
+        if (h) out.push("<h4>" + inl(h[2]) + "</h4>");
+        else if (li) { if (!list) { out.push("<ul>"); list = true; } out.push("<li>" + inl(li[1]) + "</li>"); }
+        else if (t) out.push("<p>" + inl(t) + "</p>");
+      });
+      if (list) out.push("</ul>");
+      return '<div class="md">' + out.join("") + "</div>";
+    },
+    /* 水务年度大事记(本体 V7、V16;2026-10-13 使用方要):国别概况「水务历史资料」页签最上面、城市一页里的同一块。
+       水务事件(所属国别 / 所在城市 = 它)+ 已中标项目里每年最大的三份(页面现算,不存);按年从新到旧,类别可多选筛选,筛选项上的数跟着走。
+       水务片区页(V20)传 prop = "city"、rid = 片区里几座城市的编号数组。→ 条数 */
+    async chronicle(el, prop, rid) {
+      const many = Array.isArray(rid), byCity = prop === "country" || many;
+      const on = (oid) => many ? this.cond(oid, prop, "isAnyOf", rid.length ? rid : ["__none__"]) : this.cond(oid, prop, "is", rid);
+      const head = '<h2 id="chronicle">水务大事记</h2><p class="muted small">项目批准与关闭来自世界银行项目库;机构改革、规划、水价、工程投运摘自世行等机构文件原文(出处写到页码);' +
+        "「中标」是已中标项目里每年最大的三份。人工可在表格「水务事件」里补。</p>";
+      const hasE = this.cfg.tables && this.cfg.tables.water_event && this.has("water_event", prop);
+      const hasA = this.cfg.tables && this.cfg.tables.award && this.has("award", prop);
+      if (!hasE && !hasA) { el.innerHTML = head + '<p class="muted">「水务事件」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
+      el.innerHTML = head + '<div class="panel">读取中…</div>';
+      const RAW = "日期原文";
+      const [evs, aws] = await Promise.all([
+        hasE ? this.records("water_event", { filter: this.and(on("water_event")), props: ["day", RAW, "title", "kind", "city", "source", "url"] }) : [],
+        hasA ? this.records("award", { filter: this.and(on("award")), props: ["name", "name_zh", "price_cny", "awarded", "winner", "winner_country", "city", "url"] }) : [],
+      ]);
+      const ge = (r, p) => this.get("water_event", r, p), ga = (r, p) => this.get("award", r, p);
+      const cny = (w) => (w >= 1e4 ? (Math.round(w / 100) / 100).toFixed(2) + " 亿元" : Math.round(w).toLocaleString("zh-CN") + " 万元");
+      const items = evs.map((r) => {
+        const raw = String(ge(r, RAW) || "").trim(), day = this.day(ge(r, "day")) || "";
+        return { y: (raw || day).slice(0, 4), when: raw || day, kind: ge(r, "kind") || "其他", title: ge(r, "title") || "", src: ge(r, "source") || "", url: ge(r, "url") || "",
+          city: byCity ? { id: this.linkId(ge(r, "city")), name: this.text(ge(r, "city")) } : null, open: r.id, oid: "water_event" };
+      });
+      const byYear = {};  // 已中标项目:每年按折合人民币取最大的三份
+      aws.forEach((r) => { const d = this.day(ga(r, "awarded")) || "", w = Number(ga(r, "price_cny")) || 0; if (d && w) (byYear[d.slice(0, 4)] = byYear[d.slice(0, 4)] || []).push({ r, d, w }); });
+      Object.values(byYear).forEach((arr) => arr.sort((a, b) => b.w - a.w).slice(0, 3).forEach(({ r, d, w }) => items.push({
+        y: d.slice(0, 4), when: d, kind: "中标", title: (ga(r, "winner") || "") + (ga(r, "winner_country") ? "(" + ga(r, "winner_country") + ")" : "") + " 中标「" + (ga(r, "name_zh") || ga(r, "name") || "") + "」," + cny(w),
+        src: "已中标项目", url: ga(r, "url") || "", city: byCity ? { id: this.linkId(ga(r, "city")), name: this.text(ga(r, "city")) } : null, open: r.id, oid: "award" })));
+      if (!items.length) { el.innerHTML = head + '<p class="muted">还没有记录。' + (prop === "city" ? "原文里写明了" + (many ? "片区里某座城市" : "这座城市") + "的大事才挂到城市上,其余在国别概况里。" : "") + "</p>"; return 0; }
+      items.sort((a, b) => b.when.localeCompare(a.when));
+      const KINDS = this.values("event_kind").concat(["中标"]).filter((k) => items.some((x) => x.kind === k));
+      const st = { k: [] }, YEARS = 12;
+      let all = false;
+      el.innerHTML = head + '<div class="filters"><div class="frow"><b>类别</b><span class="frow ch-k" style="padding:0"></span><span class="muted small ch-n" style="margin-left:auto"></span></div></div><div class="panel ch-t"></div>';
+      const $ = (c) => el.querySelector(c);
+      const render = () => {
+        this.chips($(".ch-k"), [["", "全部 " + items.length]].concat(KINDS.map((k) => [k, k + " " + items.filter((x) => x.kind === k).length])), st, "k", render, true);
+        const list = items.filter((x) => !st.k.length || st.k.includes(x.kind));
+        const years = [...new Set(list.map((x) => x.y))];
+        const shown = all ? years : years.slice(0, YEARS);
+        $(".ch-n").textContent = list.length + " 件 · " + (years.length > 1 ? years[years.length - 1] + "–" + years[0] + " 年" : years.length ? years[0] + " 年" : "");
+        $(".ch-t").innerHTML = !list.length ? '<p class="muted">没有这一类的大事。</p>' : '<div class="chron">' + shown.map((y) => '<div class="cy"><div class="cyl">' + this.esc(y) + "</div><ul>" +
+          list.filter((x) => x.y === y).map((x) => {
+            const when = x.when.length > 7 ? '<span class="cw">' + this.esc(x.when.slice(5, 10)) + "</span>" : x.when.length > 4 ? '<span class="cw">' + Number(x.when.slice(5, 7)) + " 月</span>" : "";  // 只到月的写「12 月」
+            const city = x.city && x.city.id ? ' <a class="muted small" href="city.html?id=' + encodeURIComponent(x.city.id) + '">' + this.esc(x.city.name) + "</a>" : "";
+            const src = x.src ? '<span class="muted small cs">' + (x.url ? '<a href="' + this.esc(x.url) + '" target="_blank" rel="noopener">' + this.esc(x.src) + " ↗</a>" : this.esc(x.src)) + "</span>" : "";
+            return '<li><span class="ck ck-' + (["项目批准", "项目完成", "机构改革", "规划与政策", "水价调整", "工程投运", "中标"].indexOf(x.kind) + 1) + '">' + this.esc(x.kind) + "</span>" + when +
+              '<span class="ct">' + this.esc(x.title) + city + "</span>" + src + "</li>";
+          }).join("") + "</ul></div>").join("") + "</div>" +
+          (years.length > shown.length ? '<p><button type="button" class="chip-btn more ch-more">列出更早的 ' + (years.length - shown.length) + " 年(" + years[years.length - 1] + "–" + years[shown.length] + ")</button></p>" : "");
+        const more = $(".ch-more"); if (more) more.onclick = () => { all = true; render(); };
+      };
+      render();
+      return items.length;
+    },
+    /* 研究资料(本体 V7):国别概况「水务历史资料」页签里,综述展开在前,其余按类型筛选、按发布日期从新到旧列表。→ 份数 */
+    async studies(el, rid) {
+      const head = '<h2 id="studies">研究资料</h2><p class="muted small">世界银行等机构公开的项目评估、完成报告、环境社会评估与行业研究,点标题看原文;综述是本系统读这些资料后整理的要点(每个数字注明出处页码)。人工可在表格「研究资料」里补别的来源。</p>';
+      if (!(this.cfg.tables && this.cfg.tables.study)) { el.innerHTML = head + '<p class="muted">「研究资料」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
+      el.innerHTML = head + '<div class="panel">读取中…</div>';
+      const rows = await this.records("study", { filter: this.and(this.cond("study", "country", "is", rid)), props: ["name", "name_zh", "kind", "publisher", "published", "language", "project", "url", "summary", "note"] });
+      const g = (r, p) => this.get("study", r, p);
+      rows.sort((a, b) => String(this.day(g(b, "published")) || "").localeCompare(String(this.day(g(a, "published")) || "")));
+      if (!rows.length) { el.innerHTML = head + '<p class="muted">这个国家还没有研究资料。</p>'; return 0; }
+      const sums = rows.filter((r) => g(r, "kind") === "综述"), docs = rows.filter((r) => g(r, "kind") !== "综述");
+      const KINDS = this.values("study_kind").filter((k) => k !== "综述" && docs.some((r) => (g(r, "kind") || "") === k));
+      const st = { k: [] };
+      el.innerHTML = head + sums.map((r) => '<details class="sec" open><summary>' + this.esc(g(r, "name_zh") || g(r, "name") || "综述") + ' <span class="muted small">' + this.esc(this.day(g(r, "published")) || "") + "</span> " +
+        this.open("study", r.id, "↗") + '</summary><div class="panel">' + this.mdLite(g(r, "summary")) + "</div></details>").join("") +
+        (docs.length ? '<div class="filters"><div class="frow"><b>类型</b><span class="frow sd-k" style="padding:0"></span></div></div><div class="panel sd-t"></div>' : "");
+      if (!docs.length) return rows.length;
+      const $ = (c) => el.querySelector(c);
+      const render = () => {
+        this.chips($(".sd-k"), [["", "全部 " + docs.length]].concat(KINDS.map((k) => [k, k + " " + docs.filter((r) => g(r, "kind") === k).length])), st, "k", render, true);
+        const list = docs.filter((r) => !st.k.length || st.k.includes(g(r, "kind")));
+        $(".sd-t").innerHTML = this.tableHtml(["发布", "标题", "类型", "相关项目", "机构", "语言", ""], list.map((r) => {
+          const zh = g(r, "name_zh"), en = g(r, "name") || "", u = g(r, "url");
+          const t = (s) => u ? '<a href="' + this.esc(u) + '" target="_blank" rel="noopener">' + this.esc(s) + " ↗</a>" : this.esc(s);
+          return [this.raw('<span class="nw">' + this.esc(this.day(g(r, "published")) || "") + "</span>"), this.raw(zh ? "<b>" + t(zh) + '</b><br><span class="muted small">' + this.esc(en) + "</span>" : "<b>" + t(en) + "</b>"),
+            g(r, "kind") || "", g(r, "project") || "", g(r, "publisher") || "", g(r, "language") || "", this.raw(this.open("study", r.id))];
+        }));
+      };
       render();
       return rows.length;
     },

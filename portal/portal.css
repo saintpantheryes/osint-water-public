@@ -485,3 +485,26 @@ details.sec.panel summary { margin: -4px 0; }
   .aw-t td:empty { display: none; }
   .aw-t td:first-child { color: var(--muted); font-size: 13px; }
 }
+/* 水务大事记(国别概况「水务历史资料」、城市页):左边年份,右边一行一件事,类别分色 */
+.chron .cy { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.chron .cy:first-child { border-top: 0; }
+.chron .cyl { font-size: 22px; font-weight: 700; color: #0b1b3a; font-variant-numeric: tabular-nums; line-height: 1.3; }
+.chron ul { list-style: none; margin: 0; padding: 0; }
+.chron li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; padding: 4px 0; }
+.chron .cw { font-size: 12px; color: #64748b; font-variant-numeric: tabular-nums; }
+.chron .ct { flex: 1 1 280px; min-width: 0; }
+.chron .cs { flex-basis: 100%; padding-left: 2px; }
+.ck { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; background: #f1f5f9; color: #475569; }
+.ck-1 { background: #dbeafe; color: #1d4ed8; }   /* 项目批准 */
+.ck-2 { background: #e2e8f0; color: #334155; }   /* 项目完成 */
+.ck-3 { background: #ede9fe; color: #6d28d9; }   /* 机构改革 */
+.ck-4 { background: #ccfbf1; color: #0f766e; }   /* 规划与政策 */
+.ck-5 { background: #fef3c7; color: #b45309; }   /* 水价调整 */
+.ck-6 { background: #dcfce7; color: #15803d; }   /* 工程投运 */
+.ck-7 { background: #ffe4e6; color: #be123c; }   /* 中标 */
+@media (max-width: 640px) { .chron .cy { grid-template-columns: 1fr; gap: 2px; } .chron .cyl { font-size: 18px; } }
+.md h4 { margin: 14px 0 6px; font-size: 15px; }
+.md h4:first-child { margin-top: 0; }
+.md p { margin: 6px 0; line-height: 1.7; }
+.md ul { margin: 4px 0 8px; padding-left: 20px; }
+.md li { margin: 3px 0; line-height: 1.7; }

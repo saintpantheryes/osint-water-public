@@ -176,9 +176,9 @@ def read_rows(path: Path) -> list[dict]:
     return list(csv.DictReader(io.StringIO(text)))
 
 
-def write_rows(path: Path, rows: list[dict]) -> None:
+def write_rows(path: Path, rows: list[dict], cols: list[str] | None = None) -> None:
     buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=COLS, extrasaction="ignore")
+    w = csv.DictWriter(buf, fieldnames=cols or COLS, extrasaction="ignore")
     w.writeheader()
     w.writerows(rows)
     data = buf.getvalue().encode("utf-8")

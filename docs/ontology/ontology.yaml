@@ -16,7 +16,7 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.16
+version: 2.18
 date: 2026-10-13
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
@@ -106,6 +106,29 @@ changes_v2_11:   # 行业术语(2026-10-09):使用方反映助手把「智慧水
   - 新增 data_scope 节「数据范围」:写明本系统面向海外、不包含中国国内(大陆、港澳台)数据;助手的提问涉及中国(含「国内」「港澳台」等说法)时在答案上方显示这句说明
   - 要跑一次建表命令(新表「行业术语」)
 
+changes_v2_18:   # 水务片区(2026-10-13):使用方认为北非、中亚这类"小国"按城市切会把一个市场切碎,按国别又太粗;试划大巴库后要求做成固定一层
+  - 新增公开对象「水务片区」(water_area):一片共用水司、水源与干管的连片城市(如大巴库 = 巴库、苏姆盖特、阿布歇隆区),市场规模的主要分析单位;
+    名称、英文名、所属国别、包含城市、服务水司、主要水源、范围说明、划分依据、备注
+  - 商机加可选关联「所属片区」(人选;不挂城市也能挂片区,如「阿布歇隆半岛 33 个居民点」)
+  - 新增行为 A35 划定水务片区(人,表格):新建一行、选包含的城市,在商机上选所属片区;首个片区「大巴库」由试点建
+  - 新增查询 V20 水务片区页(市场背景菜单下):片区清单;一个片区汇总人口(包含城市合计)、商机(所属片区 = 它,或所在城市在片区里)、线索(这些商机的线索 + 城市在片区里的)、
+    大事记(水务事件.所在城市在片区里)、已中标项目与水厂(所在城市在片区里),同国别概况的写法
+  - 要跑一次建表命令(新表、商机新字段)
+changes_v2_17:   # 研究资料(2026-10-13):使用方要把开发银行投资前做的调研(项目评估、完成报告、行业研究)当作水务历史研究资料,挂在国别概况下面
+  - 新增公开对象「研究资料」(study):标题、中文标题、类型(综述、行业研究、项目评估、完成报告、环境社会评估)、发布机构、发布日期、语言、所属国别、相关项目、原文链接、要点、编号、备注
+  - 新分类体系 study_kind
+  - 新增行为 A31 导入研究资料(命令行,只新建、只填空,去重按编号):数据文件是私有配置仓的 data/studies.csv.gz,由 scripts/fetch_wb_studies.py 从世界银行文件库取
+    (指定国家的水务项目的评估文件、完成报告、主要环境社会评估,外加水务行业研究);后台把没有中文标题的译成中文(配了模型时)。首批摩洛哥、阿塞拜疆、吉尔吉斯斯坦,
+    另有三国各一条「综述」(本系统读原文整理的要点,每个数字注明出处页码)
+  - 新增行为 A32 补录研究资料(人,表格):别的机构的报告、规划文件在表格里加一行
+  - 新增公开对象「水务事件」(water_event,使用方同日要「国别、城市的水务年度大事记」):日期(可只到年)、事件、类别(项目批准、项目完成、机构改革、规划与政策、水价调整、工程投运、其他)、
+    所属国别、所在城市(可空)、出处、原文链接、编号、备注;新分类体系 event_kind
+  - 新增行为 A33 导入水务事件(命令行):开发银行水务项目的批准与关闭由 scripts/fetch_wb_studies.py 从世界银行项目库取;机构改革、规划、水价、工程投运等由人(或助手)
+    读研究资料原文摘出,每条注明出处页码;同一个数据文件 data/events.csv.gz。A34 补录水务事件(人,表格)
+  - 大事记(V7 水务历史资料页签最上面、V16 一座城市页面):按年份从新到旧,水务事件 + 当年最大的几笔已中标项目(页面现算,不另存)
+  - 国别概况(V7)加页签「水务历史资料」:综述放最前,其余按类型筛选、从新到旧,点标题看原文
+  - 游客通道放行(示例数据里编几条)
+  - 要跑一次建表命令(新表);版本号跳过 2.16(另一处改动在用)
 changes_v2_16:   # 已中标项目补数据源(2026-10-13):使用方看到摩洛哥只有约 1.8 亿元、只有供水工程,认为明显不全;世行的数据只覆盖它自己贷款里按项目管理的那部分
   - 已中标项目加属性「采购方」(buyer):招标的业主单位;本国采购网的记录都有,世行数据没有
   - A28 的数据文件可以有几份(data/awards*.csv.gz,按来源分开);新增 scripts/fetch_ma_awards.py 从摩洛哥公共采购网(marchespublics.gov.ma)的「结果公告」取水务合同:标题按法文水务词筛;中标单位与金额在公告附件(多为扫描件)里,转正、文字识别后读出(配置的模型读识别出的文字,或看原件小图),读不准的不收;100 万迪拉姆以上
@@ -277,6 +300,7 @@ objects:
       - {id: country, name: 国别, type: "link:country", by: ai, required: true}
       - {id: location, name: 地点, type: text, by: ai}
       - {id: city, name: 城市, type: "link:city", by: human, note: 可选;项目所在的规模以上城市(人选)}
+      - {id: area, name: 所属片区, type: "link:water_area", by: human, note: "可选;项目所在的水务片区(人选)。跨几座城市或在城市之外的片区内项目只挂片区"}
       - {id: sectors, name: 领域, type: enums, by: ai, taxonomy: opp_sectors,
          enum: [供水, 输水干管, 水库调蓄, 减漏计量, 污水, 污泥, 再生水, 雨水排涝, 海水淡化, 灌溉, 防洪, 水环境治理],
          note: "细分 12 类，每类归属线索领域 7 类之一(taxonomies.opp_sectors 的 parent);机器从线索领域只能推出供水、污水、海水淡化、雨水排涝、水环境治理五个，水利分不出灌溉还是防洪，留给人填"}
@@ -581,6 +605,58 @@ objects:
       - {id: award_cny, name: 中标总额(万元), type: number, by: derived, where: teable 汇总, note: 各合同折合人民币相加;联合体的合同按全额计入每一家}
       - {id: note, name: 备注, type: longtext, by: human}
 
+  - id: study
+    name: 研究资料
+    core: false
+    band: public
+    definition: 一份公开的水务研究或调研文件:开发银行投资前做的项目评估、完成后的完成报告、环境社会评估、行业研究,以及本系统读这些文件整理的综述。属于一个国家;机器从世界银行文件库导入(A31),人可改、可补录别的来源(A32)。国别概况页「水务历史资料」页签列出,看一国水务怎么走到今天、规划里还要投什么;不计入线索、商机。
+    key: 编号(来源缩写 + 文件号,如 WB-34180924;综述为 SUM-国别码;人补录的可留空)
+    properties:
+      - {id: name, name: 标题, type: text, by: ai, required: true, note: 文件标题原文, example: "Morocco - Water Security and Resilience Program"}
+      - {id: name_zh, name: 中文标题, type: text, by: ai, note: "后台按标题译成中文(配了模型时,每个周期补一批),只填空;人可改"}
+      - {id: kind, name: 类型, type: enum, enum: [综述, 行业研究, 项目评估, 完成报告, 环境社会评估], by: ai, required: true, taxonomy: study_kind}
+      - {id: publisher, name: 发布机构, type: text, by: ai, example: 世界银行}
+      - {id: published, name: 发布日期, type: date, by: ai}
+      - {id: language, name: 语言, type: text, by: ai, example: 英文}
+      - {id: country, name: 所属国别, type: "link:country", by: ai, required: true}
+      - {id: project, name: 相关项目, type: text, by: ai, format: "项目编号 项目名", example: "P179192 Morocco Water Security and Resilience Program"}
+      - {id: url, name: 原文链接, type: url, by: ai, note: 原文 PDF(世行文件库的公开链接)}
+      - {id: summary, name: 要点, type: longtext, by: ai, format: "Markdown:### 小标题、- 列表;每个数字后面括号注出处与页码", note: "综述必填;其余可空,人可补"}
+      - {id: note, name: 备注, type: longtext, by: human}
+
+  - id: water_event
+    name: 水务事件
+    core: false
+    band: public
+    definition: 一国(或一座城市)水务上有日期的一件事:开发银行项目批准或关闭、机构改革、规划与政策出台、水价调整、工程投运等。机器导入(A33),人可改、可补录(A34)。国别概况「水务历史资料」页签与城市页的「大事记」按年列出,当年最大的几笔已中标项目由页面现算并入;不计入线索、商机。
+    key: 编号(项目事件为 WB-项目编号-批准 / 关闭;摘自资料的为 EV-国别码-序号;人补录的可留空)
+    properties:
+      - {id: day, name: 日期, type: pdate, by: ai, required: true, note: 原文说到哪一级就写到哪一级, example: "2023-07-18"}
+      - {id: title, name: 事件, type: text, by: ai, required: true, note: "中文一句话,有数字写数字;本币金额后面括注约合美元或人民币", example: "世界银行批准「摩洛哥水安全与韧性计划」,3.5 亿美元"}
+      - {id: kind, name: 类别, type: enum, enum: [项目批准, 项目完成, 机构改革, 规划与政策, 水价调整, 工程投运, 其他], by: ai, required: true, taxonomy: event_kind}
+      - {id: country, name: 所属国别, type: "link:country", by: ai, required: true}
+      - {id: city, name: 所在城市, type: "link:city", by: ai, note: "只说一座城市的事才挂;导入时按英文城市名对上该国的规模以上城市"}
+      - {id: source, name: 出处, type: text, by: ai, format: "文件简称 + 页码", example: "世行水安全项目评估(2023) 第 15 页"}
+      - {id: url, name: 原文链接, type: url, by: ai}
+      - {id: note, name: 备注, type: longtext, by: human}
+
+  - id: water_area
+    name: 水务片区
+    core: false
+    band: public
+    definition: 一片共用水司、水源与干管的连片城市(大城市圈),例如大巴库、大塔什干、大卡萨布兰卡;小国水务市场规模的主要分析单位,介于国别与城市之间。人划定(A35),页面汇总片区内城市的人口、商机、线索、大事记、中标与水厂(V20)。
+    key: 名称(一国内不重名)
+    properties:
+      - {id: name, name: 名称, type: text, by: human, required: true, example: 大巴库}
+      - {id: name_en, name: 英文名, type: text, by: human, example: Greater Baku}
+      - {id: country, name: 所属国别, type: "link:country", by: human, required: true}
+      - {id: cities, name: 包含城市, type: "links:city", by: human, required: true, note: 片区里的规模以上城市;片区人口按它们合计}
+      - {id: utility, name: 服务水司, type: text, by: human, example: 大城市联合供水局(原 Azersu)}
+      - {id: sources, name: 主要水源, type: longtext, by: human, format: 一行一个, example: "奥古兹—盖贝莱—巴库输水管线\n萨穆尔—阿布歇隆渠"}
+      - {id: scope, name: 范围说明, type: longtext, by: human, note: 包含哪些区县与郊区居民点}
+      - {id: basis, name: 划分依据, type: longtext, by: human, note: "为什么这样划,带出处", example: "2000 年起由阿布歇隆水务公司统一供水(世行完成报告 2018 第 11 页)"}
+      - {id: note, name: 备注, type: longtext, by: human}
+
   - id: member
     name: 成员
     core: false
@@ -623,6 +699,12 @@ links:
   - {from: award, name: 属于, to: country, cardinality: "*..1", via: award.country}
   - {from: award, name: 中标方, to: contractor, cardinality: "*..*", via: award.winners}
   - {from: award, name: 位于, to: city, cardinality: "*..0..1", via: award.city}
+  - {from: study, name: 属于, to: country, cardinality: "*..1", via: study.country}
+  - {from: water_event, name: 属于, to: country, cardinality: "*..1", via: water_event.country}
+  - {from: water_event, name: 发生在, to: city, cardinality: "*..0..1", via: water_event.city}
+  - {from: water_area, name: 属于, to: country, cardinality: "*..1", via: water_area.country, set_by: 人}
+  - {from: water_area, name: 包含, to: city, cardinality: "*..*", via: water_area.cities, set_by: 人}
+  - {from: opportunity, name: 所属片区, to: water_area, cardinality: "*..0..1", via: opportunity.area, set_by: 人}
   - {from: company, name: 适用于, to: country, cardinality: "*..*", via: company.countries, set_by: 人}
   - {from: preference, name: 关注, to: country, cardinality: "*..*", via: preference.countries, set_by: 人}
   - {from: preference, name: 属于, to: member, cardinality: "*..1", via: preference.user, set_by: 人}
@@ -930,6 +1012,56 @@ actions:
     writes: [contractor.name, contractor.name_zh, contractor.nationality, contractor.nationality_code, contractor.kind, contractor.parent, contractor.website, contractor.sectors, contractor.profile, contractor.note]
     note: 机器只建行、只填名称与国别,人补的资料机器不动(R2)。
     rules: [R13]
+  - id: A31
+    name: 导入研究资料
+    actor: ai
+    channel: [命令行, 后台]
+    trigger: 一次性(python -m core.jobs.studies;数据文件换了再跑一次);后台每个周期给没有中文标题的补一批中文标题
+    reads: [country]
+    creates: study
+    writes: [study.name, study.name_zh, study.kind, study.publisher, study.published, study.language, study.country, study.project, study.url, study.summary]
+    note: "数据文件是私有配置仓的 data/studies.csv.gz。由 scripts/fetch_wb_studies.py 从世界银行文件库(documents.worldbank.org 的公开检索接口)取:
+      指定国家里水务相关的项目(名称或行业有供水、污水、灌溉、防洪等),每个项目取最新的评估文件(没有的取项目文件或项目信息文件)、完成报告、一份主要的环境社会评估;
+      另收标题有水务字样的行业研究。只新建、只填空(R2),去重按编号;综述那几行由人(或助手)读原文整理后放进同一个数据文件。"
+    rules: [R2]
+  - id: A32
+    name: 补录研究资料
+    actor: human
+    channel: [表格]
+    trigger: 随时(在表格「研究资料」里加一行或改一行)
+    creates: study
+    writes: [study.name, study.name_zh, study.kind, study.publisher, study.published, study.language, study.country, study.project, study.url, study.summary, study.note]
+    note: 至少填标题、类型、所属国别;别的机构(亚行、欧洲复兴开发银行、本国政府)的规划和报告都可以加。
+    rules: [R13]
+  - id: A33
+    name: 导入水务事件
+    actor: ai
+    channel: [命令行]
+    trigger: 一次性(python -m core.jobs.studies 同时导入;数据文件换了再跑一次)
+    reads: [country, city]
+    creates: water_event
+    writes: [water_event.day, water_event.title, water_event.kind, water_event.country, water_event.city, water_event.source, water_event.url]
+    note: "数据文件是私有配置仓的 data/events.csv.gz。项目批准、项目完成由 scripts/fetch_wb_studies.py 从世界银行项目库取(批准日、关闭日、承诺额);
+      其余类别由人(或助手)读研究资料原文摘出,只收原文写明年份的,每条注明出处页码。只新建、只填空(R2),去重按编号。"
+    rules: [R2]
+  - id: A34
+    name: 补录水务事件
+    actor: human
+    channel: [表格]
+    trigger: 随时(在表格「水务事件」里加一行或改一行)
+    creates: water_event
+    writes: [water_event.day, water_event.title, water_event.kind, water_event.country, water_event.city, water_event.source, water_event.url, water_event.note]
+    note: 至少填日期、事件、类别、所属国别;新闻里看到的调价、投运、改组都可以记。
+    rules: [R13]
+  - id: A35
+    name: 划定水务片区
+    actor: human
+    channel: [表格]
+    trigger: 随时(在表格「水务片区」里加一行;在商机上选所属片区)
+    creates: water_area
+    writes: [water_area.name, water_area.name_en, water_area.country, water_area.cities, water_area.utility, water_area.sources, water_area.scope, water_area.basis, water_area.note, opportunity.area]
+    note: 按供排水服务区划:同一家水司、同一批水源与干管的连片城市算一个片区;只有一座城市自成水司的不必建片区。
+    rules: [R13]
 
 rules:
   - id: R1
@@ -1029,7 +1161,7 @@ views:
      query: "缺省:跟踪中商机(glossary.tracked)的时间节点(日期) ∪ 其跟进记录(日期、下一步到期) ∪ 报告(日期);勾「也显示未归商机的线索截止」才加上挂在线索或国别上的节点(灰色);一格最多直接显示 6 条。表格里的两个日历视图不过滤"}
   - {id: V6, name: 线索总览漏斗, of: [lead, opportunity, report], channel: [页面],
      query: "五级严格子集，每级数线索条数:信源采集(全部)→ 相关(是否相关 = 是)→ 归入商机(所属商机非空)→ 归入跟踪中的商机(所属商机 ∈ glossary.tracked)→ 写进报告(写进的报告非空);国别 / 领域 / 类别 / 发现时间筛选作用于每一级;点一级右边列出该级最新 100 条"}
-  - {id: V7, name: 国别概况, of: [country, opportunity, lead, milestone, city, award], channel: [页面, 表格], query: "一国的国别信息(指标表、机构 / 国企 / 法规表、带标签的备注)+ 该国商机按阶段 + 线索统计 + 国别级时间节点 + 规模以上城市(人口、面积、密度、生产总值、线索数、商机数);引用角标 ①②③ 指向线索;页面最下面「已中标项目」(所属国别 = 它):按类别、年份筛选(筛选项上的数跟着另一项走),卡片(项目数、合计中标价折合人民币、最大一笔、中国企业中标数),表按中标时间从新到旧"}
+  - {id: V7, name: 国别概况, of: [country, opportunity, lead, milestone, city, award, study, water_event], channel: [页面, 表格], query: "一国的国别信息(指标表、机构 / 国企 / 法规表、带标签的备注)+ 该国商机按阶段 + 线索统计 + 国别级时间节点 + 规模以上城市(人口、面积、密度、生产总值、线索数、商机数)+ 水务历史资料(最上面「大事记」:水务事件.所属国别 = 它,加上每年最大的三笔已中标项目,按年份从新到旧、按类别筛选;下面研究资料.所属国别 = 它:综述展开在最前,其余按类型筛选、从新到旧,标题点开看原文);引用角标 ①②③ 指向线索;页面最下面「已中标项目」(所属国别 = 它):按类别、年份筛选(筛选项上的数跟着另一项走),卡片(项目数、合计中标价折合人民币、最大一笔、中国企业中标数),表按中标时间从新到旧"}
   - {id: V8, name: 线索处理, of: [lead, opportunity], channel: [页面],
      query: "两页带计数:待确认归属(= V2)/ AI 推荐的商机(= V3);待确认归属可按国别、类别、有无机器建议筛选，两页都可多选后批量归入 / 忽略 / 跟踪 / 不跟进(A20)。原名「待我处理」;v2.6 起下一步已逾期、待核更新两页在商机总览(V9)"}
   - {id: V9, name: 商机总览, of: [opportunity], channel: [页面], query: "三页:商机列表(缺省只列 glossary.tracked，可切到某一阶段或全部;按阶段顺序(跟踪中、准备投标、已投标、中标、建议、未中标、放弃、不跟进)再按编号;可按国别、负责人筛选;点进商机工作台)/ 下一步已逾期(glossary.overdue)/ 待核更新(商机.待核更新非空);后两页带计数，只列出来，点进商机工作台或表格去改，游客不显示。原名「商机列表」"}
@@ -1045,7 +1177,10 @@ views:
   - {id: V17, name: 趋势机会, of: [city, country, lead], channel: [页面], query: "规模以上城市按 glossary.trend_self_funded(自付型,青绿)与 glossary.trend_loan_driven(贷款型,紫)着色,两类都是的标红,都不是的灰色小点;门槛(水风险用哪一项及多少分、人均 GDP 多少、贷款判定)页面上可调并记在网址里;下面按类分列城市(水风险从高到低)与国别对照表。是趋势参考:页首写明按公开数据推算、不是具体项目,数字不计入线索、商机;只看中国以外(使用方 2026-10-09 定,中国境内的城市与国别不进地图、清单与卡片)"}
   - {id: V18, name: 信源, of: [source, country], channel: [页面, 表格], query: "全部信源:名称与网址、类型、范围(全球或国别)、最近采集、状态、线索数、启用;状态口径:停用 / 出错、被拒 / 启用着却两天以上没采集(多日未采集)/ 正常、无条目;有问题的(出错、被拒、多日未采集)整行标红排最前,其余按线索数从多到少;按状态、范围筛选(筛选项上的数跟着其他筛选走)、搜索;编辑者点「启用」停用或重新启用一个信源;游客看示例"}
   - {id: V19, name: 供应商页, of: [contractor, award, country], channel: [页面], query: "从已中标项目表里点供应商进(不在主菜单):卡片(中标份数、合计中标价、涉及几个国家、最近一次中标)、基本信息(人补的中文名、性质、母公司、官网、主营领域、简介)、它的全部已中标项目(中标方含它),按国别、类别、年份筛选"}
-  - {id: V16, name: 城市概况, of: [city, country, opportunity, lead, supply_plant, sewage_plant, award], channel: [页面], query: "全部规模以上城市按人口从多到少,可按国别、有线索 / 有商机筛选,按中文名、英文名、行政区搜索;地图上的分布(圆点大小是人口,颜色深浅是人口或生产总值,红圈有线索或商机)左下角有滑块(和国别地图一样),按人口或地区生产总值拖出一个范围,卡片(城市数、合计人口、百万人口以上、有线索、有商机的城市数)与清单(前 300 座)只算范围内的;点一座城市:人口、面积、密度、生产总值卡片,概况(所属国别、行政区、坐标、来源、备注、小地图)与商机(商机.城市 = 它)、线索(线索.城市 = 它)、水厂(自来水厂、污水厂.所在城市 = 它)三个页签;清单多自来水厂数、污水厂数两列;一座城市的页面最下面「已中标项目」(所属城市 = 它),与国别概况同一张表"}
+  - {id: V20, name: 水务片区, of: [water_area, city, country, opportunity, lead, water_event, award, supply_plant, sewage_plant], channel: [页面], query: "市场背景菜单下;不带编号是全部片区(名称、国别、包含城市、合计人口、商机数);一个片区:卡片(合计人口、占全国人口、商机、线索)、
+      概况(所属国别、包含城市及人口、服务水司、主要水源、范围说明、划分依据)、商机(所属片区 = 它,或所在城市在片区里;按我方阶段)、线索(这些商机的线索,加上涉及城市在片区里的,最近的在前)、
+      大事记(水务事件.所在城市在片区里,加上每年最大的三笔片区内已中标项目,同国别概况)、水厂(自来水厂、污水厂.所在城市在片区里)"}
+  - {id: V16, name: 城市概况, of: [city, country, opportunity, lead, supply_plant, sewage_plant, award, water_event], channel: [页面], query: "全部规模以上城市按人口从多到少,可按国别、有线索 / 有商机筛选,按中文名、英文名、行政区搜索;地图上的分布(圆点大小是人口,颜色深浅是人口或生产总值,红圈有线索或商机)左下角有滑块(和国别地图一样),按人口或地区生产总值拖出一个范围,卡片(城市数、合计人口、百万人口以上、有线索、有商机的城市数)与清单(前 300 座)只算范围内的;点一座城市:人口、面积、密度、生产总值卡片,概况(所属国别、行政区、坐标、来源、备注、小地图)与商机(商机.城市 = 它)、线索(线索.城市 = 它)、水厂(自来水厂、污水厂.所在城市 = 它)三个页签;清单多自来水厂数、污水厂数两列;一座城市的页面最下面「已中标项目」(所属城市 = 它),与国别概况同一张表;其上「大事记」(水务事件.所在城市 = 它,加上每年最大的三笔挂在这座城市的已中标项目)"}
 
 # 现状对照(MM，2026-10-04):每种对象现在只存一处——Teable 库「水务项目机会 新版」的一张表(R1 已做到;切换前的多处存放见 git 历史里的 v1.2)。
 # 后面一行写"除表之外还有什么":只允许是配置、缓存或可再生的东西，不是第二份数据。
@@ -1086,6 +1221,14 @@ as_is:
     - 导入来源:私有配置仓 data/awards*.csv.gz(scripts/fetch_wb_awards.py 从世界银行公开数据取;scripts/fetch_ma_awards.py 从摩洛哥公共采购网取;scripts/fetch_adb_awards.py、fetch_ebrd_awards.py 从亚行、欧洲复兴开发银行取;scripts/fetch_kg_awards.py 从吉尔吉斯斯坦国家采购门户取)
   contractor:
     - Teable「供应商」表(唯一;机器从已中标项目的中标记录建行)
+  water_area:
+    - Teable「水务片区」表(唯一;人划定)
+  water_event:
+    - Teable「水务事件」表(唯一)
+    - 导入来源:私有配置仓 data/events.csv.gz
+  study:
+    - Teable「研究资料」表(唯一)
+    - 导入来源:私有配置仓 data/studies.csv.gz(scripts/fetch_wb_studies.py 从世界银行文件库取;原文 PDF 只存链接)
   company:
     - Teable「公司资料」表(唯一,附件在行里)
   preference:
@@ -1535,6 +1678,32 @@ taxonomies:
           - {v: 外资或国际企业, code: international, def: 跨国公司或其在当地的分支, boundary: 当地注册但由外国公司控股的也算, example: ""}
           - {v: 设计咨询机构, code: consultant, def: 设计院、咨询公司、监理单位, boundary: "", example: ""}
           - {v: 其他, code: other, def: 个人、联合体名义、非营利机构等, boundary: "", example: ""}
+  study_kind:
+    name: 研究资料类型
+    used_by: [study.kind]
+    note: 国别概况「水务历史资料」页签按这个顺序分组。
+    groups:
+      - name: 全部
+        values:
+          - {v: 综述, code: summary, def: "本系统读一国的研究资料后整理的要点(关键数字、机构、规划的投资、重点城市),每个数字注明出处与页码", boundary: 只整理原文说了的;推断单列并写明是推断, example: "摩洛哥水务市场:世行投资前资料要点"}
+          - {v: 行业研究, code: sector_study, def: 不针对单个项目的行业研究、国别气候与发展报告、水安全诊断等, boundary: "", example: "Water Scarcity in Morocco"}
+          - {v: 项目评估, code: appraisal, def: 项目批准前的评估文件(PAD)、政策贷款文件、项目信息文件、追加融资文件, boundary: 相当于可研摘要:建什么、在哪、多少钱、怎么招标, example: "Climate Resilient Water Services Project PAD"}
+          - {v: 完成报告, code: completion, def: 项目结束后的完成报告(ICR)与后评价, boundary: "", example: "Rural Water Supply Project ICR"}
+          - {v: 环境社会评估, code: safeguards, def: 环境影响评估、环境社会管理框架、体系评估、技术评估, boundary: 具体工程地点、规模、管线走向多在这里, example: "Environmental and Social Systems Assessment"}
+  event_kind:
+    name: 水务事件类别
+    used_by: [water_event.kind]
+    note: 大事记里按颜色区分;已中标项目由页面现算并入,不是这里的类别。
+    groups:
+      - name: 全部
+        values:
+          - {v: 项目批准, code: approved, def: 开发银行或政府批准一个水务投资项目或贷款, boundary: 追加融资也算, example: "世界银行批准吉尔吉斯斯坦气候韧性水务项目,1 亿美元"}
+          - {v: 项目完成, code: closed, def: 项目关闭、完工或完成评价, boundary: "", example: "阿塞拜疆第二期国家供水项目关闭"}
+          - {v: 机构改革, code: reform, def: "水务机构设立、合并、改组,水法与公用事业法,委托经营合同签订或终止", boundary: "", example: "成立国家水资源署"}
+          - {v: 规划与政策, code: plan, def: 国家或城市的水务规划、计划、战略与目标出台, boundary: "", example: "《国家饮用水与灌溉计划 2020–2027》"}
+          - {v: 水价调整, code: tariff, def: 水价、污水费、水资源费的调整, boundary: "", example: "水价上调约 87%"}
+          - {v: 工程投运, code: works, def: 有名字的水厂、坝、调水、管线、淡化厂开工或投运, boundary: "", example: "某海水淡化厂投运"}
+          - {v: 其他, code: other, def: 旱灾、水危机等其他有日期的大事, boundary: "", example: ""}
   company_kind:
     name: 公司资料类别
     used_by: [company.kind]
@@ -1675,6 +1844,9 @@ guest:
     sewage_plant: {}
     award: {}
     contractor: {}
+    study: {}
+    water_event: {}
+    water_area: {}
     report: {deny: [requested_by], rows: "版本 = 公开版 且 类型 ∈ 定期(周报、月报、日报)", kinds_group: 定期, edition: 公开版}
   note: 游客登录后在表格里什么也看不到(不在库里);页面上看到的线索、商机、国别、时间节点、报告都是编出来的示例数据,不是真实内容;「打开表格」「在表格里打开」不显示;不能登记跟进、申请报告、订阅日历或改任何字段。
 

@@ -220,6 +220,23 @@ city = obj(296, cyy + chh + 22, 310, "城市", sections=[
     ("dv", "派生(不存)", "线索数 · 商机数 · 自来水厂数 · 污水厂数"),
 ])
 ctx_, cty_, ctw_, cth_ = city
+# 研究资料(公开对象,v2.17):国别左边(线索「涉及」的线在它上面拐进国别)
+study = obj(56, cyy + 66, 196, "研究资料", sections=[
+    ("ai", "机器写(世行文件库,一次性导入)", "标题 · 中文标题 · 类型 · 发布机构 · 发布日期 · 语言 · 国别 · 相关项目 · 原文链接 · 要点"),
+    ("hu", "人补", "别的来源补录 · 备注"),
+])
+# 水务事件(公开对象,v2.17):研究资料下面、城市左边;国别、城市页的年度大事记
+event = obj(56, study[1] + study[3] + 26, 196, "水务事件", sections=[
+    ("ai", "机器写(世行项目库、原文摘录)", "日期 · 事件 · 类别 · 国别 · 城市 · 出处 · 原文链接"),
+    ("hu", "人补", "别的事件 · 备注"),
+])
+
+# 水务片区(公开对象,v2.18):城市右边;包含几座城市,属于国别;商机可选所属片区
+area = obj(640, cty_ + 34, 240, "水务片区", sections=[
+    ("hu", "人划定(表格,A35)", "名称 · 英文名 · 国别 · 包含城市 · 服务水司 · 主要水源 · 范围说明 · 划分依据 · 备注"),
+    ("dv", "派生(页面现算)", "合计人口 · 片区内商机、线索、大事记、中标、水厂"),
+    ("nt", "被谁挂", "商机.所属片区(可选,人选)"),
+])
 
 # 判定(菱形)
 dx, dy, dr = 743, 300, 58
@@ -428,6 +445,21 @@ path(f"M{award[0]},{award[1] + 96} L{contractor[0] + contractor[2]},{award[1] + 
 mid = (contractor[0] + contractor[2] + award[0]) / 2
 label(mid, award[1] + 74, "中标方", C["black"], size=11.5)
 label(mid, award[1] + 88, "*..*", C["black"], size=11.5)
+# 研究资料 → 国别 属于
+path(f"M{study[0] + study[2]},{study[1] + 70} L{cxx},{study[1] + 70}", C["black"], sw=1.6, end="aK")
+label((study[0] + study[2] + cxx) / 2, study[1] + 88, "属于", C["black"], size=11.5)
+label((study[0] + study[2] + cxx) / 2, study[1] + 102, "*..1", C["black"], size=11.5)
+# 水务片区 → 城市 包含;→ 国别 属于(从上面拐进国别右边)
+path(f"M{area[0]},{area[1] + 60} L{ctx_ + ctw_},{area[1] + 60}", C["black"], sw=1.6, end="aK")
+label((area[0] + ctx_ + ctw_) / 2, area[1] + 52, "包含", C["black"], size=11.5)
+label((area[0] + ctx_ + ctw_) / 2, area[1] + 78, "*..*", C["black"], size=11.5)
+ortho([(area[0] + 60, area[1]), (area[0] + 60, cyy + chh - 30), (cxx + cww, cyy + chh - 30)], C["black"], sw=1.6, end="aK")
+label(area[0] + 68, area[1] - 8, "属于 *..1", C["black"], size=11.5, anchor="start")
+# 水务事件 → 城市 发生在(可空;都属于国别)
+path(f"M{event[0] + event[2]},{event[1] + 50} L{ctx_},{event[1] + 50}", C["black"], sw=1.6, end="aK")
+label((event[0] + event[2] + ctx_) / 2, event[1] + 68, "发生在", C["black"], size=11.5)
+label((event[0] + event[2] + ctx_) / 2, event[1] + 82, "*..0..1", C["black"], size=11.5)
+label(event[0], event[1] + event[3] + 16, "属于国别 *..1", C["black"], size=11.5, anchor="start")
 # 国别 → 报告(沿底部走)
 gy_ = cyy + 120
 ortho([(cxx + cww, gy_), (rpx + 40, gy_), (rpx + 40, rpb)], C["blue"], sw=2, end="aB")
