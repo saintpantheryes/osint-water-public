@@ -2,6 +2,7 @@
 重复运行不重复建;阶段变更记跟进只记人改的;上传的线索补全但不判相关性。用内存版的 Teable(先按本体建表),假采集器与假模型,不联网。"""
 from __future__ import annotations
 
+import dataclasses
 from datetime import date
 from pathlib import Path
 
@@ -277,6 +278,19 @@ def test_enrich_fills_uploaded_leads_without_judging_relevance(env, monkeypatch)
 def test_cache_dir_is_only_a_cache(env):
     _, _, _, ctx = env
     assert Path(ctx.cache.root).name == "watch" and "cache" in str(ctx.cache.root)
+
+
+def test_translation_model_is_the_cheap_no_thinking_one(env):
+    """译名每两分钟一批,用判定线索的思考模式太贵:同一模型关思考、浅深度,输出够一批 40 个名称。"""
+    _, _, _, ctx = env
+    prof = dataclasses.replace(ctx.profile, watch={"llm": {"provider": "deepseek", "model": "deepseek-v4-pro", "effort": "high", "max_calls": 150}})
+    c = common.connect(prof, TODAY, api=ctx.api, base=ctx.base, cache_dir=ctx.cache.root.parent, log=lambda *a: None)
+    assert c.clf.cfg.thinking and c.clf.cfg.effort == "high"
+    light = c.clf_light.cfg
+    assert (light.provider, light.model, light.thinking, light.effort) == ("deepseek", "deepseek-v4-pro", False, "low")
+    assert light.max_tokens == common.TRANSLATE_MAX_TOKENS >= 8_000
+    assert common.connect(prof, TODAY, use_llm=False, api=ctx.api, base=ctx.base, cache_dir=ctx.cache.root.parent,
+                          log=lambda *a: None).clf_light is None
 
 
 def test_expire_marks_past_milestones_done_and_leaves_today_and_future(env):
