@@ -11,9 +11,9 @@
 <marker id="dK" viewBox="0 0 16 10" refX="1" refY="5" markerWidth="14" markerHeight="9" orient="auto-start-reverse"><path d="M0,5 L8,0 L16,5 L8,10 z" fill="#212121"/></marker>
 </defs>
 <rect x="0.0" y="0.0" width="1800.0" height="2990.0" rx="0" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
-<text x="40.0" y="50.0" font-size="28" fill="#212121" font-weight="bold" text-anchor="start">全球水务开源情报 本体模型 v2.18 · 对象 — 行为 — 规则</text>
+<text x="40.0" y="50.0" font-size="28" fill="#212121" font-weight="bold" text-anchor="start">全球水务开源情报 本体模型 v2.19 · 对象 — 行为 — 规则</text>
 <text x="40.0" y="80.0" font-size="14" fill="#555555" font-weight="normal" text-anchor="start">SAM/SCBRD × OBR(对象 · 行为 · 规则)  |  4 个核心对象 + 16 个支撑对象  |  判定是行为、日历是查询  |  每个对象只存一处  |  每个口径只定一次</text>
-<text x="1760.0" y="50.0" font-size="15" fill="#1976D2" font-weight="bold" text-anchor="end">«system» Ontology · Global Water OSINT v2.18</text>
+<text x="1760.0" y="50.0" font-size="15" fill="#1976D2" font-weight="bold" text-anchor="end">«system» Ontology · Global Water OSINT v2.19</text>
 <text x="1760.0" y="78.0" font-size="12.5" fill="#888888" font-weight="normal" text-anchor="end">2026-10-13 · 唯一业务库 Teable · 机器可读版 docs/ontology/ontology.yaml(分类体系与口径见 本体.md)</text>
 <line x1="40" y1="96" x2="1760" y2="96" stroke="#E0E0E0" stroke-width="1.5"/>
 <text x="40.0" y="124.0" font-size="14" fill="#D32F2F" font-weight="bold" text-anchor="start">关键路径 «keypath»:</text>

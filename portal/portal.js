@@ -576,7 +576,7 @@
         props: ["name", "name_zh", "sector", "contract_type", "price", "currency", "price_cny", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "country", "city", "source", "url"]
           .concat(hasW ? ["winners"] : [], this.has("award", "buyer") ? ["buyer"] : []) });
       const g = (r, p) => this.get("award", r, p);
-      const isoOf = {};  // 供应商页的国别列点进国别概况(那页按国别码开)
+      const isoOf = {};  // 供应商页的国别列点进国别概况的「已中标项目」页签(那页按国别码开)
       if (firm && rows.length) (await this.records("country", { props: ["key"] })).forEach((c) => { isoOf[c.id] = this.get("country", c, "key"); });
       const year = (r) => (this.day(g(r, "awarded")) || "").slice(0, 4);
       const ctry = (r) => this.text(g(r, "country")) || "";
@@ -632,7 +632,7 @@
             const at = (href, f) => href ? this.raw('<a class="nw" href="' + href + '">' + this.esc(this.text(g(r, f))) + "</a>") : this.text(g(r, f)) || "";
             const cid = this.linkId(g(r, "city")), iso = isoOf[this.linkId(g(r, "country"))];
             return [this.raw('<span class="nw">' + this.esc(this.day(g(r, "awarded")) || "") + "</span>"), this.raw(nm), g(r, "sector") || "", g(r, "contract_type") || "", this.raw(price), g(r, "quantity") || "", this.raw(win)]
-              .concat(place ? [place === "城市" ? at(cid && "city.html?id=" + encodeURIComponent(cid), "city") : at(iso && "country.html?" + new URLSearchParams({ iso }), "country")] : [], [g(r, "funder") || "", this.raw(this.open("award", r.id))]);
+              .concat(place ? [place === "城市" ? at(cid && "city.html?id=" + encodeURIComponent(cid), "city") : at(iso && "country.html?" + new URLSearchParams({ iso, t: "awards" }), "country")] : [], [g(r, "funder") || "", this.raw(this.open("award", r.id))]);
           })) + (list.length > show ? '<p><button type="button" class="chip-btn more aw-more">再列 ' + Math.min(PAGE, list.length - show) + " 份(已列 " + show + " / " + list.length + ")</button></p>" : "");
         const more = $(".aw-more"); if (more) more.onclick = () => { show += PAGE; render(); };
       };
@@ -640,19 +640,150 @@
       render();
       return rows.length;
     },
-    /* 简单 Markdown(综述要点用):## 小标题、- 列表、**粗体**、空行分段;别的原样转义 */
-    mdLite(src) {
-      const inl = (s) => this.esc(s).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
-      const out = []; let list = false;
-      String(src || "").split(/\r?\n/).forEach((l) => {
-        const t = l.trim(), li = t.match(/^[-*]\s+(.*)$/), h = t.match(/^(#{1,4})\s+(.*)$/);
-        if (!li && list) { out.push("</ul>"); list = false; }
-        if (h) out.push("<h4>" + inl(h[2]) + "</h4>");
-        else if (li) { if (!list) { out.push("<ul>"); list = true; } out.push("<li>" + inl(li[1]) + "</li>"); }
-        else if (t) out.push("<p>" + inl(t) + "</p>");
+    /* 综述(研究资料里「综述」那一行的 summary,Markdown;2026-10-13 使用方嫌排版单调、出处是一串字符):
+       开头「来源简称 / 文件简称:缩写=全称;…」那段不在正文里显示,收进文末「出处」;全称写成 [全称](网址) 的能点开原文。
+       正文括号里的「缩写 p14」→ 带序号的小角标(序号按第一次引用排),点角标弹出全称、页码和「打开原文第 14 页」;只写「p23」的算前一个出处;
+       括号外的「缩写 p7 的口径」→ 全称 + 角标。「## N. 标题」分节,节名排成目录;「- 标签:内容」标签单列加粗、内容一句一行;
+       「要点速览」一节(每条以 **数值** 开头)画成指标卡,前面带「!」的标红(说明里写清它坏在哪);标题带「推断」的一节换底色,条目开头的「推断:」去掉。
+       uid 区分同一页上的几份综述(角标、出处的锚点)。 */
+    digestHtml(src, uid) {
+      uid = "dg-" + String(uid || "x").replace(/[^\w-]/g, "");
+      const esc = (s) => this.esc(s), by = {}, srcs = [], notes = [];
+      const add = (k, desc, url) => { k = k.trim(); if (!by[k]) by[k] = { k, desc: "", url: "", pages: [], n: 0 }; if (desc && !by[k].desc) by[k].desc = desc; if (url && !by[k].url) by[k].url = url; return by[k]; };
+      const lines = String(src || "").split(/\r?\n/);
+      /* 1. 出处表:「缩写=全称」用「;」或「,」隔开,几个缩写可以「/」并列(全称也「/」并列且各段像个名字时一一对上,不然共用) */
+      const li = lines.findIndex((l) => /(来源简称|文件简称)[:：]/.test(l));
+      if (li >= 0) {
+        const l = lines[li], m = l.match(/^(.*?)(?:来源简称|文件简称)[:：]\s*(.*)$/), KEY = /(?:^|[;；,，]\s*)([^;；,，。=\s（）()\[\]]+(?:\/[^;；,，。=\s（）()\[\]]+)*)=/g;
+        if (m[1].trim()) notes.push(m[1].trim());
+        const body = m[2], hits = [...body.matchAll(KEY)];
+        hits.forEach((h, i) => {
+          let d = body.slice(h.index + h[0].length, i + 1 < hits.length ? hits[i + 1].index : body.length).replace(/[;；,，]\s*$/, "").trim();
+          if (i + 1 === hits.length) { const j = d.search(/。(?![^\[]*\])/); if (j >= 0) { const rest = d.slice(j + 1).trim(); if (rest) notes.push(rest); d = d.slice(0, j); } }
+          const lk = d.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/), desc = lk ? lk[1] : d, url = lk ? lk[2] : "";
+          const ks = h[1].split("/"), ds = desc.split("/");
+          ks.forEach((k, n) => add(k, ks.length > 1 && ds.length === ks.length && ds.every((x) => x.length >= 4) ? ds[n] : desc, url));
+        });
+        lines.splice(li, 1);
+      }
+      /* 2. 引用:先把带页码出现过的缩写都记下(括号里只写缩写、没写页码的也能认) */
+      const PG = "p\\d+(?:\\s*[-–]\\s*\\d+)?(?:表\\d+)?";
+      const PART = new RegExp("^(.*?)\\s*(" + PG + "(?:\\s*[、/]\\s*" + PG + ")*)$");
+      const parts = (g) => g.split(/[;；，]|,(?!\d{3})/).map((p) => p.trim()).filter(Boolean).map((p) => {
+        const m = p.match(PART); return m ? { k: m[1].trim(), pages: m[2].split(/\s*[、/]\s*/).map((x) => x.slice(1).replace(/\s*[-–]\s*/, "–").replace(/表\d+$/, "")) } : { text: p };
       });
-      if (list) out.push("</ul>");
-      return '<div class="md">' + out.join("") + "</div>";
+      const GROUP = /[（(]([^（）()]*)[）)]/g;
+      lines.forEach((l) => { for (const g of l.matchAll(GROUP)) parts(g[1]).forEach((p) => { if (p.pages && p.k && /^[^\s]{2,}$/.test(p.k)) add(p.k); }); });
+      const known = (k) => by[k] || (/^[一-鿿]{1,6}[A-Z]{2,}[A-Za-z-]*\d{2,4}$/.test(k) ? add(k) : null);
+      let last = null;
+      const mark = (s, pages) => {
+        if (!s.n) { srcs.push(s); s.n = srcs.length; }
+        (pages || []).forEach((p) => { if (!s.pages.includes(p)) s.pages.push(p); });
+        last = s;
+        const tip = (s.desc || s.k) + (pages && pages.length ? " · PDF 第 " + pages.join("、") + " 页" : "");
+        return '<a href="#' + uid + "-s" + s.n + '" data-u="' + uid + '" data-s="' + s.n + '" data-p="' + esc((pages || []).join(",")) + '" title="' + esc(tip) + '">' + s.n + "</a>";
+      };
+      const sup = (as) => as.length ? '<sup class="sref">' + as.join("") + "</sup>" : "";
+      /* 正文一段 → HTML:括号里的出处变角标,别的文字转义后加粗 **…**、带单位的数字加重 */
+      const NUM = /(\d[\d,]*(?:\.\d+)?(?:\s?[–-]\s?\d[\d,]*(?:\.\d+)?)?\s?(?:%|‰|(?:亿|万|百万|千)?\s?(?:美元|欧元|人民币|元|迪拉姆|马纳特|索姆|MAD|AZN|KGS|BCM|Mm3|Mm³|m3|m³|km³|km|公里|公顷|户|人|座|个|家|处|吨|小时|天)|亿|万|百万))/g;
+      const plain = (t) => esc(t).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(NUM, '<span class="dn">$1</span>');
+      const keysRe = () => { const ks = Object.keys(by).filter((k) => by[k].desc).sort((a, b) => b.length - a.length).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")); return ks.length ? new RegExp("(" + ks.join("|") + ")\\s*(" + PG + "(?:\\s*[、/]\\s*" + PG + ")*)", "g") : null; };
+      const inline = (t) => {  // 括号外的「缩写 p7」→ 全称 + 角标
+        const re = keysRe(); if (!re) return plain(t);
+        let out = "", i = 0;
+        for (const m of t.matchAll(re)) { const s = by[m[1]]; out += plain(t.slice(i, m.index)) + esc(s.desc) + sup([mark(s, m[2].split(/\s*[、/]\s*/).map((x) => x.slice(1).replace(/\s*[-–]\s*/, "–")))]); i = m.index + m[0].length; }
+        return out + plain(t.slice(i));
+      };
+      const rich = (t) => {
+        let out = "", i = 0;
+        for (const g of t.matchAll(GROUP)) {
+          const ps = parts(g[1]), cite = ps.some((p) => p.pages) || ps.every((p) => p.text && known(p.text));
+          if (!cite) continue;
+          const keep = [], as = [];
+          ps.forEach((p) => {
+            if (p.pages) { const s = p.k ? (by[p.k] || add(p.k)) : last; if (s) as.push(mark(s, p.pages)); else keep.push(p.k + " p" + p.pages.join("、p")); }
+            else if (known(p.text)) as.push(mark(known(p.text)));
+            else keep.push(p.text);
+          });
+          out += inline(t.slice(i, g.index)).replace(/\s+$/, "") + (keep.length ? "（" + inline(keep.join("，")) + "）" : "") + sup(as);
+          i = g.index + g[0].length;
+        }
+        return out + inline(t.slice(i));
+      };
+      /* 3. 分块:节(## …)、条目(- …,缩进的是子条目)、段落 */
+      const secs = []; let sec = null, intro = [];
+      const stack = [];
+      lines.forEach((l) => {
+        if (!l.trim()) return;
+        const h = l.match(/^#{1,4}\s+(.*)$/), it = l.match(/^(\s*)[-*]\s+(.*)$/);
+        if (h && /^#\s/.test(l)) return;  // 一级标题(综述本身的名字)上面已经有了
+        if (h) { sec = { title: h[1].trim(), items: [] }; secs.push(sec); stack.length = 0; return; }
+        const into = sec ? sec.items : intro;
+        if (it) {
+          const lv = Math.floor(it[1].replace(/\t/g, "  ").length / 2), node = { text: it[2].trim(), kids: [] };
+          while (stack.length && stack[stack.length - 1].lv >= lv) stack.pop();
+          (stack.length ? stack[stack.length - 1].node.kids : into).push(node);
+          stack.push({ lv, node });
+        } else { stack.length = 0; into.push({ text: l.trim(), para: true }); }
+      });
+      const label = (t) => {  // 「标签:内容」→ [标签, 内容];标签不长于 24 个字(不算括号里的出处)、不含句号
+        const i = t.search(/[:：]/); if (i <= 0) return null;
+        const k = t.slice(0, i), v = t.slice(i + 1).trim();
+        return k.replace(GROUP, "").length <= 24 && !/[。;；]/.test(k) ? [k, v] : null;
+      };
+      const sentences = (t) => t.split(/(?<=。)(?![）)])/).map((x) => x.trim()).filter(Boolean);
+      const sub = (kids) => kids.length ? '<ul class="dg-sub">' + kids.map((n) => { const kv = label(n.text);
+        return "<li>" + (kv && kv[1] ? "<b>" + rich(kv[0]) + "</b>：" + rich(kv[1]) : rich(n.text)) + sub(n.kids) + "</li>"; }).join("") + "</ul>" : "";
+      const item = (n, infer) => {
+        if (n.para) return /^\*\*[^*]+\*\*[:：]?$/.test(n.text) ? '<h5 class="dg-h5">' + rich(n.text.replace(/[:：]$/, "")) + "</h5>" : '<p class="dg-p">' + rich(n.text) + "</p>";
+        const t = infer ? n.text.replace(/^推断[:：]\s*/, "") : n.text, kv = infer ? null : label(t);
+        const body = (v) => sentences(v).map((s) => "<p>" + rich(s) + "</p>").join("");
+        return kv ? '<div class="dg-it"><div class="dg-k">' + rich(kv[0]) + '</div><div class="dg-v">' + body(kv[1]) + sub(n.kids) + "</div></div>"
+          : '<div class="dg-it dg-wide"><div class="dg-v">' + body(t) + sub(n.kids) + "</div></div>";
+      };
+      const kpi = (n) => {  // 「!**数值** 说明」→ 指标卡
+        const m = n.text.match(/^(!?)\*\*([^*]+)\*\*\s*(.*)$/), v = m[2].trim(), x = v.match(/^(约|近|超过|≤|<|>)?\s*(-?\d[\d,]*(?:\.\d+)?(?:\s?[–-]\s?\d[\d,]*(?:\.\d+)?)?)\s*(.*)$/);
+        const big = x ? (x[1] ? '<span class="ku">' + esc(x[1]) + "</span>" : "") + '<span class="kn">' + esc(x[2]) + "</span>" + (x[3] ? '<span class="ku">' + esc(x[3]) + "</span>" : "") : '<span class="kn kt">' + esc(v) + "</span>";
+        return '<div class="kpi' + (m[1] ? " bad" : "") + '"><div class="kv">' + big + '</div><div class="kl">' + rich(m[3]) + "</div></div>";
+      };
+      const head = (s, i) => { const m = s.title.match(/^(\d+)[.、．]\s*(.*)$/); return { no: m ? m[1] : "", name: (m ? m[2] : s.title).replace(/[（(](?:以下为)?推断[^（）()]*[）)]/, "").trim(), infer: /推断/.test(s.title), id: uid + "-c" + i }; };
+      const hs = secs.map(head);
+      const html = secs.map((s, i) => {
+        const h = hs[i], cards = /要点|速览|关键指标/.test(h.name) && s.items.length && s.items.every((n) => !n.para && /^!?\*\*[^*]+\*\*/.test(n.text));
+        return '<section class="dg-sec' + (h.infer ? " infer" : "") + (cards ? " dg-kpi" : "") + '" id="' + h.id + '"><h4>' + (h.no ? '<span class="dg-no">' + esc(h.no) + "</span>" : "") + esc(h.name) +
+          (h.infer ? '<span class="tag act">推断</span><span class="muted small">本系统据资料推断,不是文件原文</span>' : "") + "</h4>" +
+          (cards ? '<div class="kpis">' + s.items.map(kpi).join("") + "</div>" : s.items.map((n) => item(n, h.infer)).join("")) + "</section>";
+      }).join("");
+      const toc = hs.length > 2 ? '<nav class="dg-toc">' + hs.map((h) => '<a href="#' + h.id + '">' + (h.no ? "<b>" + esc(h.no) + "</b> " : "") + esc(h.name) + "</a>").join("") + "</nav>" : "";
+      const rest = Object.values(by).filter((s) => !s.n && s.desc);  // 出处表里列了、正文没引用的也列上
+      const all = srcs.concat(rest);
+      const pnum = (p) => parseInt(p, 10) || 0;
+      const srcHtml = all.length ? '<details class="dg-src" id="' + uid + '-src"><summary>出处:' + all.length + " 份文件" + (notes.length ? "(" + esc(notes.join(" ").replace(/。$/, "")) + ")" : "") + "</summary><ol>" +
+        all.map((s) => '<li id="' + uid + "-s" + (s.n || "") + '"' + (s.n ? "" : ' class="muted"') + '><span class="dg-sn">' + (s.n || "·") + "</span>" + (s.url ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.desc || s.k) + " ↗</a>" : esc(s.desc || s.k)) +
+          ' <span class="muted small">' + esc(s.k) + (s.pages.length ? " · 引用 PDF 第 " + s.pages.slice().sort((a, b) => pnum(a) - pnum(b)).join("、") + " 页" : s.n ? "" : " · 正文未直接引用") + "</span></li>").join("") + "</ol></details>" : "";
+      (this._dg = this._dg || {})[uid] = srcs;
+      this.srefOn();
+      return '<div class="dg">' + (intro.length ? intro.map((n) => item(n)).join("") : "") + toc + html + srcHtml + "</div>";
+    },
+    /* 角标点开:小框里是全称、页码、「打开原文第 N 页」(PDF 链接带 #page=N)和「全部出处」;点别处关掉 */
+    srefOn() {
+      if (this._srefOn) return; this._srefOn = true;
+      document.addEventListener("click", (e) => {
+        const t = e.target, a = t.closest && t.closest(".sref a"), pop = document.querySelector(".sref-pop");
+        if (pop && t.closest(".sref-pop")) { if (t.closest("a.all")) { const d = document.getElementById(t.closest("a.all").getAttribute("href").slice(1)); if (d) d.open = true; pop.remove(); } return; }
+        if (pop) pop.remove();
+        if (!a) return;
+        e.preventDefault();
+        const s = ((this._dg || {})[a.dataset.u] || [])[Number(a.dataset.s) - 1]; if (!s) return;
+        const pg = (a.dataset.p || "").split(",").filter(Boolean), p1 = pg.length ? parseInt(pg[0], 10) : 0;
+        const el = document.createElement("div"); el.className = "sref-pop";
+        el.innerHTML = '<div><b>' + s.n + "</b> " + this.esc(s.desc || s.k) + "</div>" + '<div class="muted small">' + this.esc(s.k) + (pg.length ? " · PDF 第 " + this.esc(pg.join("、")) + " 页" : "") + "</div>" +
+          '<div class="small">' + (s.url ? '<a href="' + this.esc(s.url + (p1 ? "#page=" + p1 : "")) + '" target="_blank" rel="noopener">打开原文' + (p1 ? "第 " + p1 + " 页" : "") + " ↗</a> · " : "") + '<a class="all" href="#' + a.dataset.u + '-src">全部出处</a></div>';
+        document.body.appendChild(el);
+        const r = a.getBoundingClientRect(), w = el.offsetWidth;
+        el.style.left = Math.max(8, Math.min(r.left + window.scrollX - 12, window.scrollX + document.documentElement.clientWidth - w - 8)) + "px";
+        el.style.top = (r.bottom + window.scrollY + 6) + "px";
+      });
     },
     /* 水务年度大事记(本体 V7、V16;2026-10-13 使用方要):国别概况「水务历史资料」页签最上面、城市一页里的同一块。
        水务事件(所属国别 / 所在城市 = 它)+ 已中标项目里每年最大的三份(页面现算,不存);按年从新到旧,类别可多选筛选,筛选项上的数跟着走。
@@ -722,8 +853,8 @@
       const sums = rows.filter((r) => g(r, "kind") === "综述"), docs = rows.filter((r) => g(r, "kind") !== "综述");
       const KINDS = this.values("study_kind").filter((k) => k !== "综述" && docs.some((r) => (g(r, "kind") || "") === k));
       const st = { k: [] };
-      el.innerHTML = head + sums.map((r) => '<details class="sec" open><summary>' + this.esc(g(r, "name_zh") || g(r, "name") || "综述") + ' <span class="muted small">' + this.esc(this.day(g(r, "published")) || "") + "</span> " +
-        this.open("study", r.id, "↗") + '</summary><div class="panel">' + this.mdLite(g(r, "summary")) + "</div></details>").join("") +
+      el.innerHTML = head + sums.map((r) => '<details class="sec dg-wrap" open><summary>' + this.esc(g(r, "name_zh") || g(r, "name") || "综述") + ' <span class="muted small">' + this.esc(this.day(g(r, "published")) || "") +
+        " · 点数字后面的小角标看出处页码</span> " + this.open("study", r.id, "↗") + '</summary><div class="panel">' + this.digestHtml(g(r, "summary"), r.id) + "</div></details>").join("") +
         (docs.length ? '<div class="filters"><div class="frow"><b>类型</b><span class="frow sd-k" style="padding:0"></span></div></div><div class="panel sd-t"></div>' : "");
       if (!docs.length) return rows.length;
       const $ = (c) => el.querySelector(c);
