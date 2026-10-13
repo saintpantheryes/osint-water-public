@@ -455,6 +455,7 @@
       return;
     }
     const oid = plan.object;
+    if (!NOUN[oid]) { body.innerHTML = '<p class="muted">系统刚更新过,这个页面还是旧的:请刷新页面后再问一次。</p>'; return; }  // 助手接口认得、旧页面不认得的对象
     if (oid === "award" && !hasAw()) { body.innerHTML = '<p class="muted">「已中标项目」表还没建(跑一次建表命令后就能问中标记录)。</p>'; return; }
     body.innerHTML = '<p class="muted">查表中…</p>';
     if (plan.intent === "count") {
