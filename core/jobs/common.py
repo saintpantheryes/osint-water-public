@@ -108,6 +108,7 @@ class Ctx:
     today: date
     cache: Store  # 本机缓存:网页正文、已见条目
     clf: Classifier | None = None
+    clf_light: Classifier | None = None  # 译名之类的简单活:同一模型关思考、浅深度、短输出,比 clf 便宜得多
     log: Any = print
     _countries: dict[str, str] | None = None  # ISO3 → 记录编号
     _iso_of: dict[str, str] | None = None  # 记录编号 → ISO3
@@ -243,6 +244,9 @@ class Ctx:
         return nos, urls
 
 
+TRANSLATE_MAX_TOKENS = 8_000  # 一批 40 个名称的中文译名约两三千 token,留足余量
+
+
 def connect(profile: Profile, today: date | None = None, use_llm: bool = True, log=print, api: tstore.Client | None = None,
             base: tstore.Base | None = None, cache_dir: Path | None = None) -> Ctx:
     """连上新库(机器账号的 TEABLE_TOKEN),准备模型与本机缓存。"""
@@ -253,7 +257,8 @@ def connect(profile: Profile, today: date | None = None, use_llm: bool = True, l
     cache = Store(cache_dir or Path(os.environ.get("OW_CACHE") or (profile.data_dir or storage.DATA_DIR) / "cache"))
     cfg = (profile.watch or {}).get("llm")
     clf = Classifier(LLMConfig.from_profile(cfg)) if use_llm else None
-    return Ctx(api=api, base=base, profile=profile, today=today or date.today(), cache=cache, clf=clf, log=log)
+    light = Classifier(LLMConfig.for_assistant(cfg, {"max_tokens": TRANSLATE_MAX_TOKENS})) if use_llm else None
+    return Ctx(api=api, base=base, profile=profile, today=today or date.today(), cache=cache, clf=clf, clf_light=light, log=log)
 
 
 # ---------- 采集结果 → 线索行 ----------

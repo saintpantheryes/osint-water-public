@@ -73,8 +73,8 @@ def tick(profile, now: datetime, state: dict, use_llm: bool = True) -> None:
         except Exception as e:  # noqa: BLE001
             log(f"expire 出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
     for name, fn in (("enrich", lambda: enrich.run(ctx)), ("stage_log", lambda: stage_log.run(ctx)), ("fx", lambda: fx.run(ctx)), ("reports", _reports),
-                     ("awards_zh", lambda: awards.translate(ctx.base, ctx.clf, log=log)),  # 已中标项目译中文名(A28;没配模型时什么也不做)
-                     ("studies_zh", lambda: studies.translate(ctx.base, ctx.clf, log=log))):  # 研究资料译中文标题(同上)
+                     ("awards_zh", lambda: awards.translate(ctx.base, ctx.clf_light, log=log)),  # 已中标项目译中文名(A28;不思考的便宜模式,没配模型时什么也不做)
+                     ("studies_zh", lambda: studies.translate(ctx.base, ctx.clf_light, log=log))):  # 研究资料译中文标题(同上)
         try:
             out = fn()
             if out:
