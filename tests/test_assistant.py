@@ -230,6 +230,86 @@ def test_delivery_and_price_conditions():
     assert A.rules_parse("摩洛哥的中标按承包模式分", TODAY)["group_by"] == "delivery"
 
 
+def test_semantic_layer_measures_and_assets():
+    """语义层(本体 semantic,2026-10-13 使用方:「没认出来:招标金额」「平均评标时间」「5000万人民币以上」,第二句还被当成线索):
+    指标与算法按本体的说法认(长词先认),问了只有已中标项目才有的指标就查已中标项目;主体工程按 award_asset 的说法认,「污水厂」不算供水。"""
+    q1 = "摩洛哥近3年来的污水项目中标金额与招标金额什么比例"
+    p = A.plan(q1, TODAY)
+    assert p["object"] == "award" and p["measures"] == [{"id": "price_ratio", "agg": "median"}] and p["unresolved"] == []
+    assert _on(p) == {"countries": [{"iso3": "MAR", "name": "摩洛哥"}], "sectors": ["污水"], "days": 1095}
+    assert dict(p["understood"])["指标"] == "中标价 / 招标估价(中位数)" and dict(p["understood"])["呈现"] == "指标卡片"
+    q2 = "摩洛哥近3年来5000万人民币以上的污水厂项目，平均评标时间多长?"
+    p = A.plan(q2, TODAY)  # 没说「中标」也查已中标项目:评标天数只有它有
+    f = p["filters"]
+    assert p["object"] == "award" and p["measures"] == [{"id": "eval_days", "agg": "mean"}] and p["unresolved"] == []
+    assert f["assets"] == ["污水处理厂"] and f["sectors"] == ["污水"] and f["price"]["min"] == 5e7 and f["price"]["currency"] == "CNY" and f["keywords"] == []
+    assert dict(p["understood"])["主体工程"] == "污水处理厂" and dict(p["understood"])["中标价"] == "≥ 5,000 万元"
+    pm = A.parse_measures
+    assert pm("平均中标价") == [{"id": "amount", "agg": "mean"}] and pm("中标总额") == [{"id": "amount", "agg": "sum"}]  # 长词先认,不再拆成「中标」+「价」
+    assert pm("评标一般要多久") == [{"id": "eval_days", "agg": "median"}] and pm("下浮率") == [{"id": "price_ratio", "agg": "median"}]
+    assert pm("平均几家投标") == [{"id": "bidders", "agg": "mean"}] and pm("平均投标家数") == [{"id": "bidders", "agg": "mean"}] and pm("最近 7 天埃及的线索") == []
+    assert pm("平均评标时间和投标家数") == [{"id": "eval_days", "agg": "mean"}, {"id": "bidders", "agg": "mean"}]
+    assert A.assets("污水处理厂扩建") == ["污水处理厂"] and A.assets("净水厂和管网") == ["供水厂", "管网"] and A.assets("水处理厂") == ["供水厂"] and A.assets("海水淡化厂") == ["海水淡化厂"]
+    assert A.rules_parse("摩洛哥的污水厂中标", TODAY)["filters"]["sectors"] == ["污水"]  # 「污水厂」里的「水厂」不算供水
+    assert A.rules_parse("各国污水处理厂的中标按主体工程分", TODAY)["group_by"] == "asset"
+    # 线索没有评标天数:明说查线索的,指标进「没认出来」,对象不改
+    p = A.plan("最近 30 天埃及线索的平均评标时间", TODAY)
+    assert p["object"] == "lead" and p["measures"] == [] and "评标天数" in p["unresolved"]
+
+
+def test_follow_up_questions_inherit_the_previous_plan():
+    """接着问:页面把上一问的计划带来(prev)。这一句没明说查什么的沿用它的对象;像追问的(「那……呢」、很短的「……呢」)再沿用没说的条件、指标与分组,
+    「理解为」写明沿用了哪几项。外面传来的 prev 逐项校验,认不得的丢掉;明说查别的对象的不沿用。"""
+    p1 = A.plan("摩洛哥近3年来的污水项目中标金额与招标金额什么比例", TODAY)
+    prev = dict(p1, q="摩洛哥近3年来的污水项目中标金额与招标金额什么比例")
+    p = A.plan("那吉尔吉斯斯坦呢", TODAY, prev=prev)
+    assert p["object"] == "award" and p["filters"]["countries"] == [{"iso3": "KGZ", "name": "吉尔吉斯斯坦"}] and p["filters"]["sectors"] == ["污水"] and p["filters"]["days"] == 1095
+    assert p["measures"] == [{"id": "price_ratio", "agg": "median"}] and "类别或领域、时间、指标" in dict(p["understood"])["沿用上一问"]
+    p = A.plan("按年份呢", TODAY, prev=prev)
+    assert p["group_by"] == "year" and p["filters"]["countries"][0]["iso3"] == "MAR" and p["measures"] == [{"id": "price_ratio", "agg": "median"}]
+    p = A.plan("平均评标时间呢", TODAY, prev=prev)  # 换个指标:条件照旧
+    assert p["object"] == "award" and p["measures"] == [{"id": "eval_days", "agg": "mean"}] and p["filters"]["countries"][0]["iso3"] == "MAR"
+    p = A.plan("最近 7 天埃及有哪些新线索", TODAY, prev=prev)  # 明说查线索:不沿用
+    assert p["object"] == "lead" and _on(p) == {"countries": [{"iso3": "EGY", "name": "埃及"}], "days": 7} and "沿用上一问" not in dict(p["understood"])
+    p = A.plan("其中供水的有多少", TODAY, prev=prev)
+    assert p["object"] == "award" and p["filters"]["sectors"] == ["供水"] and p["filters"]["countries"][0]["iso3"] == "MAR"
+    # 不像追问的:只沿用对象(「理解为」写明),条件不沿用
+    p = A.plan("阿塞拜疆近五年的供水中标价中位数", TODAY, prev=prev)
+    assert p["object"] == "award" and p["filters"]["countries"][0]["iso3"] == "AZE" and p["filters"]["sectors"] == ["供水"]
+    # 外面传来的 prev 逐项校验
+    junk = {"object": "award", "q": "x" * 9999, "filters": {"countries": [{"iso3": "XXX"}, "MAR", {"iso3": "MAR", "name": "伪"}], "sectors": ["供水", "核电"], "days": -5,
+                                                       "price": {"min": "多", "currency": "MAD"}, "assets": ["污水处理厂", "宫殿"]},
+            "measures": [{"id": "eval_days", "agg": "sum"}, {"id": "bidders", "agg": "median"}, {"id": "drop table"}], "group_by": "stage"}
+    clean = A._prev(junk)
+    assert clean["filters"]["countries"] == [{"iso3": "MAR", "name": "摩洛哥"}] and clean["filters"]["sectors"] == ["供水"] and clean["filters"]["assets"] == ["污水处理厂"]
+    assert clean["filters"]["days"] is None and clean["filters"]["price"] is None and clean["measures"] == [{"id": "bidders", "agg": "median"}] and clean["group_by"] is None
+    assert len(clean["q"]) == A.MAX_Q and A._prev({"object": "nope"}) is None and A._prev("x") is None
+    assert A.plan("那吉尔吉斯斯坦呢", TODAY, prev={"object": "nope"})["object"] == "lead"
+
+
+def test_model_path_uses_the_semantic_layer_and_previous_question():
+    """配了模型时:模型把第二句当成线索、把「平均评标时间」「5000万人民币以上」放进关键词与没认出来的,按语义层纠正;
+    接着问时模型看到上一句(只是提问文字,不是数据)。"""
+    q2 = "摩洛哥近3年来5000万人民币以上的污水厂项目，平均评标时间多长?"
+    bad = {"object": "lead", "intent": "list", "countries": ["摩洛哥"], "sectors": ["污水", "供水"], "keywords": ["平均评标时间", "5000万人民币"], "days": 1095,
+           "unresolved": ["平均评标时间", "5000万人民币以上"]}
+    p = A.from_model(bad, TODAY, q2)
+    assert p["object"] == "award" and p["measures"] == [{"id": "eval_days", "agg": "mean"}] and p["unresolved"] == [] and p["filters"]["keywords"] == []
+    assert p["filters"]["sectors"] == ["污水"] and p["filters"]["assets"] == ["污水处理厂"] and p["filters"]["price"]["min"] == 5e7
+    p = A.from_model({"object": "award", "intent": "list", "measure": "bidders", "agg": "mean"}, TODAY, "摩洛哥污水厂一般几家来投")
+    assert p["measures"] == [{"id": "bidders", "agg": "mean"}]  # 提问里没有语义层的说法:用模型给的
+    p = A.from_model({"object": "award", "intent": "list", "measure": "eval_days", "agg": "sum"}, TODAY, "评标多久")
+    assert p["measures"] == [{"id": "eval_days", "agg": "median"}]  # 提问里的说法为准;算法不合这个指标的用缺省
+    seen: list = []
+    clf = _deepseek(bad, seen)
+    prev = dict(A.plan("摩洛哥近3年来的污水项目中标金额与招标金额什么比例", TODAY), q="摩洛哥近3年来的污水项目中标金额与招标金额什么比例")
+    p = A.plan(q2, TODAY, clf, prev)
+    assert p["parsed_by"] == "model" and p["object"] == "award" and p["measures"] == [{"id": "eval_days", "agg": "mean"}]
+    assert seen[-1]["messages"][1]["content"] == "上一个问题(查的是已中标项目):摩洛哥近3年来的污水项目中标金额与招标金额什么比例\n这一个问题:" + q2
+    s = A.system_prompt(TODAY)
+    assert "price_ratio 中标价 / 招标估价" in s and "eval_days 评标天数" in s and {"measure", "agg", "assets"} <= set(A.SCHEMA["required"])
+
+
 def test_capacity_phrases():
     c = A.parse_capacity
     assert c("规模在5000m3/d以上") == {"min": 5000.0, "max": None} and c("日处理 1 万吨以上") == {"min": 10000.0, "max": None}
@@ -349,11 +429,11 @@ def test_portal_answers_award_questions():
             assert "非斯供水系统运营维护" in page.locator(".answer details tbody").inner_text()
             # 数一下 / 分组统计
             page.goto(base + "/index.html?q=" + quote("摩洛哥近三年的中标有多少份"))
-            page.wait_for_selector(".answer .card .n", timeout=15000)
-            assert page.locator(".answer .card .n").inner_text() == "5" and "份已中标项目" in page.inner_text(".answer")
+            page.wait_for_selector(".answer .kpi .kn", timeout=15000)
+            assert page.locator(".answer .kpi .kn").inner_text() == "5" and page.locator(".answer .kpi .ku").inner_text() == "份" and "已中标项目" in page.inner_text(".answer .kpi")
             page.goto(base + "/index.html?q=" + quote("摩洛哥近三年的中标按合同类型统计"))
             page.wait_for_selector(".answer .chart canvas", timeout=15000)
-            assert "共 5 份已中标项目" in page.inner_text(".answer") and "按合同类型分" in page.inner_text(".answer")
+            assert "共 5 份已中标项目" in page.inner_text(".answer") and "按合同类型分,柱旁是份数" in page.inner_text(".answer")
             # 承包模式与金额(10-13 使用方问):DBO 或运营两样都算,5000 万迪拉姆以上按原币比;合同类型列下面标出 DBO
             page.goto(base + "/index.html?q=" + quote("摩洛哥近三年的DBO项目或者运营项目，中标金额大于5000万迪拉姆的"))
             page.wait_for_selector(".answer table", timeout=15000)
@@ -361,6 +441,109 @@ def test_portal_answers_award_questions():
             assert "承包模式:DBO、运营(几样都算)" in und and "中标价:≥ 5,000 万迪拉姆(约 " in und
             rows = page.locator(".answer .a-body > .panel table tbody tr").all_inner_texts()
             assert len(rows) == 2 and "Rabat" in rows[0] + rows[1] and "Tanger" in rows[0] + rows[1] and "DBO" in next(r for r in rows if "Tanger" in r)
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    assert all(m == "GET" for m, _ in fake.calls[seeded:]), "助手只读"
+
+
+def test_portal_answers_measures_follow_ups_and_keeps_history():
+    """2026-10-13 使用方在首页问的几句(语义层):中标价与招标估价的比例、5000 万人民币以上污水厂的平均评标时间、「那吉尔吉斯斯坦呢」。
+    页面按条件取行自己算:卡片写问的算法(中位数、平均)与单位,写明按几份算、其余几份没有这项数据又各来自哪里;接着问的沿用上一问;
+    长清单先列 20 行、能再列、能回到这一问;按年份分的柱图写单位并说明头一年、今年不是整年;问过的话记在浏览器里,点一句跳回或重问。只读。"""
+    import pytest
+    pytest.importorskip("playwright.sync_api", reason="没有 Playwright")
+    from urllib.parse import quote
+    from playwright.sync_api import Error as PWError, sync_playwright
+    from core import schema, tstore
+    from tests.test_portal import NEW, ONTO, _fake_with_schema, _seed, _serve, _today
+    fake, admin = _fake_with_schema()
+    _seed(admin, fake)
+    b = tstore.Base(admin)
+    mar, kgz = b.create("country", [{"name_zh": "摩洛哥", "ISO3": "MAR"}, {"name_zh": "吉尔吉斯斯坦", "ISO3": "KGZ"}])
+    y = _today().year
+    ma = "摩洛哥公共采购网结果公告(2026-10-13 取)"
+    row = lambda key, name, **kw: dict({"key": key, "name": name, "sector": "污水", "contract_type": "工程", "currency": "MAD", "awarded": f"{y - 1}-06-01", "country": mar["id"],  # noqa: E731
+                                        "source": ma, "winner": "Sample SARL", "winner_country": "摩洛哥"}, **kw)
+    b.create("award", [
+        row("MA-A", "Construction de la STEP de Safi", asset="污水处理厂", price=90_000_000, estimate=100_000_000, price_cny=6_300, eval_days=30, bidders=4),
+        row("MA-B", "Réseau d'assainissement de Safi", asset="管网", price=40_000_000, estimate=50_000_000, price_cny=2_800, eval_days=50, bidders=6, awarded=f"{y - 2}-03-01"),
+        row("MA-C", "Design, Build and Operate of Agadir WWTP", asset="污水处理厂", delivery="DBO", currency="USD", price=8_000_000, price_cny=5_600, eval_days=120, bidders=3,
+            source="世界银行合同授予数据(STEP,2026-10-12 取)"),
+        row("MA-D", "Extension de la STEP de Taza", asset="污水处理厂", price=20_000_000, estimate=18_000_000, price_cny=1_400, eval_days=40, bidders=2),
+        row("MA-E", "Old STEP", asset="污水处理厂", price=30_000_000, estimate=10_000_000, price_cny=2_100, awarded=f"{y - 6}-01-01"),  # 三年前的:不算
+        row("KG-1", "Реконструкция КОС г. Ош", country=kgz["id"], currency="KGS", asset="污水处理厂", price=9_000_000, estimate=10_000_000, price_cny=74, eval_days=20,
+            source="吉尔吉斯斯坦国家采购门户中标单位表(2026-10-13 取)"),
+    ] + [row(f"MA-W{i:02d}", f"Réseau d'eau potable lot {i}", sector="供水", asset="管网", price=2_000_000 + i, price_cny=140) for i in range(25)])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    seeded = len(fake.calls)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+
+            def ask(q):
+                page.fill("#q", q)
+                page.press("#q", "Enter")
+                page.wait_for_function("(q) => { const all = document.querySelectorAll('.answer'); const a = all[all.length - 1]; return a && a.querySelector('.a-q').textContent === q && !a.innerText.includes('解析中') && !a.innerText.includes('查表中') && !a.innerText.includes('读取中'); }", arg=q, timeout=15000)
+                return page.locator(".answer").last
+
+            q1 = "摩洛哥近3年来的污水项目中标金额与招标金额什么比例"
+            page.goto(base + "/index.html?q=" + quote(q1))
+            page.wait_for_selector(".answer .kpi .kn", timeout=15000)
+            a = page.locator(".answer").last
+            und = a.locator(".understood").inner_text()
+            assert "对象:已中标项目" in und and "指标:中标价 / 招标估价(中位数)" in und and "没认出来" not in und
+            kn, ku, kl = a.locator(".kpi .kn").all_inner_texts(), a.locator(".kpi .ku").all_inner_texts(), a.locator(".kpi .kl").all_inner_texts()
+            assert kn[0] == "90" and ku[0] == "%" and kl[0] == "中标价 / 招标估价(中位数)"  # 90%、80%、111% 的中位数
+            assert kn[1] == "94" and kl[1] == "平均" and kl[3] == "低于招标估价" and kn[3] == "2"
+            body = a.locator(".a-body").inner_text()
+            assert "按有招标估价的 3 份算(符合条件的共 4 份);其余 1 份没有(世界银行合同授予数据 1 份)" in body  # 没有估价的说清来自哪里
+            a.locator("details.mlist summary").click()
+            assert a.locator("details.mlist tbody tr").count() == 3 and "招标估价的 80%" in a.locator("details.mlist tbody tr").first.inner_text()  # 从低到高
+            # 接着问:「那吉尔吉斯斯坦呢」沿用类别、时间、指标
+            a = ask("那吉尔吉斯斯坦呢")
+            und = a.locator(".understood").inner_text()
+            assert "国别:吉尔吉斯斯坦" in und and "沿用上一问" in und and "指标:中标价 / 招标估价(中位数)" in und
+            assert a.locator(".kpi .kn").first.inner_text() == "90"
+            # 第二句:主体工程「污水厂」、5000 万人民币以上、平均评标时间;没说查什么也认作已中标项目
+            a = ask("摩洛哥近3年来5000万人民币以上的污水厂项目，平均评标时间多长?")
+            und = a.locator(".understood").inner_text()
+            assert "对象:已中标项目" in und and "主体工程:污水处理厂" in und and "中标价:≥ 5,000 万元" in und and "指标:评标天数(平均)" in und and "没认出来" not in und
+            assert a.locator(".kpi .kn").first.inner_text() == "75" and a.locator(".kpi .ku").first.inner_text() == "天"  # 30 与 120 天
+            assert "按有评标天数的 2 份算(符合条件的共 2 份)" in a.locator(".a-body").inner_text()
+            # 按年份分的指标柱图:写单位与按几份算;头一年、今年不是整年要说
+            a = ask("摩洛哥近3年污水项目的评标天数按年份")
+            page.wait_for_selector(".answer >> nth=-1 >> .mchart canvas", timeout=15000)
+            assert "柱高是每组的中位数" in a.inner_text() and "不是整年" in a.inner_text()
+            # 长清单:先列 20 行,再列、全部列出、回到这一问
+            a = ask("摩洛哥近三年供水的中标")
+            rows = a.locator(".a-body table tbody tr")
+            assert rows.count() == 25 and a.locator(".a-body table tbody tr:visible").count() == 20
+            assert "再列 5 份(已列 20 / 25)" in a.locator(".fold-bar").inner_text() and a.locator(".fold-bar .back-q").count() == 1
+            a.locator(".fold-bar button[data-a=more]").click()
+            assert a.locator(".a-body table tbody tr:visible").count() == 25
+            # 问过的话:钟形按钮打开,这一页问过的点了跳回(不重问);重开首页,示例下面列最近几句
+            n = page.locator(".answer").count()
+            page.click("#histBtn")
+            items = page.locator("#histPop li button").all_inner_texts()
+            assert len(items) == 5 and items[0].startswith("摩洛哥近三年供水的中标") and any(x.startswith(q1) for x in items)
+            assert any(x.startswith("那吉尔吉斯斯坦呢") and "接着「" + q1 + "」" in x for x in items)  # 接着问的连同上一问记下,单独点也能接上
+            page.locator("#histPop li button").last.click()  # 最早问的那句(第一问)
+            assert page.locator("#histPop").count() == 0 and page.locator(".answer").count() == n
+            page.goto(base + "/index.html")
+            page.wait_for_selector("#recent .chip-btn", timeout=15000)
+            assert page.locator("#recent .chip-btn").count() == 4 and "最近问过" in page.inner_text("#recent")
+            if os.environ.get("PORTAL_SHOTS"):
+                page.screenshot(path=str(Path(os.environ["PORTAL_SHOTS"]) / "assistant_recent.png"))
             assert not errors, errors
             browser.close()
     finally:

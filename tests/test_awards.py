@@ -90,6 +90,28 @@ def test_delivery_model_from_name():
     assert d("货物", "Supply of water meters") == "" and d(None, "Pipes") == ""
 
 
+def test_main_works_from_name():
+    """主体工程(v2.21,使用方要水厂、管网分开看):海水淡化厂 → 污水处理厂 → 供水厂;厂和管网都写了的,管网在前、厂只是修饰的算管网。"""
+    a = awards.asset
+    assert a("Design, Build and Operate of Eastern Catchment Wastewater Treatment Plants (WWTPs)") == "污水处理厂"
+    assert a("Construction de la STEP de Safi") == "污水处理厂" and a("Реконструкция КОС г. Ош") == "污水处理厂"
+    assert a("Construction of 50,000 m3/day Water Treatment Plant") == "供水厂" and a("Station de traitement d'eau potable de Taza") == "供水厂"
+    assert a("2.4 MIGD SWRO Desalination Plant DBO") == "海水淡化厂"
+    assert a("Supply of pipes for the Ganja WTP") == "管网" and a("Distribution network from the WTP to Ganja districts") == "管网"  # 「供某水厂的管子」:管网
+    assert a("Water Distribution Network Rehabilitation") == "管网" and a("Construction of pumping station and reservoir") == "泵站水池水源"
+    assert a("Supply of Smart Water Meters") == "其他"
+
+
+def test_import_keeps_only_plausible_estimates_and_process_numbers():
+    """招标估价只在中标价是它的 0.3–2 倍时写(差得多的多半是标段、公告没对上);评标天数 0–900、投标家数 1–200 以外的不写。"""
+    v = lambda **kw: awards.values(dict({"key": "K", "name": "Construction de la STEP", "sector": "污水", "price": "900", "currency": "MAD"}, **kw), "rec", None)  # noqa: E731
+    assert v(estimate="1000")["estimate"] == 1000 and "estimate" not in v(estimate="100") and "estimate" not in v(estimate="5000") and "estimate" not in v(estimate="")
+    assert "estimate" not in v(estimate="1000", price="")
+    assert v(eval_days="35")["eval_days"] == 35 and "eval_days" not in v(eval_days="-3") and "eval_days" not in v(eval_days="2000")
+    assert v(bidders="4")["bidders"] == 4 and "bidders" not in v(bidders="0")
+    assert v()["asset"] == "污水处理厂" and v(asset="管网")["asset"] == "管网"  # 数据文件里写了的以它为准
+
+
 def _raw(no, desc, amount, supplier, sc="CN", country="KG", practice="Water/Sanit/Waste", cat="Works", method="Request for Bids", sid=""):
     return {"supplier_id": sid, "wb_contract_number": no, "contract_description": desc, "supplier_contract_amount_usd": amount, "supplier": supplier, "supplier_country_code": sc,
             "supplier_country": "", "borrower_country_code": country, "project_global_practice": practice, "procurement_category": cat, "procurement_method": method,
@@ -161,9 +183,9 @@ def test_import_fills_delivery_on_rows_already_there(env, tmp_path):
     b.create("award", [{"key": "A-1", "name": "Design, Build and Operate of Baku WWTP", "sector": "污水", "contract_type": "工程", "country": crid, "source": "测试"},
                        {"key": "A-2", "name": "Exploitation de la STEP de Baku", "sector": "污水", "contract_type": "运营", "country": crid, "source": "测试"},  # 人改成了运营
                        {"key": "A-3", "name": "Sewer network, lot 2", "sector": "污水", "contract_type": "工程", "delivery": "设计施工", "country": crid, "source": "测试"}])  # 人填过
-    assert awards.run(b, path, log=lambda *a: None)["补空"] == 2
-    got = {b.get("award", r, "key"): b.get("award", r, "delivery") for r in b.rows("award")}
-    assert got == {"A-1": "DBO", "A-2": "运营", "A-3": "设计施工"}
+    assert awards.run(b, path, log=lambda *a: None)["补空"] == 3  # 三份都补上主体工程(v2.21),前两份还补承包模式
+    got = {b.get("award", r, "key"): (b.get("award", r, "delivery"), b.get("award", r, "asset")) for r in b.rows("award")}
+    assert got == {"A-1": ("DBO", "污水处理厂"), "A-2": ("运营", "污水处理厂"), "A-3": ("设计施工", "管网")}
 
 
 def test_import_creates_contractors_and_links_winners(env, tmp_path):
@@ -455,3 +477,4 @@ def test_kg_rows_threshold_plausible_amounts_and_buyer():
     assert r["winner"] == 'ОсОО "Бекстрой"' and r["winner_country"] == "吉尔吉斯斯坦" and r["buyer"] == "Айыл окмоту Кабык"
     assert r["url"] == "https://zakupki.gov.kg/popp/view/order/view.xhtml?id=000000001" and r["awarded"] == "2019-09-20"
     assert out[1]["awarded"] == "2026-10-02" and out[1]["winner_country"] == "中国"  # 签约日期写错的按公告日期
+    assert r["estimate"] == "45000000.00"  # 计划金额写进招标估价(v2.21)

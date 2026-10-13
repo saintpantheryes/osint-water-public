@@ -17,7 +17,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from core import tstore
-from core.jobs.awards import delivery
+from core.jobs.awards import asset, delivery
 
 TZ = ZoneInfo("Asia/Shanghai")
 USD_CNY, EUR_CNY = 7.1, 7.7  # 示例里折合人民币用的固定汇率
@@ -132,7 +132,8 @@ def build(today: date) -> dict[str, list[dict]]:
                "country": c["country"], "city": c["_k"], "capacity": round(c["population"] * 0.15 / 1e4, 1), "pop_served": round(c["population"] * 0.4, -3), "built": str(1990 + 4 * i),
                "level": "二级" if i % 2 else "深度", "process": "A2/O 生物处理", "upgrades": "2019 | 提标改造 | 增加深度过滤(示例)" if i == 0 else None, "coords": c["coords"], "source": "示例数据"}
               for i, c in enumerate(cities)]
-    # 已中标项目:每个示例国家 4 份(三份在示例城市,一份只挂国别),类别、年份错开,好演示筛选
+    # 已中标项目:每个示例国家 4 份(三份在示例城市,一份只挂国别),类别、年份错开,好演示筛选;
+    # 工程合同里一半写了招标估价(中标价是估价的 80%–114%),工程合同都写评标天数与投标家数(演示助手的「中标价是招标估价的几成」「平均评标多久」)
     kinds = [("供水", "工程", "配水管网改造", "Water Distribution Network Rehabilitation", "配水管网 42 km"), ("污水", "工程", "污水处理厂扩建并运营", "Design, Build and Operate of WWTP Expansion", "污水厂 8 万吨/日"),
              ("水利", "工程", "灌渠衬砌", "Irrigation Canal Lining", "渠道 65 km"), ("供水", "货物", "智能水表采购", "Supply of Smart Water Meters", "水表 3 万只"),
              ("雨水排涝", "工程", "城区排水改造", "Urban Drainage Improvement", "排水管涵 18 km"), ("污水", "咨询服务", "污水管网设计与监理", "Design and Supervision of Sewer Network", ""),
@@ -155,6 +156,8 @@ def build(today: date) -> dict[str, list[dict]]:
             awards.append({"_k": f"AW-{c['country']}-{j}", "key": f"sample-aw-{i}-{j}", "name": f"{en} in {c['name_en']} (sample)", "name_zh": f"{c['name_zh']}{zh}(示例)",
                            "sector": sec, "contract_type": ctype, "delivery": delivery(ctype, en) or None, "price": price, "currency": "USD", "price_cny": _cny_wan(price, "USD"),
                            "awarded": today.replace(month=1, day=1) - d(days=365 * (j % 3) + 40 * i + 15 * j), "quantity": qty or None, "winner": win, "winner_country": wc, "winners": ws,
+                           "asset": asset(en, sec), "estimate": round(price / (0.8 + _h("est", i, j) % 35 / 100)) if ctype == "工程" and (i + j) % 2 == 0 else None,
+                           "eval_days": 20 + _h("ev", i, j) % 70 if ctype == "工程" else None, "bidders": 2 + _h("bd", i, j) % 7 if ctype == "工程" else None,
                            "project": f"P9{i}{j}000 {c['name_en']} Water Security Project (sample)", "funder": FUNDERS[j % 2], "method": "公开招标(RFB)",
                            "country": c["country"], "city": c["_k"] if j < 3 else None, "source": "示例数据", "url": f"https://example.org/award/{i}{j}"})
     # 研究资料与水务事件(国别概况「水务历史资料」、城市大事记):每个示例国家一份综述、一份评估文件、五件大事(两件在示例城市)

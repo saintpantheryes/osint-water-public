@@ -155,8 +155,8 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
             if self.path.startswith("/api/assistant/"):  # 主机上由 Caddy 转给后台任务进程里的助手接口;这里直接调它
                 from core.assistant_server import Assistant
                 n = int(self.headers.get("Content-Length") or 0)
-                q = json.loads(self.rfile.read(n) or b"{}").get("q") or ""
-                out = Assistant(None).ask(q)
+                data = json.loads(self.rfile.read(n) or b"{}")
+                out = Assistant(None).ask(data.get("q") or "", data.get("prev") if isinstance(data.get("prev"), dict) else None)
                 out["ok"] = True
                 body = json.dumps(out, ensure_ascii=False).encode()
                 self.send_response(200)
@@ -471,9 +471,9 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             assert not page.locator("#menu").is_visible() and not page.locator("#menuVeil").is_visible()
             assert page.locator(".answer").count() == 0
             page.goto(base + "/index.html?q=" + quote("阿塞拜疆最近 7 天有多少条线索"))
-            page.wait_for_selector(".answer .card .n", timeout=15000)
+            page.wait_for_selector(".answer .kpi .kn", timeout=15000)
             first = page.locator(".answer").first
-            assert first.locator(".card .n").inner_text() == "3" and "条线索" in first.inner_text()
+            assert first.locator(".kpi .kn").inner_text() == "3" and first.locator(".kpi .ku").inner_text() == "条" and "线索" in first.locator(".kpi .kl").inner_text()
             assert page.evaluate("document.body.classList.contains('asked')") and not page.locator(".hero").is_visible()  # 提问后进对话模式:标题与视频收起
             assert page.locator("#askDock #askForm").count() == 1 and page.locator("#askDock #q").is_visible() and page.locator("#askDock #llmNote").count() == 1  # 提问框挪到底部
             und = first.locator(".understood").inner_text()

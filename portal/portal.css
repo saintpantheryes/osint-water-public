@@ -84,6 +84,7 @@ h3 { font-size: 15px; margin: 14px 0 6px; } h3 .open { margin-left: 10px; font-w
 em.yr { font-style: normal; font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 400; }
 /* 关键指标卡:一排大号数字放在最前;负面的数字标红,下面一行写原因 */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 10px 0 12px; }
+.kpis.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpis.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }  /* 卡片少的一排:按张数分栏,不留空格子 */
 @media (max-width: 900px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px; min-width: 0; }
 .kpi .kv { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
@@ -551,3 +552,19 @@ sup.sref a:hover { background: var(--brand); color: #fff; }
   .dg-sec.dg-kpi .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dg-sec.infer { padding: 12px 12px 6px; }
 }
+/* 助手:长清单收起后的一行(再列、全部列出、回到这一问);问过的话(提问框里的钟形按钮弹出,手机上也不超出屏幕);从历史跳回的那一问闪一下 */
+.fold-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 14px; font-size: 13px; }
+.fold-bar .back-q { margin-left: auto; }
+.hist-pop { position: fixed; z-index: 60; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 18px 50px rgba(15, 23, 42, .18); padding: 10px 6px 8px; }
+.hist-pop .hp-h { display: flex; align-items: baseline; gap: 10px; padding: 2px 12px 8px; border-bottom: 1px solid var(--line); }
+.hist-pop .hp-clear { margin-left: auto; border: 0; background: none; color: var(--brand); font: inherit; font-size: 13px; cursor: pointer; }
+.hist-pop ul { list-style: none; margin: 4px 0 0; padding: 0; }
+.hist-pop li button { display: flex; width: 100%; align-items: baseline; gap: 12px; border: 0; background: none; text-align: left; font: inherit; color: var(--ink); padding: 8px 12px; border-radius: 10px; cursor: pointer; }
+.hist-pop li button:hover, .hist-pop li button:focus-visible { background: #f1f4f8; }
+.hist-pop li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.hist-pop li em { flex: 0 0 auto; font-style: normal; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hist-pop > p { padding: 8px 12px; margin: 0; }
+.hero-recent { margin-top: 6px; }
+.answer.flash .a-q { animation: qflash 1.2s ease-out; }
+@keyframes qflash { from { box-shadow: 0 0 0 4px rgba(14, 107, 168, .45); } to { box-shadow: 0 0 0 0 rgba(14, 107, 168, 0); } }
+.hist-pop li small { display: block; font-size: 12px; margin-top: 1px; }

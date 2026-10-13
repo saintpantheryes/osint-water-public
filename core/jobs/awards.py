@@ -4,6 +4,8 @@ scripts/fetch_ma_awards.py 从摩洛哥公共采购网的结果公告取(awards_
 城市:合同名称、所属项目名或执行地点(place 列,只用来认城市)里出现了该国某座规模以上城市的名称才挂(不分大小写、不计重音),几座都出现取人口最多的。
 供应商(v2.15):winners 列是 JSON 列表 [{name, iso3, country_zh, ext}],每家一行建进「供应商」表(标识 = contractor_key(名称),同名的并成一家),
 再把合同的「中标方」关联到这几家;同样只新建、只填空。
+v2.21:estimate(招标估价,原币,与中标价同币种;中标价是它的 0.3–2 倍才写,ESTIMATE_RATIO)、eval_days(评标天数)、bidders(投标家数)、
+asset(主体工程,没有这一列时按名称认,见 asset)四列有就填空。
 后台每个周期另有 translate:给没有中文名的行请模型译中文名(配了模型时,一次 TRANSLATE_BATCH 条)。
 命令行:python -m core.jobs.awards [--file 路径] [--dry-run]。库里还没建这张表时跳过。"""
 from __future__ import annotations
@@ -31,7 +33,7 @@ def data_files() -> list[Path]:
     return sorted(DATA.parent.glob("awards*.csv.gz"))
 OID = "award"
 COLS = ["key", "iso3", "name", "sector", "contract_type", "price", "currency", "awarded", "quantity", "winner", "winner_country",
-        "project", "funder", "method", "source", "url", "winners", "buyer", "place"]
+        "project", "funder", "method", "source", "url", "winners", "buyer", "place", "estimate", "eval_days", "bidders", "asset"]
 TEXT = ("name", "sector", "contract_type", "currency", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "buyer",
         "source", "url")
 
@@ -174,6 +176,77 @@ def delivery(contract_type: str | None, name: str | None, method: str | None = N
     return hit or {"工程": "施工", "运营": "运营"}.get(contract_type or "", "")
 
 
+# 主体工程(本体 award_asset,v2.21):按名称认。先看名称里最后一个「Lot …:」「Contract title:」后面那段(这一包具体干什么),认不出再看全名。
+# 厂:海水淡化厂 → 污水处理厂 → 供水厂(供水厂的词旁边写着污水的算污水处理厂);厂和管网都写了的,管网在前、厂只是修饰(「供某水厂的输水管」)算管网,否则算厂。
+# 英、法、俄、西、葡、印尼、越南文都认;大写缩写(STEP、КОС、ВОС、ETA)只认大写。2026-10-13 按 711 份名称里带厂字样的合同人工核过一遍
+_R = lambda p: re.compile(p, re.I)  # noqa: E731
+_DESAL = _R(r"desalin|dessal|d[ée]salement|опреснен|(?-i:\bSWRO\b|\bBWRO\b)|desalaci|dessaliniza|sea ?water (?:reverse )?osmosis|osmose inverse|d[ée]min[ée]ralisation")
+_WWTP = _R(r"waste ?water treatment|\bWWTPs?\b|\bSTPs?\b|\bFSTPs?\b|sewage treatment|sewerage treatment|effluent treatment|"
+           r"f(?:a|ae)?ecal[- ]sludge (?:treatment|management (?:plant|facilit))|\bFS treatment|sludge treatment|septage treatment|treatment of (?:waste ?water|sewage)|"
+           r"station[s]? d.?[ée]puration|(?-i:\bSTEPs?\b)|[ée]puration des eaux|lagunage|traitement des eaux us[ée]es|traitement des margines|"
+           r"очистн\w* сооружен\w*(?! (?:питьев|водопровод|воды питьев))|(?-i:\bКОС\b)|канализационн\w* очистн|"
+           r"(?-i:\bETARs?\b|\bPTARs?\b)|planta de tratamiento de aguas residuales|esta[cç][aã]o de tratamento de esgoto|(?-i:\bIPAL\b)|"
+           r"treatment plant.{0,40}(?:sewage|wastewater|sanitation)|(?:sewage|wastewater).{0,40}treatment plant|imhoff|oxidation pond|stabili[sz]ation pond|污水处理厂|污水厂")
+_WTP = _R(r"water treatment (?:plant|works|facilit|station)|\bS?WTPs?\b|water purification|purification plant|filtration plant|"
+          r"station[s]? de traitement|traitement (?:de l.)?eau potable|potabilisation|"
+          r"водоочистн|(?-i:\bВОС\b)|станци\w* (?:водо)?очистк|очистн\w* сооружен\w* (?:питьев|водопровод)|"
+          r"(?-i:\bETAs?\b|\bPTAPs?\b)|planta (?:de )?potabiliza|esta[cç][aã]o de tratamento de [aá]gua|(?-i:\bIPA\b)|"
+          r"treatment plant|nh[aà] m[aá]y n[uư][oớ]c|iron removal|defluorid|arsenic removal|净水厂|自来水厂")
+_NET = _R(r"pipe|network|distribution (?:system|line|main|net)|reticulation|transmission (?:main|line)|trunk main|rising main|"
+          r"\bmains?\b|sewer|collector|interceptor|house ?connection|service connection|drainage (?:network|system)|storm ?water drain|"
+          r"r[ée]seau|conduite|canalisation|adduction|collecteur|intercepteur|branchement|[ée]missaire|"
+          r"трубопровод|\bсет(?:ь|и|ей|ям|ях)\b|сетей|водовод|коллектор|"
+          r"tuber[ií]a|red de (?:agua|alcantarillado|distribuci)|alcantarillado|rede de|adutora|jaringan|perpipaan|đường ống|"
+          r"assainissement liquide|(?:waste ?water|sewage) collection|collection (?:system|network)|distribution works|acueducto|\bredes\b|ramais|\bdrains?\b|drainage|管网|管道")
+_PUMP = _R(r"pump(?:ing)? station|station[s]? de (?:pompage|reprise|relevage)|насосн\w* станц|reservoir|water tower|elevated (?:tank|storage)|"
+           r"ch[aâ]teau d.eau|r[ée]servoir|резервуар|\bboreholes?\b|\bwells?\b|wellfield|forage|скважин|водозабор|intake")
+_SYSTEM = _R(r"water supply (?:system|scheme|project|works|facilit)|alimentation en eau potable|(?-i:\bAEP\b)|систем\w* водоснабжен|водоснабжени|"
+             r"sistema de (?:acueducto|abastecimiento|agua)|abastecimento de [aá]gua|sistema de abastecimento|piped water|rural water supply|water supply|potable water system|"
+             r"систем\w* питьев\w* вод|points? d.eau")
+_SANI = _R(r"toilet|latrine|on-?site sanitation|sanitation facilit|hand ?washing|WASH (?:facilit|block)|blocs? sanitaires?|санузл|туалет|sanitarios")
+_IRR = _R(r"irrigat|canal|\bdams?\b|barrage|levee|dyke|dike|embankment|river ?bank|flood|inondation|оросит|ирригац|канал|дамб|селе|паводк|"
+          r"берегоукреп|watershed|catchment|khettara|s[ée]guia|périmètre")
+_FOCUS = _R(r"(?:\blot\s*(?:n\s*°|no\.?|n°)?\s*[\w\-]{1,4}\s*[:\-–]|contract tit+le\s*:|\bpackage\s*[\w\-]{1,4}\s*[:\-–])")
+_HEAD_PIPE = _R(r"^\W*(?:supply|purchas\w*|procurement|fourniture|acquisition|laying|pose|installation)?\W*(?:\w+\W+){0,6}?"
+                r"(?:pipes?|pipeline|conduite|canalisation|tuyau\w*|трубопровод|трубы)\b")
+_OF = _R(r"(?:pipes?|pipeline|network|conduite|r[ée]seau|canalisation|трубопровод|сет\w*)\b.{0,60}?\b(?:for|of|to|from|de|du|des|pour|vers|à|au|aux|для|к)\b")
+_PLANTS = (("海水淡化厂", _DESAL), ("污水处理厂", _WWTP), ("供水厂", _WTP))
+
+
+def _plant(t: str) -> str | None:
+    for k, rx in _PLANTS:
+        if rx.search(t):
+            return "污水处理厂" if k == "供水厂" and re.search(r"waste ?water|sewage|sewer|eaux us|канализ|margines|f(?:a|ae)?ecal|污水", t, re.I) else k
+    return None
+
+
+def _asset_of(t: str) -> str | None:
+    p, net, sysm = _plant(t), _NET.search(t), _SYSTEM.search(t)
+    if not p and sysm and (not net or sysm.start() < net.start()):
+        return "供水系统(综合)"
+    if p and net:
+        first = min(rx.search(t).start() for _, rx in _PLANTS if rx.search(t))
+        return "管网" if net.start() < first and (_HEAD_PIPE.search(t) or _OF.search(t[net.start():])) else p
+    return p or ("管网" if net else None)
+
+
+def asset(name: str | None, sector: str | None = None) -> str:
+    """合同名称(+ 类别)→ 主体工程(本体 award_asset 的值);认不出的算「其他」。"""
+    t = str(name or "")
+    parts = _FOCUS.split(t)
+    focus = parts[-1] if len(parts) > 1 and len(parts[-1].strip()) >= 10 else ""
+    got = (_asset_of(focus) if focus else None) or _asset_of(t)
+    if got:
+        return got
+    if _SANI.search(t):
+        return "卫生设施"
+    if any(src and _PUMP.search(src) for src in (focus, t)):
+        return "泵站水池水源"
+    if _IRR.search(t) or sector in ("水利", "雨水排涝"):
+        return "水利防洪"
+    return "其他"
+
+
 # 供应商标识:名称大写、去标点、去开头的 M/S 与结尾的公司后缀(可连着几个),空白并成一个
 _SUFFIX = {"LLC", "LTD", "LIMITED", "CO", "COMPANY", "CORP", "CORPORATION", "INC", "INCORPORATED", "JSC", "OJSC", "CJSC", "PJSC", "OAO", "ZAO",
            "OOO", "TOO", "SA", "SAS", "SARL", "SRL", "SPA", "SAU", "SL", "SAC", "LTDA", "LDA", "CIA", "PVT", "PRIVATE", "PLC", "LLP", "GMBH",
@@ -262,13 +335,23 @@ class CityIndex:
         return None
 
 
+ESTIMATE_RATIO = (0.3, 2.0)  # 中标价 ÷ 招标估价出了这个范围的,多半是标段或公告没对上:估价不写
+
+
 def values(row: dict, country_rid: str, city_rid: str | None) -> dict:
     """数据文件的一行 → 本体属性的值(空的不写)。"""
     v: dict = {k: (str(row.get(k) or "").strip() or None) for k in TEXT}
-    v["price"] = _num(row.get("price"))
+    v["price"], v["estimate"] = _num(row.get("price")), _num(row.get("estimate"))
     v["country"], v["city"] = country_rid, city_rid
     if v["price"] is not None:
         v["price"] = round(v["price"], 2)
+    if v["estimate"] is not None:
+        lo, hi = ESTIMATE_RATIO
+        v["estimate"] = round(v["estimate"], 2) if v["price"] and v["estimate"] > 0 and lo <= v["price"] / v["estimate"] <= hi else None
+    days, firms = _num(row.get("eval_days")), _num(row.get("bidders"))
+    v["eval_days"] = int(days) if days is not None and 0 <= days <= 900 else None  # 一年多的多半是日期写错,本体 award.eval_days
+    v["bidders"] = int(firms) if firms is not None and 1 <= firms <= 200 else None
+    v["asset"] = str(row.get("asset") or "").strip() or asset(row.get("name"), v.get("sector"))
     return {k: x for k, x in v.items() if x is not None}
 
 
@@ -283,9 +366,9 @@ def run(b: tstore.Base, path: Path | list[Path] | None = None, dry_run: bool = F
     rows = [r for p in paths for r in read_rows(p)]
     countries = {str(b.get("country", r, "key")): r["id"] for r in b.rows("country", props=["key"]) if b.get("country", r, "key")}
     cities = CityIndex(b)
-    props = ["key", "country", "city", *[p for p in (*TEXT, "price", "winners", "delivery") if b.has(OID, p)]]
+    props = ["key", "country", "city", *[p for p in (*TEXT, "price", "estimate", "eval_days", "bidders", "asset", "winners", "delivery") if b.has(OID, p)]]
     have = {str(b.get(OID, r, "key")): r for r in b.rows(OID, props=props) if b.get(OID, r, "key")}
-    allowed = {p: {c["name"] for c in (b.field(OID, p).get("options") or {}).get("choices") or []} for p in ("sector", "contract_type", "currency", "delivery") if b.has(OID, p)}
+    allowed = {p: {c["name"] for c in (b.field(OID, p).get("options") or {}).get("choices") or []} for p in ("sector", "contract_type", "currency", "delivery", "asset") if b.has(OID, p)}
     with_firms = b.has(OID, "winners") and "contractor" in b.t
     firms, n_firm_new, n_firm_fill = _contractors(b, rows, countries, dry_run) if with_firms else ({}, 0, 0)
     new, ups, n_city, skipped, seen = [], [], 0, 0, set()
