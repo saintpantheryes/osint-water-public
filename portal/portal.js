@@ -565,15 +565,15 @@
        类别、年份可多选筛选,筛选项上的数跟着另一项与搜索走;卡片(份数、合计中标价、最大一笔、中国企业中标)与表只算筛出来的;表按中标时间从新到旧。 */
     async awards(el, prop, rid) {  // prop:country / city(国别、城市页) / winners(供应商页:多一组国别筛选、一列国别)
       const firm = prop === "winners";
-      const head = firm ? '<h2 id="awards">中标记录</h2><p class="muted small">这家供应商在开发银行公开中标记录里的全部合同(联合体的合同全额计入每一家)。</p>' :
-        '<h2 id="awards">已中标项目</h2><p class="muted small">开发银行公开的中标记录(首批来自世界银行,2019 年以来、10 万美元以上的水务合同)和人工补录的,作报价与竞争对手的参考;不计入线索、商机。' +
+      const head = firm ? '<h2 id="awards">中标记录</h2><p class="muted small">这家供应商在公开中标记录里的全部合同(联合体的合同全额计入每一家)。</p>' :
+        '<h2 id="awards">已中标项目</h2><p class="muted small">公开的中标记录(世界银行、亚洲开发银行、欧洲复兴开发银行贷款里 10 万美元以上的水务合同;摩洛哥、吉尔吉斯斯坦另有本国公共采购网的结果,摩洛哥 100 万迪拉姆以上、吉尔吉斯斯坦 10 万美元以上)和人工补录的,作报价与竞争对手的参考;不计入线索、商机。' +
         (this.cfg.tables && this.cfg.tables.contractor ? '点供应商看它在各国的全部中标,<a href="contractor.html">全部供应商 →</a>' : "") + "</p>";
       if (!(this.cfg.tables && this.cfg.tables.award) || !this.has("award", prop)) { el.innerHTML = head + '<p class="muted">「已中标项目」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
       el.innerHTML = head + '<div class="panel">读取中…</div>';
       const many = (this.t("award").links || {})[prop] === "many", hasW = this.has("award", "winners");
       const rows = await this.records("award", { filter: this.and(many ? this.cond("award", prop, "hasAnyOf", [rid]) : this.cond("award", prop, "is", rid)),
         props: ["name", "name_zh", "sector", "contract_type", "price", "currency", "price_cny", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "country", "city", "source", "url"]
-          .concat(hasW ? ["winners"] : []) });
+          .concat(hasW ? ["winners"] : [], this.has("award", "buyer") ? ["buyer"] : []) });
       const g = (r, p) => this.get("award", r, p);
       const isoOf = {};  // 供应商页的国别列点进国别概况(那页按国别码开)
       if (firm && rows.length) (await this.records("country", { props: ["key"] })).forEach((c) => { isoOf[c.id] = this.get("country", c, "key"); });
@@ -585,7 +585,7 @@
       const big = (n) => (n >= 1e8 ? (n / 1e8).toFixed(n >= 1e10 ? 0 : 2) + " 亿" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString("zh-CN") + " 万" : Math.round(n).toLocaleString("zh-CN"));
       const curZh = (c) => ({ USD: "美元", EUR: "欧元", CNY: "元" }[c] || (c ? " " + c : ""));
       const cny = (w) => (w >= 1e4 ? (Math.round(w / 100) / 100).toFixed(2) + " 亿元" : Math.round(w).toLocaleString("zh-CN") + " 万元");  // 万元 → 文字
-      const words = (r) => [g(r, "name"), g(r, "name_zh"), g(r, "winner"), g(r, "winner_country"), g(r, "project"), firm ? ctry(r) : ""].join(" ").toLowerCase();
+      const words = (r) => [g(r, "name"), g(r, "name_zh"), g(r, "winner"), g(r, "winner_country"), g(r, "project"), g(r, "buyer"), firm ? ctry(r) : ""].join(" ").toLowerCase();
       const pass = (r, skip) => (skip === "s" || !st.s.length || st.s.includes(g(r, "sector") || "其他")) && (skip === "y" || !st.y.length || st.y.includes(year(r))) &&
         (skip === "c" || !st.c.length || st.c.includes(ctry(r))) && (!st.q || words(r).includes(st.q.toLowerCase()));
       const years = [...new Set(rows.map(year).filter(Boolean))].sort().reverse();
@@ -618,7 +618,9 @@
           this.tableHtml(["中标时间", "名称", "类别", "合同类型", "中标价", "工程量", firm ? "联合体伙伴" : "中标单位"].concat(place ? [place] : [], ["资金来源", ""]), list.slice(0, show).map((r) => {
             const zh = g(r, "name_zh"), en = g(r, "name") || "", u = g(r, "url");
             const nm = (zh ? "<b>" + this.esc(zh) + '</b><br><span class="muted small">' + this.esc(en) + "</span>" : "<b>" + this.esc(en) + "</b>") +
-              (g(r, "project") ? '<br><span class="muted small">项目:' + (u ? '<a href="' + this.esc(u) + '" target="_blank" rel="noopener">' + this.esc(g(r, "project")) + " ↗</a>" : this.esc(g(r, "project"))) + "</span>" : "");
+              (g(r, "project") ? '<br><span class="muted small">项目:' + (u ? '<a href="' + this.esc(u) + '" target="_blank" rel="noopener">' + this.esc(g(r, "project")) + " ↗</a>" : this.esc(g(r, "project"))) + "</span>" : "") +
+              (g(r, "buyer") ? '<br><span class="muted small">采购方:' + this.esc(g(r, "buyer")) + "</span>" : "") +
+              (!g(r, "project") && u ? ' <a class="small" href="' + this.esc(u) + '" target="_blank" rel="noopener">公告原文 ↗</a>' : "");  // 本国采购网的记录没有所属项目,链到公告
             const p = Number(g(r, "price")), w = Number(g(r, "price_cny"));
             const price = '<span class="nw">' + (p ? "<b>" + this.esc(big(p) + curZh(g(r, "currency"))) + "</b>" : "") + (w ? '<br><span class="muted small">≈ ' + this.esc(cny(w)) + "</span>" : "") + "</span>";
             const ws = hasW ? [].concat(g(r, "winners") || []).filter((x) => x && x.id) : [];  // 有「中标方」关联的,每家点进供应商页

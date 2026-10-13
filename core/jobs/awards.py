@@ -1,6 +1,7 @@
-"""A28 导入已中标项目:按私有配置仓的 data/awards.csv.gz 把已授出的合同建进「已中标项目」表;只新建、只填空(R2),去重按编号。
-首批数据由 scripts/fetch_wb_awards.py 从世界银行公开的合同授予数据取(那个脚本用这里的 classify / quantity 归类、摘工程量);
-别的来源整理成同样的列(COLS)也能导入。城市:合同名称(或所属项目名)里出现了该国某座规模以上城市的英文名才挂,几座都出现取人口最多的。
+"""A28 导入已中标项目:按私有配置仓 data/ 下的 awards*.csv.gz(一个来源一份)把已授出的合同建进「已中标项目」表;只新建、只填空(R2),去重按编号。
+数据由 scripts/fetch_wb_awards.py 从世界银行公开的合同授予数据取(awards.csv.gz,那个脚本用这里的 classify / quantity 归类、摘工程量),
+scripts/fetch_ma_awards.py 从摩洛哥公共采购网的结果公告取(awards_mar.csv.gz);别的来源整理成同样的列(COLS)也能导入。
+城市:合同名称、所属项目名或执行地点(place 列,只用来认城市)里出现了该国某座规模以上城市的名称才挂(不分大小写、不计重音),几座都出现取人口最多的。
 供应商(v2.15):winners 列是 JSON 列表 [{name, iso3, country_zh, ext}],每家一行建进「供应商」表(标识 = contractor_key(名称),同名的并成一家),
 再把合同的「中标方」关联到这几家;同样只新建、只填空。
 后台每个周期另有 translate:给没有中文名的行请模型译中文名(配了模型时,一次 TRANSLATE_BATCH 条)。
@@ -16,16 +17,23 @@ import math
 import os
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 from core import tstore
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "private" / "data" / "awards.csv.gz"
+
+
+def data_files() -> list[Path]:
+    """私有配置仓 data/ 下的全部数据文件(awards.csv.gz、awards_mar.csv.gz……),按文件名排。"""
+    return sorted(DATA.parent.glob("awards*.csv.gz"))
 OID = "award"
 COLS = ["key", "iso3", "name", "sector", "contract_type", "price", "currency", "awarded", "quantity", "winner", "winner_country",
-        "project", "funder", "method", "source", "url", "winners"]
-TEXT = ("name", "sector", "contract_type", "currency", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "source", "url")
+        "project", "funder", "method", "source", "url", "winners", "buyer", "place"]
+TEXT = ("name", "sector", "contract_type", "currency", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "buyer",
+        "source", "url")
 
 # 类别(lead_sectors):按合同名称里的词归,先中先得(海水淡化 → 污水 → 雨水排涝 → 供水 → 水利 → 水环境);英、法、西、葡、越南文都认。
 # 只有泛泛的「水」字样的算其他;一个都不中的不是水务合同(fetch 时丢掉)。
@@ -87,6 +95,10 @@ METHOD_ZH = {"Request for Bids": "公开招标(RFB)", "Request for Quotations": 
              "Request for Proposals": "建议书邀请(RFP)", "Community Driven Development": "社区主导", "UN Agencies (Direct)": "联合国机构(直接)",
              "E-Auctions": "电子反拍", "Force Account": "自营工程", "Public Private Partnership": "公私合营(PPP)",
              "Individual Consultant Selection": "个人咨询顾问选择", "Non-Profit Organizations": "非营利组织(直接)"}
+
+# 名称看得出是中国企业的(各来源的地址常写的是它在当地的分公司,注册国按这个改成中国)
+CHINESE_FIRM = re.compile(r"\bCHINA\b|\bSINO|\bCHINESE\b|POWERCHINA|HYDROCHINA|\bCSCEC\b|\bCRCC\b|\bCRBC\b|\bCHEC\b|\bCAMCE\b|\bCMEC\b|\bCGGC\b|"
+                          r"\bCAMC\b|\bCNEEC\b|\bCITIC\b|\bCREC\b|\bCR\d{1,2}G\b|\bTBEA\b|\(P\.?R\.?C\.?\)|\bPRC\b", re.I)
 
 CITY_MIN_LEN = 5  # 城市英文名短于这个的不认(Ica、Bo 这类会误中)
 
@@ -182,8 +194,13 @@ def _num(v: str | None) -> float | None:
     return x if x is None or math.isfinite(x) else None
 
 
+def _fold(text: str) -> str:
+    """去掉重音(Kénitra → Kenitra),认城市名时用。"""
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+
+
 class CityIndex:
-    """城市表:国别记录编号 → [(英文名正则, 人口, 城市记录编号)],人口从多到少。"""
+    """城市表:国别记录编号 → [(英文名正则, 人口, 城市记录编号)],人口从多到少;不计重音。"""
 
     def __init__(self, b: tstore.Base):
         self.by_country: dict[str, list[tuple[re.Pattern, float, str]]] = {}
@@ -192,7 +209,7 @@ class CityIndex:
         for r in b.rows("city", props=["name_en", "country", "population"]):
             name, crid = str(b.get("city", r, "name_en") or "").strip(), tstore.link_id(b.get("city", r, "country"))
             if crid and len(name) >= CITY_MIN_LEN:
-                rx = re.compile(r"(?<!\w)" + re.escape(name) + r"(?!\w)", re.I)
+                rx = re.compile(r"(?<!\w)" + re.escape(_fold(name)) + r"(?!\w)", re.I)
                 self.by_country.setdefault(crid, []).append((rx, float(b.get("city", r, "population") or 0), r["id"]))
         for v in self.by_country.values():
             v.sort(key=lambda x: -x[1])
@@ -200,6 +217,7 @@ class CityIndex:
     def find(self, country_rid: str, *texts: str | None) -> str | None:
         for t in texts:
             if t:
+                t = _fold(t)
                 hit = next((rid for rx, _, rid in self.by_country.get(country_rid, []) if rx.search(t)), None)
                 if hit:
                     return hit
@@ -216,14 +234,15 @@ def values(row: dict, country_rid: str, city_rid: str | None) -> dict:
     return {k: x for k, x in v.items() if x is not None}
 
 
-def run(b: tstore.Base, path: Path | None = None, dry_run: bool = False, log=print) -> dict:
-    """→ {新建, 补空, 挂上城市, 跳过(国别表里没有)};表没建或没有数据文件时跳过。"""
-    path = path or DATA
+def run(b: tstore.Base, path: Path | list[Path] | None = None, dry_run: bool = False, log=print) -> dict:
+    """→ {新建, 补空, 挂上城市, 跳过(国别表里没有)};表没建或没有数据文件时跳过。path 不给时读 data/ 下的全部数据文件。"""
+    paths = [path] if isinstance(path, Path) else list(path) if path else data_files()
     if OID not in b.t:
         return {"跳过": "库里还没有「已中标项目」表(先跑建表命令)"}
-    if not path.exists():
-        return {"跳过": f"没有数据文件 {path}"}
-    rows = read_rows(path)
+    paths = [p for p in paths if p.exists()]
+    if not paths:
+        return {"跳过": f"没有数据文件 {DATA.parent}/awards*.csv.gz"}
+    rows = [r for p in paths for r in read_rows(p)]
     countries = {str(b.get("country", r, "key")): r["id"] for r in b.rows("country", props=["key"]) if b.get("country", r, "key")}
     cities = CityIndex(b)
     props = ["key", "country", "city", *[p for p in (*TEXT, "price", "winners") if b.has(OID, p)]]
@@ -241,7 +260,7 @@ def run(b: tstore.Base, path: Path | None = None, dry_run: bool = False, log=pri
         if not crid:
             skipped += 1
             continue
-        city = cities.find(crid, row.get("name"), (row.get("project") or "").split(" ", 1)[-1])
+        city = cities.find(crid, row.get("name"), (row.get("project") or "").split(" ", 1)[-1], row.get("place"))
         want = {k: x for k, x in values(row, crid, city).items() if k in ("country", "city") or b.has(OID, k)}
         ids = list(dict.fromkeys(firms[k] for k in (contractor_key(w["name"]) for w in winners_of(row)) if firms.get(k)))
         if ids:
@@ -351,7 +370,7 @@ def translate(b: tstore.Base, clf, limit: int = TRANSLATE_BATCH, log=print) -> i
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m core.jobs.awards", description="A28 导入已中标项目(只新建、只填空)")
-    ap.add_argument("--file", type=Path, default=DATA, help=f"数据文件(缺省 {DATA})")
+    ap.add_argument("--file", type=Path, action="append", help=f"数据文件,可给几个(缺省 {DATA.parent}/awards*.csv.gz 全部)")
     ap.add_argument("--dry-run", action="store_true", help="只算要建、要补多少,不写")
     a = ap.parse_args(argv)
     b = tstore.Base(tstore.Client(*tstore.credentials(admin=not os.environ.get("TEABLE_TOKEN"))))  # 机器账号的令牌;只有管理员令牌时用它

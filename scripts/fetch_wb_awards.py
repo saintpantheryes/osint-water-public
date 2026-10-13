@@ -68,6 +68,16 @@ def _day(s: str | None) -> str:
         return ""
 
 
+def _supplier_code(x: dict) -> str:
+    """供应商国别码。世行不和朝鲜往来,数据里写成朝鲜(KP)的都是录错的:多是韩国公司,
+    也有刚果(金)、刚果(布)本地的单位被选成了「Korea, Democratic People's Republic of」,这种按借款国记。"""
+    code = str(x.get("supplier_country_code") or "").strip()
+    if code.upper() in ("KP", "PRK"):
+        borrower = geo.iso3(x.get("borrower_country_code"))
+        return borrower if borrower in ("COD", "COG") else "KOR"
+    return code
+
+
 def _country_zh(code: str | None, name: str | None) -> str:
     iso = geo.iso3(code) if code else None
     zh = geo.name_zh(iso) if iso else ""
@@ -101,11 +111,12 @@ def pick(raw: list[dict], min_usd: float = 100_000) -> list[dict]:
         for x in rs:
             nm = " ".join(str(x.get("supplier") or "").split())
             if nm and nm not in firms:
-                iso_w = geo.iso3(x.get("supplier_country_code")) if x.get("supplier_country_code") else None
+                code = _supplier_code(x)
+                iso_w = geo.iso3(code) if code else None
                 sid = str(x.get("supplier_id") or "").strip()
-                firms[nm] = {"name": nm, "iso3": iso_w or "", "country_zh": _country_zh(x.get("supplier_country_code"), x.get("supplier_country")),
+                firms[nm] = {"name": nm, "iso3": iso_w or "", "country_zh": _country_zh(code, x.get("supplier_country")),
                              "ext": f"WB:{sid}" if sid else ""}
-        wc = list(dict.fromkeys(_country_zh(x.get("supplier_country_code"), x.get("supplier_country")) for x in rs))
+        wc = list(dict.fromkeys(_country_zh(_supplier_code(x), x.get("supplier_country")) for x in rs))
         method = " ".join(str(r0.get("procurement_method") or "").split())
         pid = str(r0.get("project_id") or "").strip()
         out.append({"key": f"WB-{no}", "iso3": iso, "name": name, "sector": sector,
