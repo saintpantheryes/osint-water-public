@@ -1056,6 +1056,8 @@ actions:
              contractor.name, contractor.nationality, contractor.nationality_code, contractor.ext_ids]
     note: "数据文件是私有配置仓 data/ 下的 awards*.csv.gz,一个来源一份,都读。awards.csv.gz 由 scripts/fetch_wb_awards.py 从世界银行 Finances One 的「投资项目合同授予」数据(STEP 系统,借款国录入)取:
       项目属水务实践的,合同名称里有水务字样;农业、防灾、城市等别的项目里的(灌渠、水坝、防洪堤、农村供水常在这些项目下),名称要有明确的水务工程字样、且没有道路、学校、电力、种子之类字样;10 万美元以上;同一合同号的多行(联合体各家)并成一行,金额不同的各家相加。只留国别表里有的国家。
+      awards_wb_old.csv.gz 由 scripts/fetch_wb_old_awards.py 从世行项目网站的合同检索接口取 2019 年以前签的(STEP 数据之前,2000 年前后起,多是事前审查的大合同;编号与 STEP 同一套),挑法同上;
+      早年名称常很短,水务项目里名称归不了类的工程(办公楼、培训除外)、管材泵阀类货物、设计监理类咨询按项目名称归类;个人咨询顾问不收;读坏的名称(UTF-8 当 cp1252 读)还原。按国别取(使用方 2026-10-14 问阿塞拜疆为什么只有 5 份:世行在那里的水务贷款 2017 年前就花完了)。
       awards_mar.csv.gz 由 scripts/fetch_ma_awards.py 从摩洛哥公共采购网的结果公告取:标题有法文水务词、没有道路电力等字样的;中标单位与金额从公告附件读(扫描件转正后文字识别,配置的模型只读原文写着的、金额要在原文里找得到;也可看原件小图读),
       读不准的不收;100 万迪拉姆以上;一张结果表挂在几条公告上的只收一次;采购方、执行地点(认城市用)、附件里写明的外部出资方一并记下;供应商注册国只在名称看得出时写(中国企业名称、摩洛哥的 SARL)。
       招标估价:门户的「全部公告」清单(只回溯到 2024 年 10 月以来截标的)里按同一机构、同一编号找原招标公告(标题、业主相近,截标在结果公布之前),读详情页的「Estimation (en Dhs TTC)」,分标段的按标段号对上;框架合同(给最低、最高价的)不写。
@@ -1302,7 +1304,7 @@ as_is:
     - 本机缓存:GeoNames 的城市与行政区数据文件(可再取)
   award:
     - Teable「已中标项目」表(唯一)
-    - 导入来源:私有配置仓 data/awards*.csv.gz(scripts/fetch_wb_awards.py 从世界银行公开数据取;scripts/fetch_ma_awards.py 从摩洛哥公共采购网取;scripts/fetch_adb_awards.py、fetch_ebrd_awards.py 从亚行、欧洲复兴开发银行取;scripts/fetch_kg_awards.py 从吉尔吉斯斯坦国家采购门户取)
+    - 导入来源:私有配置仓 data/awards*.csv.gz(scripts/fetch_wb_awards.py、fetch_wb_old_awards.py 从世界银行公开数据取(2019 年起、2019 年以前);scripts/fetch_ma_awards.py 从摩洛哥公共采购网取;scripts/fetch_adb_awards.py、fetch_ebrd_awards.py 从亚行、欧洲复兴开发银行取;scripts/fetch_kg_awards.py 从吉尔吉斯斯坦国家采购门户取)
   contractor:
     - Teable「供应商」表(唯一;机器从已中标项目的中标记录建行)
   water_area:

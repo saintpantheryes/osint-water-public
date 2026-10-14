@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 from core import tstore
@@ -18,6 +19,7 @@ import fetch_ebrd_awards as ebrd  # noqa: E402
 import fetch_kg_awards as kg  # noqa: E402
 import fetch_ma_awards as ma  # noqa: E402
 import fetch_wb_awards  # noqa: E402
+import fetch_wb_old_awards as wb_old  # noqa: E402
 
 
 def test_classify_and_quantity():
@@ -143,6 +145,40 @@ def test_fetch_pick_fixes_north_korea_supplier_codes():
     rows = {r["key"]: r for r in fetch_wb_awards.pick(raw)}
     assert rows["WB-1"]["winner_country"] == "韩国" and json.loads(rows["WB-1"]["winners"])[0]["iso3"] == "KOR"
     assert json.loads(rows["WB-2"]["winners"])[0]["iso3"] == "COD"
+
+
+def _old(no, desc, amount, firms, group="CW", sectors=("Water Supply", "Sanitation"), project="NATIONAL WATER SUPPLY & SANITATION", signed="25-Nov-2011",
+         method="International Competitive Bidding", country="AZ"):
+    return {"contr_id": no, "contr_desc": desc, "total_contr_amnt": str(amount), "contr_sgn_date": signed, "countrycode": country, "countryshortname": "Azerbaijan",
+            "projectid": "P096213", "project_name": project, "procurement_group": group, "procurement_group_desc": {"CW": "Works", "GO": "Goods", "CS": "Consultant Services"}[group],
+            "procu_meth_text": method, "sector": list(sectors), "suppinfo": [{"name": n, "id": str(i), "country": c, "countryshortname": ""} for i, (n, c) in enumerate(firms, 1)]}
+
+
+def test_old_wb_awards_short_titles_mojibake_and_date_split():
+    raw = [_old("1", "Construction of Water Supply and Waste Water Systems in Goychay", 105_753_853.25, [("ESER CONTRACTING", "TR")]),
+           _old("2", "Construction of Transmission Main from Kura", 58_784_356, [("AZERSUTECHIZATTIKINTI JSC", "AZ"), ("TTÅž INÅžAAT LLC", "AZ")]),  # 读坏的名称还原
+           _old("3", "NETWORK REHABILITATION NASIMI, NIZAMI AND NARIMANOV DISTRICTS", 400_000, [("KHAZAR LTD.", "AZ")]),  # 名称太短:工程按项目名称归
+           _old("4", "MILL-MUGAN SIPHON COMPLETION", 5_840_000, [("AZERSU", "AZ")], project="Rehabilitation & Completion of Irrigation & Drainage", sectors=("Irrigation & drainag",)),
+           _old("5", "SUPPLY OF POLYETHYLENE (PE) PIPES AND FITTINGS", 3_900_000, [("DERNEGUL BORU", "TR")], group="GO"),  # 管材:收
+           _old("6", "Supervision consultant for 4 rayons", 7_840_000, [("P2MBERLIN GMBH", "DE")], group="CS", method="Quality And Cost-Based Selection"),
+           _old("7", "SUPPLY OF EARTHMOVING PLANT", 2_690_000, [("X", "TR")], group="GO"),  # 机械、审计、办公楼、个人顾问、太小、2019 年后的:不收
+           _old("8", "Audit of the project for 2015", 380_000, [("Y", "AZ")], group="CS"),
+           _old("9", "Construction of Office Buildings for 8 WUAs", 250_000, [("Z", "AZ")]),
+           _old("10", "Water supply specialist", 150_000, [("INDIVIDUAL CONSULTANT", "AZ")], group="CS", method="Individual Consultant Selection"),
+           _old("11", "Water supply network", 90_000, [("W", "AZ")]),
+           _old("12", "Water supply network", 900_000, [("V", "AZ")], signed="03-Jul-2019"),
+           _old("13", "Construction of 25 km sewer in Rural Investment area", 600_000, [("U", "AZ")], project="Rural Investment Project", sectors=("Rural",)),  # 别的项目:严格词
+           _old("14", "Training of PMU staff", 600_000, [("T", "AZ")], project="Rural Investment Project", sectors=("Rural",))]
+    rows = {r["key"]: r for r in wb_old.pick(raw, today=date(2026, 10, 14))}
+    assert set(rows) == {"WB-1", "WB-2", "WB-3", "WB-4", "WB-5", "WB-6", "WB-13"}
+    one = rows["WB-1"]
+    assert one["iso3"] == "AZE" and one["price"] == "105753853.25" and one["currency"] == "USD" and one["awarded"] == "2011-11-25"
+    assert one["sector"] == "污水" and one["contract_type"] == "工程" and one["method"] == "国际竞争性招标(ICB)" and one["winner_country"] == "土耳其"
+    assert one["funder"] == "世界银行" and "2019 年前" in one["source"] and "2026-10-14" in one["source"] and one["url"].endswith("/P096213")
+    assert rows["WB-2"]["winner"] == "AZERSUTECHIZATTIKINTI JSC、TTŞ INŞAAT LLC" and rows["WB-2"]["winner_country"] == "阿塞拜疆"
+    assert json.loads(rows["WB-2"]["winners"])[1] == {"name": "TTŞ INŞAAT LLC", "iso3": "AZE", "country_zh": "阿塞拜疆", "ext": "WB:2"}
+    assert rows["WB-3"]["sector"] == "供水" and rows["WB-4"]["sector"] == "水利" and rows["WB-5"]["contract_type"] == "货物"
+    assert rows["WB-6"]["contract_type"] == "咨询服务" and rows["WB-6"]["method"] == "质量和费用选择(QCBS)" and rows["WB-13"]["sector"] == "污水"
 
 
 def test_import_links_cities_fills_blanks_and_skips_unknown_countries(env, tmp_path):
