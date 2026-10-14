@@ -82,13 +82,10 @@
     $("head").innerHTML = '<div class="opphead"><div><a href="opps.html" class="muted">‹ 商机总览</a><h1>' + P.esc(g("code") || "") + " " + P.esc(g("name_zh") || "") +
       " " + P.stageTag(stage) + "</h1>" +
       '<p class="muted">' + [g("name_local"), countryName ? '<a href="country.html?iso=' + encodeURIComponent(countryName.iso) + '">' + P.esc(countryName.zh) + "</a>" : "", P.text(g("city")) ? P.esc(P.text(g("city"))) : "", g("location"), g("priority") ? "优先级 " + P.esc(g("priority")) : "", P.text(g("owner")) ? "负责人 " + P.esc(P.text(g("owner"))) : "未定负责人"].filter(Boolean).join(" · ") + "</p></div>" +
-      '<div class="kv"><div><b>公开进度</b><span>' + P.esc(g("public_stage") || "—") + (g("public_stage_note") ? '<small class="muted"> ' + P.esc(g("public_stage_note")) + "</small>" : "") + "</span></div>" +
-      "<div><b>下一节点</b><span>" + P.esc(g("next_milestone") || "—") + "</span></div>" +
-      "<div><b>下一步</b><span>" + P.esc(g("next_step") || "—") + (g("next_due") ? " · 到期 " + P.day(g("next_due")) : "") + "</span></div>" +
-      "<div><b>当前判断</b><span>" + P.esc(g("judgment") || "—") + "</span></div>" +
-      "<div><b>投资规模</b><span>" + P.esc(P.sizeText("opportunity", r) || (g("size_usd") ? "≈ " + Number(g("size_usd")).toLocaleString() + " 美元" : "—")) + "</span></div>" +
-      "<div><b>投标资格</b><span>" + P.esc(g("eligibility") || "—") + (g("eligibility_basis") ? '<small class="muted"> ' + P.esc(g("eligibility_basis")) + "</small>" : "") + "</span></div>" +
-      "<div><b>最晚启动</b><span>" + (P.day(g("latest_start")) || "—") + "</span></div></div>" +
+      P.factsHtml([["公开进度", g("public_stage") || "—", { note: g("public_stage_note") || "" }], ["下一节点", g("next_milestone") || "—"],
+        ["下一步", (g("next_step") || "—") + (g("next_due") ? " · 到期 " + P.day(g("next_due")) : "")], ["当前判断", g("judgment") || "—"],
+        ["投资规模", P.sizeText("opportunity", r) || (g("size_usd") ? "≈ " + Number(g("size_usd")).toLocaleString() + " 美元" : "—")],
+        ["投标资格", g("eligibility") || "—", { note: g("eligibility_basis") || "" }], ["最晚启动", P.day(g("latest_start")) || "—"]]) +
       '<p class="muted">' + P.open("opportunity", rid, "在表格里打开这个商机 ↗") + "</p></div>";
     $("ownerNow").textContent = P.text(g("owner")) || "(未定)";
     $("prio").value = g("priority") || "";

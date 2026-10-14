@@ -135,8 +135,6 @@ details.sec summary::before { content: "▸ "; color: var(--muted); } details.se
 .two .col.wide { min-width: 0; }
 @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
 .opphead h1 { margin: 2px 0 4px; }
-.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 16px; margin: 8px 0; }
-.kv div { display: flex; gap: 8px; align-items: baseline; } .kv b { color: var(--muted); font-weight: 500; white-space: nowrap; }
 .form h3 { margin: 0 0 8px; } .form .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
 .form label { flex: 0 0 64px; color: var(--muted); font-size: 13px; } .form input, .form select, .form textarea { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
 .form button, .toolbar .primary { font: inherit; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); cursor: pointer; }
@@ -146,7 +144,6 @@ details.sec summary::before { content: "▸ "; color: var(--muted); } details.se
 .tl .when { color: var(--muted); font-size: 12px; }
 #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: #111827; color: #fff; padding: 8px 14px; border-radius: 8px; opacity: 0; transition: .2s; pointer-events: none; z-index: 9; max-width: 90vw; }
 #toast.show { opacity: 1; transform: translateX(-50%); } #toast.bad { background: #b91c1c; }
-.kv small { display: block; font-size: 12px; line-height: 1.4; max-height: 4.2em; overflow: hidden; }
 /* 线索处理(原待我处理)、商机总览的待办页签 */
 .item { display: flex; gap: 14px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .item:last-child { border-bottom: 0; } .item.busy { opacity: .5; }
@@ -482,8 +479,6 @@ details.sec.panel summary { margin: -4px 0; }
 .lk-advice { font-size: 22px; font-weight: 700; margin: 4px 0 2px; }
 .lk-advice.go { color: var(--ok); } .lk-advice.check { color: var(--warn); } .lk-advice.no { color: #b91c1c; } .lk-advice.have { color: var(--brand); }
 .lk-why { margin: 0 0 10px; }
-.lk-kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 6px 0 10px; }
-.lk-kv dt { color: var(--muted); } .lk-kv dd { margin: 0; }
 .lk-lv { display: inline-block; font-weight: 700; padding: 0 8px; border-radius: 6px; margin-right: 6px; }
 .lk-lv.hi { background: var(--ok-soft); color: #166534; } .lk-lv.mid { background: #e0f2fe; color: #075985; } .lk-lv.lo { background: #fee2e2; color: #991b1b; }
 .lk-act { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
