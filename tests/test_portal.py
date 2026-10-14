@@ -152,6 +152,22 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
                 self.end_headers()
                 self.wfile.write(r.content)
                 return
+            if self.path.startswith("/api/assistant/law"):  # 法规按条文作答:助手接口读的是同一个内存库(没配模型:只列查到的条文)
+                from core import tstore as ts
+                from core.assistant_server import Assistant
+                n = int(self.headers.get("Content-Length") or 0)
+                data = json.loads(self.rfile.read(n) or b"{}")
+                bot = Assistant(None)
+                bot.terms_base = lambda: ts.Base(ts.Client("https://water.example", token, transport=fake.transport, sleep=lambda s: None))
+                from core import law as law_mod
+                bot.law_lib = law_mod.Library(bot.db)
+                out = bot.law_answer(data.get("q") or "", data.get("law") or {}, [c for c in data.get("countries") or [] if isinstance(c, str)])
+                body = json.dumps(out, ensure_ascii=False).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path.startswith("/api/assistant/"):  # 主机上由 Caddy 转给后台任务进程里的助手接口;这里直接调它
                 from core.assistant_server import Assistant
                 n = int(self.headers.get("Content-Length") or 0)

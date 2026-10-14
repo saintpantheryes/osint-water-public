@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 法规全文</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("country.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <!-- 本体 V21 法规全文(不进菜单):从国别概况「机构与法规」页签、助手答案的出处角标点进来(law.html?k=法规编号#c条文序号) -->
+  <div class="toolbar"><a href="country.html" id="back">← 国别概况</a><h1 style="margin:0" id="lname">法规全文</h1><span id="openRow" style="margin-left:auto"></span></div>
+  <div class="panel" id="info">读取中…</div>
+  <section id="ext"></section>
+  <h2 id="clh">条文</h2>
+  <div class="filters"><div class="frow"><b>页内搜索</b><input id="q" type="search" placeholder="中文或原文里的词,如 特许、concession" style="flex:1;min-width:180px"><span class="muted small" id="qn"></span></div></div>
+  <div class="panel" id="clauses">读取中…</div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  try {
+    await P.load();
+    if (!P.hasLaw()) { $("info").innerHTML = '<p class="muted">「法规」表还没建(跑一次建表命令、导入法规后就有)。</p>'; $("clauses").innerHTML = ""; return; }
+    const key = new URLSearchParams(location.search).get("k") || "";
+    const laws = key ? await P.records("law", { filter: P.and(P.cond("law", "key", "is", key)), props: ["key", "name", "name_orig", "kind", "number", "issued", "status", "version", "language", "country", "url", "source", "summary", "clause_count"] }) : [];
+    const lw = laws[0];
+    if (!lw) { $("info").innerHTML = '<p class="muted">没找到这部法规(编号 ' + P.esc(key) + ")。从国别概况的「机构与法规」页签点进来。</p>"; $("clauses").innerHTML = ""; return; }
+    const g = (p) => P.get("law", lw, p), crid = P.linkId(g("country")), cname = P.text(g("country"));
+    document.title = "全球水务开源情报 · " + (g("name") || "法规全文");
+    $("lname").textContent = g("name") || "法规全文";
+    $("openRow").innerHTML = P.open("law", lw.id, "在表格里打开 ↗");
+    const iso = (await P.countries()).filter((c) => c.id === crid).map((c) => P.get("country", c, "key"))[0];
+    P.backLink($("back"), iso ? "country.html?" + new URLSearchParams({ iso, t: "inst" }) : "country.html", (cname || "") + "的机构与法规");
+    $("info").innerHTML = '<div class="facts">' + [["原文名称", g("name_orig")], ["国别", cname], ["类别", g("kind")], ["文号", g("number")], ["颁布日期", P.day(g("issued"))], ["现行状态", g("status")],
+      ["收的版本", g("version")], ["语言", g("language")], ["取自", g("source")]].filter((x) => x[1]).map(([k, v]) => "<div><b>" + k + "</b><span>" + P.esc(v) + "</span></div>").join("") +
+      (g("url") ? '<div><b>原文</b><span><a href="' + P.esc(g("url")) + '" target="_blank" rel="noopener">打开原文 ↗</a></span></div>' : "") + "</div>" +
+      (g("summary") ? '<div class="small" style="margin-top:8px">' + P.esc(g("summary")).replace(/\n/g, "<br>") + "</div>" : "");
+    /* 这部法规摘出的排放限值与本国定义(放条文前面,角标点开就是下面那一条) */
+    const [d, rows] = await Promise.all([P.lawData([crid]), P.records("law_clause", { filter: P.and(P.cond("law_clause", "law", "is", lw.id)), orderBy: [{ fieldId: P.f("law_clause", "seq"), order: "asc" }],
+      props: ["key", "label", "seq", "heading", "text", "text_zh", "page"] })]);
+    d.limits = d.limits.filter((r) => P.linkId(P.get("discharge_limit", r, "law")) === lw.id);
+    d.terms = d.terms.filter((r) => P.linkId(P.get("local_term", r, "law")) === lw.id);
+    const nums = {}, lim = P.lawLimitsHtml(d, crid, nums), terms = P.lawTermsHtml(d, crid, nums);
+    $("ext").innerHTML = (lim ? '<h2>从这部法规摘的排放限值</h2><div class="panel">' + lim + "</div>" : "") + (terms ? '<h2>从这部法规摘的本国定义</h2><div class="panel">' + terms + "</div>" : "");
+    const gc = (r, p) => P.get("law_clause", r, p);
+    rows.sort((a, b) => (Number(gc(a, "seq")) || 0) - (Number(gc(b, "seq")) || 0));
+    const nZh = rows.filter((r) => gc(r, "text_zh")).length;
+    $("clh").textContent = "条文(" + rows.length + " 条" + (rows.length && nZh < rows.length ? ",已译中文 " + nZh + " 条,其余后台正在译" : "") + ")";
+    const one = (r) => {
+      const zh = gc(r, "text_zh") || "", tx = gc(r, "text") || "", pg = gc(r, "page");
+      return '<div class="law-cl" id="c' + P.esc(gc(r, "seq")) + '"><div><span class="lb">' + P.esc(gc(r, "label") || "") + "</span>" + (pg ? ' <span class="muted small">原文第 ' + P.esc(pg) + " 页</span>" : "") + "</div>" +
+        (zh ? '<div class="zh">' + P.esc(zh) + '</div><details><summary>原文</summary><div class="orig">' + P.esc(tx) + "</div></details>" : '<div class="orig">' + P.esc(tx) + "</div>") + "</div>";
+    };
+    const draw = () => {
+      const q = $("q").value.trim().toLowerCase();
+      const list = q ? rows.filter((r) => (String(gc(r, "text_zh") || "") + "\n" + String(gc(r, "text") || "")).toLowerCase().includes(q)) : rows;
+      $("qn").textContent = q ? list.length + " 条含「" + $("q").value.trim() + "」" : "";
+      let h = "", last = null;
+      list.forEach((r) => { const hd = gc(r, "heading") || ""; if (hd && hd !== last && !q) h += '<div class="law-head">' + P.esc(hd) + "</div>"; last = hd; h += one(r); });
+      $("clauses").innerHTML = h || '<p class="muted">' + (q ? "没有含这个词的条文。" : "这部法规的条文还没导入。") + "</p>";
+    };
+    let t = 0; $("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(draw, 200); });
+    draw();
+    const m = /^#c(\d+)$/.exec(location.hash);
+    if (m && $("c" + m[1])) { const el = $("c" + m[1]); el.classList.add("hit"); el.scrollIntoView({ block: "start" }); }
+  } catch (e) { P.fail($("info"), e); }
+})();
+</script>
+</body>
+</html>

@@ -4,6 +4,8 @@
     POST /ask   {"q": "最近 7 天埃及有哪些新线索"}  →  core.assistant.plan 的计划(JSON)
     POST /link  {"url": "https://…", "note": "用户附言"} →  core.link_check.check 的分析(读原文、信源、库里相关、旁证、入库建议);
                                                        游客不能用(要查真实的库)
+    POST /law   {"q": "…", "law": 计划里的 law, "countries": ["MAR"]}  →  core.law.answer:按国别与关键词查法规条文,配了模型的按条文作答(带出处序号);
+                                                       游客不能用
     GET  /health                                    →  {"ok": true, "llm": "deepseek-v4-pro(DeepSeek)" | null, "note": "…"}
     GET  /calendar.ics?country=AZE&opp=AZE-003      →  日历文件(core/calendar_feed.py):登录后经 Caddy 来的带 X-Portal-Auth: 1;
                                                        订阅程序经 /portal/feed/calendar.ics?t=<令牌> 来(Caddy 不做登录检查),令牌不对 403
@@ -29,7 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote
 from zoneinfo import ZoneInfo
 
-from core import assistant, calendar_feed, guest as guest_mod, link_check, tstore
+from core import assistant, calendar_feed, guest as guest_mod, law, link_check, tstore
 from core.jobs import common
 from core.profile import Profile, load_profile
 from core.watch.llm import Classifier, LLMConfig
@@ -67,6 +69,7 @@ class Assistant:
         self._terms_at: float | None = None
         self._terms_db_at = 0.0
         self.link_kw: dict = {}  # 测试用:注入 fetch / outside
+        self.law_lib = law.Library(self.db) if self.terms_base is not None else None  # 法规条文(真实库;十分钟内不重读)
 
     @property
     def today(self) -> date:
@@ -137,6 +140,20 @@ class Assistant:
         except Exception as e:  # noqa: BLE001  读表出错:沿用上一次读到的(或本体初始词),下次重连
             self._terms_db = None
             self.log(f"读行业术语表出错,沿用上一次的:{type(e).__name__}: {e}")
+
+    def law_answer(self, q: str, law_plan: dict, countries: list[str]) -> dict:
+        """法规问题按条文作答(core/law.py);没给国别的查收了原文的各国。"""
+        self._maybe_forgive()
+        self.refresh_terms()
+        if self.law_lib is None:
+            return {"ok": False, "error": "助手服务没连表格"}
+        if not countries:
+            b = self.db()
+            if "law" not in b.t:
+                return {"ok": True, "answer": "", "cites": [], "searched": {}, "missing": [], "note": "库里还没有「法规」表"}
+            ids = {tstore.link_id(b.get("law", r, "country")) for r in b.rows("law", props=["country"])}
+            countries = [str(b.get("country", r, "key")) for r in b.rows("country", props=["key"]) if r["id"] in ids]
+        return law.answer(self.law_lib, q, law_plan, countries[:10], self.clf, log=self.log)
 
     def ask(self, q: str, prev: dict | None = None) -> dict:
         """prev:页面带来的上一问的计划(接着问时沿用对象、条件;assistant.plan 逐项校验)。"""
@@ -276,7 +293,7 @@ def make_handler(bot: Assistant):
 
         def do_POST(self):  # noqa: N802
             path = self.path.split("?")[0]
-            if path not in ("/ask", "/link"):
+            if path not in ("/ask", "/link", "/law"):
                 self._send(404, {"ok": False, "error": "not found"})
                 return
             n = int(self.headers.get("Content-Length") or 0)
@@ -306,6 +323,22 @@ def make_handler(bot: Assistant):
                 except Exception as e:  # noqa: BLE001
                     bot.log(f"看链接出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
                     out = {"ok": False, "error": f"分析出错({type(e).__name__})"}
+                self._send(200, out)
+                return
+            if path == "/law":
+                if self.headers.get("X-Portal-Auth") != "1" and not bot.allow_link_without_auth:
+                    self._send(403, {"ok": False, "error": "请先登录"})
+                    return
+                if self._outsider():
+                    self._send(403, {"ok": False, "error": "游客帐号不能查法规条文"})
+                    return
+                lp = data.get("law") if isinstance(data.get("law"), dict) else {}
+                isos = [c for c in (data.get("countries") or [])[:10] if isinstance(c, str) and assistant.geo.iso3(c) == c]
+                try:
+                    out = bot.law_answer(q[:assistant.MAX_Q], {"kind": "text", "keywords": [str(k)[:40] for k in (lp.get("keywords") or [])[:8]]}, isos)
+                except Exception as e:  # noqa: BLE001
+                    bot.log(f"法规作答出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+                    out = {"ok": False, "error": f"查条文出错({type(e).__name__})"}
                 self._send(200, out)
                 return
             out = bot.ask(q, data.get("prev") if isinstance(data.get("prev"), dict) else None)

@@ -23,19 +23,20 @@ from pathlib import Path
 
 import yaml
 
-from core import fx, geo
+from core import fx, geo, law
 
 ROOT = Path(__file__).resolve().parent.parent
 ONTO_PATH = ROOT / "docs" / "ontology" / "ontology.yaml"
 
-OBJECTS = ("lead", "opportunity", "milestone", "report", "award", "country")
-OBJECT_ZH = {"lead": "线索", "opportunity": "商机", "milestone": "时间节点", "report": "报告", "award": "已中标项目", "country": "国别"}
+OBJECTS = ("lead", "opportunity", "milestone", "report", "award", "country", "law")
+OBJECT_ZH = {"lead": "线索", "opportunity": "商机", "milestone": "时间节点", "report": "报告", "award": "已中标项目", "country": "国别", "law": "法规"}
 INTENTS = ("count", "list", "chart", "report", "help")
 GROUPS = {"lead": ("country", "category", "sectors", "funder", "day", "status", "source"),
           "opportunity": ("country", "stage", "sectors", "funder"),
           "milestone": ("country", "kind", "day"), "report": ("kind", "country"),
           "award": ("country", "sector", "contract_type", "delivery", "asset", "winner_country", "funder", "year"),
-          "country": ()}  # 国别一国一行(营商环境指标),不再分组:页面列国别表
+          "country": (),  # 国别一国一行(营商环境指标),不再分组:页面列国别表
+          "law": ()}  # 法规问答(core/law.py):页面按种类列排放限值、本国定义或条文
 GROUP_ZH = {"country": "国别", "category": "类别", "sectors": "领域", "funder": "资金来源", "day": "按天", "status": "处理状态",
             "source": "信源", "stage": "我方阶段", "kind": "类型", "sector": "类别", "contract_type": "合同类型", "delivery": "承包模式", "asset": "主体工程", "winner_country": "中标单位国别", "year": "年份"}
 GROUP_ALIAS = {"award": {"category": "sector", "sectors": "sector", "kind": "contract_type", "day": "year"}}  # 别的对象的分组说法 → 已中标项目的(它的「类别」就是领域)
@@ -162,6 +163,7 @@ def set_terms(rows: list[dict] | None) -> None:
     """换上表里读到的行业术语(rows 为表的行,字段按本体属性 id);None 回到本体 terms 节的初始词。"""
     global _live_terms
     _live_terms = None if rows is None else [x for x in (make_term(r) for r in rows) if x]
+    law.set_concepts(rows)  # 同一张表也是通用概念(语义层):没写相关词、只作法规概念的行也算
 
 
 def terms() -> list[dict]:
@@ -930,7 +932,7 @@ def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
 
 SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器。用户用中文(偶尔夹英文)提问,你只负责把问题翻译成一个查询计划(JSON),不回答问题、不编造数据。
 
-系统里有六类对象:
+系统里有七类对象:
 - lead 线索:从公开信源采集的公告与新闻,字段有国别、领域(粗分)、类别、出资方、发现时间、处理状态、是否相关。
 - opportunity 商机:我方在跟的项目,字段有国别、领域(细分)、我方阶段、资金。「我们 / 我方中标的」「中标的商机」= 商机 + 阶段「中标」。
 - milestone 时间节点:投标截止、开标、授标等日期,挂在商机或线索下。
@@ -940,6 +942,8 @@ SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器�
   中标价 / 合同授予 / awards」的都是它,不是商机(除非明说是我方的)。
 - country 国别:一国一行的营商环境(世界银行 B-READY 2025):营商环境总分、供水得分、公共采购得分、商业水价、外企参标限制、大型工程授标天数、
   政府合同回款天数等。问「营商环境 / 外企参标 / 哪些国家水价最高 / 回款最慢」的是它;门槛(低于 50 分)、外企参标、市场分级、排序系统按提问自己读,你只填 object、countries、measure。
+- law 法规:收了原文的各国水务相关法规(水法、供排水与污水、排放标准、PPP 与特许经营、公共采购、环评)的条文、排放限值、本国对某个概念的定义。
+  问「法律 / 法规怎么规定」「特许经营最长几年」「污水排放标准」「某国法律里污水怎么定义」的是它;你只填 object、countries、keywords(要在条文里找的中文词)。
 
 字段取值(只能用这些,别的词放进 unresolved):
 - sectors(领域,粗分):{sectors}
@@ -974,7 +978,7 @@ GUIDE = """输出格式:只输出一个 JSON 对象,不要任何其他文字。�
  "stages": [], "tracked": null, "status": [], "relevant": null, "days": 30, "from": null, "to": null, "future_days": null,
  "kinds": [], "keywords": [], "contract_types": [], "deliveries": [], "assets": [], "winner_countries": [], "winners": [], "capacity_min": null, "capacity_max": null,
  "measure": "count", "agg": null, "group_by": "country", "limit": 50, "unresolved": []}
-没有的字段给空数组或 null;object 只能取 lead / opportunity / milestone / report / award / country;intent 只能取 count / list / chart / report / help。"""
+没有的字段给空数组或 null;object 只能取 lead / opportunity / milestone / report / award / country / law;intent 只能取 count / list / chart / report / help。"""
 
 SCHEMA = {
     "type": "object",
@@ -1305,7 +1309,12 @@ def _prev(prev) -> dict | None:
     gb = prev.get("group_by") if prev.get("group_by") in GROUPS[prev["object"]] else None
     od = prev.get("order") if isinstance(prev.get("order"), dict) else {}
     order = {"id": od["id"], "dir": od["dir"]} if prev["object"] == "country" and measure_of(od.get("id")) and od.get("dir") in ("asc", "desc") else None
-    return {"object": prev["object"], "q": str(prev.get("q") or "")[:MAX_Q], "filters": f, "measures": ms[:3], "group_by": gb, "order": order}
+    out = {"object": prev["object"], "q": str(prev.get("q") or "")[:MAX_Q], "filters": f, "measures": ms[:3], "group_by": gb, "order": order}
+    pl = prev.get("law") if isinstance(prev.get("law"), dict) else {}
+    if prev["object"] == "law":  # 法规问答的种类、指标、概念与关键词(逐项校验)
+        out["law"] = {"kind": pl.get("kind") if pl.get("kind") in law.KINDS else "limit", "params": [x for x in _strs(pl.get("params")) if x in law.words().params],
+                      "concepts": [x[:30] for x in _strs(pl.get("concepts"))][:5], "keywords": [x[:40] for x in _strs(pl.get("keywords"))][:8]}
+    return out
 
 
 def _follow_up(q: str) -> bool:
@@ -1341,6 +1350,19 @@ def _inherit(p: dict, prev: dict, q: str) -> None:
         p["understood"].append(["沿用上一问", "、".join(got)])
 
 
+def law_plan(q: str, lw: dict, by: str, model: str | None = None) -> dict:
+    """law.detect 的结果 → 计划(对象「法规」)。"""
+    p = empty_plan()
+    p["object"], p["intent"], p["parsed_by"], p["model"] = "law", "list", by, model
+    p["filters"]["countries"] = [{"iso3": c, "name": geo.name_zh(c)} for c in lw["countries"]]
+    p["law"] = {k: lw[k] for k in ("kind", "params", "concepts", "keywords")}
+    p["law"]["inherited"] = lw.get("inherited") or []
+    p["understood"] = law.understood(p)
+    scope = {x["iso3"]: x["note"] for x in vocab().not_collected}
+    p["scope_note"] = "".join(dict.fromkeys(scope[c] for c in lw["countries"] if c in scope))
+    return p
+
+
 def plan(q: str, today: date, clf=None, prev=None) -> dict:
     """一句提问 → 计划。配了模型就用模型解析(规则结果兜底:模型没结果、出错或认不出任何条件时用规则的),没配就只用规则。
     prev:页面带来的上一问的计划(接着问):这一句没明说查什么的沿用它的对象(问了别的对象才有的指标的除外);像追问的再沿用条件、指标与分组。"""
@@ -1350,6 +1372,9 @@ def plan(q: str, today: date, clf=None, prev=None) -> dict:
         p["intent"] = "help"
         return finish(p)
     prev = _prev(prev)
+    lw = law.detect(q, prev)
+    if lw:  # 法规问题(排放标准、本国定义、条文):不走线索 / 中标的解析
+        return law_plan(q, lw, "rules")
     force = None
     if prev and not OBJECT_RE.search(_norm(q)):
         force = _measure_object(parse_measures(q), q, prev["object"])
@@ -1369,6 +1394,11 @@ def plan(q: str, today: date, clf=None, prev=None) -> dict:
             if p["intent"] == "help" and rules["intent"] != "help":
                 p = rules
                 p["note"] = "模型没看懂,按词表解析"
+    if p["object"] == "law":  # 模型认作法规问题、提问里又没有法规说法的(「摩洛哥特许经营最长多少年」):按条文查
+        cs = [c["iso3"] for c in p["filters"]["countries"]] or list(dict.fromkeys(geo.detect(q)))
+        kw = [k for k in p["filters"]["keywords"] if k] or law.keywords(_norm(q), cs)
+        return law_plan(q, {"kind": "text" if kw else "list", "params": [], "concepts": law.concepts_in(_norm(q)), "keywords": kw[:8], "countries": cs, "inherited": []},
+                        "model", p.get("model"))
     if force and force == prev["object"] == p["object"] and rules_parse(q, today)["object"] != force:  # 不沿用也会是这个对象的,不写
         p["understood"].append(["沿用上一问", "对象(" + OBJECT_ZH[force] + ")"])
     if prev and prev["object"] == p["object"] and _follow_up(q):

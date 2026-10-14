@@ -474,6 +474,16 @@
       if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
       return r.json();
     },
+    /* 法规问题(助手认作「法规」、要按条文作答的):后台(core/law.py)按国别与关键词查条文,配了模型的按查到的条文作答;只读 */
+    async lawAsk(q, plan) {
+      const r = await fetch("api/assistant/law", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ q, law: plan.law, countries: (plan.filters.countries || []).map((c) => c.iso3) }) });
+      if (r.status === 401) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }
+      if (r.status === 403) throw new Error("游客帐号不能查法规条文");
+      if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪(后台任务没起来或还没更新到这一版);其余页面照常可用");
+      if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
+      return r.json();
+    },
     fail(el, e) { console.error(e); el.innerHTML = '<div class="err">读不到数据:' + this.esc(e && e.message ? e.message : e) + "</div>"; },
     tableHtml(head, rows) {
       if (!rows.length) return '<p class="muted">(无)</p>';
@@ -953,6 +963,153 @@
       };
       render();
       return rows.length;
+    },
+    /* 法规(本体 v2.24):国别概况「机构与法规」页签下半部、助手的法规答案、法规全文页共用。
+       排放限值按「法规 + 口径 + 排到哪里 + 适用范围」分块,口径不同的数不放在一起比;出处是带序号的小角标(.lref),
+       点开看法规、条号、页码、条文中文与原文,以及到法规全文页那一条的链接。待核实(机器摘的、人还没对过原文)的标出。 */
+    hasLaw() { return !!(this.cfg.tables && this.cfg.tables.law); },
+    async lawData(rids) {  // 国别记录编号 → {laws, limits, terms, clause: {条文记录编号: {...}}};表没建 → null
+      const T = this.cfg.tables || {};
+      if (!T.law) return null;
+      const on = (oid) => (rids && rids.length ? this.and(rids.length === 1 ? this.cond(oid, "country", "is", rids[0]) : this.cond(oid, "country", "isAnyOf", rids)) : undefined);
+      const [laws, limits, terms] = await Promise.all([
+        this.records("law", { filter: on("law"), props: ["key", "name", "name_orig", "kind", "number", "issued", "status", "version", "language", "country", "url", "source", "clause_count"] }),
+        T.discharge_limit ? this.records("discharge_limit", { filter: on("discharge_limit"), props: ["key", "param", "param_orig", "value", "value_text", "unit", "basis", "receiving", "scope", "sampling", "country", "law", "clause", "verified", "note"] }) : [],
+        T.local_term ? this.records("local_term", { filter: on("local_term"), props: ["key", "concept", "term_orig", "term_zh", "definition", "definition_orig", "relation", "difference", "country", "law", "clause", "verified"] }) : [],
+      ]);
+      const ids = [...new Set(limits.map((r) => this.linkId(this.get("discharge_limit", r, "clause"))).concat(terms.map((r) => this.linkId(this.get("local_term", r, "clause")))).filter(Boolean))];
+      const clause = {}, lawOf = {}; laws.forEach((r) => { lawOf[r.id] = r; });
+      this._lc = this._lc || {};
+      const need = ids.filter((id) => !this._lc[id]);
+      for (let i = 0; i < need.length; i += 40) {  // 条文按记录编号一条条取(引用的通常十几条),同时发
+        const got = await Promise.all(need.slice(i, i + 40).map((id) => this.api("/table/" + this.t("law_clause").id + "/record/" + id, { fieldKeyType: "id" }).catch(() => null)));
+        got.forEach((r) => { if (r && r.id) this._lc[r.id] = r; });
+      }
+      ids.forEach((id) => { const r = this._lc[id]; if (!r) return; const g = (p) => this.get("law_clause", r, p), lw = lawOf[this.linkId(g("law"))];
+        clause[id] = { id, label: g("label") || "", page: g("page") || "", seq: g("seq"), text: g("text") || "", zh: g("text_zh") || "", law: lw ? this.get("law", lw, "name") : this.text(g("law")),
+          lawKey: lw ? this.get("law", lw, "key") : "", url: lw ? this.get("law", lw, "url") : "" }; });
+      return { laws, limits, terms, clause, lawOf };
+    },
+    /* 出处角标:同一份答案里按出现先后编号(nums 由调用方给一个空对象,整份答案共用) */
+    lref(c, nums) {
+      if (!c) return "";
+      if (!nums[c.id]) nums[c.id] = Object.keys(nums).length + 1;
+      (this._lref = this._lref || {})[c.id] = c;
+      this.lrefOn();
+      return '<sup class="sref lref"><a href="' + this.esc(this.lawUrl(c.lawKey, c.seq)) + '" data-c="' + this.esc(c.id) + '" title="' + this.esc(c.law + " " + c.label) + '">' + nums[c.id] + "</a></sup>";
+    },
+    lawUrl(key, seq) { return "law.html?" + new URLSearchParams({ k: key || "" }) + (seq ? "#c" + seq : ""); },
+    lrefOn() {
+      if (this._lrefOn) return; this._lrefOn = true;
+      document.addEventListener("click", (e) => {
+        const t = e.target, a = t.closest && t.closest(".lref a"), pop = document.querySelector(".sref-pop.lpop");
+        if (pop && t.closest(".sref-pop.lpop")) { const tg = t.closest(".lp-tg"); if (tg) { e.preventDefault(); pop.querySelectorAll(".lp-tx").forEach((x) => x.classList.toggle("hide")); tg.textContent = tg.textContent === "看原文" ? "看中文" : "看原文"; } return; }
+        if (pop) pop.remove();
+        if (!a) return;
+        e.preventDefault();
+        const c = (this._lref || {})[a.dataset.c]; if (!c) return;
+        const cut = (s) => (s.length > 700 ? s.slice(0, 700) + "……" : s);
+        const el = document.createElement("div"); el.className = "sref-pop lpop";
+        el.innerHTML = "<div><b>" + this.esc(c.law) + "</b> " + this.esc(c.label) + (c.page ? ' <span class="muted small">原文第 ' + this.esc(c.page) + " 页</span>" : "") + "</div>" +
+          (c.zh ? '<div class="lp-tx small">' + this.esc(cut(c.zh)).replace(/\n/g, "<br>") + "</div>" : "") +
+          '<div class="lp-tx small' + (c.zh ? " hide" : "") + '">' + this.esc(cut(c.text)).replace(/\n/g, "<br>") + (c.zh ? "" : '<br><span class="muted">(中文译文后台正在补)</span>') + "</div>" +
+          '<div class="small"><a href="' + this.esc(this.lawUrl(c.lawKey, c.seq)) + '">看这一条和全文 →</a>' + (c.zh ? ' · <a href="#" class="lp-tg">看原文</a>' : "") +
+          (c.url ? ' · <a href="' + this.esc(c.url + (c.page && /\.pdf/i.test(c.url) ? "#page=" + parseInt(c.page, 10) : "")) + '" target="_blank" rel="noopener">原文出处 ↗</a>' : "") + "</div>";
+        document.body.appendChild(el);
+        const r = a.getBoundingClientRect(), w = el.offsetWidth;
+        el.style.left = Math.max(8, Math.min(r.left + window.scrollX - 12, window.scrollX + document.documentElement.clientWidth - w - 8)) + "px";
+        el.style.top = (r.bottom + window.scrollY + 6) + "px";
+      });
+    },
+    /* 一个限值写成一句:≤ 120 mg/L、≥ 70%(去除率)、6.5–8.5;原文照抄的(区间、带条件)用原文 */
+    limitText(r) {
+      const g = (p) => this.get("discharge_limit", r, p), u = g("unit") || "", vt = String(g("value_text") || "").trim(), v = g("value");
+      const num = v === null || v === undefined || v === "" ? "" : String(Number(v)).replace(/\.0+$/, "");
+      if (vt && !/^[\d.,]+$/.test(vt)) return vt + (u && !vt.includes(u) ? " " + u : "");
+      const op = g("basis") === "去除率下限" ? "≥ " : g("param") === "pH" ? "" : "≤ ";
+      return num ? op + num + (u ? " " + u : "") : vt;
+    },
+    /* 一国的排放限值 → html;nums 是整份答案共用的角标编号;params 只看这几个指标(空 = 全部) */
+    lawLimitsHtml(d, rid, nums, params) {
+      const g = (r, p) => this.get("discharge_limit", r, p), order = this.values("effluent_param");
+      let rows = d.limits.filter((r) => !rid || this.linkId(g(r, "country")) === rid);
+      const want = (params || []).length ? rows.filter((r) => params.includes(g(r, "param"))) : rows;
+      if (want.length) rows = want;
+      if (!rows.length) return "";
+      const blocks = {}, groups = {};  // 同一部法规同一口径、同一去处:适用范围有三种以上(如河湖按用途分级)的排成一张对照表,否则按适用范围分开列
+      rows.forEach((r) => { const k = [this.linkId(g(r, "law")), g(r, "basis") || "", g(r, "receiving") || ""].join("|"); (groups[k] = groups[k] || []).push(r); });
+      Object.entries(groups).forEach(([k, rs]) => {
+        const scopes = [...new Set(rs.map((r) => g(r, "scope") || ""))];
+        if (scopes.length >= 3) blocks[k + "|*"] = rs; else rs.forEach((r) => { const kk = k + "|" + (g(r, "scope") || ""); (blocks[kk] = blocks[kk] || []).push(r); });
+      });
+      const pend = rows.filter((r) => g(r, "verified") !== "已核实").length;
+      const src = (r) => d.clause[this.linkId(g(r, "clause"))] ? '<span class="nw">' + this.esc(d.clause[this.linkId(g(r, "clause"))].label) + "</span>" + this.lref(d.clause[this.linkId(g(r, "clause"))], nums) : '<span class="muted small">' + this.esc(this.text(g(r, "clause")) || "") + "</span>";
+      const chk = (rs) => rs.every((r) => g(r, "verified") === "已核实") ? '<span class="tag ok-tag nw">已核实</span>' : '<span class="tag warn-tag nw" title="机器从条文摘出,人还没对过原文">待核实</span>';
+      const pname = (r) => g(r, "param") === "其他" && g(r, "param_orig") ? "<b>" + this.esc(g(r, "param_orig")) + "</b>" : "<b>" + this.esc(g(r, "param")) + "</b>" + (g(r, "param_orig") && g(r, "param_orig") !== g(r, "param") ? ' <span class="muted small">' + this.esc(g(r, "param_orig")) + "</span>" : "");
+      return Object.entries(blocks).map(([k, rs]) => {
+        const [lid, basis, recv, scope] = k.split("|"), lw = d.lawOf[lid], samp = [...new Set(rs.map((r) => g(r, "sampling")).filter(Boolean))];
+        rs.sort((a, b) => order.indexOf(g(a, "param")) - order.indexOf(g(b, "param")));
+        const head = '<div class="lw-bh"><b>' + this.esc(lw ? this.get("law", lw, "name") : "(法规)") + "</b>" + (lw ? ' <a class="small" href="' + this.esc(this.lawUrl(this.get("law", lw, "key"))) + '">全文 →</a>' : "") +
+          '<div class="lw-tags">' + [["口径", basis], ["排到", recv], ["适用", scope === "*" ? "" : scope], ["取样", samp.join(";")]].filter((x) => x[1]).map(([a, b]) => '<span class="tag' + (a === "口径" && basis === "受纳水体允许浓度" ? " warn-tag" : "") + '">' + a + ":" + this.esc(b) + "</span>").join("") + "</div></div>";
+        if (scope === "*") {
+          const scopes = [...new Set(rs.map((r) => g(r, "scope") || ""))], byP = {};
+          rs.forEach((r) => { const p = g(r, "param") + "|" + (g(r, "param_orig") || ""); (byP[p] = byP[p] || []).push(r); });
+          return head + this.tableHtml(["指标", ...scopes.map((x) => x || "(未注明)"), "出处", ""], Object.values(byP).map((ps) => [
+            this.raw(pname(ps[0])),
+            ...scopes.map((sc) => { const r = ps.find((x) => (g(x, "scope") || "") === sc); return r ? this.raw('<b class="nw">' + this.esc(this.limitText(r)) + "</b>") : this.raw('<span class="muted">不规定</span>'); }),
+            this.raw([...new Set(ps.map(src))].join(" ")), this.raw(chk(ps))]));
+        }
+        return head + this.tableHtml(["指标", "限值", "出处", ""], rs.map((r) => [
+          this.raw(pname(r)),
+          this.raw('<b class="nw">' + this.esc(this.limitText(r)) + "</b>" + (g(r, "note") ? '<br><span class="muted small">' + this.esc(g(r, "note")) + "</span>" : "")),
+          this.raw(src(r)), this.raw(chk([r]))]));
+      }).join("") + (pend ? '<p class="muted small">标「待核实」的 ' + pend + " 项是从条文摘出、还没人对过原文的;在表格「排放限值」里对过后改成「已核实」。</p>" : "");
+    },
+    /* 一国的本国定义 → html(concepts 只看这几个通用概念,空 = 全部) */
+    lawTermsHtml(d, rid, nums, concepts) {
+      const g = (r, p) => this.get("local_term", r, p);
+      let rows = d.terms.filter((r) => !rid || this.linkId(g(r, "country")) === rid);
+      const want = (concepts || []).length ? rows.filter((r) => concepts.includes(g(r, "concept"))) : rows;
+      if ((concepts || []).length) rows = want;
+      if (!rows.length) return "";
+      const REL = { "相同": "", "更窄": " warn-tag", "更宽": " warn-tag", "部分重叠": " warn-tag", "没有对应": " bad-tag" };
+      return '<div class="lw-terms">' + rows.map((r) => {
+        const c = d.clause[this.linkId(g(r, "clause"))];
+        return '<div class="lw-term"><div><b>' + this.esc(g(r, "concept")) + "</b>" + (g(r, "term_zh") || g(r, "term_orig") ? " → 本国说法「" + this.esc(g(r, "term_zh") || "") + "」" +
+          (g(r, "term_orig") ? ' <span class="muted small">' + this.esc(g(r, "term_orig")) + "</span>" : "") : "") +
+          (g(r, "relation") ? ' <span class="tag' + (REL[g(r, "relation")] || "") + '">和通用说法:' + this.esc(g(r, "relation")) + "</span>" : "") +
+          (g(r, "verified") === "已核实" ? "" : ' <span class="tag warn-tag" title="机器从条文摘出,人还没对过原文">待核实</span>') + "</div>" +
+          "<div>" + this.esc(g(r, "definition") || "") + (c ? this.lref(c, nums) : "") + "</div>" +
+          (g(r, "difference") ? '<div class="muted small">差别:' + this.esc(g(r, "difference")) + "</div>" : "") + "</div>";
+      }).join("") + "</div>";
+    },
+    /* 一国的法规清单 → html(按类别;名称点进全文页) */
+    lawListHtml(d, rid) {
+      const g = (r, p) => this.get("law", r, p), rows = d.laws.filter((r) => !rid || this.linkId(g(r, "country")) === rid);
+      if (!rows.length) return "";
+      const order = this.values("law_kind");
+      rows.sort((a, b) => (order.indexOf(g(a, "kind")) - order.indexOf(g(b, "kind"))) || String(this.day(g(b, "issued")) || "").localeCompare(String(this.day(g(a, "issued")) || "")));
+      return this.tableHtml(["类别", "法规", "文号与颁布", "现行状态", "条文", ""], rows.map((r) => [g(r, "kind") || "",
+        this.raw('<a href="' + this.esc(this.lawUrl(g(r, "key"))) + '"><b>' + this.esc(g(r, "name") || "") + "</b></a>" + (g(r, "name_orig") ? '<br><span class="muted small">' + this.esc(g(r, "name_orig")) + "</span>" : "") +
+          (g(r, "version") ? '<br><span class="muted small">收的版本:' + this.esc(g(r, "version")) + "</span>" : "")),
+        this.raw(this.esc(g(r, "number") || "") + (g(r, "issued") ? '<br><span class="muted small">' + this.esc(this.day(g(r, "issued"))) + "</span>" : "")),
+        this.raw(g(r, "status") === "已废止" ? '<span class="num-bad">已废止</span>' : this.esc(g(r, "status") || "")),
+        this.raw((Number(g(r, "clause_count")) ? '<span class="nw">' + Number(g(r, "clause_count")) + " 条</span>" : '<span class="muted small nw">原文未取到</span>') + (g(r, "language") ? '<br><span class="muted small">' + this.esc(g(r, "language")) + "</span>" : "")),
+        this.raw((g(r, "url") ? '<a class="small" href="' + this.esc(g(r, "url")) + '" target="_blank" rel="noopener">原文 ↗</a> ' : "") + this.open("law", r.id, "↗"))]));
+    },
+    /* 国别概况「机构与法规」页签下半部:排放标准、本国定义、法规原文;→ 收了几部法规 */
+    async lawSection(el, rid, name) {
+      if (!this.hasLaw()) { el.innerHTML = ""; return 0; }
+      el.innerHTML = '<p class="muted">读取法规…</p>';
+      const d = await this.lawData([rid]), nums = {};
+      const lim = this.lawLimitsHtml(d, rid, nums), terms = this.lawTermsHtml(d, rid, nums), list = this.lawListHtml(d, rid);
+      const sec = (label, html, open, note) => '<details class="sec"' + (open ? " open" : "") + "><summary>" + label + '</summary><div class="panel">' + (note ? '<p class="muted small">' + note + "</p>" : "") + html + "</div></details>";
+      el.innerHTML = !d.laws.length ? sec("法规原文", '<p class="muted">还没收' + this.esc(name) + "的法规原文:上面的法规简表只有名称和链接。要收的话把原文网址告诉管理员加进法规清单。</p>", true) :
+        sec("排放标准", lim || '<p class="muted">收了' + this.esc(name) + "的 " + d.laws.length + " 部法规原文,还没摘出排放限值(可能这几部法规里没有,或在别的部令、技术规范里)。</p>", true,
+          "从法规原文摘出的限值;同一国不同口径(出水浓度上限、去除率、受纳水体允许浓度)分开列,不能直接比。角标点开看条文。") +
+        sec("本国定义", terms || '<p class="muted">还没摘出本国定义。</p>', true, "通用概念(「行业术语」表里的词)在这国法规里怎么定义,和通用说法差在哪;助手回答这国的问题时按这里的定义。") +
+        sec("法规原文", list, true, "点名称看全文(条文中文与原文对照);中文由后台逐批译,没译到的先显示原文。");
+      return d.laws.length;
     },
     /* 平铺筛选(一组按钮,点亮一个;multi 时可多选,一个没选就点亮「全部」(值为空的那个)) */
     chips(el, opts, state, key, onChange, multi) {

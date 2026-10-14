@@ -290,7 +290,32 @@ contractor = obj(56, max(award[1], term[1] + term[3] + 22), 176, "供应商", se
     ("dv", "派生(不存)", "中标数 · 中标总额"),
 ])
 
-B1_BOT = max(cty_ + cth_, supply[1] + supply[3], sewage[1] + sewage[3], term[1] + term[3], award[1] + award[3], contractor[1] + contractor[3]) + 40
+# 法规、法规条文、排放限值、国别定义(公开对象,v2.24):已中标项目下面一行;商机、报告两列的竖线在右边,不放那里
+LAW_Y = max(award[1] + award[3], contractor[1] + contractor[3]) + 34
+lawo = obj(296, LAW_Y, 200, "法规", sections=[
+    ("ai", "机器写(按法规清单取原文,A37)", "名称 · 原文名称 · 类别 · 文号 · 颁布日期 · 现行状态 · 版本说明 · 语言 · 国别 · 原文链接"),
+    ("dv", "派生(不存)", "条文数"),
+])
+clause = obj(526, LAW_Y, 196, "法规条文", sections=[
+    ("ai", "机器写(取原文、识别、按条拆)", "条号 · 顺序 · 所在章节 · 原文 · 页码 · 法规 · 国别\n中文:后台请模型译,只填空"),
+])
+limit = obj(752, LAW_Y, 196, "排放限值", sections=[
+    ("ai", "机器写(读条文摘出,A40)", "指标 · 限值 · 单位 · 口径 · 排到哪里 · 适用范围 · 取样 · 法规 · 出处条文"),
+    ("hu", "人核实(A41)", "核实状态:待核实 → 已核实 · 备注"),
+])
+lterm = obj(56, LAW_Y, 210, "国别定义", sections=[
+    ("ai", "机器写(读条文摘出,A39)", "通用概念(行业术语里的词) · 原文用词 · 本国说法 · 本国定义 · 与通用概念的关系 · 差别 · 出处条文"),
+    ("hu", "人核实(A41)", "核实状态 · 备注"),
+])
+path(f"M{clause[0]},{LAW_Y + 60} L{lawo[0] + lawo[2]},{LAW_Y + 60}", C["black"], sw=1.6, end="aK")
+label((clause[0] + lawo[0] + lawo[2]) / 2, LAW_Y + 52, "出自", C["black"], size=11.5)
+path(f"M{limit[0]},{LAW_Y + 60} L{clause[0] + clause[2]},{LAW_Y + 60}", C["black"], sw=1.6, end="aK")
+label((limit[0] + clause[0] + clause[2]) / 2, LAW_Y + 52, "出处", C["black"], size=11.5)
+path(f"M{lterm[0] + lterm[2]},{LAW_Y + 60} L{lawo[0]},{LAW_Y + 60}", C["black"], sw=1.6, end="aK")
+label((lterm[0] + lterm[2] + lawo[0]) / 2, LAW_Y + 52, "出处", C["black"], size=11.5)
+label(526, max(lawo[1] + lawo[3], clause[1] + clause[3], limit[1] + limit[3]) + 16, "四者都属于国别 *..1;国别定义的通用概念 = 行业术语里的一个词(语义层)", C["grey"], size=11.5)
+B1_BOT = max(cty_ + cth_, supply[1] + supply[3], sewage[1] + sewage[3], term[1] + term[3], award[1] + award[3], contractor[1] + contractor[3],
+             lawo[1] + lawo[3], clause[1] + clause[3], limit[1] + limit[3] + 20, lterm[1] + lterm[3]) + 40
 R(40, B1_TOP, 1500, B1_BOT - B1_TOP, C["band"], C["band_b"], sw=1.5, rx=8, extra=' fill-opacity="0.55"')
 out.insert(next(i for i, s in enumerate(out) if s.startswith('<circle')), out.pop())  # 底色放到最下层
 T(790, B1_TOP + 24, "AI · 公开数据(机器采集、判定、建议;人可增删改)", size=15, fill="#455A64", anchor="middle", weight="bold")
