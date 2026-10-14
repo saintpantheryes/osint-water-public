@@ -91,7 +91,7 @@
     $("prio").value = g("priority") || "";
     $("note").value = g("internal_note") || "";
     await resolveCites();
-    $("review").innerHTML = g("review_updates") ? '<div class="warn"><b>机器发现的待核更新</b>(与表里已有值不同,请核后在表格里改)' + list(g("review_updates")) + "</div>" : "";
+    $("review").innerHTML = g("review_updates") ? '<div class="note n-warn"><b>机器发现的待核更新</b>(与表里已有值不同,请核后在表格里改)' + list(g("review_updates")) + "</div>" : "";
     $("facts").innerHTML = sec("建设内容与规模", g("scope") ? "<p>" + cites(g("scope")) + "</p>" : "", true) + sec("资金", list(g("financing")), true) + sec("标段", list(g("packages")), false) +
       sec("业主与执行机构", g("owner_org") ? "<p>" + cites(g("owner_org")) + "</p>" : "", false) + sec("参与方", list(g("parties")), false) + sec("建议理由(机器)", g("ai_reason") ? "<p>" + cites(g("ai_reason")) + "</p>" : "", false) +
       sec("待核实", list(g("pending")), false) + sec("别名与外部编号", list(g("aliases")) + list(g("external_ids")), false) + P.citeNote(numOf, cinfo);
@@ -112,7 +112,7 @@
       "<div>" + P.esc(f(r, "content") || "") + "</div>" + (f(r, "reason") ? '<div class="muted">依据:' + P.esc(f(r, "reason")) + "</div>" : "") +
       (f(r, "next_step") ? '<div class="muted">下一步:' + P.esc(f(r, "next_step")) + (f(r, "next_due") ? "(到期 " + P.day(f(r, "next_due")) + ")" : "") + "</div>" : "") +
       ((f(r, "attachments") || []).length ? "<div>" + (f(r, "attachments") || []).map((a) => '<a href="' + P.esc(P.fileUrl(a)) + '" target="_blank" rel="noopener">' + P.esc(a.name) + "</a>").join(" · ") + "</div>" : "") +
-      "<div>" + P.open("followup", r.id, "在表格里打开(补附件)") + "</div></li>").join("") + "</ul>" : '<p class="muted">还没有跟进。左边记第一笔。</p>';
+      "<div>" + P.open("followup", r.id, "在表格里打开(补附件)") + "</div></li>").join("") + "</ul>" : '<p class="empty">还没有跟进。左边记第一笔。</p>';
     const m = (r, p) => P.get("milestone", r, p);
     const up = ms.filter((r) => P.day(m(r, "day")) >= today), past = ms.filter((r) => P.day(m(r, "day")) < today);
     const mrow = (r) => [P.day(m(r, "day")), m(r, "kind"), m(r, "status"), m(r, "label"), P.text(m(r, "lead")), P.raw(P.open("milestone", r.id))];
@@ -161,7 +161,7 @@
   try {
     await P.load();
     if (!(await P.canWrite())) P.guest();  // 游客帐号(查看者)只能看
-    if (!rid) { $("head").innerHTML = '<div class="err">网址里没有商机编号,从 <a href="opps.html">商机总览</a> 点进来。</div>'; return; }
+    if (!rid) { $("head").innerHTML = '<div class="note n-bad">网址里没有商机编号,从 <a href="opps.html">商机总览</a> 点进来。</div>'; return; }
     P.choices("followup", "judgment").forEach((s) => { const op = document.createElement("option"); op.textContent = s; $("fuJudg").appendChild(op); });
     P.choices("opportunity", "stage").forEach((s) => { const op = document.createElement("option"); op.textContent = s; $("fuStage").appendChild(op); });
     $("fuDay").value = P.today();

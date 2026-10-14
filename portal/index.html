@@ -461,7 +461,7 @@
     const ms = (plan.measures || []).map((x) => Object.assign({}, P.measure(x.id) || { id: x.id, name: x.id, unit: "" }, { agg: x.agg })).filter((m) => m.id !== "count");
     const lacks = [...new Set(ms.flatMap((m) => [].concat(m.needs || [])).filter((x) => !P.has(oid, x)))];
     const a = await awRows(f, AW_PROPS, 3000), rows = a.rows, total = rows.length, h = [];
-    if (lacks.length) h.push('<div class="warn small">表里还没有「' + lacks.map((x) => P.esc(P.propName(oid, x))).join("」「") + "」这几列(管理员更新一次表结构就有)。</div>");
+    if (lacks.length) h.push('<div class="note n-warn small">表里还没有「' + lacks.map((x) => P.esc(P.propName(oid, x))).join("」「") + "」这几列(管理员更新一次表结构就有)。</div>");
     if (!total) {
       body.innerHTML = h.join("") + "<p>没有符合这些条件的" + P.esc(NOUN[oid].slice(1)) + ",算不出" + P.esc(ms.map((m) => m.name).join("、")) + "。</p>" + capNote(plan, a, true) + "<p>" + linkOut(plan) + "</p>";
       fold(body, el, unit);
@@ -471,7 +471,7 @@
       const vals = rows.map((r) => mValue(m, r)).filter((v) => v !== null), st = stats(vals), miss = total - st.n;
       if (ms.length > 1) h.push("<h2>" + P.esc(m.name) + "</h2>");
       if (!st.n) {
-        h.push('<div class="warn">符合条件的 <b>' + total + " " + unit + "</b>里,没有一份有" + P.esc(hasName(m)) + ",算不出" + P.esc(m.name) + "。" + P.esc(m.missing || "") + "。" +
+        h.push('<div class="note n-warn">符合条件的 <b>' + total + " " + unit + "</b>里,没有一份有" + P.esc(hasName(m)) + ",算不出" + P.esc(m.name) + "。" + P.esc(m.missing || "") + "。" +
           "这 " + total + " " + unit + "来自:" + P.esc(srcCount(rows)) + "。</div>");
         return;
       }
@@ -538,7 +538,7 @@
   }
   async function countryView(plan, body, el) {
     const f = plan.filters, cols = [];
-    if (!P.has("country", "bready_edition")) { body.innerHTML = '<p class="muted">「营商环境」的字段还没建(管理员跑一次建表命令、导入 B-READY 数据后就能问)。</p>'; return; }
+    if (!P.has("country", "bready_edition")) { body.innerHTML = '<p class="empty">「营商环境」的字段还没建(管理员跑一次建表命令、导入 B-READY 数据后就能问)。</p>'; return; }
     const [rows, ign] = await Promise.all([P.records("country", { props: BR_PROPS }), P.ignored()]);
     const ms = (plan.measures || []).map((x) => P.measure(x.id)).filter((m) => m && m.id !== "count");
     const m0 = ms[0] || P.measure("bready_total"), nm = (r) => P.get("country", r, "name_zh") || P.get("country", r, "key");
@@ -608,7 +608,7 @@
   /* 法规(本体 v2.24):排放标准按国别列排放限值(同一国几种口径分开、写明出处条号、待核实的标出);本国定义;别的法规问题请后台按条文作答。
      库里没有这国法规原文的直说没收,不说成「没有规定」 */
   async function lawView(q, plan, body, el) {
-    if (!P.hasLaw()) { body.innerHTML = '<p class="muted">「法规」表还没建(管理员跑一次建表命令、导入法规原文后就能问)。</p>'; return; }
+    if (!P.hasLaw()) { body.innerHTML = '<p class="empty">「法规」表还没建(管理员跑一次建表命令、导入法规原文后就能问)。</p>'; return; }
     const lw = plan.law || {}, f = plan.filters, cs = f.countries.map((c) => ({ iso: c.iso3, name: c.name, id: (byIso[c.iso3] || {}).id }));
     const d = await P.lawData(cs.filter((c) => c.id).map((c) => c.id));
     const ofC = (oid, r) => P.linkId(P.get(oid, r, "country"));
@@ -617,7 +617,7 @@
     const nums = {}, h = [];
     const noLaw = (c) => '<p><b>' + P.esc(c.name) + "</b>:库里还没收这国的法规原文,答不了" + (lw.kind === "limit" ? "排放标准" : "") + "(不是说这国没有规定)。" +
       (c.iso ? '<a href="country.html?' + new URLSearchParams({ iso: c.iso, t: "inst" }) + '">国别概况「机构与法规」</a>里有法规名称和链接。' : "") + "</p>";
-    if (!list.length) { body.innerHTML = '<p class="muted">库里还没有任何国家的法规原文。</p>'; return; }
+    if (!list.length) { body.innerHTML = '<p class="empty">库里还没有任何国家的法规原文。</p>'; return; }
     if (lw.kind === "limit" || lw.kind === "define" || lw.kind === "list") {
       const bases = new Set();
       list.forEach((c) => {
@@ -644,7 +644,7 @@
           '<p class="lead-ans">' + P.esc(c.name) + ":收了 " + nLaw + " 部法规原文,还没摘到排放限值。</p>";
         h.push(head + lead + (std ? '<div class="panel"><p class="small"><b>这国怎么定排放标准</b></p>' + std + "</div>" : "") + (lim ? '<div class="panel">' + pm + lim + "</div>" : ""));
       });
-      if (lw.kind === "limit" && bases.size > 1) h.unshift('<div class="warn small">' + (list.length > 1 ? "几国" : "这国") + "的限值口径不止一种(" + P.esc([...bases].join("、")) + "):受纳水体允许浓度是河湖里的浓度,不是污水厂出水的上限,不能和出水限值直接比。</div>");
+      if (lw.kind === "limit" && bases.size > 1) h.unshift('<div class="note n-warn small">' + (list.length > 1 ? "几国" : "这国") + "的限值口径不止一种(" + P.esc([...bases].join("、")) + "):受纳水体允许浓度是河湖里的浓度,不是污水厂出水的上限,不能和出水限值直接比。</div>");
       body.innerHTML = h.join("") + '<p class="muted small">数据来自各国法规原文(表格「法规」「法规条文」「排放限值」「国别定义」);角标点开看条文。' +
         (cs.length ? "" : "没说国家时列收了法规原文的各国。") + "</p>";
       return;
@@ -714,12 +714,12 @@
     const r = await P.checkLink(url, note, file ? await fileData(file) : undefined);
     if (!r) return;
     const body = el.querySelector(".a-body");
-    if (!r.ok) { body.innerHTML = '<div class="warn">' + P.esc(r.error || "没看成") + "</div>"; return; }
+    if (!r.ok) { body.innerHTML = '<div class="note n-warn">' + P.esc(r.error || "没看成") + "</div>"; return; }
     const a = r.analysis || {}, s = r.source || {}, adv = r.advice || {};
     const h = [];
     h.push('<div class="lk-advice ' + (ADV_CLS[adv.action] || "") + '">建议:' + P.esc(adv.action || "先核实") + "</div>");
     h.push('<p class="lk-why">' + P.esc(adv.reason || "") + "</p>");
-    if (a.mismatch) h.push('<div class="warn small"><b>和你说的对不上:</b>' + P.esc(a.mismatch) + "</div>");
+    if (a.mismatch) h.push('<div class="note n-warn small"><b>和你说的对不上:</b>' + P.esc(a.mismatch) + "</div>");
     const src = r.final_url || url;
     h.push("<h2>原文</h2><p>" + (src ? '<a href="' + P.esc(src) + '" target="_blank" rel="noopener">' + P.esc(a.title_zh || r.title || src) + "</a>" : P.esc(a.title_zh || r.title || "上传的文件")) +
       (a.title_zh && r.title ? ' <span class="muted small">' + P.esc(r.title) + "</span>" : "") + "</p>");
@@ -768,7 +768,7 @@
     el.querySelector(".a-body").replaceWith(body); body.className = "a-body";
     el.querySelector(".a-head").insertAdjacentHTML("beforeend", understoodHtml(plan));
     if (plan.note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<p class="muted small">' + P.esc(plan.note) + "</p>");
-    if (plan.scope_note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="warn small">' + P.esc(plan.scope_note) + "</div>");  // 本体 data_scope:不在采集范围的国家
+    if (plan.scope_note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="note n-warn small">' + P.esc(plan.scope_note) + "</div>");  // 本体 data_scope:不在采集范围的国家
     if (plan.intent === "help") {
       body.innerHTML = '<p>没听懂这句。可以这样问:</p><ul class="list">' + (plan.examples || []).map((e) => '<li><a href="#" class="ex">' + P.esc(e) + "</a></li>").join("") + "</ul>";
       body.querySelectorAll(".ex").forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); submit(a.textContent, { fresh: true }); }; });
@@ -781,7 +781,7 @@
     }
     const oid = plan.object;
     if (!NOUN[oid]) { body.innerHTML = '<p class="muted">系统刚更新过,这个页面还是旧的:请刷新页面后再问一次。</p>'; return; }  // 助手接口认得、旧页面不认得的对象
-    if (oid === "award" && !hasAw()) { body.innerHTML = '<p class="muted">「已中标项目」表还没建(跑一次建表命令后就能问中标记录)。</p>'; return; }
+    if (oid === "award" && !hasAw()) { body.innerHTML = '<p class="empty">「已中标项目」表还没建(跑一次建表命令后就能问中标记录)。</p>'; return; }
     body.innerHTML = '<p class="muted">查表中…</p>';
     if (oid === "country") { await countryView(plan, body, el); return; }  // 营商环境(世行 B-READY):国别表或单国作答
     if (oid === "law") { await lawView(q, plan, body, el); return; }  // 法规:排放限值、本国定义、条文(v2.24)  // 营商环境(世行 B-READY):国别表或单国作答

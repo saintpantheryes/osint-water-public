@@ -58,7 +58,7 @@
   }
   function refreshCounts() {
     [["assign", "nAssign"], ["suggest", "nSuggest"]].forEach(([box, n]) => {
-      const k = $(box).querySelectorAll(".item").length; $(n).textContent = k; if (!k) $(box).innerHTML = '<p class="muted">没有了 ✓</p>';
+      const k = $(box).querySelectorAll(".item").length; $(n).textContent = k; if (!k) $(box).innerHTML = '<p class="empty">没有了 ✓</p>';
     });
     applyFilter("assign"); applyFilter("suggest");
   }

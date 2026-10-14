@@ -102,7 +102,7 @@
 
   async function show(iso) {
     const c = countries.find((x) => P.get("country", x, "key") === iso);
-    if (!c) { $("info").innerHTML = '<div class="err">没有这个国别</div>'; return; }
+    if (!c) { $("info").innerHTML = '<div class="note n-bad">没有这个国别</div>'; return; }
     history.replaceState(null, "", urlOf(iso));
     markMap(iso);
     const g = (p) => P.get("country", c, p);
@@ -175,7 +175,7 @@
     const inst = sec("水务管理机构", dots(f("water_agencies"), ["机构", "英文名", "职责", "网站"]), true) + sec("水务国企", dots(f("water_soes"), ["企业", "英文名", "说明", "网站"]), true) +
       sec("相关法律法规", dots(f("laws"), ["法规", "领域", "要点", "链接"]), true) + sec("市场准入与竞争", notes(f("access")), true);
     $("biz").innerHTML = P.bready(full, g("name_zh") || iso);
-    $("inst").innerHTML = inst || '<p class="muted">这个国家还没填机构、国企、法规与市场准入资料(国别表里补上就显示)。</p>';
+    $("inst").innerHTML = inst || '<p class="empty">这个国家还没填机构、国企、法规与市场准入资料(国别表里补上就显示)。</p>';
     const [opps, leads, ms, cities] = await listsP;
     const stage = {}; opps.forEach((o) => { const s = P.get("opportunity", o, "stage") || "建议"; stage[s] = (stage[s] || 0) + 1; });
     const tracked = P.tracked(opps);
@@ -194,7 +194,7 @@
     $("ms").innerHTML = P.tableHtml(["日期", "类型", "商机", "线索", "状态", "说明", ""], mine.map((m) => { const q = (p) => P.get("milestone", m, p);
       return [P.day(q("day")), q("kind"), code[P.linkId(q("opportunity"))] || P.text(q("opportunity")), P.text(q("lead")), q("status"), q("label"), P.raw(P.open("milestone", m.id))]; }));
     const num = (v) => (v === undefined || v === null || v === "" ? "" : Number(v).toLocaleString("zh-CN"));
-    $("cities").innerHTML = !hasCity ? '<p class="muted">「城市」表还没建(跑一次建表命令后这里就有)。</p>' : !cities.length ? '<p class="muted">这个国家还没有规模以上城市的记录(后台每月补;新国别第二天补)。</p>' :
+    $("cities").innerHTML = !hasCity ? '<p class="empty">「城市」表还没建(跑一次建表命令后这里就有)。</p>' : !cities.length ? '<p class="empty">这个国家还没有规模以上城市的记录(后台每月补;新国别第二天补)。</p>' :
       P.tableHtml(["城市", "行政区", "人口", "面积(km²)", "密度", "生产总值(亿美元)", "线索", "商机", ""], cities.map((ct) => { const q = (p) => P.get("city", ct, p);
         return [P.raw('<a href="city.html?id=' + encodeURIComponent(ct.id) + '"><b>' + P.esc(q("name_zh") || q("name_en") || "") + "</b></a>" + (q("name_en") && q("name_en") !== q("name_zh") ? ' <span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")), q("admin") || "", num(q("population")), num(q("area_km2")), num(q("density")),
           num(q("gdp")) + (q("gdp") && q("gdp_year") ? ' <span class="muted small">' + P.esc(String(q("gdp_year"))) + "</span>" : ""), String(q("lead_count") || 0), String(q("opp_count") || 0), P.raw(P.open("city", ct.id))]; }));
@@ -205,7 +205,7 @@
     const nat = natM ? Number(natM[1].replace(/,/g, "")) * (natM[2] === "亿" ? 1e8 : natM[2] === "万" ? 1e4 : 1) : 0;
     const wan = (n) => (n >= 1e4 ? (Math.round(n / 1e3) / 10).toLocaleString("zh-CN") + " 万" : num(n));
     const nOpp = {}; opps.forEach((o) => { const a = hasArea && P.linkId(P.get("opportunity", o, "area")); if (a) nOpp[a] = (nOpp[a] || 0) + 1; });
-    $("areas").innerHTML = !areas.length ? '<p class="muted">这个国家还没划水务片区。</p>' :
+    $("areas").innerHTML = !areas.length ? '<p class="empty">这个国家还没划水务片区。</p>' :
       P.tableHtml(["片区", "包含城市", "合计人口", "服务水司", "挂上的商机", ""], areas.map((a) => { const q = (p) => P.get("water_area", a, p), tot = P.linkIds(q("cities")).reduce((s, id) => s + (popOf[id] || 0), 0);
         return [P.raw('<a href="area.html?id=' + encodeURIComponent(a.id) + '"><b>' + P.esc(q("name") || "") + "</b></a>" + (q("name_en") ? '<br><span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")),
           P.text(q("cities")), P.raw(tot ? "<b>" + P.esc(wan(tot)) + "</b>" + (nat ? '<br><span class="muted small">占全国 ' + Math.round(tot * 100 / nat) + "%</span>" : "") : ""), q("utility") || "", String(nOpp[a.id] || 0), P.raw(P.open("water_area", a.id))]; }));

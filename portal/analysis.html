@@ -194,7 +194,7 @@
     const rows = await P.records("report", { take: 1, orderBy: [{ fieldId: P.f("report", "day"), order: "desc" }], filter: P.and(P.cond("report", "kind", "is", "日报"), P.cond("report", "gen_status", "is", "完成")),
       props: ["kind", "day", "period", "file"].concat(hasSummary ? ["summary"] : []) });
     const r = rows[0];
-    if (!r) { $("brief").innerHTML = '<h3>每日简报</h3><p class="muted">还没有日报:后台每天 08:30 采集完成后自动写一份,出来后显示在这里;也可以在<a href="reports.html?kind=日报">报告页</a>要一份今天的。</p>'; return; }
+    if (!r) { $("brief").innerHTML = '<h3>每日简报</h3><p class="empty">还没有日报:后台每天 08:30 采集完成后自动写一份,出来后显示在这里;也可以在<a href="reports.html?kind=日报">报告页</a>要一份今天的。</p>'; return; }
     const gr = (p) => P.get("report", r, p);
     const files = (gr("file") || []), docx = files.find((f) => /\.docx$/i.test(f.name)) || files[0], mdf = files.find((f) => /\.md$/i.test(f.name));
     let md = hasSummary ? (gr("summary") || "") : "";

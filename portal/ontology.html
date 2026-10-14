@@ -195,7 +195,7 @@
       '<p class="muted small">加说法、删说法在表里改;要加新指标(程序得会算)仍改本体文件。</p>';
     $("semWords").innerHTML = KIND_ORDER.slice(1).map((k) => '<div class="panel"><h3 style="margin-top:0">' + esc(k) + "</h3>" +
       P.tableHtml(["指向", "说法"], seed.filter((x) => x.kind === k).map((x) => [x.target, shown(x)])) + "</div>").join("") +
-      (bad.length ? '<div class="warn">表里这 ' + bad.length + " 行的指向本体里没有,助手不用:" + esc(bad.map((r) => (P.get("phrase", r, "kind") || "未填类别") + " · " + (P.get("phrase", r, "target") || "未填指向")).join(";")) + "。指向要照上面的名字写。</div>" : "");
+      (bad.length ? '<div class="note n-warn">表里这 ' + bad.length + " 行的指向本体里没有,助手不用:" + esc(bad.map((r) => (P.get("phrase", r, "kind") || "未填类别") + " · " + (P.get("phrase", r, "target") || "未填指向")).join(";")) + "。指向要照上面的名字写。</div>" : "");
     // 行业术语:平时读 Teable「行业术语」表(助手也读它);表没建、读不到(游客)时显示本体里的初始词
     const termHead = ["术语", "同义说法", "跨哪些领域", "按领域筛", "相关词(查标题与中文摘要,含任一个即算)", "说明"];
     const list = (x) => wlist(x).join("、");

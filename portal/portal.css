@@ -55,11 +55,25 @@ tr.bad td { background: var(--bad-soft); }  /* 信源页:出错、被拒、多�
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 .muted { color: var(--muted); }
-.err { color: #b91c1c; background: var(--bad-soft); border: 1px solid var(--bad-line); padding: 8px 10px; border-radius: 8px; }
+/* 提示框(界面规范:三种,左边一道色条区分):n-info 说明 · n-warn 要核实 · n-bad 出错。原 .warn / .err 是全局类名,跟别处的「提醒」样式串过,已去掉 */
+.note { border: 1px solid var(--line); border-left-width: 3px; border-radius: var(--r-sm); padding: 8px 12px; margin: 8px 0; background: var(--card); }
+.note.n-info { background: var(--brand-soft); border-color: #cfe3f3; border-left-color: var(--brand); }
+.note.n-warn { background: var(--warn-soft); border-color: var(--warn-line); border-left-color: var(--warn); }
+.note.n-bad { background: var(--bad-soft); border-color: var(--bad-line); border-left-color: var(--bad); color: #991b1b; }
+/* 空状态:说清为什么是空的、怎么补(文字由各页写) */
+.empty { margin: 6px 0; padding: 14px 16px; border: 1px dashed var(--line); border-radius: var(--r-md); color: var(--muted); }
+/* 按钮(界面规范:三种——普通、主按钮 .primary、文字按钮 .quiet;各处按钮都走这一条,不再各写各的) */
+.btn, button.conv, .form button, .toolbar button, .it-act button, .batch button, .convbox button {
+  font: inherit; font-size: 14px; line-height: 1.4; padding: 5px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--ink); cursor: pointer; text-align: center; white-space: nowrap; }
+.btn.primary, .form button.primary, .toolbar .primary, .it-act button.primary, .batch button.primary, .convbox button.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.btn.quiet { border-color: transparent; background: none; color: var(--brand); padding-inline: 6px; }
+button.conv { color: var(--brand); border-color: var(--brand); }
+.btn:disabled, .form button:disabled, .it-act button:disabled, .batch button:disabled, .convbox :disabled { opacity: .6; cursor: default; }
+.btn:focus-visible, .form button:focus-visible, .toolbar button:focus-visible, .it-act button:focus-visible, .batch button:focus-visible, .convbox button:focus-visible, button.conv:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .open { font-size: 12px; white-space: nowrap; }
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 8px 0 12px; }
-.toolbar select, .toolbar button, .toolbar input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
-.toolbar button { cursor: pointer; }
+.toolbar select, .toolbar input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
 /* 日历 */
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .cal .dow { text-align: center; color: var(--muted); font-size: 12px; padding: 4px 0; }
@@ -132,14 +146,11 @@ details.sec summary::before { content: "▸ "; color: var(--muted); } details.se
 /* 商机总览与工作台 */
 .over { color: #b91c1c; font-weight: 600; }
 .two { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: start; }
-.two .col.wide { min-width: 0; }
-@media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+.two > .col { min-width: 0; }  /* 两栏里的表单、表格只在自己栏里变窄,不把整页撑宽(手机上报告页、公司资料页曾横着滑) */
+@media (max-width: 900px) { .two { grid-template-columns: minmax(0, 1fr); } }
 .opphead h1 { margin: 2px 0 4px; }
 .form h3 { margin: 0 0 8px; } .form .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
 .form label { flex: 0 0 64px; color: var(--muted); font-size: 13px; } .form input, .form select, .form textarea { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
-.form button, .toolbar .primary { font: inherit; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); cursor: pointer; }
-.form button.primary { background: var(--brand); color: #fff; border-color: var(--brand); } .form button:disabled { opacity: .6; cursor: default; }
-.warn { background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: 10px; padding: 10px 14px; margin: 8px 0; }
 .tl { list-style: none; padding: 0; margin: 0; } .tl li { padding: 8px 0 8px 14px; border-left: 3px solid var(--brand); margin: 0 0 8px; }
 .tl .when { color: var(--muted); font-size: 12px; }
 #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: #111827; color: #fff; padding: 8px 14px; border-radius: 8px; opacity: 0; transition: .2s; pointer-events: none; z-index: 9; max-width: 90vw; }
@@ -149,8 +160,7 @@ details.sec summary::before { content: "▸ "; color: var(--muted); } details.se
 .item:last-child { border-bottom: 0; } .item.busy { opacity: .5; }
 .it-main { flex: 1; min-width: 0; } .it-title { font-size: 15px; margin-bottom: 2px; }
 .it-act { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; align-items: stretch; min-width: 150px; }
-.it-act button, .it-act select, .btn { font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); cursor: pointer; text-align: center; }
-.it-act button.primary { background: var(--brand); color: #fff; border-color: var(--brand); } .it-act button:disabled { opacity: .6; cursor: default; }
+.it-act select { font: inherit; font-size: 14px; padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); }
 .it-act .pick select { width: 100%; max-width: 220px; }
 @media (max-width: 640px) { .item { flex-direction: column; } .it-act { flex-direction: row; flex-wrap: wrap; } }
 h2 select.inline { font: inherit; font-size: 13px; font-weight: 400; padding: 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); margin-left: 8px; }
@@ -199,15 +209,12 @@ h2 select.inline { font: inherit; font-size: 13px; font-weight: 400; padding: 3p
 @media (max-width: 760px) { .tabs button { padding: 8px 9px; font-size: 14px; } .tabs.grouped { flex-wrap: wrap; overflow-x: visible; } .tabs .tgrp { flex: 1 1 100%; flex-direction: row; align-items: center; padding: 0; border-left: 0; border-top: 1px dashed var(--line); } .tabs .tgrp:first-child { border-top: 0; } .tabs .tg { flex: 0 0 auto; padding: 0 6px 0 0; font-size: 11px; } .tabs .tb { flex-wrap: wrap; } .tabs.grouped button { padding: 8px 8px; } }  /* 手机上与顶上的页签同一字号;商机总览三个页签在 375 宽一行放下 */
 .tab { display: none; } .tab.on { display: block; }
 .batch { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
-.batch button { font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); cursor: pointer; }
-.batch button.primary { background: var(--brand); color: #fff; border-color: var(--brand); } .batch button:disabled { opacity: .5; cursor: default; }
 .item .sel { flex: 0 0 auto; margin-top: 4px; }
 td .it-act button { white-space: nowrap; }
 /* 线索总览清单:「转为商机」与展开的一行(新建商机 / 归入已有 / 取消) */
-button.conv, .convbox button, .convbox select { font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); cursor: pointer; white-space: nowrap; }
-button.conv { color: var(--brand); border-color: var(--brand); }
+.convbox select { font: inherit; font-size: 14px; padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); }
 .convbox { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.convbox button.primary { background: var(--brand); color: #fff; border-color: var(--brand); } .convbox select { max-width: 260px; } .convbox :disabled { opacity: .6; cursor: default; }
+.convbox select { max-width: 260px; }
 /* 只读访客(游客帐号):写入控件灰掉、点不动;浏览、筛选、链接照常 */
 .guest-note { font-size: 14px; }
 body.guest .form button, body.guest .form input, body.guest .form select, body.guest .form textarea, body.guest .batch button, body.guest .batch input, body.guest .it-act button, body.guest .it-act select { pointer-events: none; opacity: .45; }
@@ -482,7 +489,6 @@ details.sec.panel summary { margin: -4px 0; }
 .lk-lv { display: inline-block; font-weight: 700; padding: 0 8px; border-radius: 6px; margin-right: 6px; }
 .lk-lv.hi { background: var(--ok-soft); color: #166534; } .lk-lv.mid { background: #e0f2fe; color: #075985; } .lk-lv.lo { background: #fee2e2; color: #991b1b; }
 .lk-act { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
-.lk-act .btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 600; }
 /* 地图下方的「灰色 = 忽略国别」说明 */
 .hatch-note { margin: 4px 0 0; }
 .hatch-swatch { display: inline-block; width: 16px; height: 11px; margin-right: 6px; vertical-align: -1px; border: 1px solid #c4bfba;

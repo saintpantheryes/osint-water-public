@@ -53,7 +53,7 @@
   /* ---------- 全部片区 ---------- */
   async function list() {
     const all = await P.records("water_area", { props: ["name", "name_en", "country", "cities", "utility"] });
-    if (!all.length) { $("rows").innerHTML = '<p class="muted">还没有片区。在表格「水务片区」里新建一行、选上包含的城市就有了。</p>'; return; }
+    if (!all.length) { $("rows").innerHTML = '<p class="empty">还没有片区。在表格「水务片区」里新建一行、选上包含的城市就有了。</p>'; return; }
     const pops = await Promise.all(all.map((a) => cityRecs(P.linkIds(g(a, "cities"))).then(pop)));
     const opps = P.has("opportunity", "area") ? await P.records("opportunity", { filter: P.and(P.cond("opportunity", "area", "isNotEmpty")), props: ["area"] }) : [];
     const nOpp = {}; opps.forEach((o) => { const a = P.linkId(P.get("opportunity", o, "area")); if (a) nOpp[a] = (nOpp[a] || 0) + 1; });
@@ -65,7 +65,7 @@
   /* ---------- 一个片区 ---------- */
   async function show(id) {
     const a = await one("water_area", id);
-    if (!a || !a.fields) { $("info").innerHTML = '<div class="err">没有这个片区</div>'; return; }
+    if (!a || !a.fields) { $("info").innerHTML = '<div class="note n-bad">没有这个片区</div>'; return; }
     const cids = P.linkIds(g(a, "cities")), crid = P.linkId(g(a, "country"));
     $("aname").textContent = g(a, "name") || "";
     $("aname2").textContent = g(a, "name_en") || "";
@@ -104,21 +104,21 @@
       ["服务水司", P.esc(g(a, "utility") || "")], ["主要水源", lines(g(a, "sources"))], ["范围说明", lines(g(a, "scope"))], ["划分依据", lines(g(a, "basis"))], ["备注", lines(g(a, "note"))]].filter(([, v]) => v);
     $("info").innerHTML = P.factsHtml(facts.map(([k, v]) => [k, v, { html: true }]));
     cities.sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0));
-    $("cities").innerHTML = !cities.length ? '<p class="muted">还没选包含的城市(在表格里选上)。</p>' : P.tableHtml(["城市", "行政区", "人口", "占片区", "总体水风险", "无安全饮用水"], cities.map((c) => { const q = (p) => P.get("city", c, p);
+    $("cities").innerHTML = !cities.length ? '<p class="empty">还没选包含的城市(在表格里选上)。</p>' : P.tableHtml(["城市", "行政区", "人口", "占片区", "总体水风险", "无安全饮用水"], cities.map((c) => { const q = (p) => P.get("city", c, p);
       return [P.raw('<a href="city.html?id=' + encodeURIComponent(c.id) + '"><b>' + P.esc(q("name_zh") || q("name_en") || "") + "</b></a>" + (q("name_en") ? ' <span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")),
         q("admin") || "", num(q("population")), total ? Math.round((Number(q("population")) || 0) * 100 / total) + "%" : "", q("water_risk") === undefined || q("water_risk") === null ? "" : Number(q("water_risk")).toFixed(2), q("no_drinking") === undefined || q("no_drinking") === null ? "" : q("no_drinking") + "%"]; }));
     const tr = new Set(P.tracked(opps).map((o) => o.id));  // 跟踪中的排前,其余按阶段
     opps.sort((x, y) => (tr.has(y.id) - tr.has(x.id)) || (P.STAGES.indexOf(P.get("opportunity", x, "stage") || "建议") - P.STAGES.indexOf(P.get("opportunity", y, "stage") || "建议")) || String(P.get("opportunity", x, "code")).localeCompare(String(P.get("opportunity", y, "code"))));
-    $("opps").innerHTML = !opps.length ? '<p class="muted">还没有商机挂在这个片区或片区里的城市上(在商机上选「所属片区」)。</p>' :
+    $("opps").innerHTML = !opps.length ? '<p class="empty">还没有商机挂在这个片区或片区里的城市上(在商机上选「所属片区」)。</p>' :
       P.tableHtml(["编号", "名称", "我方阶段", "公开进度", "资金", ""], opps.map((o) => { const q = (p) => P.get("opportunity", o, p);
         return [P.raw('<a class="nw" href="opp.html?id=' + encodeURIComponent(o.id) + '">' + P.esc(q("code") || "") + "</a>"), q("name_zh"), q("stage") || "建议", q("public_stage") || "", (q("financing") || "").split("\n")[0].replace(/\s*\[[0-9a-f]{8}\]/g, "").replace(/\s*〔R\d+〕/g, ""), P.raw(P.open("opportunity", o.id))]; }));
-    $("leads").innerHTML = !leads.length ? '<p class="muted">还没有。</p>' :
+    $("leads").innerHTML = !leads.length ? '<p class="empty">还没有。</p>' :
       P.tableHtml(["标题", "类别", "发布", "所属商机", "处理状态", ""], leads.slice(0, 50).map((l) => { const q = (p) => P.get("lead", l, p);
         return [P.titleCell(l), q("category") || "", P.day(q("published")) || P.day(q("found_at")) || "", P.text(q("opportunity")), q("status") || "", P.raw(P.open("lead", l.id))]; })) +
       (leads.length > 50 ? '<p class="muted small">列出最近 50 条,共 ' + leads.length + (leads.length >= 200 ? "+" : "") + " 条。</p>" : "");
     const pl = [].concat(...plants.map((rows, i) => rows.map((r) => ({ r, oid: i ? "sewage_plant" : "supply_plant" }))));
     pl.sort((x, y) => (Number(P.get(y.oid, y.r, "capacity")) || 0) - (Number(P.get(x.oid, x.r, "capacity")) || 0));
-    $("plants").innerHTML = !pl.length ? '<p class="muted">片区里的城市还没有水厂记录。</p>' :
+    $("plants").innerHTML = !pl.length ? '<p class="empty">片区里的城市还没有水厂记录。</p>' :
       P.tableHtml(["名称", "类型", "城市", "规模(万吨/日)", "服务人口", "状态", ""], pl.map(({ r, oid }) => { const q = (p) => P.get(oid, r, p);
         return [P.raw("<b>" + P.esc(q("name_zh") || q("name") || "") + "</b>" + (q("note") ? '<br><span class="muted small">' + P.esc(String(q("note")).split("\n")[0]) + "</span>" : "")), oid === "supply_plant" ? "自来水厂" : "污水厂",
           P.text(q("city")), q("capacity") === undefined || q("capacity") === null ? "" : String(q("capacity")), num(q("pop_served")), q("status") || "", P.raw(P.open(oid, r.id))]; }));
@@ -128,7 +128,7 @@
     await P.load();
     if (!(P.cfg.tables && P.cfg.tables.water_area)) {
       $("one").style.display = "none"; $("list").style.display = "";
-      $("rows").innerHTML = '<p class="muted">「水务片区」表还没建(跑一次建表命令后这里就有)。</p>';
+      $("rows").innerHTML = '<p class="empty">「水务片区」表还没建(跑一次建表命令后这里就有)。</p>';
       return;
     }
     const id = q0.get("id");

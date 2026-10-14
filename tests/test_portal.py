@@ -2336,3 +2336,47 @@ def test_portal_css_takes_colors_from_the_tokens():
     in_spec = lits & {v.lower() for v in tokens.values() if len(v) == 7}
     assert not in_spec, f"这些颜色规范里有,请写成 var(--…):{sorted(in_spec)}"
     assert len(set(re.findall(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b", rest))) <= 69, "portal.css 里新加了散色值;请用 :root 里的颜色"
+
+
+def test_notes_and_buttons_have_one_shape_each():
+    """界面规范第五步:提示框只用 .note(n-info / n-warn / n-bad),空状态用 .empty;全局的 .warn / .err 去掉了
+    (它们跟「提醒」色的类名串过,营商环境卡片变黄底、线索总览数字卡变黄底都是这个原因),页面里不许再写回来。按钮的样子只在一条规则里定。"""
+    css = (PORTAL / "portal.css").read_text(encoding="utf-8")
+    assert not re.search(r"^\.(warn|err)\s*\{", css, re.M)
+    for f in PORTAL.glob("*.html"):
+        if f.name == "login.html":  # 登录页自带样式,不引 portal.css
+            continue
+        t = f.read_text(encoding="utf-8")
+        assert not re.search(r"""class=\\?["'](warn|err)\b""", t), f.name
+    js = (PORTAL / "portal.js").read_text(encoding="utf-8")
+    assert not re.search(r"""class=\\?["'](warn|err)\b""", js) and 'className = "warn' not in js
+    assert len(re.findall(r"background: var\(--brand\); border-color: var\(--brand\); color: #fff", css)) == 1  # 主按钮只定义一次
+
+
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_every_page_fits_a_phone_and_a_laptop():
+    """各页在手机(390)和笔记本(1366)上:整页不横着滑,名称-数值行、指标卡不变形(LAYOUT 量的那几样)。
+    2026-10-14 这样扫出过报告页、公司资料页在手机上被左边表单撑宽。表格太宽在自己框里横滑,不算。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    srv = _serve(fake, schema.read_config(admin, NEW, ONTO))
+    pages = ["index.html", "how.html", "ontology.html", "sources.html", "country.html?iso=AZE", "country.html?iso=AZE&t=biz", "country.html?iso=AZE&t=inst",
+             "city.html", "trend.html", "overview.html", "analysis.html", "inbox.html", "opps.html", f"opp.html?id={o['id']}", "calendar.html", "reports.html", "me.html", "company.html"]
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            for w in (390, 1366):
+                page = browser.new_page(viewport={"width": w, "height": 900})
+                for pth in pages:
+                    page.goto(f"http://127.0.0.1:{srv.server_port}/{pth}")
+                    page.wait_for_load_state("networkidle")
+                    assert page.evaluate(LAYOUT, "main") == [], (w, pth)
+                page.close()
+            browser.close()
+    finally:
+        srv.shutdown()
+        srv.assistant.shutdown()
