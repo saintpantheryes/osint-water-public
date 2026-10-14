@@ -63,6 +63,8 @@
     tab = k;
     $("tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.t === k));
     document.querySelectorAll(".tab").forEach((d) => d.classList.toggle("on", d.dataset.t === k));
+    const bar = $("tabs"), on = bar.querySelector("button.on");  // 窗口窄、页签横着滑时,把选中的那个滑进来
+    if (on && bar.scrollWidth > bar.clientWidth) { const l = on.offsetLeft - bar.offsetLeft; if (l < bar.scrollLeft || l + on.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = l - 24; }
     history.replaceState(null, "", urlOf($("pick").value));
   }
   function drawTabs(counts) {
