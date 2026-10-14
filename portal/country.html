@@ -143,8 +143,8 @@
     const facts = (v, skip) => {
       const rows = (Array.isArray(v) ? v : factRows(v)).filter((r) => !(skip || []).includes(r));
       if (!rows.length) return "";
-      return '<div class="facts">' + rows.map((r) => P.factHtml(r.k, r.v,
-        r.src || r.url ? (r.url ? '<a class="src" href="' + P.esc(r.url) + '" target="_blank" rel="noopener" title="' + P.esc(r.src) + '">' + P.esc(r.src || "来源") + " ↗</a>" : '<span class="src">' + P.esc(r.src) + "</span>") : "")).join("") + "</div>";
+      return P.factsHtml(rows.map((r) => [r.k, r.v,
+        r.src || r.url ? (r.url ? '<a class="src" href="' + P.esc(r.url) + '" target="_blank" rel="noopener" title="' + P.esc(r.src) + '">' + P.esc(r.src || "来源") + " ↗</a>" : '<span class="src">' + P.esc(r.src) + "</span>") : ""]));
     };
     /* 关键指标(放大放最前,负面标红):按这个顺序从「宏观与水务指标」里挑,挑出来的不在下面重复列 */
     const KEY = [[/^GDP\(现价\)|^GDP\s*\(现价/, "GDP"], [/^人均 GDP(?!\s*\(PPP)/, "人均 GDP"], [/实际增速/, "GDP 实际增速"], [/^总人口/, "总人口"], [/^城镇化率/, "城镇化率"],
@@ -170,7 +170,7 @@
     const sec = (label, html, open) => html ? '<details class="sec"' + (open ? " open" : "") + "><summary>" + label + '</summary><div class="panel">' + html + "</div></details>" : "";
     const kv = [["大洲与区域", f("region")], ["市场分级", f("tier")], ["收入组与贷款类别", f("income_group")], ["经营区域", f("market")], ["我方在当地", f("presence")]].filter((x) => x[1]);
     $("info").innerHTML = P.kpiHtml(keyRows.map(({ r, label }) => ({ label, value: r.v }))) +
-      '<div class="panel"><div class="facts">' + kv.map(([k, v]) => "<div><b>" + k + "</b><span>" + P.esc(P.text(v)) + "</span></div>").join("") + "</div></div>" +
+      (kv.length ? '<div class="panel">' + P.factsHtml(kv.map(([k, v]) => [k, P.text(v)])) + "</div>" : "") +
       sec("国别备注与近期动态", notes(f("note")), true) + sec("宏观与水务指标", facts(indRows, keyRows.map((x) => x.r)), true) + sec("水风险与经济(趋势参考)", P.riskFacts("country", full, iso), true) + sec("基础信息", facts(f("basics")), false) + P.citeNote(numOf, cinfo);
     const inst = sec("水务管理机构", dots(f("water_agencies"), ["机构", "英文名", "职责", "网站"]), true) + sec("水务国企", dots(f("water_soes"), ["企业", "英文名", "说明", "网站"]), true) +
       sec("相关法律法规", dots(f("laws"), ["法规", "领域", "要点", "链接"]), true) + sec("市场准入与竞争", notes(f("access")), true);

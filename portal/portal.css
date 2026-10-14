@@ -72,15 +72,21 @@ pre.lines { white-space: pre-wrap; font: inherit; margin: 0; }
 .more { display: block; font-size: 12px; margin-top: 2px; }
 .chk { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
 h3 { font-size: 15px; margin: 14px 0 6px; } h3 .open { margin-left: 10px; font-weight: 400; }
-/* 国别概况:把长文本按行、按「名称:数值(来源)」整理成清单与表格 */
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 6px 18px; }
-.facts div { display: flex; gap: 8px; align-items: baseline; border-bottom: 1px dashed var(--line); padding: 3px 0; }
-.facts b { color: var(--muted); font-weight: 500; flex: 0 0 auto; }
-.facts span { flex: 1; } .facts .src { font-size: 11px; color: var(--muted); white-space: nowrap; }
-/* 指标值加粗、年份变小;负面的值标红(门槛在 portal.js 的 TONES) */
-.facts .v strong { font-weight: 600; color: #0b1b3a; font-variant-numeric: tabular-nums; }
-.facts .bad .v strong { color: #dc2626; }
-.facts em.over { font-style: normal; font-size: 12px; color: #dc2626; margin-left: 6px; }
+/* 名称-数值行(P.factHtml / P.factsHtml 生成,全站只这一种;2026-10-14 重写):
+   只用子选择器(>)和 fact- 前缀的类名,不跟别处的 .warn、span、div 串样式;每格都 min-width: 0,长字只在自己格里换行,不挤别人、不压到隔壁。
+   一行 = 两栏网格:名称(最宽占 45%,超了换行)| 值(数 + 年份 + 来源);警示、说明各占值那一栏的一行。 */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 0 24px; }
+.facts > .fact { display: grid; grid-template-columns: fit-content(45%) minmax(0, 1fr); column-gap: 10px; align-content: start; min-width: 0; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.fact > .fact-k { grid-column: 1; color: var(--muted); font-weight: 500; line-height: 1.5; }
+.fact > .fact-v, .fact > .fact-w, .fact > .fact-n { grid-column: 2; min-width: 0; overflow-wrap: anywhere; }
+.fact > .fact-v { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; line-height: 1.5; }
+.fact-v > strong { font-weight: 600; color: #0b1b3a; font-variant-numeric: tabular-nums; }
+.fact-v > .src { margin-left: auto; font-size: 11px; color: var(--muted); }  /* 来源靠右;放不下就自己换到下一行 */
+.fact-v > em.yr { margin-left: 0; }
+.fact > .fact-w { font-size: 12px; font-weight: 600; line-height: 1.5; color: #dc2626; }
+.fact > .fact-n { font-size: 12px; line-height: 1.5; color: #94a3b8; }
+.fact.is-bad .fact-v > strong { color: #dc2626; }
+.fact.is-warn .fact-v > strong, .fact.is-warn > .fact-w { color: #b45309; }
 em.yr { font-style: normal; font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 400; }
 /* 关键指标卡:一排大号数字放在最前;负面的数字标红,下面一行写原因 */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 10px 0 12px; }
@@ -576,10 +582,10 @@ sup.sref a:hover { background: var(--brand); color: #fff; }
 @media (max-width: 760px) { .bcols { grid-template-columns: 1fr; } }
 .bcols h3 { margin: 0 0 6px; font-size: 15px; }
 .bitems { list-style: none; margin: 0; padding: 0; }
+.bitems li > span { flex: 1 1 auto; min-width: 0; } .bitems li > b { flex: 0 1 auto; max-width: 55%; overflow-wrap: anywhere; }
 .bitems li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
 .bitems li b { font-weight: 600; text-align: right; } .bitems li b.no { color: var(--muted); font-weight: 500; }
 .bitems li.bad b { color: #dc2626; } .bitems em.over { display: block; font-style: normal; font-size: 12px; color: #dc2626; font-weight: 500; }
-.facts .warn .v strong { color: #b45309; } .facts .warn em.over { color: #b45309; }
 .num-bad { color: #dc2626; font-weight: 700; } .num-warn { color: #b45309; font-weight: 600; }  /* 助手国别表:偏弱的数标红,外企参标「部分有限制」标橙 */
 .lead-ans { font-size: 17px; margin: 6px 0 10px; } .lead-ans b { font-size: 22px; }  /* 助手单国作答:问的那项先写成一句话,数放大 */
 /* 法规(v2.24):排放限值按法规 + 口径分块;本国定义;出处小框里中文与原文切换 */

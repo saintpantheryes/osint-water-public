@@ -36,9 +36,9 @@
     $("openRow").innerHTML = P.open("law", lw.id, "在表格里打开 ↗");
     const iso = (await P.countries()).filter((c) => c.id === crid).map((c) => P.get("country", c, "key"))[0];
     P.backLink($("back"), iso ? "country.html?" + new URLSearchParams({ iso, t: "inst" }) : "country.html", (cname || "") + "的机构与法规");
-    $("info").innerHTML = '<div class="facts">' + [["原文名称", g("name_orig")], ["国别", cname], ["类别", g("kind")], ["文号", g("number")], ["颁布日期", P.day(g("issued"))], ["现行状态", g("status")],
-      ["收的版本", g("version")], ["语言", g("language")], ["取自", g("source")]].filter((x) => x[1]).map(([k, v]) => "<div><b>" + k + "</b><span>" + P.esc(v) + "</span></div>").join("") +
-      (g("url") ? '<div><b>原文</b><span><a href="' + P.esc(g("url")) + '" target="_blank" rel="noopener">打开原文 ↗</a></span></div>' : "") + "</div>" +
+    $("info").innerHTML = P.factsHtml([["原文名称", g("name_orig")], ["国别", cname], ["类别", g("kind")], ["文号", g("number")], ["颁布日期", P.day(g("issued"))], ["现行状态", g("status")],
+      ["收的版本", g("version")], ["语言", g("language")], ["取自", g("source")]].filter((x) => x[1]).map(([k, v]) => [k, P.esc(v), { html: true }])
+      .concat(g("url") ? [["原文", '<a href="' + P.esc(g("url")) + '" target="_blank" rel="noopener">打开原文 ↗</a>', { html: true }]] : [])) +
       (g("summary") ? '<div class="small" style="margin-top:8px">' + P.esc(g("summary")).replace(/\n/g, "<br>") + "</div>" : "");
     /* 这部法规摘出的排放限值与本国定义(放条文前面,角标点开就是下面那一条) */
     const [d, rows] = await Promise.all([P.lawData([crid]), P.records("law_clause", { filter: P.and(P.cond("law_clause", "law", "is", lw.id)), orderBy: [{ fieldId: P.f("law_clause", "seq"), order: "asc" }],
