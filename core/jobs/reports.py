@@ -600,15 +600,25 @@ def _orig_title(ctx: Ctx, r: dict, n: int = 120) -> str:
 def translate_titles(ctx: Ctx, leads: list[dict]) -> dict[str, str]:
     """没有中文项目名与中文摘要的线索,请模型把原题译成中文(报告用,不写回表格);译过的存在本机缓存,下次不再花钱。
     没配模型或调用失败时返回已缓存的,其余线索照旧用「要点」。→ {原题: 中文}"""
+    want = []
+    for r in leads:
+        t = _orig_title(ctx, r, 300)
+        if t and _zh_name(ctx, r, t)[1] not in ("项目名", "摘要"):
+            want.append(t)
+    return translate_texts(ctx, want)
+
+
+def translate_texts(ctx: Ctx, texts: list[str]) -> dict[str, str]:
+    """一组外文标题(线索原题、商机名)→ {原文: 中文};已含汉字的不译;缓存与 translate_titles 同一个文件。"""
     fp = ctx.cache.root.parent / "title_zh.json"
     try:
         done: dict[str, str] = json.loads(fp.read_text(encoding="utf-8")) if fp.exists() else {}
     except (OSError, ValueError):
         done = {}
     want = []
-    for r in leads:
-        t = _orig_title(ctx, r, 300)
-        if t and t not in done and t not in want and _zh_name(ctx, r, t)[1] not in ("项目名", "摘要") and not _CJK.search(t):
+    for t in texts:
+        t = (t or "").strip()
+        if t and t not in done and t not in want and not _CJK.search(t):
             want.append(t)
     clf = ctx.clf
     if want and clf is not None and getattr(clf, "enabled", False) and hasattr(clf, "ask"):
