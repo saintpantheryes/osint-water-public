@@ -80,11 +80,10 @@
     const last = rows.map((r) => g(r, "last_run")).filter(Boolean).sort().pop();
     $("kpis").innerHTML = P.kpiHtml([
       { label: "信源", value: rows.length + " 个", note: "启用 " + on.length + " · 停用 " + (rows.length - on.length) },
-      { label: "有问题", value: bad.length + " 个", note: bad.length ? "出错、被拒或多日未采集" : "全部正常" },
+      { label: "有问题", value: bad.length + " 个", tone: bad.length ? "bad" : "", note: bad.length ? "出错、被拒或多日未采集" : "全部正常" },
       { label: "带来的线索", value: leads.toLocaleString("en-US") + " 条" },
       { label: "最近一次采集", value: last ? ago(last) : "还没有", note: last ? when(last) : "" },
     ]);
-    if (bad.length) { const k = $("kpis").querySelectorAll(".kpi")[1]; k.classList.add("bad"); }
   }
   async function load() {
     rows = await P.records("source", { props: ["name", "key", "url", "kind", "scope", "enabled", "last_run", "last_status", "lead_count"] });

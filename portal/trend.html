@@ -31,7 +31,7 @@
     <div class="frow"><b>显示</b><span id="fShow" class="frow" style="padding:0"></span><span class="muted" id="fNote" style="margin-left:auto"></span></div>
   </div>
   <div class="backbar" id="rel"></div>
-  <div class="cards" id="cards"><div class="card"><div class="n">…</div><div class="l">读取中</div></div></div>
+  <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
   <h2>分布(圆点大小是人口;灰色小点是两类都不是的城市;点圆点看这座城市,点国家只看这个国家;滚轮缩放)</h2>
   <div class="panel"><div id="map" class="chart tall"></div></div>
   <h2 id="listTitle">城市</h2>
@@ -115,9 +115,9 @@
       const base = cities.filter((ct) => !one || P.linkId(P.get("city", ct, "country")) === one.id).map((ct) => ({ ct, k: kindOf(ct) }));
       const n = (k) => base.filter((x) => x.k === k).length;
       const loanCs = countries.filter((c) => used.has(c.id) && (!one || c.id === one.id) && loanCountry(c));
-      $("cards").innerHTML = [[n("self") + n("both"), "自付型城市"], [n("loan") + n("both"), "贷款型城市"], [n("both"), "两类都是"], [loanCs.length, "有开发性贷款进水务的国别"],
+      $("cards").innerHTML = P.kpiHtml([[n("self") + n("both"), "自付型城市"], [n("loan") + n("both"), "贷款型城市"], [n("both"), "两类都是"], [loanCs.length, "有开发性贷款进水务的国别"],
         [base.filter((x) => val("city", x.ct, state.r) !== null).length.toLocaleString("zh-CN") + " / " + base.length.toLocaleString("zh-CN"), "有水风险数据的城市"]]
-        .map(([v, l]) => '<div class="card"><div class="n">' + v + '</div><div class="l">' + l + "</div></div>").join("");
+        .map(([v, l]) => ({ label: l, value: String(v) })));
       /* 地图:两类都不是的灰色小点垫底,有机会的按类着色 */
       const maxPop = Math.max(1, ...base.map((x) => Number(P.get("city", x.ct, "population")) || 0));
       const series = ["none", "loan", "self", "both"].map((k) => ({ name: LABEL[k] || "其他", type: "scatter", coordinateSystem: "geo", z: k === "none" ? 1 : 3,

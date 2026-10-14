@@ -23,7 +23,7 @@
     <div class="frow"><b>国别</b><span id="fCountry" class="frow" style="padding:0"></span><button type="button" class="chip-btn more" id="moreC">更多国家 ▾</button><span class="muted small" id="fNote" style="margin-left:auto"></span></div>
     <div class="frow" id="rowMore" style="display:none"><b></b><span id="fCountry2" class="frow" style="padding:0"></span></div>
   </div>
-  <div class="cards" id="cards"><div class="card"><div class="n">…</div><div class="l">读取中</div></div></div>
+  <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
   <div class="tabs" id="tabs"></div>
   <div class="tab" data-t="trend">
     <h2>每日新增(按发现时间;蓝色是判为相关的)</h2>
@@ -104,12 +104,12 @@
     const pending = rows.filter((l) => g(l, "status") === "待处理").length, assign = rows.filter(toAssign).length;
     const inOpp = rel.filter((l) => P.linkId(g(l, "opportunity"))).length, uploads = rows.filter((l) => g(l, "origin") === "用户上传").length;
     $("fNote").textContent = state.w === "" ? "全部线索" : state.w === "0" ? "今天发现的" : "最近 " + state.w + " 天发现的";
-    $("cards").innerHTML = [[rows.length, "线索", () => drill("线索", rows)], [rel.length, "判为相关", () => drill("判为相关", rel)], [pending, "待处理", () => drill("待处理", rows.filter((l) => g(l, "status") === "待处理"))],
+    $("cards").innerHTML = P.kpiHtml([[rows.length, "线索", () => drill("线索", rows)], [rel.length, "判为相关", () => drill("判为相关", rel)], [pending, "待处理", () => drill("待处理", rows.filter((l) => g(l, "status") === "待处理"))],
       [assign, "待确认归属", () => drill("待确认归属", rows.filter(toAssign))], [inOpp, "已归入商机", () => drill("已归入商机", rel.filter((l) => P.linkId(g(l, "opportunity"))))], [uploads, "同事上传", () => drill("同事上传", rows.filter((l) => g(l, "origin") === "用户上传"))]]
-      .map(([n, l], i) => '<a class="card' + (/^待/.test(l) && n > 0 ? " warn" : "") + '" href="#" data-i="' + i + '"><div class="n">' + n + '</div><div class="l">' + l + "</div></a>").join("");
+      .map(([n, l], i) => ({ label: l, value: String(n), tone: /^待/.test(l) && n > 0 ? "warn" : "", href: "#", attrs: 'data-i="' + i + '"' })));
     const cardActs = [() => drill("线索", rows), () => drill("判为相关", rel), () => drill("待处理", rows.filter((l) => g(l, "status") === "待处理")), () => drill("待确认归属", rows.filter(toAssign)),
       () => drill("已归入商机", rel.filter((l) => P.linkId(g(l, "opportunity")))), () => drill("同事上传", rows.filter((l) => g(l, "origin") === "用户上传"))];
-    $("cards").querySelectorAll(".card").forEach((a) => { a.onclick = (e) => { e.preventDefault(); cardActs[Number(a.dataset.i)](); }; });
+    $("cards").querySelectorAll(".kpi").forEach((a) => { a.onclick = (e) => { e.preventDefault(); cardActs[Number(a.dataset.i)](); }; });
 
     /* 每日新增:窗口内每天一柱(全部时从最早一天起) */
     const days = [...count(rows, dayOf).keys()].filter(Boolean).sort();

@@ -490,6 +490,14 @@
     },
     /* 「226 亿美元(2025)」→ ["226 亿美元", "2025"] */
     splitYear(text) { const m = String(text || "").match(/^(.*?)\s*[((](\d{4}(?:-\d{2})?)[))]\s*$/); return m ? [m[1], m[2]] : [String(text || ""), ""]; },
+    /* 标签(界面规范:全站一种胶囊,颜色只按含义分):tone = ""(灰,一般属性) | "info"(进行中) | "ok"(正面、已核实) | "warn"(提醒、要核实) | "bad"(负面、出错) */
+    tagHtml(text, tone, title) { return '<span class="tag' + (tone ? " t-" + tone : "") + '"' + (title ? ' title="' + this.esc(title) + '"' : "") + ">" + this.esc(text) + "</span>"; },
+    /* 我方阶段的标签:颜色按本体 taxonomies.stage 的编码定(不在这里写阶段名):建议(suggested)提醒色、中标(won)正面色、其余在跟踪的进行中色、已结束和不跟进灰色 */
+    stageTag(s) {
+      s = s || this.STAGES[0];
+      const code = (this.taxonomy("stage").groups.flatMap((g) => g.values).find((v) => v.v === s) || {}).code;
+      return this.tagHtml(s, code === "suggested" ? "warn" : code === "won" ? "ok" : this.TRACKED.includes(s) ? "info" : "");
+    },
     /* 名称-数值行(全站只有这一种写法,样式在 portal.css「名称-数值行」;2026-10-14 起各页不再各拼各的 <div><b><span>,免得样式互相串):
        第一行「名称 | 值 年份 来源」,值太长就在自己那一栏里换行;下面一行是警示(红/橙),再下面一行是灰色说明,都在值那一栏,不挤值也不压到隔壁。
        值是数或短词的加粗;html 的值(链接、成段说明)用正常粗细。
@@ -509,17 +517,24 @@
       rows = rows.filter((r) => r && r[1] !== undefined && r[1] !== null && r[1] !== "");
       return rows.length ? '<div class="facts">' + rows.map(([k, v, o]) => this.factHtml(k, v, o)).join("") + "</div>" : "";
     },
-    /* 关键指标卡:items = [{label, value, year?, note?}];数字放大加粗,单位跟在后面小一号;负面的数字标红并写明原因 */
+    /* 指标卡(界面规范:全站数字卡片只这一种,2026-10-14 起国别、城市、线索总览等顶上那排数也用它):
+       items = [{label, value, year?, note?, tone?, why?, href?, attrs?}];数字放大加粗,单位跟在后面小一号;
+       负面(按 TONES 自动判断,或 tone: "bad")数字标红、下面写原因;tone: "warn" 是琥珀色提醒(待处理这类有积压的数);
+       有 href 的整张卡可点(attrs 是附加的属性串,如 data-i、target) */
     kpiHtml(items) {
       items = items.filter((x) => x && x.value !== "" && x.value !== null && x.value !== undefined);
       if (!items.length) return "";
-      return '<div class="kpis">' + items.map((x) => {
+      /* 分几栏按张数定,不让最后一张单独落一行:6 张以内一排放下,再多就分两排;窄一点(≤1000px)5 张以上分两排;手机两栏,单出来的那张占满一行 */
+      const n = items.length, cols = n <= 6 ? n : Math.ceil(n / 2), colsMd = n <= 5 ? n : Math.ceil(n / 2);
+      return '<div class="kpis" style="--cols:' + cols + ";--cols-md:" + colsMd + '">' + items.map((x) => {
         const [main, y] = this.splitYear(String(x.value)), year = x.year || y;
-        const m = main.replace(/[−–]/g, "-").match(/^\s*(约\s*)?(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/);  // 「约 1.18 美元/m³」:约 小字在前,数字放大
-        const bad = this.tone(x.label, this.num(m ? m[2] : main));
+        const m = main.replace(/[−–]/g, "-").match(/^\s*(约\s*)?(-?\d[\d,]*(?:\.\d+)?\+?(?:\s?\/\s?\d[\d,]*)?)\s*(.*)$/);  // 「约 1.18 美元/m³」:约 小字在前;「200+」「13 / 98」整个放大
+        const auto = x.tone ? null : this.tone(x.label, this.num(m ? m[2] : main)), tone = x.tone || (auto ? "bad" : ""), why = x.why || (auto ? "超警戒线:" + auto : "");
         const big = m ? (m[1] ? '<span class="ku">约</span>' : "") + '<span class="kn">' + this.esc(m[2]) + "</span>" + (m[3] ? '<span class="ku">' + this.esc(m[3]) + "</span>" : "") : '<span class="kn kt">' + this.esc(main) + "</span>";
-        return '<div class="kpi' + (bad ? " bad" : "") + '"><div class="kv">' + big + "</div>" + '<div class="kl">' + this.esc(x.label) + (year ? '<em class="yr">' + this.esc(year) + "</em>" : "") + "</div>" +
-          (bad ? '<div class="kw">超警戒线:' + this.esc(bad) + "</div>" : "") + (x.note ? '<div class="kx">' + this.esc(x.note) + "</div>" : "") + "</div>";
+        const tag = x.href ? "a" : "div";
+        return "<" + tag + ' class="kpi' + (tone ? " is-" + tone : "") + '"' + (x.href ? ' href="' + this.esc(x.href) + '"' : "") + (x.attrs ? " " + x.attrs : "") + '><div class="kv">' + big + "</div>" +
+          '<div class="kl">' + this.esc(x.label) + (year ? '<em class="yr">' + this.esc(year) + "</em>" : "") + "</div>" +
+          (why ? '<div class="kw">' + this.esc(why) + "</div>" : "") + (x.note ? '<div class="kx">' + this.esc(x.note) + "</div>" : "") + "</" + tag + ">";
       }).join("") + "</div>";
     },
     /* 水风险与经济(城市、国别共用;glossary.risk_level 的读法):有数的项才列,一项都没有返回空串 */
@@ -624,7 +639,7 @@
       if (ks.length) out.push({ label: "中标价 / 招标估价(中位数)", value: Math.round(med(ks)) + "%", note: "按 " + ks.length + " 份有估价的算,低于估价的 " + ks.filter((v) => v < 100).length + " 份" });
       if (ds.length) out.push({ label: "评标天数(中位数)", value: Math.round(med(ds)) + " 天", note: "按 " + ds.length + " 份算" });
       if (bs.length) out.push({ label: "投标家数(中位数)", value: (Math.round(med(bs) * 10) / 10) + " 家", note: "按 " + bs.length + " 份算" });
-      return out.length ? this.kpiHtml(out).replace('class="kpis"', 'class="kpis n' + out.length + '"') : "";
+      return this.kpiHtml(out);
     },
     async awards(el, prop, rid) {  // prop:country / city(国别、城市页) / winners(供应商页:多一组国别筛选、一列国别)
       const firm = prop === "winners";
@@ -824,14 +839,14 @@
       const kpi = (n) => {  // 「!**数值** 说明」→ 指标卡
         const m = n.text.match(/^(!?)\*\*([^*]+)\*\*\s*(.*)$/), v = m[2].trim(), x = v.match(/^(约|近|超过|≤|<|>)?\s*(-?\d[\d,]*(?:\.\d+)?(?:\s?[–-]\s?\d[\d,]*(?:\.\d+)?)?)\s*(.*)$/);
         const big = x ? (x[1] ? '<span class="ku">' + esc(x[1]) + "</span>" : "") + '<span class="kn">' + esc(x[2]) + "</span>" + (x[3] ? '<span class="ku">' + esc(x[3]) + "</span>" : "") : '<span class="kn kt">' + esc(v) + "</span>";
-        return '<div class="kpi' + (m[1] ? " bad" : "") + '"><div class="kv">' + big + '</div><div class="kl">' + rich(m[3]) + "</div></div>";
+        return '<div class="kpi' + (m[1] ? " is-bad" : "") + '"><div class="kv">' + big + '</div><div class="kl">' + rich(m[3]) + "</div></div>";
       };
       const head = (s, i) => { const m = s.title.match(/^(\d+)[.、．]\s*(.*)$/); return { no: m ? m[1] : "", name: (m ? m[2] : s.title).replace(/[（(](?:以下为)?推断[^（）()]*[）)]/, "").trim(), infer: /推断/.test(s.title), id: uid + "-c" + i }; };
       const hs = secs.map(head);
       const html = secs.map((s, i) => {
         const h = hs[i], cards = /要点|速览|关键指标/.test(h.name) && s.items.length && s.items.every((n) => !n.para && /^!?\*\*[^*]+\*\*/.test(n.text));
         return '<section class="dg-sec' + (h.infer ? " infer" : "") + (cards ? " dg-kpi" : "") + '" id="' + h.id + '"><h4>' + (h.no ? '<span class="dg-no">' + esc(h.no) + "</span>" : "") + esc(h.name) +
-          (h.infer ? '<span class="tag act">推断</span><span class="muted small">本系统据资料推断,不是文件原文</span>' : "") + "</h4>" +
+          (h.infer ? '<span class="tag t-warn">推断</span><span class="muted small">本系统据资料推断,不是文件原文</span>' : "") + "</h4>" +
           (cards ? '<div class="kpis">' + s.items.map(kpi).join("") + "</div>" : s.items.map((n) => item(n, h.infer)).join("")) + "</section>";
       }).join("");
       const toc = hs.length > 2 ? '<nav class="dg-toc">' + hs.map((h) => '<a href="#' + h.id + '">' + (h.no ? "<b>" + esc(h.no) + "</b> " : "") + esc(h.name) + "</a>").join("") + "</nav>" : "";
@@ -1031,13 +1046,13 @@
       });
       const pend = rows.filter((r) => g(r, "verified") !== "已核实").length;
       const src = (r) => d.clause[this.linkId(g(r, "clause"))] ? '<span class="nw">' + this.esc(d.clause[this.linkId(g(r, "clause"))].label) + "</span>" + this.lref(d.clause[this.linkId(g(r, "clause"))], nums) : '<span class="muted small">' + this.esc(this.text(g(r, "clause")) || "") + "</span>";
-      const chk = (rs) => rs.every((r) => g(r, "verified") === "已核实") ? '<span class="tag ok-tag nw">已核实</span>' : '<span class="tag warn-tag nw" title="机器从条文摘出,人还没对过原文">待核实</span>';
+      const chk = (rs) => rs.every((r) => g(r, "verified") === "已核实") ? '<span class="tag t-ok nw">已核实</span>' : '<span class="tag t-warn nw" title="机器从条文摘出,人还没对过原文">待核实</span>';
       const pname = (r) => g(r, "param") === "其他" && g(r, "param_orig") ? "<b>" + this.esc(g(r, "param_orig")) + "</b>" : "<b>" + this.esc(g(r, "param")) + "</b>" + (g(r, "param_orig") && g(r, "param_orig") !== g(r, "param") ? ' <span class="muted small">' + this.esc(g(r, "param_orig")) + "</span>" : "");
       return Object.entries(blocks).map(([k, rs]) => {
         const [lid, basis, recv, scope] = k.split("|"), lw = d.lawOf[lid], samp = [...new Set(rs.map((r) => g(r, "sampling")).filter(Boolean))];
         rs.sort((a, b) => order.indexOf(g(a, "param")) - order.indexOf(g(b, "param")));
         const head = '<div class="lw-bh"><b>' + this.esc(lw ? this.get("law", lw, "name") : "(法规)") + "</b>" + (lw ? ' <a class="small" href="' + this.esc(this.lawUrl(this.get("law", lw, "key"))) + '">全文 →</a>' : "") +
-          '<div class="lw-tags">' + [["口径", basis], ["排到", recv], ["适用", scope === "*" ? "" : scope], ["取样", samp.join(";")]].filter((x) => x[1]).map(([a, b]) => '<span class="tag' + (a === "口径" && basis === "受纳水体允许浓度" ? " warn-tag" : "") + '">' + a + ":" + this.esc(b) + "</span>").join("") + "</div></div>";
+          '<div class="lw-tags">' + [["口径", basis], ["排到", recv], ["适用", scope === "*" ? "" : scope], ["取样", samp.join(";")]].filter((x) => x[1]).map(([a, b]) => '<span class="tag' + (a === "口径" && basis === "受纳水体允许浓度" ? " t-warn" : "") + '">' + a + ":" + this.esc(b) + "</span>").join("") + "</div></div>";
         if (scope === "*") {
           const scopes = [...new Set(rs.map((r) => g(r, "scope") || ""))], byP = {};
           rs.forEach((r) => { const p = g(r, "param") + "|" + (g(r, "param_orig") || ""); (byP[p] = byP[p] || []).push(r); });
@@ -1059,13 +1074,13 @@
       const want = (concepts || []).length ? rows.filter((r) => concepts.includes(g(r, "concept"))) : rows;
       if ((concepts || []).length) rows = want;
       if (!rows.length) return "";
-      const REL = { "相同": "", "更窄": " warn-tag", "更宽": " warn-tag", "部分重叠": " warn-tag", "没有对应": " bad-tag" };
+      const REL = { "相同": "", "更窄": " t-warn", "更宽": " t-warn", "部分重叠": " t-warn", "没有对应": " t-bad" };
       return '<div class="lw-terms">' + rows.map((r) => {
         const c = d.clause[this.linkId(g(r, "clause"))];
         return '<div class="lw-term"><div><b>' + this.esc(g(r, "concept")) + "</b>" + (g(r, "term_zh") || g(r, "term_orig") ? " → 本国说法「" + this.esc(g(r, "term_zh") || "") + "」" +
           (g(r, "term_orig") ? ' <span class="muted small">' + this.esc(g(r, "term_orig")) + "</span>" : "") : "") +
           (g(r, "relation") ? ' <span class="tag' + (REL[g(r, "relation")] || "") + '">和通用说法:' + this.esc(g(r, "relation")) + "</span>" : "") +
-          (g(r, "verified") === "已核实" ? "" : ' <span class="tag warn-tag" title="机器从条文摘出,人还没对过原文">待核实</span>') + "</div>" +
+          (g(r, "verified") === "已核实" ? "" : ' <span class="tag t-warn" title="机器从条文摘出,人还没对过原文">待核实</span>') + "</div>" +
           "<div>" + this.esc(g(r, "definition") || "") + (c ? this.lref(c, nums) : "") + "</div>" +
           (g(r, "difference") ? '<div class="muted small">差别:' + this.esc(g(r, "difference")) + "</div>" : "") + "</div>";
       }).join("") + "</div>";

@@ -336,6 +336,9 @@ LAYOUT = """(sel) => { const bad = [];
       rows.slice(i + 1).forEach((o) => { const ro = o.getBoundingClientRect();
         if (Math.min(rr.right, ro.right) - Math.max(rr.left, ro.left) > 1 && Math.min(rr.bottom, ro.bottom) - Math.max(rr.top, ro.top) > 1) bad.push('重叠:' + row.textContent.slice(0, 12)); }); });
     root.querySelectorAll('.kpi').forEach((k) => { if (k.scrollWidth > k.clientWidth + 1) bad.push('卡片溢出:' + k.textContent.slice(0, 12)); });
+    root.querySelectorAll('.kpis').forEach((g) => { const ks = [...g.children].filter((k) => k.offsetParent), rows = {};  // 最后一张不单独落一行(占满一行的除外)
+      if (ks.length < 2) return; ks.forEach((k) => { const t = Math.round(k.getBoundingClientRect().top); (rows[t] = rows[t] || []).push(k); });
+      Object.values(rows).forEach((r) => { if (r.length === 1 && r[0].getBoundingClientRect().width < g.getBoundingClientRect().width * 0.9) bad.push('单独一张:' + r[0].textContent.slice(0, 12)); }); });
   });
   if (document.documentElement.scrollWidth > innerWidth + 1) bad.push('整页横向滚动');
   return bad; }"""
@@ -361,10 +364,19 @@ def test_fact_rows_and_cards_keep_their_shape_at_common_widths():
                     page.goto(f"http://127.0.0.1:{srv.server_port}/country.html?iso=AZE&t={t}")
                     page.wait_for_selector(f".tab[data-t={t}] .facts > .fact", timeout=15000)
                     assert page.evaluate(LAYOUT, f".tab[data-t={t}]") == [], (w, t)
+                    assert page.evaluate(LAYOUT, "#cards") == [], (w, t)
                 biz = page.locator("#biz")
                 assert biz.locator(".fact.is-warn .fact-w").inner_text() == "部分招标对外企设限,投标前要核实"
                 assert "超过 180 天,授标慢" in biz.locator(".fact.is-bad .fact-w").inner_text() and "发标到授标" in biz.locator(".fact.is-bad .fact-n").inner_text()
                 assert biz.locator(".kpi").nth(3).locator(".kn").inner_text() == "1.18"  # 「约 1.18 美元/m³」数字照样放大
+                tones = page.evaluate("['建议', '跟踪中', '已投标', '中标', '未中标', '放弃'].map((s) => P.stageTag(s).match(/class=\"([^\"]+)\"/)[1])")
+                assert tones == ["tag t-warn", "tag t-info", "tag t-info", "tag t-ok", "tag", "tag"]  # 标签只一种胶囊,颜色按含义(界面规范第三步)
+                ready = "[...document.querySelectorAll('#cards .kpi .kn')].every((e) => e.textContent !== '…') && document.querySelector('#cards .kpi')"
+                for pth, wait in (("overview.html", ready), ("analysis.html", ready), ("ontology.html", ready),  # 顶上一排数(界面规范第二步:都是指标卡)
+                                  (f"opp.html?id={o['id']}", "document.querySelector('#head .facts > .fact')")):  # 商机页的名称-数值行(第四步)
+                    page.goto(f"http://127.0.0.1:{srv.server_port}/{pth}")
+                    page.wait_for_function(wait, timeout=15000)
+                    assert page.evaluate(LAYOUT, "main") == [], (w, pth)
                 page.close()
             browser.close()
     finally:
@@ -416,7 +428,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             # 线索总览(原首页):数字卡片、漏斗、地图、最新报告
             page.goto(base + "/overview.html")
             page.wait_for_selector("#reports table", timeout=15000)
-            assert page.locator("#cards .card").count() == 5
+            assert page.locator("#cards .kpi").count() == 5
             assert "周报_2026-W40.docx" in page.inner_text("#reports")
             assert page.locator("#funnel canvas").count() >= 1 and page.locator("#map canvas").count() >= 1
             # 筛选是平铺按钮:国别、领域(多选)、类别、时间;清单在右栏,漏斗和地图在左栏
@@ -432,7 +444,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.wait_for_function("document.getElementById('fNote').textContent.includes('已按筛选')", timeout=15000)
             page.click("#fSector .chip-btn:has-text('供水')")
             page.wait_for_function("document.querySelector('#fSector .chip-btn.on') && location.search.includes('s=')", timeout=15000)
-            assert page.locator("#cards .card").count() == 5
+            assert page.locator("#cards .kpi").count() == 5
             # 区域(经营区域)与国别联动:点区域,国别只剩该区域的;资金来源按机构族归组
             assert page.locator("#fRegion .chip-btn").count() >= 2 and page.locator("#fFunder .chip-btn").count() == len(FUNDERS) + 3
             page.click("#fSector .chip-btn:has-text('全部')")  # 先把领域放开
@@ -442,7 +454,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.click("#fFunder .chip-btn:has-text('世界银行')")
             page.wait_for_function("location.search.includes('f=')", timeout=15000)
             page.wait_for_function("!document.getElementById('fNote').textContent.includes('统计中')", timeout=15000)
-            assert page.inner_text("#cards .card .n") == "1"  # 只有 aaaaaaaa 的出资方是 World Bank (IDA)
+            assert page.inner_text("#cards .kpi .kn") == "1"  # 只有 aaaaaaaa 的出资方是 World Bank (IDA)
             # 日历:本月有节点、跟进、到期、报告四种
             page.wait_for_load_state("networkidle")
             page.goto(base + "/calendar.html")
@@ -484,7 +496,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.click("#tabs button:has-text('营商环境')")
             bz = page.inner_text("#biz")
             assert "66.0" in bz and "79.3" in bz and "约\n1.18" in bz and "美元/m³" in bz and "2 AZN/m³" in bz and "365 天" in bz and "超过 180 天,授标慢" in bz
-            assert page.locator("#biz .kpi.bad").count() == 1 and "低于 50 分,偏弱" in page.inner_text("#biz .kpi.bad") and "公共采购得分" in page.inner_text("#biz .kpi.bad")
+            assert page.locator("#biz .kpi.is-bad").count() == 1 and "低于 50 分,偏弱" in page.inner_text("#biz .kpi.is-bad") and "公共采购得分" in page.inner_text("#biz .kpi.is-bad")
             assert "部分招标对外企设限" in bz and page.locator("#biz .bitems li.bad").count() == 1 and "对外企投标不利" in page.inner_text("#biz .bitems li.bad")
             assert "December 10, 2025" in bz and page.locator("#biz a[href*='businessready']").count() == 1
             none = page.evaluate("P.bready({ fields: {} }, '埃及')")
@@ -497,7 +509,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.wait_for_load_state("networkidle")
             page.goto(base + "/analysis.html")
             page.wait_for_selector("#brief h4", timeout=15000)
-            page.wait_for_function("document.querySelectorAll('#cards .card').length == 6", timeout=15000)
+            page.wait_for_function("document.querySelectorAll('#cards .kpi').length == 6", timeout=15000)
             brief = page.inner_text("#brief")
             assert "今日概览" in brief and "线索累计 3 条" in brief and "待处理 3 条,待确认归属 2 条" in brief and "值得看的新线索" in brief and "[" not in brief  # 方括号的线索号成了角标
             cites = page.locator("#brief a.cite")
@@ -513,13 +525,13 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.wait_for_function("location.search.includes('t=country')", timeout=15000)
             assert page.locator("#drill").bounding_box()["y"] > page.locator("#cCountry").bounding_box()["y"]  # 清单在图的下面,不再在右边
             assert page.locator("#fWin .chip-btn").count() == 5 and page.locator("#fRel .chip-btn").count() == 2 and "示例甲区域" in page.inner_text("#fRegion") and page.locator("#fCountry .chip-btn").count() == 2
-            page.click("#cards .card:has-text('待确认归属')")
+            page.click("#cards .kpi:has-text('待确认归属')")
             page.wait_for_selector("#drill table", timeout=15000)
             dr = page.inner_text("#drill")
             assert "苏姆盖特新污水厂主体工程招标" in dr and "哈卡里恰伊输水干管" in dr and "Ganja" not in dr  # 中文名称为主:模型的项目名或中文摘要
             assert "Sumgait WWTP tender notice" in dr and "New reservoir pipeline EOI" in dr  # 原题在小字里,能对上原文
             assert "要点" not in dr  # 两条都有模型给的中文,不用要点
-            page.click("#cards .card:has-text('判为相关')")
+            page.click("#cards .kpi:has-text('判为相关')")
             page.wait_for_function("document.querySelector('#drill').innerText.includes('Ganja')", timeout=15000)
             assert "污水处理厂、意向书" in page.inner_text("#drill") and page.locator("#drill .tag:has-text('要点')").count() == 1  # 没有中文摘要的,从原题挑词成「要点」
             page.click("#fRel .chip-btn:has-text('只看')")
@@ -589,7 +601,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.goto(base + "/ontology.html")
             page.wait_for_selector("#graph canvas", timeout=15000)
             page.wait_for_function("document.querySelectorAll('#objs .chip-btn').length == " + str(len(ONTO.objects)), timeout=15000)
-            assert page.locator("#cards .card").count() == 7 and "v" + str(ONTO.raw["version"]) in page.inner_text("#ver")
+            assert page.locator("#cards .kpi").count() == 7 and "v" + str(ONTO.raw["version"]) in page.inner_text("#ver")
             assert "商机" in page.inner_text("#detail h2") and "我方阶段" in page.inner_text("#detail")  # 缺省选中商机
             page.click("#objs .chip-btn:has-text('线索')")
             page.wait_for_function("document.querySelector('#detail h2').innerText.includes('线索')", timeout=15000)
@@ -609,7 +621,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.wait_for_function("document.querySelector('#semMeasures').innerText.includes('评标天数') && !document.querySelector('#terms').innerText.includes('读取中')", timeout=15000)
             sm = page.inner_text("#semMeasures")
             assert "评标时间" in sm and "中位数" in sm and "缺数时怎么说" in sm and "污水处理厂" in page.inner_text("#semWords") and "问排放标准" in page.inner_text("#semWords")
-            assert "智慧水务" in page.inner_text("#terms") and page.locator("#semCards .card").count() == 5
+            assert "智慧水务" in page.inner_text("#terms") and page.locator("#semCards .kpi").count() == 5
             page.click("#tabs button:has-text('规则')")
             assert "一个对象只存一处" in page.inner_text("#rules")
             # 到这里为止全是只读页:没有任何写请求
@@ -1519,18 +1531,18 @@ def test_filters_line_up_and_overview_search():
             check_rows(page, "资金来源")
             # 搜索:四样文字里含这个词的线索才算;卡片、清单一起变
             page.wait_for_function("!document.getElementById('fNote').textContent.includes('统计中')", timeout=15000)
-            assert page.inner_text("#cards .card .n") == "3"
+            assert page.inner_text("#cards .kpi .kn") == "3"
             for word, key in (("ganja", "aaaaaaaa"), ("苏姆盖特", "bbbbbbbb"), ("哈卡里恰伊", "cccccccc"), ("ccccc", "cccccccc")):
                 page.fill("#fText", word)
                 page.wait_for_function(f"document.getElementById('drillTitle').textContent.includes('{word}') && document.querySelector('#drill table') && !document.getElementById('fNote').textContent.includes('统计中')", timeout=15000)
-                assert page.inner_text("#cards .card .n") == "1" and key in page.inner_text("#drill") and page.locator("#drill tbody tr").count() == 1, word
+                assert page.inner_text("#cards .kpi .kn") == "1" and key in page.inner_text("#drill") and page.locator("#drill tbody tr").count() == 1, word
                 assert "q=" in page.url
             assert "哈卡里恰伊输水干管" in page.inner_text("#drill")  # 清单里中文名称在前
             page.fill("#fText", "不会有这个词")
             page.wait_for_function("document.getElementById('drill').textContent.includes('没有符合的线索')", timeout=15000)
             page.fill("#fText", "")
             page.wait_for_function("document.getElementById('drillTitle').textContent === '清单' && !document.getElementById('fNote').textContent.includes('统计中')", timeout=15000)
-            assert page.inner_text("#cards .card .n") == "3" and "q=" not in page.url and "点左边漏斗" in page.inner_text("#drill")
+            assert page.inner_text("#cards .kpi .kn") == "3" and "q=" not in page.url and "点左边漏斗" in page.inner_text("#drill")
             # 带着搜索词打开(书签、转发的链接):一打开就是搜过的
             page.goto(base + "/overview.html?q=Sumgait")
             page.wait_for_function("document.querySelector('#drill table')", timeout=15000)
@@ -1540,7 +1552,7 @@ def test_filters_line_up_and_overview_search():
             page.wait_for_selector("#list table", timeout=15000)
             assert page.locator("#fSector .chip-btn.on").all_inner_texts() == ["全部"]
             check_rows(page, "资金来源")
-            for path, ready in (("/analysis.html", "#cards .card"), ("/reports.html", "#list table"), ("/inbox.html", "#assign .item"), ("/company.html", "#fKind .chip-btn")):
+            for path, ready in (("/analysis.html", "#cards .kpi"), ("/reports.html", "#list table"), ("/inbox.html", "#assign .item"), ("/company.html", "#fKind .chip-btn")):
                 page.goto(base + path)
                 page.wait_for_selector(ready, timeout=15000)
                 got = page.evaluate(rows)
@@ -1663,7 +1675,7 @@ def test_city_page_lists_cities_and_opens_one():
             # 一座城市:卡片、概况,商机与线索各在自己的页签里
             page.goto(base + f"/city.html?id={city['id']}")
             page.wait_for_function("document.querySelectorAll('#tabs button').length === 4", timeout=15000)
-            assert page.inner_text("#cname") == "甘贾" and "阿塞拜疆" in page.inner_text("#info") and "34 万" in page.inner_text("#ccards")
+            assert page.inner_text("#cname") == "甘贾" and "阿塞拜疆" in page.inner_text("#info") and "34\n万" in page.inner_text("#ccards")
             info = page.inner_text("#info")
             assert "0.7 AZN/立方米" in info and "2024-03-01" in info and "居民价\n非居民 2.0" in info  # 水价挂城市(人填)
             assert page.locator("#tabs button").all_inner_texts() == ["概况", "商机 1", "线索 1", "水厂 1"]
@@ -1882,7 +1894,7 @@ def test_sources_page_flags_problems_and_toggles_enabled():
             rows = page.locator("#list tbody tr").all_inner_texts()
             assert len(rows) == 4 and rows[0].startswith("GDELT") and "被拒" in rows[0] and rows[1].startswith("MEED") and "多日未采集" in rows[1]
             assert rows[2].startswith("世行") and rows[3].startswith("旧 EBRD") and "已停用" in rows[3] and "阿塞拜疆" in rows[0]
-            assert page.locator("#list tbody tr.bad").count() == 2 and page.locator("#kpis .kpi.bad").count() == 1 and "2\n个\n有问题" in page.inner_text("#kpis") and "今天" in page.inner_text("#kpis")
+            assert page.locator("#list tbody tr.bad").count() == 2 and page.locator("#kpis .kpi.is-bad").count() == 1 and "2\n个\n有问题" in page.inner_text("#kpis") and "今天" in page.inner_text("#kpis")
             assert page.locator("#fState .chip-btn").all_inner_texts() == ["全部 4", "有问题 2", "正常 1", "已停用 1"]
             page.click("#fScope .chip-btn:has-text('阿塞拜疆')")  # 筛了范围,状态上的数跟着变
             assert page.locator("#fState .chip-btn").all_inner_texts() == ["全部 2", "有问题 1", "正常 0", "已停用 1"] and page.locator("#list tbody tr").count() == 2
@@ -2060,7 +2072,7 @@ def test_water_history_tab_and_city_chronicle():
             secs = "\n".join(page.locator("#studies .dg-sec").all_inner_texts())
             assert "文件简称" not in secs and "24报告" not in secs and "07PAD" not in secs and " p36" not in secs and "推断：" not in secs
             assert page.locator("#studies .dg-toc a").all_inner_texts() == ["要点速览", "1 关键数字", "2 对中国承包商的意义"]
-            assert page.locator("#studies .dg-kpi .kpi").count() == 2 and page.locator("#studies .dg-kpi .kpi.bad .kn").inner_text() == "51.5"
+            assert page.locator("#studies .dg-kpi .kpi").count() == 2 and page.locator("#studies .dg-kpi .kpi.is-bad .kn").inner_text() == "51.5"
             assert page.locator("#studies .dg-k").all_inner_texts() == ["巴库漏损", "出资方"] and page.locator("#studies .dg-v p").count() == 3  # 一句一行
             assert page.locator("#studies sup.sref a").all_inner_texts() == ["1", "1", "1", "2", "2", "2", "1"]  # 按第一次引用编号;只写 p14 的算前一个出处
             assert "（2007年时的数字）" in secs and "世行水务行业报告（2024）" in page.inner_text("#studies .dg-sec.infer")  # 括号外的「24报告 p41」换成全称
@@ -2308,3 +2320,19 @@ def test_assistant_answers_business_environment_questions():
     finally:
         srv.shutdown()
     assert all(m == "GET" for m, _ in fake.calls[seeded:]), "助手问营商环境只读"
+
+
+def test_portal_css_takes_colors_from_the_tokens():
+    """界面规范(2026-10-14):颜色、字号、圆角在 portal.css 开头的 :root 里定成固定几档。规范里有的颜色,别处只能写 var(--…);
+    还没收进规范的散色值只许减少不许增加(逐页清理时把这个上限往下调)。"""
+    css = (PORTAL / "portal.css").read_text(encoding="utf-8")
+    root = re.search(r"^:root \{(.*?)\n\}", css, re.S | re.M)
+    assert root, "portal.css 开头要有 :root 规范"
+    tokens = dict(re.findall(r"(--[\w-]+):\s*(#[0-9a-fA-F]{3,6})\b", root.group(1)))
+    for need in ("--ink", "--ink-strong", "--muted", "--faint", "--line", "--brand", "--bad", "--warn", "--ok", "--info"):
+        assert need in tokens, need
+    rest = css[:root.start()] + css[root.end():]
+    lits = {h.lower() for h in re.findall(r"#[0-9a-fA-F]{6}\b", rest)}
+    in_spec = lits & {v.lower() for v in tokens.values() if len(v) == 7}
+    assert not in_spec, f"这些颜色规范里有,请写成 var(--…):{sorted(in_spec)}"
+    assert len(set(re.findall(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b", rest))) <= 69, "portal.css 里新加了散色值;请用 :root 里的颜色"

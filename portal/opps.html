@@ -81,7 +81,7 @@
     $("list").innerHTML = P.tableHtml(["编号", "名称", "国别", "我方阶段", "投资规模", "优先级", "负责人", "下一节点", "下一步", "到期", "最近跟进", "线索"], rows.map((o) => {
       const due = P.day(g(o, "next_due")), over = due && due < today;
       return [P.raw(P.star("opportunity", o) + '<a href="' + P.oppUrl(o.id) + '"><b>' + P.esc(g(o, "code")) + "</b></a>"), P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(g(o, "name_zh") || "") + "</a>"),
-        cname[P.linkId(g(o, "country"))] || P.text(g(o, "country")), P.raw('<span class="stage s-' + P.esc(g(o, "stage") || "建议") + '">' + P.esc(g(o, "stage") || "建议") + "</span>"),
+        cname[P.linkId(g(o, "country"))] || P.text(g(o, "country")), P.raw(P.stageTag(g(o, "stage"))),
         P.sizeText("opportunity", o), g(o, "priority"), P.text(g(o, "owner")), g(o, "next_milestone"), g(o, "next_step"), P.raw(due ? '<span class="' + (over ? "over" : "") + '">' + due + (over ? " 逾期" : "") + "</span>" : ""),
         P.day(g(o, "last_followup")), g(o, "lead_count")];
     }));

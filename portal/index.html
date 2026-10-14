@@ -274,7 +274,7 @@
   }
 
   /* ---------- 呈现 ---------- */
-  const stageTag = (s) => '<span class="stage s-' + P.esc(s || "建议") + '">' + P.esc(s || "建议") + "</span>";
+  const stageTag = (s) => P.stageTag(s);
   function leadTable(rows) {
     return P.tableHtml(["标题", "国别", "类别", "发现", "所属商机", ""], P.followFirst(rows, "lead").map((l) => { const g = (p) => P.get("lead", l, p);
       return [P.titleCell(l), P.text(g("country")), g("category") || "", P.day(g("found_at")), P.text(g("opportunity")), P.raw(P.open("lead", l.id))]; }));
@@ -671,7 +671,7 @@
   }
 
   function understoodHtml(plan) {
-    const tag = plan.parsed_by === "model" ? '<span class="tag intel" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
+    const tag = plan.parsed_by === "model" ? '<span class="tag t-ok" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
     const items = (plan.understood || []).map(([k, v]) => '<span class="chip-btn on" style="cursor:default">' + P.esc(k) + ":" + P.esc(v) + "</span>").join("");
     const un = (plan.unresolved || []).length ? '<span class="muted small">没认出来:' + plan.unresolved.map(P.esc).join("、") + "</span>" : "";
     return '<div class="frow understood"><b>理解为</b>' + items + tag + un + "</div>";
@@ -725,7 +725,7 @@
       (a.title_zh && r.title ? ' <span class="muted small">' + P.esc(r.title) + "</span>" : "") + "</p>");
     if (a.summary_zh) h.push("<p>" + P.esc(a.summary_zh) + "</p>");
     const kv = [["项目", a.project_name], ["国别", r.country && r.country.name], ["城市或地区", a.city], ["出资方", a.funder], ["规模或金额", a.amount], ["进展", a.stage], ["信息日期", r.published], ["领域", (a.sectors || []).join("、")]].filter((x) => x[1]);
-    if (kv.length) h.push('<dl class="lk-kv">' + kv.map(([k, v]) => "<dt>" + P.esc(k) + "</dt><dd>" + P.esc(v) + "</dd>").join("") + "</dl>");
+    if (kv.length) h.push(P.factsHtml(kv.map(([k, v]) => [k, String(v)])));
     const cred = (a.credibility && a.credibility.level) || s.level;
     h.push("<h2>信源</h2><p>" + '<span class="lk-lv ' + (LV_CLS[cred] || "mid") + '">可信度 ' + P.esc(cred || "待核实") + "</span>" + P.esc(s.domain || "") + "(" + P.esc(s.label || s.kind || "") + ")" +
       (s.known ? ',库里已有信源「' + P.esc(s.known) + "」" : "") + "</p>" + (a.credibility && a.credibility.reason ? "<p>" + P.esc(a.credibility.reason) + "</p>" : ""));

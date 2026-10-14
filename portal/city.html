@@ -23,7 +23,7 @@
       <div class="frow"><b>关联</b><span id="fHas" class="frow" style="padding:0"></span></div>
       <div class="frow"><b>搜索</b><input id="fText" placeholder="搜城市中文名、英文名或行政区" size="30" aria-label="搜城市"><span class="muted" id="fNote" style="margin-left:auto"></span></div>
     </div>
-    <div class="cards" id="cards"><div class="card"><div class="n">…</div><div class="l">读取中</div></div></div>
+    <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
     <h2>分布(拖左下角滑块按<span id="byName">人口</span>筛城市,清单跟着变;颜色越深数越大,红圈是有线索或商机;点圆点看这座城市;滚轮缩放,<a href="#" id="mapReset">复位</a>)</h2>
     <div class="panel"><div id="map" class="chart tall"></div></div>
     <h2 id="listTitle">城市清单</h2>
@@ -32,7 +32,7 @@
   <section id="one" style="display:none">
     <div class="toolbar"><a href="city.html" id="back">← 全部城市</a><h1 style="margin:0" id="cname"></h1><span class="muted" id="cname2"></span><span id="openRow" style="margin-left:auto"></span></div>
     <div class="backbar" id="rel"></div>
-    <div class="cards" id="ccards"></div>
+    <div id="ccards"></div>
     <div class="tabs" id="tabs"></div>
     <div class="tab" data-t="info"><div class="panel" id="info"></div><div class="panel"><div id="cmap" class="chart"></div></div></div>
     <div class="tab" data-t="opps"><div class="panel" id="opps">读取中…</div></div>
@@ -147,9 +147,9 @@
       history.replaceState(null, "", "city.html" + (qs ? "?" + qs : ""));
       const pop = rows.reduce((s, ct) => s + (Number(P.get("city", ct, "population")) || 0), 0);
       const n = (f) => rows.filter(f).length;
-      $("cards").innerHTML = [[rows.length.toLocaleString("zh-CN"), "城市"], [people(pop), "合计人口"], [n((ct) => Number(P.get("city", ct, "population")) >= 1e6), "百万人口以上"],
+      $("cards").innerHTML = P.kpiHtml([[rows.length.toLocaleString("zh-CN"), "城市"], [people(pop), "合计人口"], [n((ct) => Number(P.get("city", ct, "population")) >= 1e6), "百万人口以上"],
         [n((ct) => Number(P.get("city", ct, "lead_count")) > 0), "有线索的城市"], [n((ct) => Number(P.get("city", ct, "opp_count")) > 0), "有商机的城市"]]
-        .map(([v, l]) => '<div class="card"><div class="n">' + v + '</div><div class="l">' + l + "</div></div>").join("");
+        .map(([v, l]) => ({ label: l, value: String(v) })));
       $("fNote").textContent = all.length ? "共 " + all.length.toLocaleString("zh-CN") + " 座" : "";
       $("listTitle").textContent = "城市清单(" + ($("rangeNote").dataset.sel && (state.lo || state.hi) ? ($("byName").textContent + " " + $("rangeNote").dataset.sel + ",") : "") + "按人口从多到少" + (rows.length > SHOW ? ",列出前 " + SHOW + " 座,筛选或搜索看其余的" : "") + ")";
       $("rows").innerHTML = !rows.length ? '<p class="muted">没有符合条件的城市。</p>' :
@@ -210,9 +210,9 @@
     $("supply").innerHTML = plantTable("supply_plant", supply, "自来水厂");
     $("sewage").innerHTML = plantTable("sewage_plant", sewage, "污水厂");
     const nPlants = (supply || []).length + (sewage || []).length;
-    $("ccards").innerHTML = [[people(Number(g("population")) || 0), "人口" + (g("pop_year") ? "(" + g("pop_year") + ")" : "")], [num(g("area_km2")) || "—", "面积(km²)"], [num(g("density")) || "—", "密度(人/km²)"],
+    $("ccards").innerHTML = P.kpiHtml([[people(Number(g("population")) || 0), "人口" + (g("pop_year") ? "(" + g("pop_year") + ")" : "")], [num(g("area_km2")) || "—", "面积(km²)"], [num(g("density")) || "—", "密度(人/km²)"],
       [num(g("gdp")) || "—", "生产总值(亿美元)" + (g("gdp_year") ? "(" + g("gdp_year") + ")" : "")], [opps.length, "商机"], [leads.length + (leads.length >= 200 ? "+" : ""), "线索"]]
-      .map(([v, l]) => '<div class="card"><div class="n">' + P.esc(String(v)) + '</div><div class="l">' + P.esc(l) + "</div></div>").join("");
+      .map(([v, l]) => ({ label: l, value: String(v) })));
     const kv = [["所属国别", c ? countryCell(ct).__html : P.esc(P.text(g("country")))], ["所在行政区", P.esc(g("admin") || "")], ["坐标", P.esc(g("coords") || "")],
       ["现行水价", g("tariff") != null && g("tariff") !== "" ? P.esc(String(g("tariff")) + " " + (g("tariff_currency") || "") + "/立方米") : ""], ["最近调价", P.esc(P.day(g("tariff_changed")) || "")],
       ["水价说明", P.esc(g("tariff_note") || "").replace(/\r?\n/g, "<br>")], ["水价来源", P.esc(g("tariff_source") || "")],
