@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import date, timedelta
+import re
 from statistics import median
 
 from core import ontology as onto_mod
@@ -17,6 +18,7 @@ from core.zh_name import zh_name
 
 from .common import Ctx
 
+_CJK = re.compile(r"[\u4e00-\u9fff]")
 TRACKED_STAGES = set(onto_mod.glossary_stages("tracked"))  # 本体 glossary.tracked(运行时读)
 # 线索类别里的「采购类」组(本体 taxonomies.lead_category 第一组),本体里的顺序即「值得看」的优先级;其余类别按本体顺序接在后面
 PROCUREMENT = onto_mod.group_values("lead_category", "采购类")
@@ -61,16 +63,23 @@ def _top(counter: Counter, n: int = TOP, unit: str = "") -> str:
     return s
 
 
-def _title(b: tstore.Base, r: dict, n: int = 60) -> str:
-    """线索在简报里的名字:中文名称(项目名 → 中文摘要 → 从原题挑的「要点」,见 core.zh_name);
-    只有要点或连要点都没有时把原题也带上,读的人能对上原文。"""
+def _title(b: tstore.Base, r: dict, zh_of: dict[str, str] | None = None, n: int = 60) -> tuple[str, str]:
+    """线索在简报里的名字 → (中文名, 原题):中文名按 项目名 → 中文摘要 → 模型译名(reports.translate_texts,有缓存) → 从原题挑的「要点」;
+    项目名、摘要里没有汉字的不算中文名。原题已经是中文、或中文名就是原题时,原题给空。"""
     g = lambda p: b.get("lead", r, p)
     full = (str(g("title") or "").strip().splitlines() or [""])[0]
-    name, how = zh_name(full, g("summary_zh"), g("project_name"), 1000)
-    name, orig = _short(name, n), _short(full, n)
-    if how in ("项目名", "摘要"):
-        return name
-    return f"{name}(原题:{orig})" if name else orig
+    pn, sz = (str(g(p) or "") for p in ("project_name", "summary_zh"))
+    name, how = zh_name(full, sz if _CJK.search(sz) else None, pn if _CJK.search(pn) else None, 1000)
+    if how != "项目名" and (zh_of or {}).get(full[:300]):  # 译名比摘要短,做标题更合适
+        name, how = zh_of[full[:300]], "译名"
+    elif how == "摘要":  # 摘要是一段话:只取第一句做名字
+        name = re.split(r"[，。；;]", name)[0]
+    elif how == "要点" and name:
+        name = "要点:" + name
+    if not _CJK.search(name or ""):
+        name = ""
+    orig = "" if _CJK.search(full) and (not name or name == full) else _short(full, n)
+    return _short(name or full, n), orig
 
 
 def build_daily(ctx: Ctx, today: date | None = None) -> tuple[str, set[str], set[str], str]:
@@ -143,8 +152,16 @@ def build_daily(ctx: Ctx, today: date | None = None) -> tuple[str, set[str], set
     # ---- 值得看的新线索:采购类优先,再按类别优先级;同类里有金额的在前
     prio = {k: i for i, k in enumerate(CATEGORY_PRIORITY)}
     picks = sorted(rel, key=lambda r: (prio.get(str(g(r, "category") or ""), 99), 0 if g(r, "amount") else 1, day_of[r["id"]]))[:PICKS]
-    pick_lines = [f"- {_cell(g(r, 'country')) or '未定国别'} · {g(r, 'category') or '未分类'} · {_title(b, r)}"
-                  + (f" · {_amount(g(r, 'amount'), g(r, 'amount_cny'))}" if g(r, "amount") else "") + f" [{g(r, 'key')}]" for r in picks]
+    from .reports import translate_texts  # reports 引用本模块,这里晚一点再引
+    zh_of = translate_texts(ctx, [(str(g(r, "title") or "").strip().splitlines() or [""])[0][:300] for r in picks])
+    pick_lines = []
+    for r in picks:  # 一条两行:中文名 + 标签(国别 · 阶段 · 领域 · 金额)+ 线索号;下一行缩进给原题,对得上原文
+        name, orig = _title(b, r, zh_of)
+        tags = [_cell(g(r, "country")) or "未定国别", "阶段:" + str(g(r, "category") or "未分类"),
+                "领域:" + ("、".join(g(r, "sectors") or []) or "未分")]
+        if g(r, "amount"):
+            tags.append(_amount(g(r, "amount"), g(r, "amount_cny")))
+        pick_lines.append(f"- {name}〔{' · '.join(tags)}〕 [{g(r, 'key')}]" + (f"\n  原题:{orig}" if orig else ""))
     if not pick_lines:
         pick_lines = ["- 今日没有新的相关线索。"]
 
@@ -152,7 +169,9 @@ def build_daily(ctx: Ctx, today: date | None = None) -> tuple[str, set[str], set
     # 机器每天按新线索推荐商机(阶段「建议」),和人立项跟踪的分开说,免得把推荐当成新立项
     new_ai = [r for r in new_opps if str(og(r, "stage") or "建议") == "建议"]
     new_set = [r for r in new_opps if r not in new_ai]
-    opp_list = lambda rs: "(" + "、".join(f"{og(r, 'code')} {og(r, 'name_zh') or ''}".strip() for r in rs[:TOP]) + ("等" if len(rs) > TOP else "") + ")" if rs else ""  # noqa: E731
+    opp_zh = translate_texts(ctx, [str(og(r, "name_zh") or "") for r in (new_ai[:TOP] + new_set[:TOP])])
+    oname = lambda r: _short(opp_zh.get(str(og(r, "name_zh") or "").strip()) or str(og(r, "name_zh") or ""), 40)  # noqa: E731
+    opp_list = lambda rs: "(" + "、".join(f"{og(r, 'code')} {oname(r)}".strip() for r in rs[:TOP]) + ("等" if len(rs) > TOP else "") + ")" if rs else ""  # noqa: E731
     opp_lines = [f"- 今日 AI 新推荐商机 {len(new_ai)} 个{opp_list(new_ai)};新立项跟踪 {len(new_set)} 个{opp_list(new_set)}。"]
     if changed:
         opp_lines.append("- 阶段有变化:" + "、".join(f"{c} → {s}" for c, s in changed[:TOP]) + ("等" if len(changed) > TOP else "") + "。")

@@ -212,6 +212,7 @@
       if (/^# /.test(ln)) return;  // 标题由本页给
       if (/^## /.test(ln)) { flush(); out.push("<h4>" + P.esc(ln.slice(3)) + "</h4>"); return; }
       if (/^- /.test(ln)) { ul.push("<li>" + P.cites(ln.slice(2), numOf, info) + "</li>"); return; }
+      if (/^  \S/.test(ln) && ul.length) { ul[ul.length - 1] = ul[ul.length - 1].replace(/<\/li>$/, '<div class="muted small">' + P.esc(ln.trim()) + "</div></li>"); return; }  // 缩进行:接在上一条下面(如原题)
       flush(); if (ln.trim()) out.push("<p>" + P.cites(ln, numOf, info) + "</p>");
     });
     flush(); return out.join("");

@@ -216,9 +216,9 @@ def test_daily_brief_is_built_after_collection_and_shown_as_summary(env, monkeyp
     assert "线索累计 5 条;今日新增 3 条(相关 2 条,其中采购类 1 条)" in md
     assert "待处理 5 条,待确认归属 1 条;跟踪中的商机 1 个" in md  # 处理状态缺省待处理,5 条都是
     assert "资金来源:世界银行 1、未填 1" in md and "领域:海水淡化 1、供水 1" in md
-    assert "阿塞拜疆 · 招标 · 苏姆盖特海水淡化厂招标 · 50,000,000 USD [cccccccc]" in md  # 采购类排在政策前;线索号在句末(页面与 Word 里成角标)
+    assert "- 苏姆盖特海水淡化厂招标〔阿塞拜疆 · 阶段:招标 · 领域:海水淡化 · 50,000,000 USD〕 [cccccccc]\n  原题:Sumgait desalination tender" in md  # 中文名在前,标签跟着;原题另起一行
     assert md.index("[cccccccc]") < md.index("[dddddddd]")
-    assert "阿塞拜疆 · 政策 · 政策(原题:Water policy news) [dddddddd]" in md  # 没有中文摘要的:从原题挑词成「要点」,原题跟在后面
+    assert "- 要点:政策〔阿塞拜疆 · 阶段:政策 · 领域:供水〕 [dddddddd]\n  原题:Water policy news" in md  # 没有中文名的:从原题挑词成「要点」
     assert "今日采集信源 1 个:正常 1" in md and "未使用模型" in md and "模型研判" not in md
     files = _val(abase, "report", r, "file")
     assert [f["name"] for f in files] == [_val(abase, "report", r, "key")]  # 有「简报正文」字段时只传 Word
@@ -247,9 +247,19 @@ def test_daily_brief_tells_sections_apart_shows_rmb_and_ai_suggested_opps(env, m
                            "country": c["id"], "found_at": f"{today.isoformat()}T01:00:00.000Z", "amount": "51,953,580 MAD", "amount_cny": 3700,
                            "status": "待处理", "origin": "机器采集"}])
     md, _, _, _ = brief.build_daily(ctx, today)
-    line = next(x for x in md.splitlines() if "[ffffffff]" in x)
-    assert "TRONÇON 2" in line and "…" in line and "51,953,580 MAD(约 3,700 万元)" in line
+    lines = md.splitlines()
+    i = next(k for k, x in enumerate(lines) if "[ffffffff]" in x)
+    assert "51,953,580 MAD(约 3,700 万元)" in lines[i] and lines[i + 1].startswith("  原题:") and lines[i + 1].endswith("TRONÇON 2") and "…" in lines[i + 1]
     assert "今日 AI 新推荐商机 1 个(MAR-099 推荐的);新立项跟踪 " in md and "今日新建商机" not in md
+    # 配了模型:没有中文名的原题请模型译成中文(有缓存),做标题
+    class T:
+        enabled, calls, label = True, 0, "测试模型"
+        def ask(self, system, user, schema, guide):
+            import json as _j
+            return {"items": [{"i": x["i"], "zh": "奥里卡公路拓宽第二段"} for x in _j.loads(user)]}
+    ctx.clf = T()
+    md2, _, _, _ = brief.build_daily(ctx, today)
+    assert "- 奥里卡公路拓宽第二段〔阿塞拜疆 · 阶段:招标" in md2
 
 
 def test_daily_brief_compares_with_median_of_past_week(env, monkeypatch):  # noqa: F811
