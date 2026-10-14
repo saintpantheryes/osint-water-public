@@ -2308,3 +2308,19 @@ def test_assistant_answers_business_environment_questions():
     finally:
         srv.shutdown()
     assert all(m == "GET" for m, _ in fake.calls[seeded:]), "助手问营商环境只读"
+
+
+def test_portal_css_takes_colors_from_the_tokens():
+    """界面规范(2026-10-14):颜色、字号、圆角在 portal.css 开头的 :root 里定成固定几档。规范里有的颜色,别处只能写 var(--…);
+    还没收进规范的散色值只许减少不许增加(逐页清理时把这个上限往下调)。"""
+    css = (PORTAL / "portal.css").read_text(encoding="utf-8")
+    root = re.search(r"^:root \{(.*?)\n\}", css, re.S | re.M)
+    assert root, "portal.css 开头要有 :root 规范"
+    tokens = dict(re.findall(r"(--[\w-]+):\s*(#[0-9a-fA-F]{3,6})\b", root.group(1)))
+    for need in ("--ink", "--ink-strong", "--muted", "--faint", "--line", "--brand", "--bad", "--warn", "--ok", "--info"):
+        assert need in tokens, need
+    rest = css[:root.start()] + css[root.end():]
+    lits = {h.lower() for h in re.findall(r"#[0-9a-fA-F]{6}\b", rest)}
+    in_spec = lits & {v.lower() for v in tokens.values() if len(v) == 7}
+    assert not in_spec, f"这些颜色规范里有,请写成 var(--…):{sorted(in_spec)}"
+    assert len(set(re.findall(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b", rest))) <= 69, "portal.css 里新加了散色值;请用 :root 里的颜色"
