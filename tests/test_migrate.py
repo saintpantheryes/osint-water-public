@@ -323,4 +323,4 @@ def test_lead_only_followups_newlines_followup_keys_and_one_download_per_table(e
     _, again = _write(fake, plans, b.plan)
     assert again["跟进记录·新建"] == 0 and again["线索·新建"] == 0 and again["跟进记录·关联"] == 0
     gets = [path for m, path in fake.calls[n:] if m == "GET" and re.search(r"/table/[^/]+/record$", path.split("?")[0])]
-    assert len(gets) == 23, gets  # 二十三张表各下载一遍(含没有迁移行的报告模板、城市、公司资料、个人设置、自来水厂、污水厂、行业术语、已中标项目、供应商、研究资料、水务事件、水务片区、法规、法规条文、国别定义、排放限值表);关联与附件复用
+    assert len(gets) == 24, gets  # 二十四张表各下载一遍(含没有迁移行的报告模板、城市、公司资料、个人设置、自来水厂、污水厂、行业术语、已中标项目、供应商、研究资料、水务事件、水务片区、法规、法规条文、国别定义、排放限值、语义层说法表);关联与附件复用

@@ -549,12 +549,18 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             assert page.locator("#objs .chip-btn.on").inner_text().startswith("线索") and "o=lead" in page.url
             page.click("#detail a.olink:has-text('国别')")
             page.wait_for_function("document.querySelector('#detail h2').innerText.includes('国别')", timeout=15000)
-            assert page.locator("#tabs button").count() == 6 and page.locator("#tax details").count() == len(ONTO.raw["taxonomies"])
+            assert page.locator("#tabs button").count() == 7 and page.locator("#tax details").count() == len(ONTO.raw["taxonomies"])
             assert "线索类别" in page.inner_text("#tax") and "跟踪中的商机" not in page.inner_text("#tax")
             page.click("#tabs button:has-text('口径')")
             page.wait_for_function("location.search.includes('t=glossary')", timeout=15000)
             g = page.inner_text("#glossary")
             assert "跟踪中的商机" in g and "World Bank" in page.inner_text("#groupings")
+            # 语义层页签:指标(单位、算法、缺数时怎么说、说法)、别的说法、行业术语、本国定义集中在一处
+            page.click("#tabs button:has-text('语义层')")
+            page.wait_for_function("document.querySelector('#semMeasures').innerText.includes('评标天数') && !document.querySelector('#terms').innerText.includes('读取中')", timeout=15000)
+            sm = page.inner_text("#semMeasures")
+            assert "评标时间" in sm and "中位数" in sm and "缺数时怎么说" in sm and "污水处理厂" in page.inner_text("#semWords") and "问排放标准" in page.inner_text("#semWords")
+            assert "智慧水务" in page.inner_text("#terms") and page.locator("#semCards .card").count() == 5
             page.click("#tabs button:has-text('规则')")
             assert "一个对象只存一处" in page.inner_text("#rules")
             # 到这里为止全是只读页:没有任何写请求

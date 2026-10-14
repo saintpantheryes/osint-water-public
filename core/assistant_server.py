@@ -123,7 +123,7 @@ class Assistant:
             return {"ok": False, "error": str(e)}
 
     def refresh_terms(self) -> None:
-        """隔 TERMS_EVERY 秒重读一次「行业术语」表;表没建、读不到时用本体的初始词,不影响提问。"""
+        """隔 TERMS_EVERY 秒重读一次「行业术语」「语义层说法」两张表;表没建、读不到时用本体的初始词,不影响提问。"""
         if self.terms_base is None:
             return
         now = time.monotonic()
@@ -137,6 +137,8 @@ class Assistant:
                 return
             props = ("term", "aliases", "covers", "sectors", "match", "means", "disabled")
             assistant.set_terms([{p: b.get("term", r, p) for p in props if b.has("term", p)} for r in b.rows("term")])
+            # 语义层说法(指标、算法、主体工程、法规问法、排放指标的口语):表没建时用本体的
+            assistant.set_phrases([{p: b.get("phrase", r, p) for p in ("target", "kind", "words")} for r in b.rows("phrase")] if "phrase" in b.t else None)
         except Exception as e:  # noqa: BLE001  读表出错:沿用上一次读到的(或本体初始词),下次重连
             self._terms_db = None
             self.log(f"读行业术语表出错,沿用上一次的:{type(e).__name__}: {e}")

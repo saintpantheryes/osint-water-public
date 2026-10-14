@@ -16,7 +16,7 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.24
+version: 2.25
 date: 2026-10-14
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
@@ -155,6 +155,15 @@ changes_v2_16:   # 已中标项目补数据源(2026-10-13):使用方看到摩洛
   - 世行数据把几家韩国公司(也有刚果本地单位)的国别录成了朝鲜:世行不与朝鲜往来,导入时改回韩国(刚果的按借款国)
   - 要跑一次建表命令(新字段)
 
+changes_v2_25:   # 语义层集中查看、说法挪进表格(2026-10-14):使用方问语义层在哪能看到、能不能管理;当时行业术语在本体页「口径与归组」,本国定义在国别概况,
+                 # 指标、算法与口语说法只在本体文件里,页面看不到,改要改程序。使用方选「做」:本体页加「语义层」页签集中看,口语说法挪进表格由懂行的人改
+  - 新增公开对象「语义层说法」(phrase):一个指向一行:类别(新分类体系 phrase_kind:指标、算法、主体工程、法规问法、排放指标)、指向(指标名、算法名、主体工程、法规问法或排放指标,照本体写)、
+    说法(提问里出现任一个就算问到它)、说明。助手每分钟重读这张表:表里有这一行的按表里的说法认(表里删掉的说法助手不再认),表里没有的用本体 semantic 节的初始说法;
+    指向写错(本体里没有)的那一行不用,页面标出。新指标、新算法要程序会算,仍改本体
+  - 新增行为 A42 维护语义层说法(人,表格)与 A43 补齐语义层说法(后台每个周期:本体里有、表里没有的指向补一行,带初始说法;只新建,不改已有的行)
+  - 本体页(V13)加「语义层」页签:指标(单位、算法、缺数时怎么说、说法)、算法、主体工程与法规问法的说法(读表,读不到时显示本体初始说法)、行业术语(从「口径与归组」挪过来)、
+    本国定义(按国别数,点开到国别概况),各块有「在表格里打开」
+  - 要跑一次建表命令(新表、新选项)
 changes_v2_24:   # 法规原文、国别定义与排放标准(2026-10-14):使用方问抓到的法律法规有没有做文字识别、能不能直接问「摩洛哥或阿塞拜疆的污水厂排放标准」;
                  # 当时国别表只存每部法规一行名称与链接,助手答不了。使用方的思路:法规原文识别入库,里面的词放进语义层,各国对同一类事物的定义不完全一致,涉及一国的按这国的定义;排放标准也在内。选先做摩洛哥、阿塞拜疆、吉尔吉斯斯坦三国试点
   - 新增公开对象「法规」(law):一部法律、法令、部令或技术规范一行:名称、原文名称、类别(新分类体系 law_kind,比国别表的法规类别多「排放标准与技术规范」)、文号、颁布日期、现行状态(law_status)、
@@ -852,6 +861,18 @@ objects:
          note: "线索标题多为英、法、西等原文,英文词也要写;拉丁字母的词至少 4 个字母(GIS 会误中 logistics),短于 4 个的助手不用", example: "数字孪生、SCADA、smart、digital"}
       - {id: means, name: 说明, type: longtext, by: human}
       - {id: disabled, name: 停用, type: bool, by: human, note: 勾上助手就不用这一行(代替删除)}
+  - id: phrase
+    name: 语义层说法
+    core: false
+    band: public
+    definition: 助手理解提问的口语:一个指向一行(一个指标、一种算法、一类主体工程、一种法规问法或一个排放指标),写明提问里哪些说法算问到它。懂行的人在表里加说法、删说法,下一个提问就生效(助手每分钟重读一次表);表里没有的指向用本体 semantic 节的初始说法。新指标、新算法要程序会算,改本体。
+    key: 类别 + 指向
+    properties:
+      - {id: target, name: 指向, type: text, by: human, required: true, note: 照本体写:指标名、算法名、主体工程、法规问法(问排放标准、问定义、问法规条文)或排放指标;本体里没有的这一行不用, example: 评标天数}
+      - {id: kind, name: 类别, type: enum, enum: [指标, 算法, 主体工程, 法规问法, 排放指标], by: human, required: true, taxonomy: phrase_kind}
+      - {id: words, name: 说法, type: longtext, by: human, format: "一行一个,或用「、」隔开;提问里出现任一个都算问到这个指向;拉丁字母的词按整词认", example: "评标时间、评标周期、多久定标"}
+      - {id: note, name: 说明, type: longtext, by: human, note: 补行时写上这个指向的含义(指标的单位、缺数时怎么说)}
+
 
 # 关系(Link type):from 指向 to;cardinality 为「from 端 .. to 端」;via 为承载它的属性
 links:
@@ -1314,6 +1335,24 @@ actions:
              discharge_limit.verified, discharge_limit.note, discharge_limit.value, discharge_limit.value_text, discharge_limit.scope]
     note: 对过原文把核实状态改「已核实」;机器摘错的直接改,改过的机器不再动(R2);页面和助手把「待核实」的标出来。
     rules: [R13]
+  - id: A42
+    name: 维护语义层说法
+    actor: human
+    channel: [表格]
+    trigger: 随时(在表格「语义层说法」里加说法、删说法)
+    writes: [phrase.target, phrase.kind, phrase.words, phrase.note]
+    note: 助手每分钟重读一次这张表;表里有这一行的按表里的说法认,没有的用本体 semantic 节的初始说法。删掉整行,下个周期按本体补回初始说法;要助手不认某个说法,把它从「说法」里删掉。
+    rules: [R13]
+  - id: A43
+    name: 补齐语义层说法
+    actor: ai
+    channel: [后台]
+    trigger: 后台每个周期
+    reads: [phrase]
+    creates: phrase
+    sets_on_create: {phrase.target: 本体里的指向名, phrase.kind: 类别, phrase.words: 本体初始说法, phrase.note: 指向的含义}
+    note: 本体 semantic 节里有、表里还没有的指向(类别 + 指向)补一行;只新建,不改已有的行(R2)。表没建时跳过。
+    rules: [R2]
 rules:
   - id: R1
     name: 一个对象只存一处
@@ -1421,8 +1460,8 @@ views:
   - {id: V11, name: 报告页, of: [report, template], channel: [页面], query: "历史报告按类型 / 版本 / 生成状态 / 国别筛选、搜索、下载;左栏发起国别或项目报告(可选模板);「报告模板」一节列模板、换文件、设缺省、上传新模板(A21)"}
   - {id: V12, name: 线索分析, of: [lead, country, opportunity, source, report], channel: [页面],
      query: "顶部是最近一份日报的正文(report.kind = 日报，取日期最新的);下面按发现时间窗口(今天 / 7 / 30 / 90 天 / 全部)、是否只看相关、经营区域筛选后现算:每日新增走势(相关 / 不相关)、国别前 15、国别 × 类别热力、类别、领域(lead_sectors 7 类)、资金来源(groupings.funders)、信源前 15、判定方式、处理状态、归属(所属 / 建议 / 可能新项目 / 无);点任一柱右栏列出该组线索。数字与线索总览同一口径:线索总数 = 线索总览「线索」卡，待处理 = glossary.pending_leads，待确认归属 = glossary.to_assign(R14)"}
-  - {id: V13, name: 本体, of: [lead, country, opportunity, followup, source, milestone, report, template, member, city], channel: [页面],
-     query: "只读:对象与关系图(公开 / 业务两种颜色，核心对象描边，箭头是关联)，点一个对象看定义、标识、状态流转、按写入方分组的属性(单选 / 多选的指向分类体系)、关系、涉及它的行为;下面页签:分类体系(每个值的英文键、定义、边界、示例)、口径与归组、规则、行为、视图与事件、版本记录。全部读 portal/ontology.json(ontology.yaml 转的)，不读库"}
+  - {id: V13, name: 本体, of: [lead, country, opportunity, followup, source, milestone, report, template, member, city, phrase, term, local_term], channel: [页面],
+     query: "只读:对象与关系图(公开 / 业务两种颜色，核心对象描边，箭头是关联)，点一个对象看定义、标识、状态流转、按写入方分组的属性(单选 / 多选的指向分类体系)、关系、涉及它的行为;下面页签:分类体系(每个值的英文键、定义、边界、示例)、语义层(指标:单位、算法、缺数时怎么说、说法;算法、主体工程、法规问法、排放指标的说法;行业术语;本国定义按国别数。说法读「语义层说法」表,读不到时显示本体初始说法,表里指向写错的标出;各块有「在表格里打开」)、口径与归组、规则、行为、视图与事件、版本记录。除语义层外读 portal/ontology.json(ontology.yaml 转的)，不读库"}
   - {id: V14, name: 我方资料页, of: [company, country], channel: [页面], query: "从「我的」页进(不在主菜单):全部公司资料按类别 / 领域 / 国别筛选,搜索;新增、改、传附件、勾「写进报告」(A23);游客看不到"}
   - {id: V15, name: 我的, of: [preference, country, member], channel: [页面], query: "登录人自己的一行:帐号与角色、关注的国别(加减,点进国别页;清单里这些国家排前、带 ★)、忽略的国别(地图上点选、按大洲一键;地图上画斜线,采集不再涉及)、保存的日历订阅(复制链接、删除)(A24);入口到帐号设置、退出登录、我方资料"}
   - {id: V17, name: 趋势机会, of: [city, country, lead], channel: [页面], query: "规模以上城市按 glossary.trend_self_funded(自付型,青绿)与 glossary.trend_loan_driven(贷款型,紫)着色,两类都是的标红,都不是的灰色小点;门槛(水风险用哪一项及多少分、人均 GDP 多少、贷款判定)页面上可调并记在网址里;下面按类分列城市(水风险从高到低)与国别对照表。是趋势参考:页首写明按公开数据推算、不是具体项目,数字不计入线索、商机;只看中国以外(使用方 2026-10-09 定,中国境内的城市与国别不进地图、清单与卡片)"}
@@ -1500,6 +1539,9 @@ as_is:
   term:
     - Teable「行业术语」表(唯一)
     - 本体 terms 节:建表时的初始词;表没建或读不到时助手用它兜底
+  phrase:
+    - Teable「语义层说法」表(唯一)
+    - 本体 semantic 节:初始说法;后台按它给表里没有的指向补行(A43),表没建或读不到时助手用它兜底
 
 # 分类体系(taxonomies):每个枚举属性的值集、分组、定义、边界与示例。values 的顺序就是显示顺序;code 是代码里的英文键(core.jobs.common 等)。
 # 属性上 taxonomy: <id> 指向这里;tests 检查属性的 enum 与这里的 values 完全相同(顺序也相同)。改选项先改这里与属性，再在 Teable 里加选项(只增不删)，再改 code_enums 列的代码。
@@ -2033,6 +2075,17 @@ taxonomies:
           - {v: 更宽, code: broader, def: 本国定义比通用说法包含得多, boundary: "", example: "「废水」含雨水"}
           - {v: 部分重叠, code: overlap, def: 两边各有对方没有的部分, boundary: "", example: ""}
           - {v: 没有对应, code: none, def: 本国法规里没有这个概念，用的是别的办法, boundary: 差别说明里写它用的是什么, example: "不定全国统一出水限值，按受纳水体逐厂核定"}
+  phrase_kind:
+    name: 语义层说法类别
+    used_by: [phrase.kind]
+    groups:
+      - name: 全部
+        values:
+          - {v: 指标, code: measure, def: "助手能算的数(中标价、评标天数、供水得分……),对应 semantic.measures", boundary: "新指标要程序会算,改本体", example: 评标天数}
+          - {v: 算法, code: agg, def: "合计、平均、中位数,对应 semantic.aggs", boundary: "", example: 中位数}
+          - {v: 主体工程, code: asset, def: "已中标项目的主体工程(污水处理厂、管网……),对应 semantic.words.award_asset", boundary: "", example: 污水处理厂}
+          - {v: 法规问法, code: law, def: "提问是在问排放标准、问定义还是问法规条文,对应 semantic.words.law", boundary: "", example: 问排放标准}
+          - {v: 排放指标, code: param, def: "排放限值的指标(BOD5、COD……),对应 semantic.words.effluent_param", boundary: "", example: BOD5}
   extract_check:
     name: 核实状态(摘录)
     used_by: [local_term.verified, discharge_limit.verified]
