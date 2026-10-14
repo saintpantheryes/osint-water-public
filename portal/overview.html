@@ -24,7 +24,7 @@
     <div class="frow"><b>时间</b><span id="fWin" class="frow" style="padding:0"></span></div>
     <div class="frow"><b>搜索</b><input id="fText" placeholder="搜标题、项目名、中文摘要或线索号" size="30" aria-label="搜线索"><span class="muted" id="fNote" style="margin-left:auto"></span></div>
   </div>
-  <div class="cards" id="cards"><div class="card"><div class="n">…</div><div class="l">读取中</div></div></div>
+  <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
   <div class="home">
     <div class="col">
       <h2>漏斗:信源采集 → 相关 → 归入商机 → 归入跟踪中的商机 → 写进报告(数线索条数,每级是上一级的子集;点一级,右边出清单)<a href="analysis.html" class="more" style="display:inline;margin-left:10px;font-weight:400">多维度分析与每日简报 →</a></h2>
@@ -88,10 +88,10 @@
     const [total, , , , , pending, toAssign] = counts;
     $("fNote").textContent = base.length ? "已按筛选统计(地图不受筛选影响)" : "";
     const stageCount = {}; cur.forEach((o) => { const s = P.get("opportunity", o, "stage") || "建议"; stageCount[s] = (stageCount[s] || 0) + 1; });
-    $("cards").innerHTML = [
+    $("cards").innerHTML = P.kpiHtml([
       [total, "线索", P.tableUrl("lead")], [pending, "待处理线索", P.tableUrl("lead", "待处理")], [toAssign, "待确认归属", "inbox.html"],
       [tracked.length, "跟踪中的商机", "opps.html"], [stageCount["建议"] || 0, "AI 推荐的商机", "inbox.html#suggest"],
-    ].map(([n, l, u]) => '<a class="card' + (/^待/.test(l) && n > 0 ? " warn" : "") + '" href="' + u + '"' + (u.startsWith("/") ? ' target="_blank" rel="noopener"' : "") + '><div class="n">' + n + '</div><div class="l">' + l + "</div></a>").join("");
+    ].map(([n, l, u]) => ({ label: l, value: String(n), tone: /^待/.test(l) && n > 0 ? "warn" : "", href: u, attrs: u.startsWith("/") ? 'target="_blank" rel="noopener"' : "" })));
 
     const levels = L.map(([n], i) => [n, counts[i]]);
     const nodes = levels.map(([n]) => ({ name: n })), links = [];

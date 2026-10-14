@@ -15,7 +15,7 @@
 <main>
   <div class="toolbar"><h1 style="margin:0">国别概况</h1><select id="pick"></select><span id="rel"></span><span id="openRow"></span><span class="muted" style="margin-left:auto">在地图上点国家也行(滚轮缩放,<a href="#" id="mapReset">复位</a>)</span></div>
   <div class="panel"><div id="map" class="chart"></div></div>
-  <div class="cards" id="cards"></div>
+  <div id="cards"></div>
   <div class="tabs grouped" id="tabs"></div>
   <div class="tab" data-t="info"><div id="info"></div></div>
   <div class="tab" data-t="inst"><div id="inst"></div><section id="lawBox"></section></div>
@@ -179,8 +179,8 @@
     const [opps, leads, ms, cities] = await listsP;
     const stage = {}; opps.forEach((o) => { const s = P.get("opportunity", o, "stage") || "建议"; stage[s] = (stage[s] || 0) + 1; });
     const tracked = P.tracked(opps);
-    $("cards").innerHTML = [[Number(g("lead_count")) || 0, "线索(全部)"], [leads.length + (leads.length >= 200 ? "+" : ""), "最近 90 天相关线索"], [opps.length, "商机"], [tracked.length, "跟踪中"], [stage["建议"] || 0, "AI 推荐"]]
-      .map(([n, l]) => '<div class="card"><div class="n">' + n + '</div><div class="l">' + l + "</div></div>").join("");
+    $("cards").innerHTML = P.kpiHtml([[Number(g("lead_count")) || 0, "线索(全部)"], [leads.length + (leads.length >= 200 ? "+" : ""), "最近 90 天相关线索"], [opps.length, "商机"], [tracked.length, "跟踪中"], [stage["建议"] || 0, "AI 推荐"]]
+      .map(([n, l]) => ({ label: l, value: String(n) })));
     opps.sort((a, b) => (P.STAGES.indexOf(P.get("opportunity", a, "stage") || "建议") - P.STAGES.indexOf(P.get("opportunity", b, "stage") || "建议")) || String(P.get("opportunity", a, "code")).localeCompare(String(P.get("opportunity", b, "code"))));
     $("opps").innerHTML = P.tableHtml(["编号", "名称", "我方阶段", "优先级", "负责人", "公开进度", "下一节点", "资金", ""], opps.map((o) => { const q = (p) => P.get("opportunity", o, p);
       return [q("code"), q("name_zh"), q("stage") || "建议", q("priority"), P.text(q("owner")), q("public_stage"), q("next_milestone"), (q("financing") || "").split("\n")[0], P.raw(P.open("opportunity", o.id))]; }));

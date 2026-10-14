@@ -15,7 +15,7 @@
 <main>
   <div class="toolbar"><h1 style="margin:0">本体</h1><span id="ver" class="muted"></span>
     <span class="muted small" style="margin-left:auto">这页只读:系统里有哪些对象、它们之间的关系、每个选项的定义与口径,全部按本体文件显示;要改本体暂时还是改文件(下一步做页面上改)</span></div>
-  <div class="cards" id="cards"></div>
+  <div id="cards"></div>
   <div class="onto">
     <div class="col wide">
       <div class="panel">
@@ -31,7 +31,7 @@
   <div class="tab" data-t="tax"><div id="tax"></div></div>
   <div class="tab" data-t="sem">
     <p class="small" id="semIntro">助手理解提问靠这几样:问的是哪个指标、怎么算(语义层说法),行业词怎么翻成筛选条件(行业术语),一国法规里的词按这国怎么定义(本国定义)。都在表格里改,下一分钟起的提问就用上,不用改程序。</p>
-    <div class="cards" id="semCards"></div>
+    <div id="semCards"></div>
     <h2>指标 <span class="muted small">助手能算的数;提问里出现任一个说法就算问到它</span> <span id="semOpen1"></span></h2><div class="panel" id="semMeasures"><p class="muted">读取中…</p></div>
     <h2>算法、主体工程、法规问法与排放指标的说法 <span id="semOpen2"></span></h2><div id="semWords"><p class="muted">读取中…</p></div>
     <h2>行业术语 <span class="muted small">跨领域的词不当成某一个领域</span> <span id="semOpen3"></span></h2><div class="panel" id="terms"><p class="muted">读取中…</p></div>
@@ -231,8 +231,8 @@
       '<p class="muted small">核对过原文的在表里把核实状态改成「已核实」,之后机器不再动它。</p>'
       : '<p class="muted">' + (P.isGuest ? "示例数据里没有本国定义。" : "还没有本国定义(表格「国别定义」是空的或还没建)。") + "</p>";
     const nWords = seed.reduce((s, x) => s + ((words(x) || x.words || []).length), 0);
-    $("semCards").innerHTML = [[ms.length, "指标"], [seed.length - ms.length, "其他指向"], [nWords, "说法"], [terms.length, "行业术语"], [groups.length ? local.length + " / " + groups.length + " 国" : "0", "本国定义"]]
-      .map(([n, l]) => '<div class="card"><div class="n">' + n + '</div><div class="l">' + l + "</div></div>").join("");
+    $("semCards").innerHTML = P.kpiHtml([[ms.length, "指标"], [seed.length - ms.length, "其他指向"], [nWords, "说法"], [terms.length, "行业术语"], [groups.length ? local.length + " / " + groups.length + " 国" : "0", "本国定义"]]
+      .map(([n, l]) => ({ label: l, value: String(n) })));
   }
   function drawRules() {
     $("rules").innerHTML = P.tableHtml(["编号", "规则", "内容", "怎么落实", "为什么"], O.rules.map((r) => [r.id, r.name, r.text, r.enforce || "", r.why || r.note || ""]));
@@ -265,8 +265,8 @@
     O = P.onto;
     $("ver").textContent = "v" + O.version + " · " + O.date + " · " + O.schema;
     const nProps = O.objects.reduce((s, o) => s + o.properties.length, 0), nVals = Object.values(O.taxonomies).reduce((s, t) => s + t.groups.reduce((x, g) => x + g.values.length, 0), 0);
-    $("cards").innerHTML = [[O.objects.length, "对象"], [nProps, "属性"], [O.links.length, "关系"], [Object.keys(O.taxonomies).length + " / " + nVals, "分类体系 / 选项值"], [O.actions.length, "行为"], [O.rules.length, "规则"], [O.views.length, "视图"]]
-      .map(([n, l]) => '<div class="card"><div class="n">' + n + '</div><div class="l">' + l + "</div></div>").join("");
+    $("cards").innerHTML = P.kpiHtml([[O.objects.length, "对象"], [nProps, "属性"], [O.links.length, "关系"], [Object.keys(O.taxonomies).length + " / " + nVals, "分类体系 / 选项值"], [O.actions.length, "行为"], [O.rules.length, "规则"], [O.views.length, "视图"]]
+      .map(([n, l]) => ({ label: l, value: String(n) })));
     $("objs").innerHTML = O.objects.map((o) => '<button type="button" class="chip-btn" data-v="' + esc(o.id) + '">' + esc(o.name) + ' <span class="muted small">' + o.properties.length + "</span></button>").join("");
     $("objs").querySelectorAll(".chip-btn").forEach((b) => { b.onclick = () => select(b.dataset.v); });
     drawGraph(); drawTax(); drawGlossary(); drawSem().catch((e) => P.fail($("semMeasures"), e)); drawRules(); drawActions(); drawViews(); drawChanges();

@@ -509,17 +509,24 @@
       rows = rows.filter((r) => r && r[1] !== undefined && r[1] !== null && r[1] !== "");
       return rows.length ? '<div class="facts">' + rows.map(([k, v, o]) => this.factHtml(k, v, o)).join("") + "</div>" : "";
     },
-    /* 关键指标卡:items = [{label, value, year?, note?}];数字放大加粗,单位跟在后面小一号;负面的数字标红并写明原因 */
+    /* 指标卡(界面规范:全站数字卡片只这一种,2026-10-14 起国别、城市、线索总览等顶上那排数也用它):
+       items = [{label, value, year?, note?, tone?, why?, href?, attrs?}];数字放大加粗,单位跟在后面小一号;
+       负面(按 TONES 自动判断,或 tone: "bad")数字标红、下面写原因;tone: "warn" 是琥珀色提醒(待处理这类有积压的数);
+       有 href 的整张卡可点(attrs 是附加的属性串,如 data-i、target) */
     kpiHtml(items) {
       items = items.filter((x) => x && x.value !== "" && x.value !== null && x.value !== undefined);
       if (!items.length) return "";
-      return '<div class="kpis">' + items.map((x) => {
+      /* 分几栏按张数定,不让最后一张单独落一行:6 张以内一排放下,再多就分两排;窄一点(≤1000px)5 张以上分两排;手机两栏,单出来的那张占满一行 */
+      const n = items.length, cols = n <= 6 ? n : Math.ceil(n / 2), colsMd = n <= 5 ? n : Math.ceil(n / 2);
+      return '<div class="kpis" style="--cols:' + cols + ";--cols-md:" + colsMd + '">' + items.map((x) => {
         const [main, y] = this.splitYear(String(x.value)), year = x.year || y;
-        const m = main.replace(/[−–]/g, "-").match(/^\s*(约\s*)?(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/);  // 「约 1.18 美元/m³」:约 小字在前,数字放大
-        const bad = this.tone(x.label, this.num(m ? m[2] : main));
+        const m = main.replace(/[−–]/g, "-").match(/^\s*(约\s*)?(-?\d[\d,]*(?:\.\d+)?\+?(?:\s?\/\s?\d[\d,]*)?)\s*(.*)$/);  // 「约 1.18 美元/m³」:约 小字在前;「200+」「13 / 98」整个放大
+        const auto = x.tone ? null : this.tone(x.label, this.num(m ? m[2] : main)), tone = x.tone || (auto ? "bad" : ""), why = x.why || (auto ? "超警戒线:" + auto : "");
         const big = m ? (m[1] ? '<span class="ku">约</span>' : "") + '<span class="kn">' + this.esc(m[2]) + "</span>" + (m[3] ? '<span class="ku">' + this.esc(m[3]) + "</span>" : "") : '<span class="kn kt">' + this.esc(main) + "</span>";
-        return '<div class="kpi' + (bad ? " bad" : "") + '"><div class="kv">' + big + "</div>" + '<div class="kl">' + this.esc(x.label) + (year ? '<em class="yr">' + this.esc(year) + "</em>" : "") + "</div>" +
-          (bad ? '<div class="kw">超警戒线:' + this.esc(bad) + "</div>" : "") + (x.note ? '<div class="kx">' + this.esc(x.note) + "</div>" : "") + "</div>";
+        const tag = x.href ? "a" : "div";
+        return "<" + tag + ' class="kpi' + (tone ? " is-" + tone : "") + '"' + (x.href ? ' href="' + this.esc(x.href) + '"' : "") + (x.attrs ? " " + x.attrs : "") + '><div class="kv">' + big + "</div>" +
+          '<div class="kl">' + this.esc(x.label) + (year ? '<em class="yr">' + this.esc(year) + "</em>" : "") + "</div>" +
+          (why ? '<div class="kw">' + this.esc(why) + "</div>" : "") + (x.note ? '<div class="kx">' + this.esc(x.note) + "</div>" : "") + "</" + tag + ">";
       }).join("") + "</div>";
     },
     /* 水风险与经济(城市、国别共用;glossary.risk_level 的读法):有数的项才列,一项都没有返回空串 */
@@ -624,7 +631,7 @@
       if (ks.length) out.push({ label: "中标价 / 招标估价(中位数)", value: Math.round(med(ks)) + "%", note: "按 " + ks.length + " 份有估价的算,低于估价的 " + ks.filter((v) => v < 100).length + " 份" });
       if (ds.length) out.push({ label: "评标天数(中位数)", value: Math.round(med(ds)) + " 天", note: "按 " + ds.length + " 份算" });
       if (bs.length) out.push({ label: "投标家数(中位数)", value: (Math.round(med(bs) * 10) / 10) + " 家", note: "按 " + bs.length + " 份算" });
-      return out.length ? this.kpiHtml(out).replace('class="kpis"', 'class="kpis n' + out.length + '"') : "";
+      return this.kpiHtml(out);
     },
     async awards(el, prop, rid) {  // prop:country / city(国别、城市页) / winners(供应商页:多一组国别筛选、一列国别)
       const firm = prop === "winners";
@@ -824,7 +831,7 @@
       const kpi = (n) => {  // 「!**数值** 说明」→ 指标卡
         const m = n.text.match(/^(!?)\*\*([^*]+)\*\*\s*(.*)$/), v = m[2].trim(), x = v.match(/^(约|近|超过|≤|<|>)?\s*(-?\d[\d,]*(?:\.\d+)?(?:\s?[–-]\s?\d[\d,]*(?:\.\d+)?)?)\s*(.*)$/);
         const big = x ? (x[1] ? '<span class="ku">' + esc(x[1]) + "</span>" : "") + '<span class="kn">' + esc(x[2]) + "</span>" + (x[3] ? '<span class="ku">' + esc(x[3]) + "</span>" : "") : '<span class="kn kt">' + esc(v) + "</span>";
-        return '<div class="kpi' + (m[1] ? " bad" : "") + '"><div class="kv">' + big + '</div><div class="kl">' + rich(m[3]) + "</div></div>";
+        return '<div class="kpi' + (m[1] ? " is-bad" : "") + '"><div class="kv">' + big + '</div><div class="kl">' + rich(m[3]) + "</div></div>";
       };
       const head = (s, i) => { const m = s.title.match(/^(\d+)[.、．]\s*(.*)$/); return { no: m ? m[1] : "", name: (m ? m[2] : s.title).replace(/[（(](?:以下为)?推断[^（）()]*[）)]/, "").trim(), infer: /推断/.test(s.title), id: uid + "-c" + i }; };
       const hs = secs.map(head);

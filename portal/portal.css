@@ -47,12 +47,6 @@ a { color: var(--brand); text-decoration: none; }
 main { max-width: 1200px; margin: 0 auto; padding: 14px 16px 40px; }
 h1 { font-size: 20px; margin: 6px 0 12px; }
 h2 { font-size: 16px; margin: 18px 0 8px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-.card .n { font-size: 28px; font-weight: 700; line-height: 1.2; letter-spacing: -.01em; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
-.card.bad .n { color: var(--bad); }
-.card.warn .n { color: var(--warn); }  /* 待处理、待确认这类有积压的数:琥珀色提醒(负面才用红) */
-.card .l { color: var(--muted); font-size: 13px; }
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 10px 0; overflow-x: auto; }
 .chart { width: 100%; height: 320px; }
 .chart.tall { height: 440px; }
@@ -101,23 +95,27 @@ h3 { font-size: 15px; margin: 14px 0 6px; } h3 .open { margin-left: 10px; font-w
 .fact.is-warn .fact-v > strong, .fact.is-warn > .fact-w { color: var(--warn); }
 em.yr { font-style: normal; font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 400; }
 /* 关键指标卡:一排大号数字放在最前;负面的数字标红,下面一行写原因 */
-.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 10px 0 12px; }
-.kpis.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpis.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }  /* 卡片少的一排:按张数分栏,不留空格子 */
-@media (max-width: 900px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px; min-width: 0; }
+/* 指标卡(界面规范:全站数字卡片只这一种,P.kpiHtml 生成):一排按宽度自动分栏,数字大而粗、单位小一号;
+   负面 is-bad 红色并写原因,提醒 is-warn 琥珀色;整张可点的是 a.kpi,鼠标移上去边框变蓝 */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 10px; margin: 10px 0 12px; }
+.kpis[style*="--cols"] { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }  /* 栏数由 P.kpiHtml 按张数给 */
+@media (max-width: 1000px) { .kpis[style*="--cols"] { grid-template-columns: repeat(var(--cols-md), minmax(0, 1fr)); } }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px 12px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+a.kpi { color: inherit; } a.kpi:hover { border-color: var(--brand); }
 .kpi .kv { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
-.kpi .kn { font-size: 30px; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
-.kpi .kn.kt { font-size: 20px; letter-spacing: 0; }
+.kpi .kn { font-size: var(--fs-num); font-weight: 700; line-height: 1.15; letter-spacing: -.02em; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
+.kpi .kn.kt { font-size: var(--fs-xl); letter-spacing: 0; }
 .kpi .ku { font-size: 14px; font-weight: 600; color: #475569; }
-.kpi .kl { margin-top: 4px; font-size: 13px; color: var(--muted); }
-.kpi .kx { margin-top: 2px; font-size: 12px; color: var(--faint); }
-.kpi .kw { margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--bad); }
-.kpi.bad { border-color: var(--bad-line); background: linear-gradient(180deg, #fff, #fff7f7); }
-.kpi.bad .kn { color: var(--bad); }
+.kpi .kl { margin-top: 2px; font-size: var(--fs-sm); color: var(--muted); }
+.kpi .kx { font-size: var(--fs-xs); color: var(--faint); }
+.kpi .kw { font-size: var(--fs-xs); font-weight: 600; color: var(--bad); }
+.kpi.is-bad { border-color: var(--bad-line); background: linear-gradient(180deg, var(--card), var(--bad-soft)); }
+.kpi.is-bad .kn { color: var(--bad); }
+.kpi.is-warn .kn, .kpi.is-warn .kw { color: var(--warn); }
 .panel .kpis { margin-top: 2px; }
 .panel .kpi { background: var(--sunk); border-color: #eef2f6; }
-.panel .kpi.bad { background: var(--bad-soft); border-color: var(--bad-line); }
-@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .kpi { padding: 12px; } .kpi .kn { font-size: 24px; } }
+.panel .kpi.is-bad { background: var(--bad-soft); border-color: var(--bad-line); }
+@media (max-width: 640px) { .kpis, .kpis[style*="--cols"] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .kpis > .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; } .kpi { padding: 12px; } .kpi .kn { font-size: 24px; } }
 .notes { list-style: none; padding: 0; margin: 0; }
 .notes li { padding: 7px 0; border-bottom: 1px solid var(--line); }
 .notes li:last-child { border-bottom: 0; }
@@ -187,7 +185,6 @@ h2 select.inline { font: inherit; font-size: 13px; font-weight: 400; padding: 3p
 .chart.short { height: 240px; }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
-.cards a.card { color: inherit; }
 /* 线索处理:页签、批量 */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 8px 0 10px; flex-wrap: wrap; }
 .tabs button { font: inherit; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: none; cursor: pointer; color: var(--ink); }
@@ -465,8 +462,6 @@ details.sec.panel summary { margin: -4px 0; }
   .filters .frow > .muted { white-space: nowrap; }  /* 行尾的说明、条数不挤成一字一行(放不下就跟着这一行横着滑) */
   .filters .chip-btn, .toolbar .chip-btn { white-space: nowrap; }
   .toolbar { gap: 6px; }
-  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .card .n { font-size: 22px; }
 }
 /* 手机:宽表横向滑动,不挤成一字一行(首列照常换行,其余列不换行) */
 @media (max-width: 760px) {
