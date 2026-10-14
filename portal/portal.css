@@ -177,13 +177,15 @@ h2 select.inline { font: inherit; font-size: 13px; font-weight: 400; padding: 3p
 .tabs button b { background: #e5e7eb; border-radius: 10px; padding: 0 7px; font-size: 12px; margin-left: 4px; } .tabs button.on b { background: #dbeafe; }
 .tabs button b.bad { background: #fee2e2; color: #b91c1c; }
 /* 国别概况的页签分三组:组名小字灰色在上,页签在下,组与组之间一道竖线;手机上一组一行,组名在左 */
-.tabs.grouped { gap: 0; align-items: flex-end; }
-.tabs .tgrp { display: flex; flex-direction: column; padding: 2px 4px 0; border-left: 1px solid var(--line); }
+.tabs.grouped { gap: 0; align-items: flex-end; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }  /* 三组排一行(使用方 2026-10-14:不要挤成两行);窗口再窄就横着滑,不折行 */
+.tabs.grouped::-webkit-scrollbar { display: none; }
+.tabs .tgrp { flex: 0 0 auto; display: flex; flex-direction: column; padding: 2px 4px 0; border-left: 1px solid var(--line); }
 .tabs .tgrp:first-child { border-left: 0; padding-left: 0; }
-.tabs .tg { padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .06em; color: #94a3b8; line-height: 1.3; }
-.tabs .tb { display: flex; flex-wrap: wrap; gap: 2px; }
-.tabs.grouped button { padding: 6px 12px 8px; }
-@media (max-width: 760px) { .tabs button { padding: 8px 9px; font-size: 14px; } .tabs .tgrp { flex: 1 1 100%; flex-direction: row; align-items: center; padding: 0; border-left: 0; border-top: 1px dashed var(--line); } .tabs .tgrp:first-child { border-top: 0; } .tabs .tg { flex: 0 0 auto; padding: 0 6px 0 0; font-size: 11px; } .tabs.grouped button { padding: 8px 8px; } }  /* 手机上与顶上的页签同一字号;商机总览三个页签在 375 宽一行放下 */
+.tabs .tg { padding: 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; color: #94a3b8; line-height: 1.3; }
+.tabs .tb { display: flex; flex-wrap: nowrap; gap: 0; }
+.tabs.grouped button { padding: 6px 8px 8px; white-space: nowrap; }
+.tabs.grouped button b { margin-left: 3px; padding: 0 6px; }
+@media (max-width: 760px) { .tabs button { padding: 8px 9px; font-size: 14px; } .tabs.grouped { flex-wrap: wrap; overflow-x: visible; } .tabs .tgrp { flex: 1 1 100%; flex-direction: row; align-items: center; padding: 0; border-left: 0; border-top: 1px dashed var(--line); } .tabs .tgrp:first-child { border-top: 0; } .tabs .tg { flex: 0 0 auto; padding: 0 6px 0 0; font-size: 11px; } .tabs .tb { flex-wrap: wrap; } .tabs.grouped button { padding: 8px 8px; } }  /* 手机上与顶上的页签同一字号;商机总览三个页签在 375 宽一行放下 */
 .tab { display: none; } .tab.on { display: block; }
 .batch { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
 .batch button { font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); cursor: pointer; }
