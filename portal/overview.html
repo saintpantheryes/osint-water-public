@@ -213,10 +213,9 @@
       series: [{ type: "map", map: "world", roam: true, nameProperty: "name", data, emphasis: { label: { show: false } }, itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" } }],
     };
     mc.setOption(mapOption);
-    P.hatchFit(mc, bl, { series: () => raw });  // 斜线按缩放换算成细线
     P.hatchNote($("map"), bl);
     mc.on("click", (p) => { if (byIso[p.name]) location.href = "country.html?iso=" + encodeURIComponent(p.name); });
-    $("mapReset").onclick = (e) => { e.preventDefault(); mc.clear(); mc.setOption(mapOption); P.hatchFit(mc, bl, { series: () => raw }); };
+    $("mapReset").onclick = (e) => { e.preventDefault(); mc.clear(); mc.setOption(mapOption); };
     let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { fc && fc.resize(); mc.resize(); }, 150); });  // 连续 resize 要缓一拍,不然地图内部算变换会报错
 
     /* 最新报告 */

@@ -379,7 +379,7 @@
     star(oid, rec) { return this.isFollowed(oid, rec) ? '<span class="star" title="关注的国别">★</span> ' : ""; },
     /* 关注国家的排前面,其余顺序不变 */
     followFirst(rows, oid) { if (!this.follow.ids.size) return rows; const a = [], b = []; rows.forEach((r) => (this.isFollowed(oid, r) ? a : b).push(r)); return a.concat(b); },
-    /* 忽略的国别(个人设置「忽略国别」,存逗号分隔的国别码):登录人自己忽略的 → ISO3 集合(读一次,各页共用)。地图上这些国别画斜线(hatch*);
+    /* 忽略的国别(个人设置「忽略国别」,存逗号分隔的国别码):登录人自己忽略的 → ISO3 集合(读一次,各页共用)。地图上这些国别涂成灰色(hatch*);
        采集不再涉及它们由后台按所有账号的忽略合起来做(A01)。没设过(字段空着)默认忽略中国;一个都不忽略时存「-」,和没设过分开。
        游客 → 默认;表或字段还没建 → 空集合。 */
     IGNORE_DEFAULT: ["CHN"],
@@ -399,11 +399,10 @@
         records: [{ id: rec.id, fields: { [this.f("preference", "ignored")]: Array.from(set).sort().join(",") || "-" } }] });
       this._ignored = Promise.resolve(new Set(set));
     },
-    /* 斜线花纹(echarts decal):叠在原来的底色上,颜色深浅照旧看得出。花纹画在地图自己的坐标里,会跟着缩放变粗,
-       所以按地图当前每度多少像素换算(hatchDecal),缩放后 hatchFit 重算一次,屏幕上始终是约 1.5 像素的细线、5 像素的间距 */
-    HATCH: { symbol: "rect", symbolSize: 1, dashArrayX: [[1, 0]], dashArrayY: [0.3, 1], rotation: -Math.PI / 4, color: "rgba(51,65,85,0.6)" },
-    hatchDecal(k) { return k ? Object.assign({}, this.HATCH, { dashArrayY: [1.5 / k, 5 / k] }) : this.HATCH; },
-    /* 地图系列(type: "map")的数据:忽略的国别加斜线;数据里没有的也补一项,好画上 */
+    /* 忽略国别涂灰:用 echarts decal 铺满一层不透明的中性灰,盖住线索多少的蓝色(visualMap 的颜色压不住单项的 areaColor,decal 能);
+       灰色不带蓝调,和最浅的蓝 #dbeafe 也分得开。铺满的颜色不随缩放变,不用按缩放换算 */
+    HATCH: { symbol: "rect", symbolSize: 1, dashArrayX: [[1, 0]], dashArrayY: [1, 0], color: "#c4bfba" },
+    /* 地图系列(type: "map")的数据:忽略的国别涂灰;数据里没有的也补一项,好画上 */
     hatchData(data, set, decal) {
       if (!set || !set.size) return data;
       decal = decal || this.HATCH;
@@ -420,33 +419,13 @@
     },
     hatchItems(set, decal) { decal = decal || this.HATCH; return Array.from(set).map((iso) => ({ name: iso, itemStyle: { decal } })); },
     onGeo(p) { return !!p && (p.componentType === "geo" || p.seriesId === "hatch"); },
-    /* 画好(或重画)地图之后调:按当前缩放把斜线换算成屏幕上的细线;滚轮缩放后再换算。
-       base:{ series: () => 地图系列不带斜线的 data }(国别、线索总览的地图),或 { geo: true }(叠了 hatchSeries 的 geo 底图) */
-    hatchFit(mc, set, base) {
-      if (!mc) return;
-      if (!set || !set.size) { mc.__hatch = null; return; }
-      mc.__hatch = { set, base, k: 0 };
-      const fit = () => {
-        const h = mc.__hatch; if (!h || mc.isDisposed()) return;
-        const finder = h.base.geo ? { geoIndex: 0 } : { seriesIndex: 0 };
-        let a, b, c; try { a = mc.convertToPixel(finder, [0, 0]); b = mc.convertToPixel(finder, [10, 0]); c = mc.convertToPixel(finder, [0, 10]); } catch (e) { return; }
-        if (!a || !b || !c) return;
-        const k = (Math.abs(b[0] - a[0]) + Math.abs(c[1] - a[1])) / 20;  // 横竖每度像素不一样(纬度方向拉长),取平均
-        if (!k || Math.abs(k - h.k) / k < 0.05) return;
-        h.k = k;
-        const d = this.hatchDecal(k);
-        mc.setOption(h.base.geo ? { series: [{ id: "hatch", data: this.hatchItems(h.set, d) }] } : { series: [{ data: this.hatchData(h.base.series(), h.set, d) }] });
-      };
-      fit();
-      if (!mc.__hatchOn) { mc.__hatchOn = true; let t = 0; mc.on("georoam", () => { clearTimeout(t); t = setTimeout(fit, 60); }); }
-    },
     /* 提示框里的一行,与地图下方的图例说明 */
     hatchTip(iso, set) { return set && set.has(iso) ? '<br><span style="color:#64748b">已忽略:不再采集这一国的线索</span>' : ""; },
     hatchNote(mapEl, set) {
       if (!mapEl || !set || !set.size || (mapEl.nextElementSibling && mapEl.nextElementSibling.classList.contains("hatch-note"))) return;
       const p = document.createElement("p");
       p.className = "hatch-note muted small";
-      p.innerHTML = '<span class="hatch-swatch"></span>斜线:我忽略的国别(' + set.size + ' 个,不再采集),在<a href="me.html">我的</a>里改。';
+      p.innerHTML = '<span class="hatch-swatch"></span>灰色:我忽略的国别(' + set.size + ' 个,不再采集),在<a href="me.html">我的</a>里改。';
       mapEl.insertAdjacentElement("afterend", p);
     },
     /* 日历订阅列表属性:一行一个「名称 | 链接」 */

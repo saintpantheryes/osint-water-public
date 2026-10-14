@@ -476,11 +476,11 @@ details.sec.panel summary { margin: -4px 0; }
 .lk-lv.hi { background: #dcfce7; color: #166534; } .lk-lv.mid { background: #e0f2fe; color: #075985; } .lk-lv.lo { background: #fee2e2; color: #991b1b; }
 .lk-act { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
 .lk-act .btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 600; }
-/* 地图下方的「斜线 = 忽略国别」说明 */
+/* 地图下方的「灰色 = 忽略国别」说明 */
 .hatch-note { margin: 4px 0 0; }
-.hatch-swatch { display: inline-block; width: 16px; height: 11px; margin-right: 6px; vertical-align: -1px; border: 1px solid #cbd5e1;
-  background: repeating-linear-gradient(-45deg, #f1f5f9 0 3px, rgba(51,65,85,0.55) 3px 4px); }
-.chip-btn.blk { color: #334155; border-color: #94a3b8; background: repeating-linear-gradient(-45deg, #f8fafc 0 5px, #e2e8f0 5px 7px); }
+.hatch-swatch { display: inline-block; width: 16px; height: 11px; margin-right: 6px; vertical-align: -1px; border: 1px solid #c4bfba;
+  background: #c4bfba; }
+.chip-btn.blk { color: #334155; border-color: #c4bfba; background: #e7e5e4; }
 /* 关注的国别:清单里的 ★ */
 .star { color: #d97706; font-size: 13px; }
 .nw { white-space: nowrap; }

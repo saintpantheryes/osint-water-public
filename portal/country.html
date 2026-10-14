@@ -93,10 +93,9 @@
         itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" }, select: { itemStyle: { borderColor: "#dc2626", borderWidth: 2 }, label: { show: false } } }],
     };
     mc.setOption(mapOption);
-    P.hatchFit(mc, bl, { series: () => raw });  // 斜线按缩放换算成细线
     P.hatchNote($("map"), bl);
     mc.on("click", (p) => { if (has[p.name]) { $("pick").value = p.name; show(p.name).catch((e) => P.fail($("info"), e)); } });
-    $("mapReset").onclick = (e) => { e.preventDefault(); mc.clear(); mc.setOption(mapOption); P.hatchFit(mc, bl, { series: () => raw }); markMap($("pick").value); };
+    $("mapReset").onclick = (e) => { e.preventDefault(); mc.clear(); mc.setOption(mapOption); markMap($("pick").value); };
     let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => mc.resize(), 150); });
   }
   function markMap(iso) { if (mc) mc.dispatchAction({ type: "select", seriesIndex: 0, name: iso }); }

@@ -106,7 +106,7 @@
     $("rel").addEventListener("click", (e) => { if (e.target.id === "allC") { e.preventDefault(); pickCountry(""); } });
     const isoSet = new Set(countries.filter((c) => used.has(c.id)).map((c) => P.get("country", c, "key")));
     const zhOf = {};
-    let mc = null, bl = new Set();  // bl:登录人忽略的国别,地图上画斜线
+    let mc = null, bl = new Set();  // bl:登录人忽略的国别,地图上涂灰
     const draw = () => {
       const qs = new URLSearchParams(Object.entries(state).filter(([k, v]) => v && v !== DEFAULT[k])).toString();
       history.replaceState(null, "", "trend.html" + (qs ? "?" + qs : ""));
@@ -142,7 +142,6 @@
           emphasis: { itemStyle: { areaColor: "#e2e8f0" }, label: { show: false } }, label: { show: false },
           regions },
         series: series.concat(P.hatchSeries(bl, null, true)) }, true);
-      P.hatchFit(mc, bl, { geo: true });  // 斜线按缩放换算成细线
       /* 城市清单:按水风险从高到低,再按人口 */
       const want = { "": ["self", "loan", "both"], self: ["self", "both"], loan: ["loan", "both"], both: ["both"], all: ["self", "loan", "both", "none"] }[state.s];
       const rows = base.filter((x) => want.includes(x.k)).sort((a, b) => (val("city", b.ct, state.r) || -1) - (val("city", a.ct, state.r) || -1) ||

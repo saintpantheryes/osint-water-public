@@ -38,7 +38,7 @@
     </div>
   </div>
   <h2>忽略的国别 <span class="muted" id="iCount"></span></h2>
-  <p class="muted small">忽略的国家在各页地图上画斜线,后台也不再采集这些国家的新线索(已有的线索保留)。在地图上点一个国家忽略,再点一下恢复;也可以按大洲、按经济水平一键忽略或恢复。没改过的默认只忽略中国。</p>
+  <p class="muted small">忽略的国家在各页地图上涂成灰色,后台也不再采集这些国家的新线索(已有的线索保留)。在地图上点一个国家忽略,再点一下恢复;也可以按大洲、按经济水平一键忽略或恢复。没改过的默认只忽略中国。</p>
   <div class="panel" id="ignoreBox">
     <div class="frow" id="iConts"></div>
     <div class="frow" id="iEcon"></div>
@@ -99,7 +99,6 @@
       $("iCount").textContent = n ? n + " 个" : "";
       const raw = Array.from(ign).map((iso) => ({ name: iso, itemStyle: { areaColor: "#cbd5e1" } }));
       mc.setOption({ series: [{ data: P.hatchData(raw, ign) }] });
-      P.hatchFit(mc, ign, { series: () => raw });
       /* 一键按钮:整组都忽略了就亮着,点一下恢复整组;否则点一下忽略整组 */
       const btns = (list) => list.map((g) => { const k = g.xs.filter((i) => ign.has(i)).length, full = k === g.xs.length;
         return '<button type="button" class="chip-btn' + (full ? " blk" : "") + '" data-g="' + g.key + '">' + (full ? "恢复" : "忽略") + g.label + (k && !full ? ' <span class="muted small">已忽略 ' + k + "/" + g.xs.length + "</span>" : "") + "</button>"; }).join("");

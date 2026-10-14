@@ -67,7 +67,7 @@
 
   function world() {  // 世界地图底图只注册一次
     geoReady = geoReady || Promise.all([fetch("world.geo.json").then((r) => r.json()).then((geo) => echarts.registerMap("world", geo)),
-      P.ignored().then((s) => { bl = s; })]);  // 忽略的国别:底图画斜线
+      P.ignored().then((s) => { bl = s; })]);  // 忽略的国别:底图涂灰
     return geoReady;
   }
   function onMap(el, cities, opt) {
@@ -89,7 +89,6 @@
       series: [{ type: "scatter", coordinateSystem: "geo", data: cities.map(pt).filter(Boolean), symbolSize: (v) => 4 + 18 * Math.sqrt(v[2] / max), itemStyle: { opacity: 0.75 } }].concat(P.hatchSeries(bl)),
     };
     mc.setOption(option);
-    P.hatchFit(mc, bl, { geo: true });
     P.hatchNote(el, bl);
     if (opt.click) mc.on("click", (p) => { if (p.data && p.data.id) location.href = "city.html?id=" + encodeURIComponent(p.data.id); });
     let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => mc.resize(), 150); });
@@ -164,7 +163,7 @@
     $("fCountry").onchange = () => { state.c = $("fCountry").value; draw(); };
     $("fText").value = state.q;
     let tt = 0; $("fText").oninput = () => { clearTimeout(tt); tt = setTimeout(() => { state.q = $("fText").value.trim(); draw(); }, 250); };
-    $("mapReset").onclick = (e) => { e.preventDefault(); if (map) { map.mc.clear(); map.mc.setOption(map.option); P.hatchFit(map.mc, bl, { geo: true }); } };
+    $("mapReset").onclick = (e) => { e.preventDefault(); if (map) { map.mc.clear(); map.mc.setOption(map.option); } };
     if (!all.length) {
       $("cards").innerHTML = ""; $("map").parentNode.style.display = "none";
       $("rows").innerHTML = '<p class="muted">城市表已经建好,还没有数据:后台每月按 GeoNames 公开数据把人口 10 万以上的城市建进来,第一次在下一轮自动任务里补上(最晚第二天早上)。</p>';
@@ -259,7 +258,6 @@
           itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" }, emphasis: { disabled: true }, label: { show: false } },
         series: [{ name: "城市", type: "scatter", coordinateSystem: "geo", data: cxy ? [{ name: cname(ct), kind: "城市中心", value: cxy.concat([0]) }] : [], symbol: "diamond", symbolSize: 12, itemStyle: { color: "#64748b" }, z: 1 }]
           .concat(pts.map((p) => ({ name: p.label, type: "scatter", coordinateSystem: "geo", data: p.data, symbolSize: (v) => 6 + 18 * Math.sqrt((v[2] || 0) / maxCap), itemStyle: { color: p.color, opacity: 0.8 }, z: 2 }))).concat(P.hatchSeries(bl)) });
-      P.hatchFit(mc, bl, { geo: true });
       pmap = mc;
     };
     const showPlants = (k) => { if (k !== "plants") return; if (pmap) pmap.resize(); else drawPlants(); };
