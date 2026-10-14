@@ -13,7 +13,7 @@ from collections import Counter
 from datetime import timedelta
 from functools import lru_cache
 
-from core import geo, tstore
+from core import country_facts, geo, tstore
 from core.watch import reporting
 from core.zh_name import FUNDERS, TERMS_PATH
 
@@ -39,7 +39,9 @@ OUTLINE: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
     ("投资规划与资金来源", (("资金方分布", "商机的出资方与融资方式"), ("已识别项目的投资规模", "商机的投资规模(折合人民币)"),
                             ("国际金融机构涉水项目", "世行项目库统计"), ("分析", "资金来源与投资节奏"))),
     ("竞争格局", (("商机参与方", "商机上记录的业主、咨询、承包商与同业动向"), ("分析", "业主、承包商与竞争态势"))),
-    ("市场准入与商务环境", (("准入与竞争要点", "国别表「市场准入与竞争」"), ("分析", "招标采购、资质与本地化要求"))),
+    ("市场准入与商务环境", (("准入与竞争要点", "国别表「市场准入与竞争」"),
+                            ("营商环境(世界银行 B-READY)", "B-READY 总分、供水与公共采购得分、商业水价、外企参标限制、授标与回款天数"),
+                            ("分析", "招标采购、资质与本地化要求"))),
     ("机会识别与进入策略", (("已立项跟踪的商机", "人工确认、正在跟踪或已结束的商机及阶段"), ("AI 建议的商机", "机器建议、待人决定跟不跟的商机及理由"),
                             ("未来时间节点", "这些商机未来 30 天的截止与节点"), ("重点机会研判", "分析"), ("行动建议", "分析"))),
     ("风险分析与建议", (("需要留意的指标", "超过警戒线的指标"), ("风险提示", "分析"), ("结论与建议", "分析"))),
@@ -67,7 +69,7 @@ FIELDS_B = {
     "competition": "竞争格局分析:150–300 字,业主与采购方式、近期中标的承包商与国别、竞争态势",
 }
 FIELDS_C = {
-    "access": "市场准入与商务环境分析:150–300 字,招标采购流程、资质与本地化、对我方的要求",
+    "access": "市场准入与商务环境分析:150–300 字,招标采购流程、资质与本地化、对我方的要求;有世界银行 B-READY 数据的,结合公共采购得分、外企参标限制、授标与回款天数写",
     "opportunities": "重点机会研判:最值得跟进的 3–8 个机会,Markdown 列表;每个写明是什么、为什么值得跟进、关键日期、资格限制或风险",
     "actions": "行动建议:按紧迫程度排序的具体行动,Markdown 列表,写明建议完成时间",
     "risks": "风险提示:4–6 条,Markdown 列表,每条标明风险高低(高 / 中 / 低),涉及政治、经济与支付、法律合规、执行",
@@ -173,6 +175,34 @@ def _strip_refs(text: str) -> str:
 def _capital(basics: list[dict]) -> str:
     r = next((x for x in basics if x["k"] in ("首都", "首都或主要城市")), None)
     return re.sub(r"[((].*$", "", r["v"]).strip() if r else ""
+
+
+def _bready(g, name: str, built: bool) -> str:
+    """营商环境(世界银行 B-READY,v2.23):一句话 + 小表,偏弱的写明;字段没建(built 假)时整节不出,这一期没覆盖的写明。"""
+    if not built:
+        return ""
+    n = lambda p: _num(g(p))  # noqa: E731
+    if n("bready_total") is None:
+        return f"世界银行 B-READY 2025 这一期没有覆盖{name}(评了 101 个经济体,下一期计划扩大到约 180 个)。\n"
+    usd, loc, cur = n("water_tariff_usd"), n("water_tariff"), str(g("water_tariff_cur") or "")
+    rows = [("营商环境总分", _fmt(n("bready_total"), 1, "分"), "三大支柱平均,0–100"), ("供水得分", _fmt(n("bready_water"), 1, "分"), "水价监管、漏损目标、接水与供水可靠性"),
+            ("公共采购得分", _fmt(n("bready_procure"), 1, "分"), "招投标规则、电子采购、授标与付款"), ("纠纷解决得分", _fmt(n("bready_dispute"), 1, "分"), "商事纠纷解决"),
+            ("商业水价", (f"约 {usd:.2f} 美元/m³" + (f"({loc:g} {cur}/m³)" if loc is not None else "")) if usd is not None else "", "水费 + 污水费,每月 1000 m³ 的商业用户"),
+            ("外企参标限制", str(g("foreign_bid") or ""), "法规是否限制外国企业参加公共招标"),
+            ("大型工程授标天数", _fmt(n("award_days"), 0, "天"), "国际招标门槛以上的工程,从发标到授标(专家估计)"),
+            ("政府合同回款天数", _fmt(n("gov_pay_days"), 0, "天"), "企业收到政府合同款的平均天数"),
+            ("企业供水可靠比例", (f"{n('water_reliable'):.1f}%" if n("water_reliable") is not None else ""), "没遇到缺水的企业占比"), ("接水天数", _fmt(n("water_conn_days"), 0, "天"), "企业新接供水的天数")]
+    body = []
+    for k, v, why in rows:
+        if not v:
+            continue
+        bad = country_facts.tone(k, v) or ("所有公共招标都对外企设限" if k == "外企参标限制" and "全部" in v else
+                                           "部分招标对外企设限,投标前要核实" if k == "外企参标限制" and ("部分" in v or "说法不一" in v) else None)
+        body.append([k, R._md_text(v) + (f"(超警戒线:{bad})" if bad else ""), why])
+    weak = [r[0] for r in body if "超警戒线" in r[1]]
+    head = (f"世界银行 B-READY 2025 评{name}的营商环境总分 {_fmt(n('bready_total'), 1)} 分"
+            + (f";需要留意的是{'、'.join(weak)}" if weak else ",各项未越过警戒线") + "。分数测的是最大的商业城市,世行不给国家排名。\n\n")
+    return head + R._table(["项目", "数值", "说明"], body) + f"\n来源:世界银行 Business Ready(<https://www.worldbank.org/en/businessready>),数据:{R._md_text(str(g('bready_edition') or ''))}。\n"
 
 
 def build_country(ctx: Ctx, iso: str, internal: bool = True) -> tuple[str, set[str], set[str], str]:
@@ -316,7 +346,7 @@ def build_country(ctx: Ctx, iso: str, internal: bool = True) -> tuple[str, set[s
         if lines:
             party_rows.append([og(r, "code"), R._md_text(str(og(r, "name_zh") or "")), ";".join(R._md_text(x)[:160] for x in lines[:5])])
     sec["竞争格局"] = {"商机参与方": R._table(["编号", "名称", "参与方"], party_rows) if party_rows else ""}
-    sec["市场准入与商务环境"] = {"准入与竞争要点": R._bullets(g("access")) if g("access") else ""}
+    sec["市场准入与商务环境"] = {"准入与竞争要点": R._bullets(g("access")) if g("access") else "", "营商环境(世界银行 B-READY)": _bready(g, name, b.has("country", "bready_edition"))}
     sec["机会识别与进入策略"] = {
         "已立项跟踪的商机": (R._table(["编号", "名称", "我方阶段", "公开进度", "下一节点", "资金"], [[_strip_refs(R._cell(v)) for v in x[:2] + x[3:]] for x in R._opp_rows(ctx, own_opps)])
                          if own_opps else "该国还没有人工立项跟踪的商机。\n"),

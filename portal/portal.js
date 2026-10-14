@@ -491,6 +491,8 @@
       [/基本饮水|基本卫生/, (v) => v < 80, "覆盖率 < 80%"], [/安全管理饮水|安全管理卫生/, (v) => v < 50, "覆盖率 < 50%"],
       [/淡水压力/, (v) => v >= 75, "取水 ≥ 75% 可再生量"], [/无安全饮用水|无卫生设施/, (v) => v >= 20, "≥ 20% 人口"], [/未处理污水/, (v) => v >= 50, "≥ 50%"],
       [/水风险|用水压力|干旱风险|洪水风险/, (v) => v >= 3, "风险高(≥ 3 分)"],
+      [/营商环境总分|供水得分|公共采购得分|纠纷解决得分/, (v) => v < 50, "低于 50 分,偏弱"], [/企业供水可靠/, (v) => v < 80, "不到 80%,缺水的企业多"],
+      [/授标天数/, (v) => v > 180, "超过 180 天,授标慢"], [/回款天数/, (v) => v > 90, "超过 90 天,回款慢"],
     ],
     num(text) {
       const m = String(text == null ? "" : text).replace(/[−–]/g, "-").match(/^\s*(-?\d[\d,]*(?:\.\d+)?)/);
@@ -563,6 +565,43 @@
       const rest = rows.filter((r) => !top.includes(r));
       return this.kpiHtml(kp) + (rest.length ? '<div class="facts">' + rest.map(([k, v]) => this.factHtml(k, v)).join("") + "</div>" : "") +
         '<p class="muted small">分数 0–5:4 以上极高,3–4 高。来源:' + this.esc(this.get(oid, rec, "risk_source") || "WRI Aqueduct 4.0 等") + '。模型估计,作趋势参考' + (iso === "CHN" ? "(中国境内不做趋势机会分析)" : ';<a href="trend.html' + (iso ? "?" + new URLSearchParams({ c: iso }) : "") + '">看趋势机会 →</a>') + "</p>";
+    },
+    /* 营商环境(世界银行 B-READY;本体 V7「营商环境」页签,2026-10-14 使用方要):rec 是一整条国别记录。
+       四张大号指标卡(总分、供水得分、公共采购得分、商业水价)→ 投标与供水的几项 → 细项分供水、采购两栏;这一期没覆盖的国家写明,不显示成 0 */
+    BREADY_URL: "https://www.worldbank.org/en/businessready",
+    BREADY_BAD: /外企参标或授标受限|外企须|专留给本地企业/,  // 这几条细项答「是」反倒是坏事(对我们投标不利),标红
+    bready(rec, name) {
+      const src = '<p class="muted small">来源:<a href="' + this.BREADY_URL + '" target="_blank" rel="noopener">世界银行 Business Ready(B-READY)↗</a>' +
+        "。分数 0–100,专家问卷加企业调查,测的是这国最大的商业城市;总分是三大支柱(监管框架、公共服务、运行效率)的平均。世行不给国家排名,这里也只看分数和含义。</p>";
+      if (!this.has("country", "bready_edition")) return '<p class="muted">「营商环境」的字段还没建(跑一次建表命令后就有)。</p>';
+      const g = (p) => this.get("country", rec, p), n = (p) => { const v = g(p); return v === undefined || v === null || v === "" ? null : Number(v); };
+      if (n("bready_total") === null) return '<div class="panel"><p><b>世界银行 B-READY 这一期没有覆盖' + this.esc(name || "这个国家") + "。</b></p>" +
+        '<p class="muted">2025 年这一期评了 101 个经济体(2024 年 50 个),世行计划扩大到约 180 个;新一期出来、数据文件换掉后这里自动补上。</p></div>' + src;
+      const sc = (p) => (n(p) === null ? "" : n(p).toFixed(1) + " 分"), day = (p) => (n(p) === null ? "" : Math.round(n(p)) + " 天");
+      const cur = g("water_tariff_cur") || "", usd = n("water_tariff_usd"), loc = n("water_tariff");
+      const kp = [{ label: "营商环境总分", value: sc("bready_total"), note: "三大支柱平均" }, { label: "供水得分", value: sc("bready_water"), note: "水价监管、漏损目标、接水与供水可靠性" },
+        { label: "公共采购得分", value: sc("bready_procure"), note: "招投标规则、电子采购、授标与付款" },
+        usd !== null ? { label: "商业水价", value: "约 " + usd.toFixed(2) + " 美元/m³", note: (loc !== null ? loc.toLocaleString("zh-CN", { maximumFractionDigits: 3 }) + " " + cur + "/m³," : "") + "水费 + 污水费,每月 1000 m³ 的商业用户" }
+          : { label: "商业水价", value: "未公布", note: "这一期没有可用的数" }];
+      const fb = g("foreign_bid") || "", fbCls = /全部/.test(fb) ? " bad" : /部分|说法不一/.test(fb) ? " warn" : "";
+      const rows = [["大型工程授标天数", day("award_days"), "国际招标门槛以上的工程,从发标到授标(专家估计)"], ["政府合同回款天数", day("gov_pay_days"), "企业收到政府合同款的平均天数"],
+        ["企业供水可靠比例", n("water_reliable") === null ? "" : n("water_reliable").toFixed(1) + "%", "没遇到缺水的企业占比"], ["接水天数", day("water_conn_days"), "企业新接供水的天数(中位数)"],
+        ["纠纷解决得分", sc("bready_dispute"), "商事纠纷解决"]].filter(([, v]) => v);
+      const items = String(g("bready_items") || "").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+      const col = (grp) => {
+        const li = items.filter((x) => x.startsWith("[" + grp + "]")).map((x) => {
+          const t = x.replace(/^\[[^\]]+\]\s*/, ""), i = t.lastIndexOf(":"), k = i > 0 ? t.slice(0, i) : t, v = i > 0 ? t.slice(i + 1) : "";
+          const bad = this.BREADY_BAD.test(k) && v && !/^否/.test(v) && !/^说法不一/.test(v);
+          return '<li' + (bad ? ' class="bad"' : "") + "><span>" + this.esc(k) + '</span><b class="' + (/^否/.test(v) ? "no" : "yes") + '">' + this.esc(v || "") + (bad ? '<em class="over">对外企投标不利</em>' : "") + "</b></li>";
+        });
+        return li.length ? '<ul class="bitems">' + li.join("") + "</ul>" : '<p class="muted">(无)</p>';
+      };
+      return this.kpiHtml(kp) +
+        '<div class="panel"><div class="facts">' + '<div class="fact' + fbCls + '"><b>外企参标限制</b><span class="v"><strong>' + this.esc(fb || "—") + "</strong>" +
+          (fbCls === " bad" ? '<em class="over">所有公共招标都对外企设限</em>' : fbCls ? '<em class="over">' + (/说法不一/.test(fb) ? "专家看法不一,投标前要核实" : "部分招标对外企设限,投标前要核实") + "</em>" : "") + "</span></div>" +
+          rows.map(([k, v, why]) => this.factHtml(k, v, '<span class="src">' + this.esc(why) + "</span>")).join("") + "</div></div>" +
+        '<div class="bcols"><div class="panel"><h3>供水细项</h3>' + col("供水") + '</div><div class="panel"><h3>公共采购细项</h3>' + col("采购") + "</div></div>" +
+        src.replace("</p>", "数据:" + this.esc(g("bready_edition") || "") + "。</p>");
     },
     /* 已中标项目(本体 V7、V16;2026-10-12 使用方要):国别概况、城市一页最下面的同一块。prop = "country" 或 "city",rid = 那条记录。
        类别、合同类型、承包模式、金额(折合人民币分档)、年份可多选筛选(2026-10-13 使用方要合同类型、金额筛选与排序),筛选项上的数跟着别的项与搜索走;

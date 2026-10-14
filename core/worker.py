@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from core import assistant_server, storage, tstore
-from core.jobs import awards, cities, collect, common, countries, enrich, expire, fx, plants, reports, risk, stage_log, studies
+from core.jobs import awards, bready, cities, collect, common, countries, enrich, expire, fx, plants, reports, risk, stage_log, studies
 from core.profile import load_profile
 
 EVERY = 120  # 秒
@@ -120,6 +120,12 @@ def tick(profile, now: datetime, state: dict, use_llm: bool = True) -> None:
                 log(f"risk:{out}")
         except Exception as e:  # noqa: BLE001
             log(f"risk 出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+        try:  # 营商环境(A36,世行 B-READY):新国别跟着补;数据文件换了新一期整组替换
+            out = bready.run(ctx.base, log=log)
+            if any(out.values()):
+                log(f"bready:{out}")
+        except Exception as e:  # noqa: BLE001
+            log(f"bready 出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
         if today.day == 1:
             try:  # 存量水厂(A25):每月 1 日城市维护之后跑一遍,补新数据与新城市的关联(只新建、只填空)
                 out = plants.run(ctx.base, log=log)

@@ -288,7 +288,7 @@
       const oid = P.linkId(g("opportunity"));
       return [P.day(g("day")), g("kind") || "", P.raw(oid ? '<a href="' + P.oppUrl(oid) + '">' + P.esc(P.text(g("opportunity"))) + "</a>" : P.esc(P.text(g("lead")))), P.text(g("country")), g("status") || "", (g("label") || "").slice(0, 60), P.raw(P.open("milestone", m.id))]; }));
   }
-  const NOUN = { lead: "条线索", opportunity: "个商机", milestone: "个时间节点", report: "份报告", award: "份已中标项目" };
+  const NOUN = { lead: "条线索", opportunity: "个商机", milestone: "个时间节点", report: "份报告", award: "份已中标项目", country: "国国别" };
   /* 已中标项目的表(与国别概况「已中标项目」页签同样的列):中标价写原币,旁边给约合人民币(后台按汇率折的「折合人民币(万元)」);问了规模的,工程量下面写读出的规模;
      有招标估价的,中标价下面写「招标估价的 87%」;中标时间下面写评标天数与投标家数(有的才写) */
   const CUR_ZH = { USD: "美元", EUR: "欧元", CNY: "元" };
@@ -518,6 +518,93 @@
     });
   }
 
+  /* ---------- 国别的营商环境(世界银行 B-READY,v2.23;2026-10-14 使用方要「供水得分低于 50 的市场国别」「哪些国家不限制外企参标」「摩洛哥商业水价多少」) ----------
+     国别一国一行,在页面上筛、排:点了国名的逐国作答(没覆盖的直说);否则列国别表,按问的指标排,卡片写符合几国、中位数、我们的国别里有数的几国,
+     没覆盖的举几个线索多的国家,一国都不符合时说清有数的几国里最低、最高是多少。忽略的国别(个人设置)不列,点了名的照答 */
+  const BR_PROPS = ["key", "name_zh", "tier", "lead_count", "bready_total", "bready_water", "bready_procure", "bready_dispute", "water_tariff", "water_tariff_cur", "water_tariff_usd",
+    "water_reliable", "water_conn_days", "foreign_bid", "award_days", "gov_pay_days", "bready_items", "bready_edition"];
+  function brVal(r, id) { const v = P.get("country", r, id); return v === null || v === undefined || v === "" || !isFinite(Number(v)) ? null : Number(v); }
+  function brText(m, v) {
+    if (v === null) return "—";
+    if (m.id === "water_tariff_usd") return "约 " + v.toFixed(2) + " 美元/m³";
+    if (m.unit === "%") return v.toFixed(1) + "%";
+    if (m.unit === "天") return Math.round(v) + " 天";
+    return v.toFixed(1) + " " + (m.unit || "");
+  }
+  const brNU = (m, v) => (m.id === "water_tariff_usd" ? [v.toFixed(2), "美元/m³"] : m.unit === "%" ? [v.toFixed(1), "%"] : m.unit === "天" ? [String(Math.round(v)), "天"] : [v.toFixed(1), m.unit || ""]);  // 卡片的 [数, 单位]
+  function brTariff(r) {  // 「约 1.18 美元/m³(2 AZN/m³)」:当地币也写上
+    const u = brVal(r, "water_tariff_usd"), l = brVal(r, "water_tariff"), cur = P.get("country", r, "water_tariff_cur") || "";
+    return u === null ? "—" : "约 " + u.toFixed(2) + " 美元/m³" + (l !== null ? "(" + l.toLocaleString("zh-CN", { maximumFractionDigits: 3 }) + " " + cur + "/m³)" : "");
+  }
+  async function countryView(plan, body, el) {
+    const f = plan.filters, cols = [];
+    if (!P.has("country", "bready_edition")) { body.innerHTML = '<p class="muted">「营商环境」的字段还没建(管理员跑一次建表命令、导入 B-READY 数据后就能问)。</p>'; return; }
+    const [rows, ign] = await Promise.all([P.records("country", { props: BR_PROPS }), P.ignored()]);
+    const ms = (plan.measures || []).map((x) => P.measure(x.id)).filter((m) => m && m.id !== "count");
+    const m0 = ms[0] || P.measure("bready_total"), nm = (r) => P.get("country", r, "name_zh") || P.get("country", r, "key");
+    const has = (r) => brVal(r, "bready_total") !== null, link = (r, label) => '<a href="country.html?' + new URLSearchParams({ iso: P.get("country", r, "key"), t: "biz" }) + '">' + P.esc(label || nm(r)) + "</a>";
+    const ed = (rows.find((r) => P.get("country", r, "bready_edition")) || { fields: {} }), edition = P.get("country", ed, "bready_edition") || "B-READY 2025";
+    const src = '<p class="muted small">来源:<a href="' + P.BREADY_URL + '" target="_blank" rel="noopener">世界银行 Business Ready(B-READY)↗</a>,数据:' + P.esc(edition) +
+      "。测的是各国最大的商业城市;世行不给国家排名,这里按分数排只为方便查看。</p>";
+    /* 点了国名:逐国作答,问的那项放最前、写成一句话,下面是国别概况「营商环境」页签的同一块 */
+    if (f.countries.length) {
+      const h = [];
+      f.countries.forEach((c) => {
+        const r = rows.find((x) => P.get("country", x, "key") === c.iso3);
+        if (!r) { h.push('<div class="panel"><p><b>库里没有' + P.esc(c.name) + "这个国别。</b></p></div>"); return; }
+        if (!has(r)) { h.push(P.bready(r, c.name)); return; }
+        const lead = ms.map((m) => {
+          const v = brVal(r, m.id), bad = P.tone(m.name, v);
+          const val = m.id === "water_tariff_usd" ? brTariff(r) : brText(m, v);
+          return "<p class=\"lead-ans\">" + P.esc(c.name) + "的" + P.esc(m.name) + ":<b" + (bad ? ' class="num-bad"' : "") + ">" + P.esc(val) + "</b>" + (bad ? "(" + P.esc(bad) + ")" : "") +
+            (v === null ? '<span class="muted small">(' + P.esc(m.missing || "这一期没有这项") + ")</span>" : "") + "</p>";
+        }).join("");
+        h.push((f.countries.length > 1 ? "<h2>" + P.esc(c.name) + "</h2>" : "") + lead + P.bready(r, c.name).replace(/<p class="muted small">来源:[\s\S]*$/, "") +
+          "<p>" + link(r, "在国别概况看" + c.name + "的营商环境 →") + "</p>");
+      });
+      body.innerHTML = h.join("") + src;
+      return;
+    }
+    /* 列国别:先按市场分级、外企参标、门槛筛(没 B-READY 数据的另算),再按问的指标排 */
+    const pool = rows.filter((r) => !ign.has(P.get("country", r, "key")) && (!f.tiers.length || f.tiers.includes(P.get("country", r, "tier"))));
+    const covered = pool.filter(has), uncovered = pool.filter((r) => !has(r)).sort((a, b) => (Number(P.get("country", b, "lead_count")) || 0) - (Number(P.get("country", a, "lead_count")) || 0));
+    const mt = f.metric, mm = mt ? P.measure(mt.id) : null;
+    const ok = (r) => (!f.foreign.length || f.foreign.includes(P.get("country", r, "foreign_bid"))) &&
+      (!mm || ((v) => v !== null && (mt.min === null || v > mt.min) && (mt.max === null || v < mt.max))(brVal(r, mm.id)));
+    const hit = covered.filter(ok), withV = hit.filter((r) => brVal(r, m0.id) !== null), noV = hit.filter((r) => brVal(r, m0.id) === null);
+    const od = plan.order || { id: m0.id, dir: mt && mt.max !== null && mt.min === null ? "asc" : mt && mt.min !== null ? "desc" : m0.better === "low" ? "asc" : "desc" };
+    const om = P.measure(od.id) || m0;
+    withV.sort((a, b) => ((brVal(a, om.id) ?? -1e9) - (brVal(b, om.id) ?? -1e9)) * (od.dir === "asc" ? 1 : -1));
+    const scope = f.tiers.length ? (f.tiers.length === 1 ? "「" + f.tiers[0] + "」" : "市场") + "国别" : "我们的国别";
+    const miss = uncovered.slice(0, 6).map(nm).join("、") + (uncovered.length > 6 ? "等" : "");
+    const covNote = scope + "共 " + pool.length + " 国,B-READY 这一期有数的 " + covered.length + " 国" + (uncovered.length ? ";没覆盖的 " + uncovered.length + " 国(" + miss + ")不在表里" : "") + "。";
+    const vals = withV.map((r) => brVal(r, m0.id)).sort((a, b) => a - b), med = vals.length ? (vals[(vals.length - 1) >> 1] + vals[vals.length >> 1]) / 2 : null;
+    const h = [];
+    if (!hit.length) {
+      const all = covered.map((r) => brVal(r, (mm || m0).id)).filter((v) => v !== null).sort((a, b) => a - b), mx = mm || m0;
+      const why = mm && all.length ? "有这项数据的 " + all.length + " 国里," + mx.name + "最低 " + brText(mx, all[0]) + "、最高 " + brText(mx, all[all.length - 1]) + "。" : "";
+      body.innerHTML = '<div class="kpis n2">' + kpiCard("符合条件的国别", ["0", "国"], "") + "</div><p>没有符合这些条件的国别。" + P.esc(why) + P.esc(covNote) + "</p>" + src;
+      return;
+    }
+    const lim = Math.min(plan.limit || 200, 200), shown = withV.slice(0, lim);
+    h.push('<div class="kpis' + (med === null ? " n2" : " n3") + '">' + kpiCard("符合条件的国别", [String(hit.length), "国"], "在有 B-READY 数据的 " + covered.length + " 国里") +
+      (med !== null ? kpiCard(m0.name + "(中位数)", brNU(m0, med), "按这 " + withV.length + " 国算") : "") +
+      kpiCard("没覆盖", [String(uncovered.length), "国"], miss ? "如 " + miss : "") + "</div>");
+    h.push('<p class="small">' + P.esc(covNote) + (noV.length ? "符合条件的国别里另有 " + noV.length + " 国没有" + P.esc(m0.name) + "(" + P.esc(m0.missing || "") + "),列在表末。" : "") +
+      (withV.length > lim ? "按" + P.esc(om.name) + (od.dir === "asc" ? "从低到高" : "从高到低") + "只列前 " + lim + " 国。" : "按" + P.esc(om.name) + (od.dir === "asc" ? "从低到高" : "从高到低") + "排。") + "</p>");
+    const show = [m0, ...ms.slice(1)].concat(["bready_total", "bready_water", "bready_procure", "water_tariff_usd", "award_days", "gov_pay_days"].map((id) => P.measure(id)).filter(Boolean))
+      .filter((m, i, a) => a.findIndex((x) => x.id === m.id) === i);
+    const cell = (r, m) => { const v = brVal(r, m.id), bad = P.tone(m.name, v), t = m.id === "water_tariff_usd" ? (v === null ? "—" : v.toFixed(2)) : v === null ? "—" : m.unit === "天" ? String(Math.round(v)) : v.toFixed(1);
+      return P.raw('<span class="nw' + (bad ? " num-bad" : "") + '"' + (bad ? ' title="' + P.esc(bad) + '"' : "") + ">" + P.esc(t) + "</span>"); };
+    const SHORT = { bready_total: "总分", bready_water: "供水", bready_procure: "采购", bready_dispute: "纠纷解决", water_tariff_usd: "水价 美元/m³", water_reliable: "供水可靠 %",
+      water_conn_days: "接水 天", award_days: "授标 天", gov_pay_days: "回款 天" };  // 列名短写,表在手机上也放得下;全称写在表下
+    const head = ["国别", ...show.map((m) => SHORT[m.id] || m.name), "外企参标"];
+    const fb = (r) => { const v = P.get("country", r, "foreign_bid") || "—"; return P.raw('<span class="nw' + (/全部/.test(v) ? " num-bad" : /部分|说法不一/.test(v) ? " num-warn" : "") + '">' + P.esc(v) + "</span>"); };
+    h.push('<div class="panel">' + P.tableHtml(head, shown.concat(noV).map((r) => [P.raw('<span class="nw">' + link(r) + (P.get("country", r, "tier") && P.get("country", r, "tier") !== "其他" ? ' <span class="tag">' + P.esc(P.get("country", r, "tier")) + "</span>" : "") + "</span>"), ...show.map((m) => cell(r, m)), fb(r)])) + "</div>");
+    body.innerHTML = h.join("") + '<p class="muted small">列名:' + P.esc(show.map((m) => (SHORT[m.id] || m.name).replace(/ .*$/, "") + " = " + m.name).join(";")) + '(得分 0–100)。标红的是偏弱的:得分低于 50、企业供水可靠比例不到 80%、授标超过 180 天、回款超过 90 天、所有招标都限制外企。点国名到国别概况的「营商环境」页签看细项。</p>' + src;
+    fold(body, el, "国");
+  }
+
   function understoodHtml(plan) {
     const tag = plan.parsed_by === "model" ? '<span class="tag intel" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
     const items = (plan.understood || []).map(([k, v]) => '<span class="chip-btn on" style="cursor:default">' + P.esc(k) + ":" + P.esc(v) + "</span>").join("");
@@ -610,7 +697,7 @@
   async function answer(q, el, prev) {
     const plan = await P.ask(q, prev);
     if (!plan) return;
-    lastPlan = ["help", "report"].includes(plan.intent) ? lastPlan : { q, object: plan.object, filters: plan.filters, measures: plan.measures || [], group_by: plan.group_by };
+    lastPlan = ["help", "report"].includes(plan.intent) ? lastPlan : { q, object: plan.object, filters: plan.filters, measures: plan.measures || [], group_by: plan.group_by, order: plan.order || null };
     if (prev && (plan.understood || []).some((x) => x[0] === "沿用上一问")) notePrev(q, prev);  // 历史里记下它接的是哪一问,以后点它照样接上
     const f = plan.filters, body = document.createElement("div");
     el.querySelector(".a-body").replaceWith(body); body.className = "a-body";
@@ -631,6 +718,7 @@
     if (!NOUN[oid]) { body.innerHTML = '<p class="muted">系统刚更新过,这个页面还是旧的:请刷新页面后再问一次。</p>'; return; }  // 助手接口认得、旧页面不认得的对象
     if (oid === "award" && !hasAw()) { body.innerHTML = '<p class="muted">「已中标项目」表还没建(跑一次建表命令后就能问中标记录)。</p>'; return; }
     body.innerHTML = '<p class="muted">查表中…</p>';
+    if (oid === "country") { await countryView(plan, body, el); return; }  // 营商环境(世行 B-READY):国别表或单国作答
     if ((plan.measures || []).some((m) => m.id !== "count") && oid === "award") { await metricView(plan, body, el); return; }  // 问了平均、中位数、合计、比例这类指标
     if (plan.intent === "count") {
       let n, aw = null;

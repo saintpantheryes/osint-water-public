@@ -19,6 +19,7 @@
   <div class="tabs grouped" id="tabs"></div>
   <div class="tab" data-t="info"><div id="info"></div></div>
   <div class="tab" data-t="inst"><div id="inst"></div></div>
+  <div class="tab" data-t="biz"><h2>营商环境(世界银行 B-READY)</h2><div id="biz"></div></div>
   <div class="tab" data-t="opps">
     <h2>商机(按我方阶段)</h2>
     <div class="panel" id="opps">读取中…</div>
@@ -51,7 +52,7 @@
   let countries = [], mc = null, mapOption = null;
   /* 页签分三组(使用方 2026-10-13 要的):基本信息(概况、机构与法规、城市、水务片区)→ 历史信息(水务历史资料、已中标项目)→ 动态信息(商机、线索、时间节点);
      选中的记在网址 t= 里,数字是这个国家的条数。水务片区(使用方 2026-10-14 从市场背景菜单挪来)只在这个国家划了片区时出现 */
-  const GROUPS = [["基本信息", [["info", "概况"], ["inst", "机构与法规"], ["cities", "规模以上城市"], ["areas", "水务片区"]]],
+  const GROUPS = [["基本信息", [["info", "概况"], ["inst", "机构与法规"], ["biz", "营商环境"], ["cities", "规模以上城市"], ["areas", "水务片区"]]],
     ["历史信息", [["docs", "水务历史资料"], ["awards", "已中标项目"]]],
     ["动态信息", [["opps", "商机"], ["leads", "最近 90 天线索"], ["ms", "未来 30 天节点"]]]];
   const TABS = GROUPS.flatMap(([, ts]) => ts);
@@ -171,6 +172,7 @@
       sec("国别备注与近期动态", notes(f("note")), true) + sec("宏观与水务指标", facts(indRows, keyRows.map((x) => x.r)), true) + sec("水风险与经济(趋势参考)", P.riskFacts("country", full, iso), true) + sec("基础信息", facts(f("basics")), false) + P.citeNote(numOf, cinfo);
     const inst = sec("水务管理机构", dots(f("water_agencies"), ["机构", "英文名", "职责", "网站"]), true) + sec("水务国企", dots(f("water_soes"), ["企业", "英文名", "说明", "网站"]), true) +
       sec("相关法律法规", dots(f("laws"), ["法规", "领域", "要点", "链接"]), true) + sec("市场准入与竞争", notes(f("access")), true);
+    $("biz").innerHTML = P.bready(full, g("name_zh") || iso);
     $("inst").innerHTML = inst || '<p class="muted">这个国家还没填机构、国企、法规与市场准入资料(国别表里补上就显示)。</p>';
     const [opps, leads, ms, cities] = await listsP;
     const stage = {}; opps.forEach((o) => { const s = P.get("opportunity", o, "stage") || "建议"; stage[s] = (stage[s] || 0) + 1; });

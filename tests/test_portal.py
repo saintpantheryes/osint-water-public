@@ -274,7 +274,11 @@ def _seed(admin: tstore.Client, fake: FakeTeable):
     from datetime import timedelta
     b = tstore.Base(admin)
     today = _today()
-    c = b.create("country", [{"name_zh": "阿塞拜疆", "ISO3": "AZE", "tier": "重点", "market": "示例甲区域", "indicators": "GDP:720 亿美元(2025)(世行 WDI https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=AZ)", "note": "[备注] 甲城项目采购已启动 [aaaaaaaa]\n2026-09 [建议动作] 在 ECEPP 注册(到期 2026-10-10,待定)"}])[0]
+    c = b.create("country", [{"name_zh": "阿塞拜疆", "ISO3": "AZE", "tier": "重点", "market": "示例甲区域", "indicators": "GDP:720 亿美元(2025)(世行 WDI https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=AZ)", "note": "[备注] 甲城项目采购已启动 [aaaaaaaa]\n2026-09 [建议动作] 在 ECEPP 注册(到期 2026-10-10,待定)",
+                                    "bready_total": 66.0, "bready_water": 79.3, "bready_procure": 45.7, "bready_dispute": 65.3, "water_tariff": 2, "water_tariff_cur": "AZN", "water_tariff_usd": 1.18,
+                                    "water_reliable": 97.1, "water_conn_days": 5, "foreign_bid": "部分招标有限制", "award_days": 365, "gov_pay_days": 7,
+                                    "bready_items": "[供水] 法规设了降低漏损的目标:是\n[供水] 有独立于水司的投诉渠道:否\n[采购] 外企参标或授标受限:部分招标有\n[采购] 外企须与本地企业联合才能投标:否",
+                                    "bready_edition": "B-READY 2025(数据版本 December 10, 2025)"}])[0]
     o = b.create("opportunity", [{"code": "AZE-001", "name_zh": "甘贾污水厂", "country": c["id"], "stage": "跟踪中", "public_stage": "采购进行中", "scope": "新建污水厂,一期 10 万吨/日 [aaaaaaaa]", "sectors": ["污水"], "financing": "[aaaaaaaa] World Bank (IDA) · 主权贷款 · 50,000,000 USD · 已批准", "size_value": 5e7, "currency": "USD", "size_cny": 36000}])[0]
     ld = b.create("lead", [{"key": "aaaaaaaa", "title": "Ganja WWTP EOI", "url": "https://example.org/a", "relevant": True, "category": "意向书", "funder": "World Bank (IDA)",
                             "country": c["id"], "found_at": today.isoformat() + "T02:00:00.000Z", "opportunity": o["id"], "status": "待处理", "origin": "机器采集"}])[0]
@@ -393,10 +397,10 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             assert "阿塞拜疆" in txt and "GDP\n720 亿美元" in txt and "甲城项目采购已启动" in txt  # 默认页签「概况」:备注与指标
             assert page.locator(".facts a.src").count() >= 1 and "AI 推荐" in txt and "待人定" not in txt  # 指标成了「名称 / 数值 / 来源链接」,不再是一坨原文
             # 页签切换:商机 / 线索 / 节点各在自己的页签里,页签上带条数;其他页签的内容藏着
-            assert page.locator("#tabs button").count() == 8 and page.locator("#tabs button.on").inner_text() == "概况" and "AZE-001" not in txt
+            assert page.locator("#tabs button").count() == 9 and page.locator("#tabs button.on").inner_text() == "概况" and "AZE-001" not in txt
             # 页签分三组:基本信息 → 历史信息 → 动态信息(使用方 2026-10-13 要的)
             assert page.locator("#tabs .tg").all_inner_texts() == ["基本信息", "历史信息", "动态信息"]
-            assert [page.locator("#tabs button").nth(i).get_attribute("data-t") for i in range(8)] == ["info", "inst", "cities", "docs", "awards", "opps", "leads", "ms"]
+            assert [page.locator("#tabs button").nth(i).get_attribute("data-t") for i in range(9)] == ["info", "inst", "biz", "cities", "docs", "awards", "opps", "leads", "ms"]
             assert page.inner_text("#tabs button:has-text('商机')").split()[-1] == "2" and page.inner_text("#tabs button:has-text('线索')").split()[-1] == "3"
             page.click("#tabs button:has-text('商机')")
             assert "AZE-001" in page.inner_text("main") and "GDP" not in page.inner_text("main")
@@ -411,6 +415,15 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             assert "巴库" in ct and "Baki" in ct and "2,300,000" in ct and "2,130" in ct and "1,080" in ct and page.inner_text("#tabs button:has-text('城市')").split()[-1] == "1"
             page.click("#tabs button:has-text('机构')")
             assert "还没填机构" in page.inner_text("main")
+            # 营商环境(B-READY,2026-10-14):四张大号指标卡,低于 50 分的标红写明含义;外企参标限制写明要核实;细项里对外企投标不利的标红;没覆盖的国家写明,不显示成 0
+            page.click("#tabs button:has-text('营商环境')")
+            bz = page.inner_text("#biz")
+            assert "66.0" in bz and "79.3" in bz and "约 1.18" in bz and "美元/m³" in bz and "2 AZN/m³" in bz and "365 天" in bz and "超过 180 天,授标慢" in bz
+            assert page.locator("#biz .kpi.bad").count() == 1 and "低于 50 分,偏弱" in page.inner_text("#biz .kpi.bad") and "公共采购得分" in page.inner_text("#biz .kpi.bad")
+            assert "部分招标对外企设限" in bz and page.locator("#biz .bitems li.bad").count() == 1 and "对外企投标不利" in page.inner_text("#biz .bitems li.bad")
+            assert "December 10, 2025" in bz and page.locator("#biz a[href*='businessready']").count() == 1
+            none = page.evaluate("P.bready({ fields: {} }, '埃及')")
+            assert "没有覆盖埃及" in none and "0 分" not in none
             page.click("#tabs button:has-text('概况')")
             assert "重点" not in page.inner_text("#pick")  # 国别下拉只有国名,不带市场分级
             assert page.locator("#map canvas").count() >= 1  # 国别页有世界地图,点国家切换
@@ -2046,7 +2059,7 @@ def test_water_area_page_sums_its_cities():
             page.goto(base + "/country.html?iso=AZE&t=areas")
             page.wait_for_selector("#areas table", timeout=15000)
             tabs = page.locator("#tabs .tgrp").first.locator("button").all_inner_texts()
-            assert [t.split(" ")[0] for t in tabs] == ["概况", "机构与法规", "规模以上城市", "水务片区"] and tabs[-1] == "水务片区 1"  # 基本信息组的最后一个
+            assert [t.split(" ")[0] for t in tabs] == ["概况", "机构与法规", "营商环境", "规模以上城市", "水务片区"] and tabs[-1] == "水务片区 1"  # 基本信息组的最后一个
             assert page.locator(".tab.on").get_attribute("data-t") == "areas"
             row = page.inner_text("#areas tbody tr")
             assert "大巴库" in row and "巴库" in row and "苏姆盖特" in row and "277.8 万" in row and "\t1\t" in row  # 挂上的商机 1 个
@@ -2141,3 +2154,86 @@ def test_contractor_page_lists_its_awards_and_winner_names_link_to_it():
     finally:
         srv.shutdown()
     assert all(m == "GET" for m, _ in fake.calls[seeded:]), "供应商页只读"
+
+
+def test_assistant_answers_business_environment_questions():
+    """助手问营商环境(世界银行 B-READY,v2.23;使用方 2026-10-14 要的问法):按市场分级、外企参标、门槛筛国别,按问的指标排,偏弱的标红;
+    点了国名的逐国作答(当地币也写);没覆盖的国家直说,不显示成 0;一国都不符合时说清最低、最高是多少;忽略的国别(缺省中国)不列。只读。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    br = lambda **k: {"bready_edition": "B-READY 2025(数据版本 December 10, 2025)", **k}  # noqa: E731
+    b.create("country", [
+        {"name_zh": "摩洛哥", "ISO3": "MAR", "tier": "市场", **br(bready_total=61.2, bready_water=70.4, bready_procure=58.0, water_tariff=9.5, water_tariff_cur="MAD", water_tariff_usd=0.95,
+                                                                 foreign_bid="无限制", award_days=150, gov_pay_days=60)},
+        {"name_zh": "吉尔吉斯斯坦", "ISO3": "KGZ", "tier": "市场", **br(bready_total=55.0, bready_water=45.0, bready_procure=52.1, water_tariff=30, water_tariff_cur="KGS", water_tariff_usd=0.34,
+                                                                      foreign_bid="部分招标有限制", award_days=90, gov_pay_days=120)},
+        {"name_zh": "中国", "ISO3": "CHN", "tier": "其他", **br(bready_total=70.0, bready_water=30.0, bready_procure=60.0, foreign_bid="无限制", gov_pay_days=200)},
+        {"name_zh": "埃及", "ISO3": "EGY", "tier": "重点"},
+    ])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    seeded = len(fake.calls)
+    shots = Path(os.environ.get("PORTAL_SHOTS", "")) if os.environ.get("PORTAL_SHOTS") else None
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/index.html")
+            page.wait_for_selector("#examples .chip-btn", timeout=15000)
+
+            def ask(q):
+                page.fill("#q", q)
+                page.press("#q", "Enter")
+                page.wait_for_function("(q) => { const all = document.querySelectorAll('.answer'); const a = all[all.length - 1]; return a && a.querySelector('.a-q').textContent === q && !a.innerText.includes('解析中') && !a.innerText.includes('查表中'); }", arg=q, timeout=15000)
+                return page.locator(".answer").last
+
+            a = ask("供水得分低于 50 的市场国别")
+            t = a.inner_text()
+            assert "对象:国别" in t and "市场分级:重点、市场" in t and "门槛:供水得分低于 50 分" in t
+            rows = a.locator("tbody tr").all_inner_texts()
+            assert len(rows) == 1 and rows[0].startswith("吉尔吉斯斯坦") and "中国" not in t  # 中国 30 分,但缺省忽略
+            assert a.locator("tbody .num-bad").count() >= 1 and "埃及" in t and "没覆盖" in t  # 偏弱的标红;没数据的说是哪几国
+            assert "1\n国" in a.locator(".kpis").inner_text()
+            if shots:
+                page.screenshot(path=str(shots / "assistant_bready.png"), full_page=True)
+            a = ask("哪些国家不限制外企参标")
+            rows = a.locator("tbody tr").all_inner_texts()
+            assert [r.split("\t")[0].split(" ")[0] for r in rows] == ["摩洛哥"] and "外企参标:无限制" in a.inner_text()
+            a = ask("摩洛哥商业水价多少")
+            t = a.inner_text()
+            assert "摩洛哥的商业水价:约 0.95 美元/m³(9.5 MAD/m³)" in t and a.locator("a[href='country.html?iso=MAR&t=biz']").count() == 1
+            a = ask("那吉尔吉斯斯坦呢")
+            t = a.inner_text()
+            assert "吉尔吉斯斯坦的商业水价:约 0.34 美元/m³(30 KGS/m³)" in t and "沿用上一问" in t
+            if shots:
+                a.screenshot(path=str(shots / "assistant_bready_one.png"))
+            a = ask("哪些国家政府回款最慢")
+            rows = a.locator("tbody tr").all_inner_texts()
+            assert rows[0].startswith("吉尔吉斯斯坦") and "排序:政府合同回款天数从高到低" in a.inner_text()
+            assert a.locator("tbody tr").first.locator(".num-bad").count() >= 1  # 120 天超过 90 天,标红
+            a = ask("埃及的营商环境怎么样")
+            t = a.inner_text()
+            assert "没有覆盖埃及" in t and "0 分" not in t
+            a = ask("授标天数超过 1000 天的国家")
+            t = a.inner_text()
+            assert "没有符合这些条件的国别" in t and "最低 90 天" in t and "最高 365 天" in t
+            a = ask("水价调整的线索")
+            assert "对象:线索" in a.inner_text() and "没认出来" not in a.inner_text()  # 说线索的「水价」不改查国别
+            page.set_viewport_size({"width": 390, "height": 844})  # 手机:国别表在面板里横向滑,不撑出整页的横向滚动
+            a = ask("哪些国家政府回款最慢")
+            assert page.evaluate("document.documentElement.scrollWidth") <= 391
+            if shots:
+                page.screenshot(path=str(shots / "assistant_bready_phone.png"), full_page=True)
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    assert all(m == "GET" for m, _ in fake.calls[seeded:]), "助手问营商环境只读"
