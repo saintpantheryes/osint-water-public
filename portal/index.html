@@ -274,7 +274,7 @@
   }
 
   /* ---------- 呈现 ---------- */
-  const stageTag = (s) => '<span class="stage s-' + P.esc(s || "建议") + '">' + P.esc(s || "建议") + "</span>";
+  const stageTag = (s) => P.stageTag(s);
   function leadTable(rows) {
     return P.tableHtml(["标题", "国别", "类别", "发现", "所属商机", ""], P.followFirst(rows, "lead").map((l) => { const g = (p) => P.get("lead", l, p);
       return [P.titleCell(l), P.text(g("country")), g("category") || "", P.day(g("found_at")), P.text(g("opportunity")), P.raw(P.open("lead", l.id))]; }));
@@ -671,7 +671,7 @@
   }
 
   function understoodHtml(plan) {
-    const tag = plan.parsed_by === "model" ? '<span class="tag intel" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
+    const tag = plan.parsed_by === "model" ? '<span class="tag t-ok" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
     const items = (plan.understood || []).map(([k, v]) => '<span class="chip-btn on" style="cursor:default">' + P.esc(k) + ":" + P.esc(v) + "</span>").join("");
     const un = (plan.unresolved || []).length ? '<span class="muted small">没认出来:' + plan.unresolved.map(P.esc).join("、") + "</span>" : "";
     return '<div class="frow understood"><b>理解为</b>' + items + tag + un + "</div>";

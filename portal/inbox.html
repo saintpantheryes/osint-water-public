@@ -138,7 +138,7 @@
     const same = opps.filter((o) => P.linkId(g(o, "country")) === cid && (g(o, "stage") || "建议") !== "不跟进"), others = opps.filter((o) => P.linkId(g(o, "country")) !== cid);
     const opts = (arr) => arr.map((o) => '<option value="' + o.id + '">' + P.esc((g(o, "code") || "") + " " + (g(o, "name_zh") || "")) + "</option>").join("");
     el.innerHTML = '<div class="it-main"><div class="it-title">' + (q("url") ? '<a href="' + P.esc(q("url")) + '" target="_blank" rel="noopener">' + P.esc(q("title") || "(无标题)") + "</a>" : P.esc(q("title") || "(无标题)")) +
-      ' <span class="muted">' + P.esc(q("key") || "") + " · " + P.esc(cname[cid] || "") + " · " + P.esc(q("category") || "") + (q("maybe_new") ? ' · <span class="tag act">像是新项目</span>' : "") + "</span></div>" +
+      ' <span class="muted">' + P.esc(q("key") || "") + " · " + P.esc(cname[cid] || "") + " · " + P.esc(q("category") || "") + (q("maybe_new") ? ' · <span class="tag t-warn">像是新项目</span>' : "") + "</span></div>" +
       '<div class="muted">' + P.esc(trunc(q("summary_zh"), 160)) + "</div>" +
       (sug ? '<div>机器建议归入:<b>' + P.esc(g(sug, "code") + " " + (g(sug, "name_zh") || "")) + "</b>" + (q("suggest_reliable") ? "" : ' <span class="muted">(没把握)</span>') + ' <a href="' + P.oppUrl(sug.id) + '" target="_blank">看商机</a></div>' : "") +
       "</div><div class=\"it-act\">" + (sug ? '<button class="primary" data-a="sug">归入 ' + P.esc(g(sug, "code")) + "</button>" : "") +

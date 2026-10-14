@@ -369,6 +369,8 @@ def test_fact_rows_and_cards_keep_their_shape_at_common_widths():
                 assert biz.locator(".fact.is-warn .fact-w").inner_text() == "部分招标对外企设限,投标前要核实"
                 assert "超过 180 天,授标慢" in biz.locator(".fact.is-bad .fact-w").inner_text() and "发标到授标" in biz.locator(".fact.is-bad .fact-n").inner_text()
                 assert biz.locator(".kpi").nth(3).locator(".kn").inner_text() == "1.18"  # 「约 1.18 美元/m³」数字照样放大
+                tones = page.evaluate("['建议', '跟踪中', '已投标', '中标', '未中标', '放弃'].map((s) => P.stageTag(s).match(/class=\"([^\"]+)\"/)[1])")
+                assert tones == ["tag t-warn", "tag t-info", "tag t-info", "tag t-ok", "tag", "tag"]  # 标签只一种胶囊,颜色按含义(界面规范第三步)
                 for pth in ("overview.html", "analysis.html", "ontology.html"):  # 顶上一排数(界面规范第二步:都是指标卡)
                     page.goto(f"http://127.0.0.1:{srv.server_port}/{pth}")
                     page.wait_for_function("[...document.querySelectorAll('#cards .kpi .kn')].every((e) => e.textContent !== '…')", timeout=15000)

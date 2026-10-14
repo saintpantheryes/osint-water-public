@@ -80,7 +80,7 @@
     const stage = g("stage") || "建议";
     document.title = "全球水务开源情报 · " + (g("code") || "") + " " + (g("name_zh") || "");
     $("head").innerHTML = '<div class="opphead"><div><a href="opps.html" class="muted">‹ 商机总览</a><h1>' + P.esc(g("code") || "") + " " + P.esc(g("name_zh") || "") +
-      ' <span class="stage s-' + P.esc(stage) + '">' + P.esc(stage) + "</span></h1>" +
+      " " + P.stageTag(stage) + "</h1>" +
       '<p class="muted">' + [g("name_local"), countryName ? '<a href="country.html?iso=' + encodeURIComponent(countryName.iso) + '">' + P.esc(countryName.zh) + "</a>" : "", P.text(g("city")) ? P.esc(P.text(g("city"))) : "", g("location"), g("priority") ? "优先级 " + P.esc(g("priority")) : "", P.text(g("owner")) ? "负责人 " + P.esc(P.text(g("owner"))) : "未定负责人"].filter(Boolean).join(" · ") + "</p></div>" +
       '<div class="kv"><div><b>公开进度</b><span>' + P.esc(g("public_stage") || "—") + (g("public_stage_note") ? '<small class="muted"> ' + P.esc(g("public_stage_note")) + "</small>" : "") + "</span></div>" +
       "<div><b>下一节点</b><span>" + P.esc(g("next_milestone") || "—") + "</span></div>" +
@@ -111,7 +111,7 @@
     ]);
     const f = (r, p) => P.get("followup", r, p);
     $("timeline").innerHTML = fus.length ? '<ul class="tl">' + fus.map((r) => "<li><div class=\"when\">" + P.day(f(r, "day")) + " · " + P.esc(P.text(f(r, "author")) || "—") + "</div>" +
-      (f(r, "stage_change") ? '<span class="tag">阶段 → ' + P.esc(f(r, "stage_change")) + "</span>" : "") + (f(r, "judgment") ? '<span class="tag intel">' + P.esc(f(r, "judgment")) + "</span>" : "") +
+      (f(r, "stage_change") ? '<span class="tag">阶段 → ' + P.esc(f(r, "stage_change")) + "</span>" : "") + (f(r, "judgment") ? '<span class="tag t-ok">' + P.esc(f(r, "judgment")) + "</span>" : "") +
       "<div>" + P.esc(f(r, "content") || "") + "</div>" + (f(r, "reason") ? '<div class="muted">依据:' + P.esc(f(r, "reason")) + "</div>" : "") +
       (f(r, "next_step") ? '<div class="muted">下一步:' + P.esc(f(r, "next_step")) + (f(r, "next_due") ? "(到期 " + P.day(f(r, "next_due")) + ")" : "") + "</div>" : "") +
       ((f(r, "attachments") || []).length ? "<div>" + (f(r, "attachments") || []).map((a) => '<a href="' + P.esc(P.fileUrl(a)) + '" target="_blank" rel="noopener">' + P.esc(a.name) + "</a>").join(" · ") + "</div>" : "") +

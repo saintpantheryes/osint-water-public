@@ -119,8 +119,10 @@ a.kpi { color: inherit; } a.kpi:hover { border-color: var(--brand); }
 .notes { list-style: none; padding: 0; margin: 0; }
 .notes li { padding: 7px 0; border-bottom: 1px solid var(--line); }
 .notes li:last-child { border-bottom: 0; }
-.tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #e0f2fe; color: #075985; margin-right: 6px; vertical-align: 1px; }
-.tag.act { background: #fef3c7; color: #92400e; } .tag.intel { background: var(--ok-soft); color: #166534; }
+/* 标签(界面规范:全站一种胶囊,P.tagHtml / P.stageTag 生成;颜色只按含义分:灰 一般 · t-info 进行中 · t-ok 正面 · t-warn 提醒 · t-bad 负面) */
+.tag { display: inline-block; font-size: var(--fs-xs); line-height: 1.5; padding: 0 8px; border-radius: var(--r-pill); background: #f1f5f9; color: #475569; font-weight: 500; margin-right: 6px; vertical-align: 1px; }
+.tag.t-info { background: var(--info-soft); color: #1e40af; } .tag.t-ok { background: var(--ok-soft); color: #166534; }
+.tag.t-warn { background: #fef3c7; color: #92400e; } .tag.t-bad { background: #fee2e2; color: #991b1b; }
 .when { color: var(--muted); font-size: 12px; margin-right: 6px; }
 .cite { font-size: 10px; color: var(--brand); vertical-align: super; margin-left: 2px; padding: 0 3px; border: 1px solid #bfdbfe; border-radius: 3px; background: #eff6ff; text-decoration: none; }
 sup.cite { color: var(--muted); border-color: var(--line); background: #f9fafb; }
@@ -128,9 +130,6 @@ sup.cite { color: var(--muted); border-color: var(--line); background: #f9fafb; 
 details.sec { margin: 10px 0; } details.sec summary { cursor: pointer; font-weight: 600; padding: 4px 0; list-style: none; }
 details.sec summary::before { content: "▸ "; color: var(--muted); } details.sec[open] summary::before { content: "▾ "; }
 /* 商机总览与工作台 */
-.stage { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--line); color: #374151; vertical-align: 2px; }
-.stage.s-跟踪中, .stage.s-准备投标, .stage.s-已投标 { background: var(--info-soft); color: #1e40af; } .stage.s-中标 { background: var(--ok-soft); color: #166534; }
-.stage.s-建议 { background: #fef3c7; color: #92400e; } .stage.s-放弃, .stage.s-不跟进, .stage.s-未中标 { background: #f3f4f6; color: var(--muted); }
 .over { color: #b91c1c; font-weight: 600; }
 .two { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: start; }
 .two .col.wide { min-width: 0; }
@@ -596,7 +595,6 @@ sup.sref a:hover { background: var(--brand); color: #fff; }
 .num-bad { color: var(--bad); font-weight: 700; } .num-warn { color: var(--warn); font-weight: 600; }  /* 助手国别表:偏弱的数标红,外企参标「部分有限制」标橙 */
 .lead-ans { font-size: 17px; margin: 6px 0 10px; } .lead-ans b { font-size: 22px; }  /* 助手单国作答:问的那项先写成一句话,数放大 */
 /* 法规(v2.24):排放限值按法规 + 口径分块;本国定义;出处小框里中文与原文切换 */
-.tag.warn-tag { background: #fef3c7; color: #92400e; } .tag.ok-tag { background: var(--ok-soft); color: #166534; } .tag.bad-tag { background: #fee2e2; color: #991b1b; }
 .lw-bh { margin: 14px 0 6px; } .lw-bh:first-child { margin-top: 0; }
 .lw-tags { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; } .lw-tags .tag { margin: 0; font-size: 12px; white-space: normal; }
 .lw-terms { display: grid; gap: 10px; } .lw-term { border-left: 3px solid #bfdbfe; padding: 2px 0 2px 10px; line-height: 1.65; }

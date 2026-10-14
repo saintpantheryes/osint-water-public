@@ -156,7 +156,7 @@
         let when = "", tag = "", rest = l;
         const w = rest.match(/^(\d{4}-\d{2}(?:-\d{2})?)\s+/); if (w) { when = w[1]; rest = rest.slice(w[0].length); }
         const t = rest.match(/^\[([^\]]{1,8})\]\s*/); if (t) { tag = t[1]; rest = rest.slice(t[0].length); }
-        const cls = /动作|待办/.test(tag) ? "act" : /情报|动态/.test(tag) ? "intel" : "";
+        const cls = /动作|待办/.test(tag) ? "t-warn" : /情报|动态/.test(tag) ? "t-ok" : "t-info";
         return "<li>" + (when ? '<span class="when">' + P.esc(when) + "</span>" : "") + (tag ? '<span class="tag ' + cls + '">' + P.esc(tag) + "</span>" : "") + cites(rest) + "</li>";
       });
       return items.length ? '<ul class="notes">' + items.join("") + "</ul>" : "";
