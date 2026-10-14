@@ -590,7 +590,7 @@ objects:
       - {id: name, name: 名称, type: text, by: human, required: true, note: 登录人的显示名;页面建行时写}
       - {id: user, name: 账号, type: "link:member", by: human, required: true}
       - {id: countries, name: 关注国别, type: "links:country", by: human, note: "页面清单里这些国家的线索、商机排在最前、带 ★;国别下拉放在最上面一组"}
-      - {id: ignored, name: 忽略国别, type: text, by: human, format: "国别码(ISO3),英文逗号分隔", example: "USA,CAN,MEX", note: "地图上画斜线;任何一个账号忽略的国别,采集都不再涉及(A01)。没设过(空着)默认忽略中国(CHN);一个都不忽略存「-」。我的页可按大洲、按经济水平(IMF 发达经济体、世行收入组)一键忽略"}
+      - {id: ignored, name: 忽略国别, type: text, by: human, format: "国别码(ISO3),英文逗号分隔", example: "USA,CAN,MEX", note: "地图上涂成灰色;任何一个账号忽略的国别,采集都不再涉及(A01)。没设过(空着)默认忽略中国(CHN);一个都不忽略存「-」。我的页可按大洲、按经济水平(IMF 发达经济体、世行收入组)一键忽略"}
       - {id: subscriptions, name: 日历订阅, type: list, by: human, format: "一行一个「名称 | 链接」", example: "跟踪中商机 | https://…/calendar.ics?…"}
       - {id: note, name: 备注, type: longtext, by: human}
 
@@ -1463,7 +1463,7 @@ views:
   - {id: V13, name: 本体, of: [lead, country, opportunity, followup, source, milestone, report, template, member, city, phrase, term, local_term], channel: [页面],
      query: "只读:对象与关系图(公开 / 业务两种颜色，核心对象描边，箭头是关联)，点一个对象看定义、标识、状态流转、按写入方分组的属性(单选 / 多选的指向分类体系)、关系、涉及它的行为;下面页签:分类体系(每个值的英文键、定义、边界、示例)、语义层(指标:单位、算法、缺数时怎么说、说法;算法、主体工程、法规问法、排放指标的说法;行业术语;本国定义按国别数。说法读「语义层说法」表,读不到时显示本体初始说法,表里指向写错的标出;各块有「在表格里打开」)、口径与归组、规则、行为、视图与事件、版本记录。除语义层外读 portal/ontology.json(ontology.yaml 转的)，不读库"}
   - {id: V14, name: 我方资料页, of: [company, country], channel: [页面], query: "从「我的」页进(不在主菜单):全部公司资料按类别 / 领域 / 国别筛选,搜索;新增、改、传附件、勾「写进报告」(A23);游客看不到"}
-  - {id: V15, name: 我的, of: [preference, country, member], channel: [页面], query: "登录人自己的一行:帐号与角色、关注的国别(加减,点进国别页;清单里这些国家排前、带 ★)、忽略的国别(地图上点选、按大洲一键;地图上画斜线,采集不再涉及)、保存的日历订阅(复制链接、删除)(A24);入口到帐号设置、退出登录、我方资料"}
+  - {id: V15, name: 我的, of: [preference, country, member], channel: [页面], query: "登录人自己的一行:帐号与角色、关注的国别(加减,点进国别页;清单里这些国家排前、带 ★)、忽略的国别(地图上点选、按大洲一键;地图上涂成灰色,采集不再涉及)、保存的日历订阅(复制链接、删除)(A24);入口到帐号设置、退出登录、我方资料"}
   - {id: V17, name: 趋势机会, of: [city, country, lead], channel: [页面], query: "规模以上城市按 glossary.trend_self_funded(自付型,青绿)与 glossary.trend_loan_driven(贷款型,紫)着色,两类都是的标红,都不是的灰色小点;门槛(水风险用哪一项及多少分、人均 GDP 多少、贷款判定)页面上可调并记在网址里;下面按类分列城市(水风险从高到低)与国别对照表。是趋势参考:页首写明按公开数据推算、不是具体项目,数字不计入线索、商机;只看中国以外(使用方 2026-10-09 定,中国境内的城市与国别不进地图、清单与卡片)"}
   - {id: V18, name: 信源, of: [source, country], channel: [页面, 表格], query: "全部信源:名称与网址、类型、范围(全球或国别)、最近采集、状态、线索数、启用;状态口径:停用 / 出错、被拒 / 启用着却两天以上没采集(多日未采集)/ 正常、无条目;有问题的(出错、被拒、多日未采集)整行标红排最前,其余按线索数从多到少;按状态、范围筛选(筛选项上的数跟着其他筛选走)、搜索;编辑者点「启用」停用或重新启用一个信源;游客看示例"}
   - {id: V19, name: 供应商页, of: [contractor, award, country], channel: [页面], query: "从已中标项目表里点供应商进(不在主菜单):卡片(中标份数、合计中标价、涉及几个国家、最近一次中标)、基本信息(人补的中文名、性质、母公司、官网、主营领域、简介)、它的全部已中标项目(中标方含它),按国别、类别、年份筛选"}

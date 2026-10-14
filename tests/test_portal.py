@@ -748,7 +748,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             pf = b.rows("preference", props=["countries", "subscriptions"])
             assert len(pf) == 1 and not tstore.link_ids(b.get("preference", pf[0], "countries")) and not b.get("preference", pf[0], "subscriptions")
             # 忽略国别:没设过默认忽略中国;「我的」地图上点一个国家 → 个人设置「忽略国别」写国别码;再点恢复;按大洲、按经济水平一键忽略,
-            # 清单里整组合成一项;一个都不忽略存「-」;国别概况、线索总览的地图上忽略的国家画斜线,地图下有说明
+            # 清单里整组合成一项;一个都不忽略存「-」;国别概况、线索总览的地图上忽略的国家涂成灰色,地图下有说明
             page.wait_for_function("document.querySelector('#iConts button') && !document.querySelector('#iList').innerText.includes('读取')", timeout=15000)
             assert page.inner_text("#iList").strip().startswith("中国") and page.locator("#iConts button").count() == 6 and page.locator("#iEcon button").count() == 5
             click = "(iso) => { const c = echarts.getInstanceByDom(document.getElementById('iMap')); c.getZr().handler.dispatch('click', {}); c.trigger('click', {name: iso}); }"
