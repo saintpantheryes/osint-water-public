@@ -29,7 +29,15 @@
   </div>
   <div class="tabs" id="tabs"></div>
   <div class="tab" data-t="tax"><div id="tax"></div></div>
-  <div class="tab" data-t="glossary"><div class="panel" id="glossary"></div><h2>行业术语(助手理解提问用;跨领域的词不当成某一个领域)</h2><div class="panel" id="terms"></div><h2>归组(页面筛选用,底下的字段是自由文本)</h2><div id="groupings"></div></div>
+  <div class="tab" data-t="sem">
+    <p class="small" id="semIntro">助手理解提问靠这几样:问的是哪个指标、怎么算(语义层说法),行业词怎么翻成筛选条件(行业术语),一国法规里的词按这国怎么定义(本国定义)。都在表格里改,下一分钟起的提问就用上,不用改程序。</p>
+    <div class="cards" id="semCards"></div>
+    <h2>指标 <span class="muted small">助手能算的数;提问里出现任一个说法就算问到它</span> <span id="semOpen1"></span></h2><div class="panel" id="semMeasures"><p class="muted">读取中…</p></div>
+    <h2>算法、主体工程、法规问法与排放指标的说法 <span id="semOpen2"></span></h2><div id="semWords"><p class="muted">读取中…</p></div>
+    <h2>行业术语 <span class="muted small">跨领域的词不当成某一个领域</span> <span id="semOpen3"></span></h2><div class="panel" id="terms"><p class="muted">读取中…</p></div>
+    <h2>本国定义 <span class="muted small">通用概念在各国法规里怎么定义;助手回答一国的问题时按这国的</span> <span id="semOpen4"></span></h2><div class="panel" id="semLocal"><p class="muted">读取中…</p></div>
+  </div>
+  <div class="tab" data-t="glossary"><div class="panel" id="glossary"></div><h2>归组(页面筛选用,底下的字段是自由文本)</h2><div id="groupings"></div></div>
   <div class="tab" data-t="rules"><div class="panel" id="rules"></div></div>
   <div class="tab" data-t="actions"><div class="panel" id="actions"></div></div>
   <div class="tab" data-t="views"><h2>视图(查询,不存)</h2><div class="panel" id="views"></div><h2>事件 → 行为</h2><div class="panel" id="events"></div></div>
@@ -41,7 +49,7 @@
   const BAND = { public: "#0e6ba8", business: "#15803d" };
   const BY = { ai: "机器写", human: "人写", derived: "派生(不存,用时算)" };
   const ACTOR = { ai: "机器", human: "人" };
-  const TABS = [["tax", "分类体系(选项与定义)"], ["glossary", "口径与归组"], ["rules", "规则"], ["actions", "行为"], ["views", "视图与事件"], ["changes", "版本记录"]];
+  const TABS = [["tax", "分类体系(选项与定义)"], ["sem", "语义层"], ["glossary", "口径与归组"], ["rules", "规则"], ["actions", "行为"], ["views", "视图与事件"], ["changes", "版本记录"]];
   let O = null, chart = null, cur = null, tab = "tax";
   const q0 = new URLSearchParams(location.search);
   const esc = (s) => P.esc(s);
@@ -145,19 +153,86 @@
   }
   function drawGlossary() {
     $("glossary").innerHTML = "<h2 style=\"margin-top:0\">口径(同一个词在页面、报告、表格视图里只定一次)</h2>" + P.tableHtml(["口径", "含义", "用在哪"], Object.entries(O.glossary).map(([k, g]) => [g.term + "(" + k + ")", g.means + (g.example ? ";示例 " + g.example : ""), (g.used_in || []).join("、")]));
-    // 行业术语:平时读 Teable「行业术语」表(助手也读它);表没建、读不到(游客)时显示本体里的初始词
-    const termHead = ["术语", "同义说法", "跨哪些领域", "按领域筛", "相关词(查标题与中文摘要,含任一个即算)", "说明"];
-    const list = (x) => (Array.isArray(x) ? x : String(x || "").split(/[\n、,，;；]+/)).map((w) => String(w).trim()).filter(Boolean).join("、");
-    $("terms").innerHTML = '<p class="muted small">本体里的初始词</p>' + P.tableHtml(termHead, (O.terms || []).map((t) => [t.term, list(t.aliases), list(t.covers), list(t.sectors) || "不限领域", list(t.match), t.means || ""]));
-    (async () => {
-      const rows = await P.records("term", { props: ["term", "aliases", "covers", "sectors", "match", "means", "disabled"] });
-      $("terms").innerHTML = '<p class="small">助手读的是表格「行业术语」:在表里加一行、改相关词,下一分钟起的提问就用上;不用的勾「停用」。' + (P.isGuest ? "" : ' <a href="' + P.tableUrl("term") + '" target="_blank" rel="noopener">在表格里打开 →</a>') + "</p>" +
-        P.tableHtml(termHead, rows.filter((r) => !P.get("term", r, "disabled")).map((r) => [P.get("term", r, "term") || "", list(P.get("term", r, "aliases")), list(P.get("term", r, "covers")),
-          list(P.get("term", r, "sectors")) || "不限领域", list(P.get("term", r, "match")), P.get("term", r, "means") || ""]));
-    })().catch(() => {});
     $("groupings").innerHTML = Object.entries(O.groupings).map(([gid, g]) => '<div class="panel"><h3 style="margin-top:0">' + esc(g.name) + ' <span class="muted small">' + esc(gid) + " · 作用于 " + (g.over || []).map(propName).join("、") + "</span></h3><p class=\"small\">" + esc(g.def) + "</p>" +
       (g.groups ? P.tableHtml(["组", "英文键", "出资方文本里包含任一个即归这组"], g.groups.map((x) => [x.v, x.code, (x.patterns || []).join("、")])) : "") +
       '<p class="muted small">' + (g.other ? "有值但不属于任何一组 → 「" + esc(g.other) + "」;" : "") + (g.empty ? "没有值 → 「" + esc(g.empty) + "」" : "") + (g.note ? "<br>" + esc(g.note) : "") + "</p></div>").join("");
+  }
+  /* 语义层(本体 semantic 节 + 三张表):说法读表「语义层说法」,表里没有的指向用本体的初始说法(助手也是这样认的);
+     行业术语读表「行业术语」;本国定义按国别数。表没建、读不到(游客)时显示本体里的初始词 */
+  const KIND_ORDER = ["指标", "算法", "主体工程", "法规问法", "排放指标"];
+  const LAW_ASK = { limit: "问排放标准", define: "问定义", text: "问法规条文" };
+  const wlist = (x) => (Array.isArray(x) ? x : String(x || "").split(/[\n、,，;；]+/)).map((w) => String(w).trim()).filter(Boolean);
+  const openLink = (oid, label) => (P.isGuest || !P.cfg.tables[oid] ? "" : '<a class="small" href="' + P.tableUrl(oid) + '" target="_blank" rel="noopener">' + (label || "在表格里打开 →") + "</a>");
+  function semSeed() {
+    const sem = O.semantic || {}, w = sem.words || {}, aggName = (id) => ((sem.aggs || []).find((a) => a.id === id) || {}).name || id, out = [];
+    (sem.measures || []).filter((m) => (m.words || []).length).forEach((m) => out.push({ kind: "指标", target: m.name, m, words: m.words }));
+    (sem.aggs || []).filter((a) => (a.words || []).length).forEach((a) => out.push({ kind: "算法", target: a.name, words: a.words }));
+    Object.entries(w.award_asset || {}).forEach(([k, ws]) => out.push({ kind: "主体工程", target: k, words: ws }));
+    Object.entries(w.law || {}).forEach(([k, ws]) => out.push({ kind: "法规问法", target: LAW_ASK[k] || k, words: ws }));
+    Object.entries(w.effluent_param || {}).forEach(([k, ws]) => out.push({ kind: "排放指标", target: k, words: ws }));
+    out.forEach((r) => { r.aggName = aggName; });
+    return out;
+  }
+  async function drawSem() {
+    const seed = semSeed();
+    let rows = [], fromTable = false;
+    try { rows = await P.records("phrase", { props: ["target", "kind", "words", "note"] }); fromTable = rows.length > 0; } catch (e) { rows = []; }
+    const live = {}, bad = [];
+    rows.forEach((r) => {
+      const k = (P.get("phrase", r, "kind") || "") + "|" + String(P.get("phrase", r, "target") || "").trim();
+      if (!seed.some((x) => x.kind + "|" + x.target === k)) { bad.push(r); return; }
+      live[k] = [...new Set([...(live[k] || []), ...wlist(P.get("phrase", r, "words"))])];
+    });
+    const words = (x) => live[x.kind + "|" + x.target] || (fromTable ? null : x.words);  /* null = 表里还没有这一行(后台下个周期补) */
+    const shown = (x) => { const ws = words(x); return ws === null ? wlist(x.words).join("、") + "(本体初始说法,表里还没有这一行)" : (ws.length ? ws.join("、") : "(说法是空的:助手不认这个指向)"); };
+    const src = fromTable ? '<span class="muted small">说法读的是表格「语义层说法」</span> ' : '<span class="muted small">' + (P.isGuest ? "显示的是本体里的初始说法" : "表格「语义层说法」还没建好或读不到,显示的是本体里的初始说法") + "</span> ";
+    $("semOpen1").innerHTML = src + openLink("phrase");
+    $("semOpen2").innerHTML = openLink("phrase");
+    const ms = seed.filter((x) => x.kind === "指标");
+    const unit = (m) => (typeof m.unit === "string" ? m.unit : "按对象(" + Object.values(m.unit || {}).join("、") + ")");
+    $("semMeasures").innerHTML = P.tableHtml(["指标", "单位", "算法(第一个是缺省)", "缺数时怎么说", "说法"],
+      ms.map((x) => [x.target, unit(x.m), (x.m.aggs || []).map(x.aggName).join("、"), x.m.missing || "", shown(x)])) +
+      '<p class="muted small">加说法、删说法在表里改;要加新指标(程序得会算)仍改本体文件。</p>';
+    $("semWords").innerHTML = KIND_ORDER.slice(1).map((k) => '<div class="panel"><h3 style="margin-top:0">' + esc(k) + "</h3>" +
+      P.tableHtml(["指向", "说法"], seed.filter((x) => x.kind === k).map((x) => [x.target, shown(x)])) + "</div>").join("") +
+      (bad.length ? '<div class="warn">表里这 ' + bad.length + " 行的指向本体里没有,助手不用:" + esc(bad.map((r) => (P.get("phrase", r, "kind") || "未填类别") + " · " + (P.get("phrase", r, "target") || "未填指向")).join(";")) + "。指向要照上面的名字写。</div>" : "");
+    // 行业术语:平时读 Teable「行业术语」表(助手也读它);表没建、读不到(游客)时显示本体里的初始词
+    const termHead = ["术语", "同义说法", "跨哪些领域", "按领域筛", "相关词(查标题与中文摘要,含任一个即算)", "说明"];
+    const list = (x) => wlist(x).join("、");
+    let terms = (O.terms || []).map((t) => [t.term, list(t.aliases), list(t.covers), list(t.sectors) || "不限领域", list(t.match) || "(只作法规概念)", t.means || ""]), termSrc = "本体里的初始词";
+    try {
+      const tr = await P.records("term", { props: ["term", "aliases", "covers", "sectors", "match", "means", "disabled"] });
+      if (tr.length) {
+        /* 本体里有、表里还没有这一行的(停用的算有)助手照样认(core/law.py concepts),这里一并列出并注明 */
+        const inTable = new Set(tr.map((r) => String(P.get("term", r, "term") || "").trim()));
+        terms = tr.filter((r) => !P.get("term", r, "disabled")).map((r) => [P.get("term", r, "term") || "", list(P.get("term", r, "aliases")), list(P.get("term", r, "covers")),
+          list(P.get("term", r, "sectors")) || "不限领域", list(P.get("term", r, "match")) || "(只作法规概念)", P.get("term", r, "means") || ""])
+          .concat(terms.filter((t) => !inTable.has(t[0])).map((t) => [t[0] + "(本体初始词,表里还没有这一行)", ...t.slice(1)]));
+        termSrc = "表格「行业术语」";
+      }
+    } catch (e) { /* 用本体的 */ }
+    $("semOpen3").innerHTML = '<span class="muted small">读的是' + termSrc + "</span> " + openLink("term");
+    $("terms").innerHTML = '<p class="small">在表里加一行、改相关词,下一分钟起的提问就用上;不用的勾「停用」。相关词空着的只作法规里的通用概念,不拿它查线索。</p>' + P.tableHtml(termHead, terms);
+    // 本国定义:按国别数(条数、已核实、待核实),点国别到国别概况的「机构与法规」
+    let local = [];
+    try { local = await P.records("local_term", { props: ["concept", "country", "verified"] }); } catch (e) { local = []; }
+    const by = {};
+    local.forEach((r) => {
+      const c = P.get("local_term", r, "country"), id = P.linkId(c), name = P.text(c) || "未填国别", cc = P.get("local_term", r, "concept");
+      const g = by[id || name] = by[id || name] || { id, name, n: 0, ok: 0, concepts: new Set() };
+      g.n++; if (P.get("local_term", r, "verified") === "已核实") g.ok++; if (cc) g.concepts.add(String(cc));
+    });
+    const groups = Object.values(by).sort((a, b) => b.n - a.n);
+    let isoOf = {};
+    if (groups.some((g) => g.id)) { try { (await P.records("country", { props: ["key"], filter: P.and(P.cond("country", "key", "isNotEmpty")) })).forEach((c) => { isoOf[c.id] = P.get("country", c, "key"); }); } catch (e) { isoOf = {}; } }
+    $("semOpen4").innerHTML = openLink("local_term");
+    $("semLocal").innerHTML = groups.length ? P.tableHtml(["国别", "条数", "已核实", "待核实", "通用概念"], groups.map((g) => [
+      P.raw(isoOf[g.id] ? '<a href="country.html?iso=' + encodeURIComponent(isoOf[g.id]) + '&t=inst">' + esc(g.name) + "</a>" : esc(g.name)), g.n, g.ok, g.n - g.ok, [...g.concepts].join("、")])) +
+      '<p class="muted small">核对过原文的在表里把核实状态改成「已核实」,之后机器不再动它。</p>'
+      : '<p class="muted">' + (P.isGuest ? "示例数据里没有本国定义。" : "还没有本国定义(表格「国别定义」是空的或还没建)。") + "</p>";
+    const nWords = seed.reduce((s, x) => s + ((words(x) || x.words || []).length), 0);
+    $("semCards").innerHTML = [[ms.length, "指标"], [seed.length - ms.length, "其他指向"], [nWords, "说法"], [terms.length, "行业术语"], [groups.length ? local.length + " / " + groups.length + " 国" : "0", "本国定义"]]
+      .map(([n, l]) => '<div class="card"><div class="n">' + n + '</div><div class="l">' + l + "</div></div>").join("");
   }
   function drawRules() {
     $("rules").innerHTML = P.tableHtml(["编号", "规则", "内容", "怎么落实", "为什么"], O.rules.map((r) => [r.id, r.name, r.text, r.enforce || "", r.why || r.note || ""]));
@@ -194,7 +269,7 @@
       .map(([n, l]) => '<div class="card"><div class="n">' + n + '</div><div class="l">' + l + "</div></div>").join("");
     $("objs").innerHTML = O.objects.map((o) => '<button type="button" class="chip-btn" data-v="' + esc(o.id) + '">' + esc(o.name) + ' <span class="muted small">' + o.properties.length + "</span></button>").join("");
     $("objs").querySelectorAll(".chip-btn").forEach((b) => { b.onclick = () => select(b.dataset.v); });
-    drawGraph(); drawTax(); drawGlossary(); drawRules(); drawActions(); drawViews(); drawChanges();
+    drawGraph(); drawTax(); drawGlossary(); drawSem().catch((e) => P.fail($("semMeasures"), e)); drawRules(); drawActions(); drawViews(); drawChanges();
     $("tabs").innerHTML = TABS.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + "</button>").join("");
     $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
     showTab(TABS.some(([k]) => k === q0.get("t")) ? q0.get("t") : "tax");

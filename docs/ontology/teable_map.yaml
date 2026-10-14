@@ -6,7 +6,7 @@
 schema: osint-water/teable-map@1
 base: 水务项目机会 新版
 timezone: Asia/Shanghai
-order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award, study, water_event, water_area, law, law_clause, local_term, discharge_limit]   # 建表顺序(关联字段在所有表建好后再加)
+order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award, study, water_event, water_area, law, law_clause, local_term, discharge_limit, phrase]   # 建表顺序(关联字段在所有表建好后再加)
 
 tables:
   lead:
@@ -139,6 +139,10 @@ tables:
     table: 行业术语
     primary: term
     optional: true   # 2026-10-09 新加的表:库里还没建时助手用本体 terms 节的初始词
+  phrase:
+    table: 语义层说法
+    primary: target
+    optional: true   # 2026-10-14 新加的表:库里还没建时助手用本体 semantic 节的初始说法
   report:
     table: 报告
     key: {name: 文件名, note: 报告文件的文件名(含扩展名);生成报告时写,迁移与再生成按它增量——附件上传失败也认得出这一行}
@@ -252,6 +256,8 @@ views:
     - {name: 按国别, group: [[所属国别, asc]]}
   discharge_limit:
     - {name: 待核实, filter: {and: [[核实状态, is, 待核实]]}, group: [[所属国别, asc]]}
+  phrase:
+    - {name: 按类别, group: [[类别, asc]]}
   local_term:
     - {name: 待核实, filter: {and: [[核实状态, is, 待核实]]}, group: [[所属国别, asc]]}
   study:

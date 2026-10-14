@@ -314,8 +314,13 @@ label((limit[0] + clause[0] + clause[2]) / 2, LAW_Y + 52, "出处", C["black"], 
 path(f"M{lterm[0] + lterm[2]},{LAW_Y + 60} L{lawo[0]},{LAW_Y + 60}", C["black"], sw=1.6, end="aK")
 label((lterm[0] + lterm[2] + lawo[0]) / 2, LAW_Y + 52, "出处", C["black"], size=11.5)
 label(526, max(lawo[1] + lawo[3], clause[1] + clause[3], limit[1] + limit[3]) + 16, "四者都属于国别 *..1;国别定义的通用概念 = 行业术语里的一个词(语义层)", C["grey"], size=11.5)
+# 语义层说法(v2.25):国别定义下面;助手理解提问的口语,和别的对象没有关联
+phrase = obj(56, lterm[1] + lterm[3] + 22, 210, "语义层说法", sections=[
+    ("hu", "人写(表格,A42)", "类别 · 指向 · 说法 · 说明"),
+    ("nt", "谁读", "助手每分钟重读;表里没有的指向\n后台按本体补行(A43)"),
+])
 B1_BOT = max(cty_ + cth_, supply[1] + supply[3], sewage[1] + sewage[3], term[1] + term[3], award[1] + award[3], contractor[1] + contractor[3],
-             lawo[1] + lawo[3], clause[1] + clause[3], limit[1] + limit[3] + 20, lterm[1] + lterm[3]) + 40
+             lawo[1] + lawo[3], clause[1] + clause[3], limit[1] + limit[3] + 20, phrase[1] + phrase[3]) + 40
 R(40, B1_TOP, 1500, B1_BOT - B1_TOP, C["band"], C["band_b"], sw=1.5, rx=8, extra=' fill-opacity="0.55"')
 out.insert(next(i for i, s in enumerate(out) if s.startswith('<circle')), out.pop())  # 底色放到最下层
 T(790, B1_TOP + 24, "AI · 公开数据(机器采集、判定、建议;人可增删改)", size=15, fill="#455A64", anchor="middle", weight="bold")

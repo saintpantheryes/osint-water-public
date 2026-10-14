@@ -6,7 +6,7 @@
   define  本国定义:页面列国别定义(通用概念 → 本国说法、定义、和通用说法的差别)
   text    别的法规问题:页面请后台 /law 按国别与关键词查条文;配了模型的请它只按查到的条文作答、每句带出处角标
   list    只问「某国有哪些法规」:页面列这国的法规
-词表全在本体 semantic.words.law / effluent_param 与行业术语(通用概念);改说法改本体或术语表,不改程序。
+词表在表格「语义层说法」(初始说法是本体 semantic.words.law / effluent_param)与行业术语(通用概念);改说法改表,不改程序。
 """
 from __future__ import annotations
 
@@ -44,9 +44,9 @@ def words() -> Words:
     o = yaml.safe_load(ONTO_PATH.read_text(encoding="utf-8"))
     w = ((o.get("semantic") or {}).get("words") or {})
     srt = lambda xs: sorted({str(x).lower() for x in xs or []}, key=len, reverse=True)  # noqa: E731
-    law = w.get("law") or {}
-    return Words(limit=srt(law.get("limit")), define=srt(law.get("define")), text=srt(law.get("text")),
-                 params={k: srt([k, *v]) for k, v in (w.get("effluent_param") or {}).items()})
+    from core import semantic  # 表「语义层说法」里有这一行的用表里的说法,没有的用本体的
+    return Words(limit=srt(semantic.words("法规问法", "limit")), define=srt(semantic.words("法规问法", "define")), text=srt(semantic.words("法规问法", "text")),
+                 params={k: srt([k, *semantic.words("排放指标", k)]) for k in (w.get("effluent_param") or {})})
 
 
 _live_concepts: list[dict] | None = None  # 行业术语表里的全部术语(含只作法规概念、没写相关词的);None = 本体 terms 节

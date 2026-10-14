@@ -23,7 +23,7 @@ from pathlib import Path
 
 import yaml
 
-from core import fx, geo, law
+from core import fx, geo, law, semantic
 
 ROOT = Path(__file__).resolve().parent.parent
 ONTO_PATH = ROOT / "docs" / "ontology" / "ontology.yaml"
@@ -166,6 +166,13 @@ def set_terms(rows: list[dict] | None) -> None:
     law.set_concepts(rows)  # 同一张表也是通用概念(语义层):没写相关词、只作法规概念的行也算
 
 
+def set_phrases(rows: list[dict] | None) -> None:
+    """换上「语义层说法」表读到的行;None 回到本体 semantic 节的初始说法。说法变了才清词表缓存。"""
+    if semantic.set_rows(rows):
+        vocab.cache_clear()
+        law.words.cache_clear()
+
+
 def terms() -> list[dict]:
     return _live_terms if _live_terms is not None else vocab().terms
 
@@ -221,8 +228,9 @@ def vocab() -> Vocab:
         contract_types=[x["v"] for x in _values(tax["award_contract_type"])],
         deliveries=[x["v"] for x in _values(tax["award_delivery"])],
         assets=[x["v"] for x in _values(tax["award_asset"])],
-        measures=[{**m, "words": sorted({str(w).lower() for w in m.get("words") or []}, key=len, reverse=True)} for m in sem.get("measures") or []],
-        aggs=[{**a, "words": sorted({str(w).lower() for w in a.get("words") or []}, key=len, reverse=True)} for a in sem.get("aggs") or []],
+        # 指标、算法、主体工程的说法:表「语义层说法」里有这一行的用表里的,没有的用本体的(core/semantic.py)
+        measures=[{**m, "words": sorted({str(w).lower() for w in semantic.words("指标", m["id"])}, key=len, reverse=True)} for m in sem.get("measures") or []],
+        aggs=[{**a, "words": sorted({str(w).lower() for w in semantic.words("算法", a["id"])}, key=len, reverse=True)} for a in sem.get("aggs") or []],
         terms=[x for x in (make_term(t) for t in o.get("terms") or []) if x],
         not_collected=list((o.get("data_scope") or {}).get("not_collected") or []),
         market_tiers=list(o["glossary"]["threshold"].get("tiers") or []),
@@ -244,7 +252,7 @@ def vocab() -> Vocab:
         "report_kinds": merge(v.report_kinds, {}),
         "contract_types": merge(v.contract_types, CONTRACT_WORDS),
         "deliveries": merge([d for d in v.deliveries if d != "运营"], DELIVERY_WORDS),  # 「运营」只在同一句说了别的承包模式时才按承包模式查,见 _or_delivery
-        "assets": merge([a for a in v.assets if a != "其他"], (sem.get("words") or {}).get("award_asset") or {}),
+        "assets": merge([a for a in v.assets if a != "其他"], {k: semantic.words("主体工程", k) for k in (sem.get("words") or {}).get("award_asset") or {}}),
     }
     # 太短、太泛的英文词不要(「plan」「law」会误伤),资金来源里长度 ≤ 2 的拉丁缩写(WB、EU)只在整词时才认,见 _hit
     for dim in v.words.values():
