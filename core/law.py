@@ -50,14 +50,16 @@ def words() -> Words:
 
 
 _live_concepts: list[dict] | None = None  # 行业术语表里的全部术语(含只作法规概念、没写相关词的);None = 本体 terms 节
+_live_terms: set[str] = set()  # 表里出现过的术语名(含停用的)
 _lock = threading.Lock()
 
 
 def set_concepts(rows: list[dict] | None) -> None:
     """行业术语表的行(属性 term、aliases、disabled)→ 通用概念;None 回到本体 terms 节。assistant.set_terms 一并调。"""
-    global _live_concepts
+    global _live_concepts, _live_terms
     with _lock:
         _live_concepts = None if rows is None else [c for c in (_concept(r) for r in rows) if c]
+        _live_terms = {str(r.get("term") or "").strip() for r in rows or []}
 
 
 def _concept(t: dict) -> dict | None:
@@ -76,8 +78,11 @@ def _seed_concepts() -> list[dict]:
 
 
 def concepts() -> list[dict]:
+    """表里的通用概念;本体 terms 节有、表里还没有这一行的(停用的算有)照样认,免得表没补齐时问不出。"""
     with _lock:
-        return list(_live_concepts) if _live_concepts is not None else _seed_concepts()
+        if _live_concepts is None:
+            return _seed_concepts()
+        return list(_live_concepts) + [c for c in _seed_concepts() if c["term"] not in _live_terms]
 
 
 def _hit(text: str, w: str) -> bool:
@@ -121,6 +126,8 @@ def kind_of(text: str) -> str | None:
         return "limit"
     other = OTHER_RE.search(text)
     if params_in(text) and re.search(r"限值|标准|不超过|上限|多少|要求", text) and not other:
+        return "limit"
+    if re.search(r"(?:出水|尾水|排放|排水|排出的水|处理后的水).{0,10}(?:标准|限值|要求|达到|达标)", text) and not other:  # 「出水要达到什么标准」
         return "limit"
     if other:
         return None
@@ -275,6 +282,9 @@ def answer(lib: Library, q: str, law_plan: dict, countries: list[str], clf=None,
         if out and not out.get("_error"):
             zh = list(dict.fromkeys(zh + [str(x).strip() for x in out.get("zh") or [] if str(x).strip()]))[:12]
             orig = [str(x).strip() for x in out.get("orig") or [] if str(x).strip()][:16]
+    for c in concepts():  # 提问里的通用概念:术语表里写了的外文说法(如 特许经营 → concession)也拿去原文里找
+        if c["term"] in (law_plan.get("concepts") or []):
+            orig += [t for t in c["triggers"] if t.isascii() and len(t) >= 4 and t not in orig]
     pool, searched, missing = [], {}, []
     for iso in countries:
         clauses, laws = lib.country_rows(iso)

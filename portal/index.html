@@ -637,12 +637,14 @@
         const lim = P.lawLimitsHtml(d, c.id, nums, lw.params);
         const pm = (lw.params || []).length && mine.length && !mine.some((r) => lw.params.includes(P.get("discharge_limit", r, "param"))) ? "<p>" + P.esc(c.name) + "的法规里没有" + P.esc(lw.params.join("、")) + "的限值,下面是全部指标。</p>" : "";
         const n = mine.filter((r) => !(lw.params || []).length || lw.params.includes(P.get("discharge_limit", r, "param"))).length || mine.length;
-        const lead = mine.length ? '<p class="lead-ans">' + P.esc(c.name) + "的污水排放标准:<b>" + n + " 项限值</b>,出自 " + new Set(mine.map((r) => P.linkId(P.get("discharge_limit", r, "law")))).size + " 部法规" +
+        const none = d.terms.some((r) => ofC("local_term", r) === c.id && P.get("local_term", r, "concept") === "排放标准" && P.get("local_term", r, "relation") === "没有对应");
+        const lead = mine.length && none ? '<p class="lead-ans">' + P.esc(c.name) + "<b>没有全国统一的污水厂出水限值</b>(做法见下);查到的相关数值 " + n + " 项,口径和出处分开列,不能当成全国出水标准。</p>" :
+          mine.length ? '<p class="lead-ans">' + P.esc(c.name) + "的污水排放标准:<b>" + n + " 项限值</b>,出自 " + new Set(mine.map((r) => P.linkId(P.get("discharge_limit", r, "law")))).size + " 部法规" +
           (new Set(mine.map((r) => P.get("discharge_limit", r, "basis"))).size > 1 ? ",分几种口径,下面分开列" : "") + "。</p>" :
           '<p class="lead-ans">' + P.esc(c.name) + ":收了 " + nLaw + " 部法规原文,还没摘到排放限值。</p>";
         h.push(head + lead + (std ? '<div class="panel"><p class="small"><b>这国怎么定排放标准</b></p>' + std + "</div>" : "") + (lim ? '<div class="panel">' + pm + lim + "</div>" : ""));
       });
-      if (lw.kind === "limit" && bases.size > 1) h.unshift('<div class="warn small">几国的口径不同(' + P.esc([...bases].join("、")) + "):受纳水体允许浓度是河湖里的浓度,不是污水厂出水的上限,不能和出水限值直接比。</div>");
+      if (lw.kind === "limit" && bases.size > 1) h.unshift('<div class="warn small">' + (list.length > 1 ? "几国" : "这国") + "的限值口径不止一种(" + P.esc([...bases].join("、")) + "):受纳水体允许浓度是河湖里的浓度,不是污水厂出水的上限,不能和出水限值直接比。</div>");
       body.innerHTML = h.join("") + '<p class="muted small">数据来自各国法规原文(表格「法规」「法规条文」「排放限值」「国别定义」);角标点开看条文。' +
         (cs.length ? "" : "没说国家时列收了法规原文的各国。") + "</p>";
       return;

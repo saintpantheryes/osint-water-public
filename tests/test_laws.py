@@ -116,3 +116,67 @@ def test_answer_cites_clauses_and_lists_countries_without_texts():
     clf = _Clf({"zh": ["生化需氧量"], "orig": ["BOD5"]}, {"answer": "阿塞拜疆 BOD5 限值 25 毫克/升[1]。", "used": [1]})
     res = law.answer(lib, "阿塞拜疆的 BOD5 限值", plan, ["AZE"], clf, log=lambda *a: None)
     assert res["answer"].endswith("[1]。") and res["used"] == [1] and res["cites"][0]["law"] == "虚构排放规则"
+
+
+def test_translate_starts_with_clauses_the_extracts_cite(env, tmp_path):
+    fake, admin, b, ctx = env
+    laws.run(b, _data(tmp_path), log=lambda *a: None)
+    clf = _Clf({"items": [{"i": 0, "zh": "BOD5 25 毫克/升"}]})
+    assert laws.translate(b, clf, max_chars=30, log=lambda *a: None) == 1  # 一批只放得下一条:先译排放限值引的附表
+    zh = {b.get("law_clause", r, "key"): b.get("law_clause", r, "text_zh") for r in b.rows("law_clause")}
+    assert zh["LAW-AZE-T1-0002"] == "BOD5 25 毫克/升" and not zh["LAW-AZE-T1-0001"] and "BOD5" in clf.calls[0]
+
+
+def test_portal_answers_discharge_standard_questions(tmp_path):
+    """首页问排放标准:按口径列限值、标「待核实」、带出处角标;没有全国出水限值的国家先说清楚;追问换国家;没收原文的国家直说没收,不说「没有规定」。只读。"""
+    import pytest
+    pytest.importorskip("playwright.sync_api", reason="没有 Playwright")
+    from urllib.parse import quote
+    from playwright.sync_api import Error as PWError, sync_playwright
+    from core import schema
+    from tests.test_portal import NEW, ONTO, _fake_with_schema, _serve
+    fake, admin = _fake_with_schema()
+    b = tstore.Base(admin)
+    b.create("country", [{"name_zh": "阿塞拜疆", "ISO3": "AZE"}, {"name_zh": "吉尔吉斯斯坦", "ISO3": "KGZ"}, {"name_zh": "约旦", "ISO3": "JOR"}])
+    d = _data(tmp_path)
+    with open(d / "laws.csv", "a", encoding="utf-8", newline="") as fh:
+        csv.DictWriter(fh, laws.LAW_COLS).writerow({"key": "LAW-KGZ-T1", "iso3": "KGZ", "name": "虚构水体保护规则", "kind": "排放标准与技术规范", "status": "现行有效", "language": "俄文"})
+    with open(d / "discharge_limits.csv", "a", encoding="utf-8", newline="") as fh:
+        csv.DictWriter(fh, laws.LIMIT_COLS).writerows([
+            {"key": f"KGZ-T1-BOD5-{i}", "iso3": "KGZ", "law_key": "LAW-KGZ-T1", "param": "BOD5", "value": v, "unit": "mg/L", "basis": "受纳水体允许浓度", "receiving": "地表水", "scope": sc}
+            for i, (v, sc) in enumerate([(2, "饮用水源"), (4, "游憩"), (3, "渔业")])])
+    with open(d / "local_terms.csv", "a", encoding="utf-8", newline="") as fh:
+        csv.DictWriter(fh, laws.TERM_COLS).writerow({"key": "KGZ-T1-std", "iso3": "KGZ", "concept": "排放标准", "term_orig": "ПДС", "term_zh": "最大允许排放量", "definition": "逐厂核定", "relation": "没有对应", "law_key": "LAW-KGZ-T1"})
+    laws.run(b, d, log=lambda *a: None)
+    srv = _serve(fake, schema.read_config(admin, NEW, ONTO))
+    base = f"http://127.0.0.1:{srv.server_port}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/index.html?q=" + quote("阿塞拜疆污水厂排放标准是多少"))
+            page.wait_for_selector(".answer table", timeout=15000)
+            body = page.locator(".answer").last.inner_text()
+            assert "对象:法规" in body and "国别:阿塞拜疆" in body and "≤ 25 mg/L" in body and "待核实" in body and "虚构排放规则" in body
+            assert page.locator(".answer").last.locator("sup, .lref").count() >= 1
+            page.fill("#q", "那吉尔吉斯斯坦呢")
+            page.press("#q", "Enter")
+            page.wait_for_function("document.querySelectorAll('.answer').length > 1 && document.querySelectorAll('.answer')[1].querySelector('table')", timeout=15000)
+            body = page.locator(".answer").last.inner_text()
+            assert "国别:吉尔吉斯斯坦" in body and "没有全国统一的污水厂出水限值" in body and "受纳水体允许浓度" in body
+            assert "饮用水源" in body and "游憩" in body and "渔业" in body  # 三种用途排成一张对照表
+            page.fill("#q", "约旦污水排放标准")
+            page.press("#q", "Enter")
+            page.wait_for_function("document.querySelectorAll('.answer').length > 2 && !document.querySelectorAll('.answer')[2].innerText.includes('解析中')", timeout=15000)
+            page.wait_for_timeout(1000)
+            body = page.locator(".answer").last.inner_text()
+            assert "还没收这国的法规原文" in body and "不是说这国没有规定" in body
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()

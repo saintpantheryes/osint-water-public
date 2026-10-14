@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import os
 import sys
@@ -168,10 +169,19 @@ def translate(b: tstore.Base, clf, max_chars: int = TRANSLATE_CHARS, log=print) 
     oid = "law_clause"
     if clf is None or not getattr(clf, "enabled", False) or not hasattr(clf, "ask") or oid not in b.t or not b.has(oid, "text_zh"):
         return 0
+    first = []  # 摘录(排放限值、国别定义)引用的条文先译:助手答排放标准时引的就是它们
+    for o in ("discharge_limit", "local_term"):
+        if o in b.t and b.has(o, "clause"):
+            first += [tstore.link_id(b.get(o, r, "clause")) for r in b.rows(o, props=["clause"])]
+    pending = []
+    for rid in dict.fromkeys(x for x in first if x):
+        r = b.record(oid, rid)
+        if not b.get(oid, r, "text_zh") and b.get(oid, r, "text"):
+            pending.append(r)
     it = b.api.iter_records(b.t[oid], filter=b.filter(b.cond(oid, "text_zh", "isEmpty"), b.cond(oid, "text", "isNotEmpty")),
                             projection=[b.fid(oid, "text"), b.fid(oid, "label")], take=TRANSLATE_TAKE)
     rows, total = [], 0
-    for _, r in zip(range(TRANSLATE_TAKE), it):
+    for _, r in zip(range(TRANSLATE_TAKE), itertools.chain(pending, it)):
         t = _s(b.get(oid, r, "text"))
         if rows and total + len(t) > max_chars:
             break

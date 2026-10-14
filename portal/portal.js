@@ -1036,19 +1036,33 @@
       const want = (params || []).length ? rows.filter((r) => params.includes(g(r, "param"))) : rows;
       if (want.length) rows = want;
       if (!rows.length) return "";
-      const blocks = {};
-      rows.forEach((r) => { const k = [this.linkId(g(r, "law")), g(r, "basis") || "", g(r, "receiving") || "", g(r, "scope") || ""].join("|"); (blocks[k] = blocks[k] || []).push(r); });
+      const blocks = {}, groups = {};  // 同一部法规同一口径、同一去处:适用范围有三种以上(如河湖按用途分级)的排成一张对照表,否则按适用范围分开列
+      rows.forEach((r) => { const k = [this.linkId(g(r, "law")), g(r, "basis") || "", g(r, "receiving") || ""].join("|"); (groups[k] = groups[k] || []).push(r); });
+      Object.entries(groups).forEach(([k, rs]) => {
+        const scopes = [...new Set(rs.map((r) => g(r, "scope") || ""))];
+        if (scopes.length >= 3) blocks[k + "|*"] = rs; else rs.forEach((r) => { const kk = k + "|" + (g(r, "scope") || ""); (blocks[kk] = blocks[kk] || []).push(r); });
+      });
       const pend = rows.filter((r) => g(r, "verified") !== "已核实").length;
+      const src = (r) => d.clause[this.linkId(g(r, "clause"))] ? '<span class="nw">' + this.esc(d.clause[this.linkId(g(r, "clause"))].label) + "</span>" + this.lref(d.clause[this.linkId(g(r, "clause"))], nums) : '<span class="muted small">' + this.esc(this.text(g(r, "clause")) || "") + "</span>";
+      const chk = (rs) => rs.every((r) => g(r, "verified") === "已核实") ? '<span class="tag ok-tag nw">已核实</span>' : '<span class="tag warn-tag nw" title="机器从条文摘出,人还没对过原文">待核实</span>';
+      const pname = (r) => g(r, "param") === "其他" && g(r, "param_orig") ? "<b>" + this.esc(g(r, "param_orig")) + "</b>" : "<b>" + this.esc(g(r, "param")) + "</b>" + (g(r, "param_orig") && g(r, "param_orig") !== g(r, "param") ? ' <span class="muted small">' + this.esc(g(r, "param_orig")) + "</span>" : "");
       return Object.entries(blocks).map(([k, rs]) => {
         const [lid, basis, recv, scope] = k.split("|"), lw = d.lawOf[lid], samp = [...new Set(rs.map((r) => g(r, "sampling")).filter(Boolean))];
         rs.sort((a, b) => order.indexOf(g(a, "param")) - order.indexOf(g(b, "param")));
         const head = '<div class="lw-bh"><b>' + this.esc(lw ? this.get("law", lw, "name") : "(法规)") + "</b>" + (lw ? ' <a class="small" href="' + this.esc(this.lawUrl(this.get("law", lw, "key"))) + '">全文 →</a>' : "") +
-          '<div class="lw-tags">' + [["口径", basis], ["排到", recv], ["适用", scope], ["取样", samp.join(";")]].filter((x) => x[1]).map(([a, b]) => '<span class="tag' + (a === "口径" && basis === "受纳水体允许浓度" ? " warn-tag" : "") + '">' + a + ":" + this.esc(b) + "</span>").join("") + "</div></div>";
+          '<div class="lw-tags">' + [["口径", basis], ["排到", recv], ["适用", scope === "*" ? "" : scope], ["取样", samp.join(";")]].filter((x) => x[1]).map(([a, b]) => '<span class="tag' + (a === "口径" && basis === "受纳水体允许浓度" ? " warn-tag" : "") + '">' + a + ":" + this.esc(b) + "</span>").join("") + "</div></div>";
+        if (scope === "*") {
+          const scopes = [...new Set(rs.map((r) => g(r, "scope") || ""))], byP = {};
+          rs.forEach((r) => { const p = g(r, "param") + "|" + (g(r, "param_orig") || ""); (byP[p] = byP[p] || []).push(r); });
+          return head + this.tableHtml(["指标", ...scopes.map((x) => x || "(未注明)"), "出处", ""], Object.values(byP).map((ps) => [
+            this.raw(pname(ps[0])),
+            ...scopes.map((sc) => { const r = ps.find((x) => (g(x, "scope") || "") === sc); return r ? this.raw('<b class="nw">' + this.esc(this.limitText(r)) + "</b>") : this.raw('<span class="muted">不规定</span>'); }),
+            this.raw([...new Set(ps.map(src))].join(" ")), this.raw(chk(ps))]));
+        }
         return head + this.tableHtml(["指标", "限值", "出处", ""], rs.map((r) => [
-          this.raw("<b>" + this.esc(g(r, "param")) + "</b>" + (g(r, "param_orig") && g(r, "param_orig") !== g(r, "param") ? ' <span class="muted small">' + this.esc(g(r, "param_orig")) + "</span>" : "")),
+          this.raw(pname(r)),
           this.raw('<b class="nw">' + this.esc(this.limitText(r)) + "</b>" + (g(r, "note") ? '<br><span class="muted small">' + this.esc(g(r, "note")) + "</span>" : "")),
-          this.raw(d.clause[this.linkId(g(r, "clause"))] ? this.esc(d.clause[this.linkId(g(r, "clause"))].label) + this.lref(d.clause[this.linkId(g(r, "clause"))], nums) : '<span class="muted small">' + this.esc(this.text(g(r, "clause")) || "") + "</span>"),
-          this.raw(g(r, "verified") === "已核实" ? '<span class="tag ok-tag">已核实</span>' : '<span class="tag warn-tag" title="机器从条文摘出,人还没对过原文">待核实</span>')]));
+          this.raw(src(r)), this.raw(chk([r]))]));
       }).join("") + (pend ? '<p class="muted small">标「待核实」的 ' + pend + " 项是从条文摘出、还没人对过原文的;在表格「排放限值」里对过后改成「已核实」。</p>" : "");
     },
     /* 一国的本国定义 → html(concepts 只看这几个通用概念,空 = 全部) */
@@ -1080,7 +1094,7 @@
           (g(r, "version") ? '<br><span class="muted small">收的版本:' + this.esc(g(r, "version")) + "</span>" : "")),
         this.raw(this.esc(g(r, "number") || "") + (g(r, "issued") ? '<br><span class="muted small">' + this.esc(this.day(g(r, "issued"))) + "</span>" : "")),
         this.raw(g(r, "status") === "已废止" ? '<span class="num-bad">已废止</span>' : this.esc(g(r, "status") || "")),
-        this.raw('<span class="nw">' + (Number(g(r, "clause_count")) || 0) + " 条</span>" + (g(r, "language") ? '<br><span class="muted small">' + this.esc(g(r, "language")) + "</span>" : "")),
+        this.raw((Number(g(r, "clause_count")) ? '<span class="nw">' + Number(g(r, "clause_count")) + " 条</span>" : '<span class="muted small nw">原文未取到</span>') + (g(r, "language") ? '<br><span class="muted small">' + this.esc(g(r, "language")) + "</span>" : "")),
         this.raw((g(r, "url") ? '<a class="small" href="' + this.esc(g(r, "url")) + '" target="_blank" rel="noopener">原文 ↗</a> ' : "") + this.open("law", r.id, "↗"))]));
     },
     /* 国别概况「机构与法规」页签下半部:排放标准、本国定义、法规原文;→ 收了几部法规 */

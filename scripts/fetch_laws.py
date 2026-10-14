@@ -35,10 +35,11 @@ sys.path.insert(0, str(ROOT))
 from core.jobs.laws import CLAUSE_COLS  # noqa: E402
 
 DATA = ROOT / "private" / "data"
+csv.field_size_limit(10_000_000)  # 没拆开的长附表一格可能很大
 UA = "Mozilla/5.0 (compatible; osint-water law fetcher)"
 LANG_OCR = {"法文": "fra", "俄文": "rus", "英文": "eng", "阿塞拜疆文": "aze", "吉尔吉斯文": "kir+rus", "阿拉伯文": "ara"}
 ART = re.compile(r"^\s*(?:"
-                 r"(?:ARTICLE|Article|Art\.)\s+(?P<fr>premier|PREMIER|1er|\d+(?:[.\-–]\d+)*(?:\s?(?:bis|ter|quater))?)"
+                 r"(?:ARTICLE|Article|ART\.|Art\.|CLAUSE|Clause)\s+(?P<fr>premier|PREMIER|1er|\d+(?:[.\-–]\d+)*(?:\s?(?:bis|ter|quater))?)"
                  r"|(?:Статья|СТАТЬЯ|Стаття)\s+(?P<ru>\d+(?:[.\-]\d+)*)"
                  r"|(?:Maddə|MADDƏ|Madde)\s+(?P<az>\d+(?:[.\-]\d+)*)"
                  r"|(?P<kg>\d+)-(?:берене|статья)"
@@ -46,6 +47,8 @@ ART = re.compile(r"^\s*(?:"
                  r")\s*[.:\-–—)]?\s*(?P<rest>.*)$")
 ANNEX = re.compile(r"^\s*(?P<a>ANNEXE|Annexe|ANNEX|Annex|ПРИЛОЖЕНИЕ|Приложение|Əlavə|ƏLAVƏ|Тиркеме|TABLEAU|Tableau|Таблица|Cədvəl|Table)\b\s*(?:n°\s*|№\s*)?(?P<n>[\w\-.]*)\s*[.:\-–—]?\s*(?P<rest>.*)$")
 HEAD = re.compile(r"^\s*(?:CHAPITRE|Chapitre|TITRE|Titre|Section|SECTION|ГЛАВА|Глава|РАЗДЕЛ|Раздел|Fəsil|FƏSİL|Bölmə|BÖLMƏ|Chapter|CHAPTER|Глава|Бөлүм)\b.{0,160}$")
+POINT = re.compile(r"^\s*(?P<n>\d{1,3})\.\s+(?P<rest>\S.*)$")  # 没有条号的规则、指南按「1. 2. 3.」编的点
+CHUNK = 6000  # 一条太长(附表、整份没拆开的)按段切开,检索和翻译都按这个粒度
 LABEL = {"fr": "第 {} 条", "ru": "第 {} 条", "az": "第 {} 条", "kg": "第 {} 条", "ar": "第 {} 条"}
 
 
@@ -60,7 +63,7 @@ class _Text(HTMLParser):
     def handle_starttag(self, tag, attrs):
         if tag in self.SKIP:
             self.skip += 1
-        if tag in ("p", "br", "div", "tr", "li", "h1", "h2", "h3", "h4", "table"):
+        if tag in ("p", "br", "div", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table"):
             self.out.append("\n")
 
     def handle_endtag(self, tag):
@@ -69,12 +72,19 @@ class _Text(HTMLParser):
 
     def handle_data(self, data):
         if not self.skip:
-            self.out.append(data)
+            self.out.append(re.sub(r"\s+", " ", data))  # 源码里的换行只是排版;分行看块标签
 
 
 def _pages_arg(spec: str) -> tuple[int, int] | None:
     m = re.fullmatch(r"\s*(\d+)\s*(?:-\s*(\d+))?\s*", spec or "")
     return (int(m.group(1)), int(m.group(2) or m.group(1))) if m else None
+
+
+def _two_columns(t: str) -> bool:
+    """一页里过半的长行中间有一大段空白、两边都有字 → 双栏。表格行也有空白,但少有过半。"""
+    lines = [x for x in t.splitlines() if len(x.strip()) > 50]
+    gap = [x for x in lines if re.search(r"\S {4,}\S", x.strip()) and re.search(r"\w{3,}.* {4,}.*\w{3,}", x)]
+    return len(lines) >= 12 and len(gap) > 0.5 * len(lines)
 
 
 def pdf_pages(path: Path, lang: str, pages: tuple[int, int] | None = None, log=print) -> list[tuple[int, str]]:
@@ -87,6 +97,8 @@ def pdf_pages(path: Path, lang: str, pages: tuple[int, int] | None = None, log=p
     out, ocrd = [], 0
     for p in range(lo, min(hi, n) + 1):
         t = subprocess.run(["pdftotext", "-q", "-layout", "-f", str(p), "-l", str(p), str(path), "-"], capture_output=True, text=True).stdout
+        if _two_columns(t):  # 公报常见双栏:按版面取会把左右两栏拼成一行,改按阅读顺序取
+            t = subprocess.run(["pdftotext", "-q", "-f", str(p), "-l", str(p), str(path), "-"], capture_output=True, text=True).stdout
         if len(re.sub(r"\s", "", t)) < 40 and ocr_lang:
             with tempfile.TemporaryDirectory() as d:
                 subprocess.run(["pdftoppm", "-r", "300", "-gray", "-f", str(p), "-l", str(p), "-png", str(path), f"{d}/pg"], check=True)
@@ -100,8 +112,13 @@ def pdf_pages(path: Path, lang: str, pages: tuple[int, int] | None = None, log=p
 
 
 def html_pages(raw: bytes) -> list[tuple[int, str]]:
+    m = re.search(rb"charset=[\"']?([\w\-]+)", raw[:4000], re.I)  # 阿塞拜疆官网的是 windows-1251 / 1254
+    try:
+        text = raw.decode(m.group(1).decode() if m else "utf-8")
+    except (LookupError, UnicodeDecodeError):
+        text = raw.decode("utf-8", errors="replace")
     p = _Text()
-    p.feed(raw.decode("utf-8", errors="replace"))
+    p.feed(text)
     return [(0, re.sub(r"\n\s*\n+", "\n", "".join(p.out)))]
 
 
@@ -140,6 +157,11 @@ def split(pages: list[tuple[int, str]], law_key: str) -> list[dict]:
                 cur = {"label": "序言", "heading": "", "page": str(pg or ""), "lines": []}
                 items.append(cur)
             cur["lines"].append(s)
+    if sum(1 for x in items if x["label"].startswith("第 ")) < 3 and sum(len(" ".join(x["lines"])) for x in items) > CHUNK:
+        items = _points(pages) or items
+    labels = [x["label"] for x in items]
+    items = [x for i, x in enumerate(items) if not (len(" ".join(x["lines"])) < 200 and x["label"] in labels[i + 1:])]  # 卷首目录里的条号行
+    items = [part for it in items for part in _chunks(it)]
     rows, seen = [], {}
     for i, it in enumerate(x for x in items if _clean("\n".join(x["lines"]))):
         lab = it["label"]
@@ -151,6 +173,50 @@ def split(pages: list[tuple[int, str]], law_key: str) -> list[dict]:
     if len(rows) == 1:
         rows[0]["label"] = "全文"
     return rows
+
+
+def _points(pages: list[tuple[int, str]]) -> list[dict]:
+    """按「1. 2. 3.」顺序编号拆(号接得上上一点才算新的一点;章节标题另有自己的编号,并进上一点)。拆不出 3 点 → []。"""
+    items, cur, n, most = [], None, 0, 0
+    for pg, text in pages:
+        for line in text.splitlines():
+            s = line.strip()
+            if not s:
+                continue
+            a = ANNEX.match(s)
+            if a and len(s) < 120:  # 决议正文的「1. 批准……」之后,附件(规则本身、附表)重新编号
+                n = 0
+                cur = {"label": ("附件 " + a.group("n").strip(".")).strip(), "heading": "", "page": str(pg or ""), "lines": [s]}
+                items.append(cur)
+                continue
+            m = POINT.match(s)
+            if m and int(m.group("n")) == n + 1:
+                n += 1
+                most = max(most, n)
+                cur = {"label": f"第 {n} 点", "heading": "", "page": str(pg or ""), "lines": [s]}
+                items.append(cur)
+                continue
+            if cur is None:
+                cur = {"label": "序言", "heading": "", "page": str(pg or ""), "lines": []}
+                items.append(cur)
+            cur["lines"].append(s)
+    return items if most >= 3 else []
+
+
+def _chunks(it: dict) -> list[dict]:
+    """一条超过 CHUNK 字的按行切成几段,标「(第 k 段)」;页码取每段开头所在页(段内只记开头)。"""
+    if sum(len(x) + 1 for x in it["lines"]) <= CHUNK:
+        return [it]
+    out, cur, size = [], [], 0
+    for x in it["lines"]:
+        if cur and size + len(x) > CHUNK and (x == "" or size > CHUNK * 1.3 or x[:1].isupper() or x[:1].isdigit()):
+            out.append(cur)
+            cur, size = [], 0
+        cur.append(x)
+        size += len(x) + 1
+    if cur:
+        out.append(cur)
+    return [{**it, "label": f"{it['label']}(第 {k + 1} 段)", "lines": ls} for k, ls in enumerate(out)]
 
 
 def fetch(src: dict, data: Path, log=print) -> list[tuple[int, str]]:
