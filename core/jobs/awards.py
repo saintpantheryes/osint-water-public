@@ -103,7 +103,12 @@ METHOD_ZH = {"Request for Bids": "公开招标(RFB)", "Request for Quotations": 
              "Least Cost Selection": "最低费用选择(LCS)", "Quality Based Selection": "质量选择(QBS)", "Fixed Budget Selection": "固定预算选择(FBS)",
              "Request for Proposals": "建议书邀请(RFP)", "Community Driven Development": "社区主导", "UN Agencies (Direct)": "联合国机构(直接)",
              "E-Auctions": "电子反拍", "Force Account": "自营工程", "Public Private Partnership": "公私合营(PPP)",
-             "Individual Consultant Selection": "个人咨询顾问选择", "Non-Profit Organizations": "非营利组织(直接)"}
+             "Individual Consultant Selection": "个人咨询顾问选择", "Non-Profit Organizations": "非营利组织(直接)",
+             # 2019 年前的叫法(scripts/fetch_wb_old_awards.py)
+             "International Competitive Bidding": "国际竞争性招标(ICB)", "National Competitive Bidding": "国内竞争性招标(NCB)",
+             "Limited International Bidding": "有限国际招标(LIB)", "Shopping": "询价采购", "International Shopping": "国际询价采购",
+             "National Shopping": "国内询价采购", "Direct Contracting": "直接签约", "Single Source Selection": "单一来源选择(SSS)",
+             "Selection Under a Fixed Budget": "固定预算选择(FBS)", "Commercial Practices": "商业惯例采购"}
 
 # 名称看得出是中国企业的(各来源的地址常写的是它在当地的分公司,注册国按这个改成中国)
 CHINESE_FIRM = re.compile(r"\bCHINA\b|\bSINO|\bCHINESE\b|POWERCHINA|HYDROCHINA|\bCSCEC\b|\bCRCC\b|\bCRBC\b|\bCHEC\b|\bCAMCE\b|\bCMEC\b|\bCGGC\b|"
