@@ -135,13 +135,15 @@
         let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => mc.resize(), 150); });
       }
       const regions = one ? [{ name: state.c, itemStyle: { areaColor: "#e0f2fe", borderColor: "#0f4c81", borderWidth: 1.5 } }] : [];
+      const tipFmt = (p) => P.onGeo(p) ? "<b>" + P.esc(zhOf[p.name] || p.name) + "</b><br>" + (p.name === "CHN" ? "中国境内不做趋势分析" : !isoSet.has(p.name) ? "没有城市数据" : p.name === state.c ? "再点一下看全部国别" : "点一下只看这个国家") + P.hatchTip(p.name, bl) : p.data ? "<b>" + P.esc(p.data.name) + "</b>" + (LABEL[p.data.kind] ? " · " + LABEL[p.data.kind] : "") + "<br>人口 " + people(p.data.value[2]) +
+          " · " + rname() + " " + (p.data.value[3] === null ? "无数据" : p.data.value[3].toFixed(1)) + " · 人均 GDP " + (p.data.value[4] ? num(p.data.value[4]) + " 美元" : "无数据") : "";
       mc.setOption({ animation: false,
-        tooltip: { trigger: "item", formatter: (p) => P.onGeo(p) ? "<b>" + P.esc(zhOf[p.name] || p.name) + "</b><br>" + (p.name === "CHN" ? "中国境内不做趋势分析" : !isoSet.has(p.name) ? "没有城市数据" : p.name === state.c ? "再点一下看全部国别" : "点一下只看这个国家") + P.hatchTip(p.name, bl) : p.data ? "<b>" + P.esc(p.data.name) + "</b>" + (LABEL[p.data.kind] ? " · " + LABEL[p.data.kind] : "") + "<br>人口 " + people(p.data.value[2]) +
-          " · " + rname() + " " + (p.data.value[3] === null ? "无数据" : p.data.value[3].toFixed(1)) + " · 人均 GDP " + (p.data.value[4] ? num(p.data.value[4]) + " 美元" : "无数据") : "" },
-        geo: { map: "world", roam: true, center, zoom: center ? 4 : 1.1, triggerEvent: true, tooltip: { show: true }, itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" },
+        tooltip: { trigger: "item", formatter: tipFmt },
+        geo: { map: "world", roam: true, center, zoom: center ? 4 : 1.1, triggerEvent: true, tooltip: { show: true, formatter: tipFmt },  // 有 regions 时 geo 用自己的提示框设置,要再给一次
+          itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" },
           emphasis: { itemStyle: { areaColor: "#e2e8f0" }, label: { show: false } }, label: { show: false },
-          regions },
-        series: series.concat(P.hatchSeries(bl, null, true)) }, true);
+          regions: P.hatchRegions(bl).concat(regions) },
+        series }, true);
       /* 城市清单:按水风险从高到低,再按人口 */
       const want = { "": ["self", "loan", "both"], self: ["self", "both"], loan: ["loan", "both"], both: ["both"], all: ["self", "loan", "both", "none"] }[state.s];
       const rows = base.filter((x) => want.includes(x.k)).sort((a, b) => (val("city", b.ct, state.r) || -1) - (val("city", a.ct, state.r) || -1) ||

@@ -399,26 +399,22 @@
         records: [{ id: rec.id, fields: { [this.f("preference", "ignored")]: Array.from(set).sort().join(",") || "-" } }] });
       this._ignored = Promise.resolve(new Set(set));
     },
-    /* 忽略国别涂灰:用 echarts decal 铺满一层不透明的中性灰,盖住线索多少的蓝色(visualMap 的颜色压不住单项的 areaColor,decal 能);
-       灰色不带蓝调,和最浅的蓝 #dbeafe 也分得开。铺满的颜色不随缩放变,不用按缩放换算 */
-    HATCH: { symbol: "rect", symbolSize: 1, dashArrayX: [[1, 0]], dashArrayY: [1, 0], color: "#c4bfba" },
+    /* 忽略国别涂灰:直接给这几项填底色(areaColor),不用 echarts 的花纹(decal)。花纹是画布图案,有的浏览器拖动地图时整张图画不出来。
+       有 visualMap(线索多少的蓝色)的地图,visualMap 会盖掉单项底色,所以忽略的国别 value 写「-」(不参与配色),线索数挪到 leads,提示框照常显示。
+       灰色不带蓝调,和最浅的蓝 #dbeafe 也分得开 */
+    IGNORED_COLOR: "#c4bfba",
     /* 地图系列(type: "map")的数据:忽略的国别涂灰;数据里没有的也补一项,好画上 */
-    hatchData(data, set, decal) {
+    hatchData(data, set) {
       if (!set || !set.size) return data;
-      decal = decal || this.HATCH;
-      const out = data.map((d) => (set.has(d.name) ? Object.assign({}, d, { itemStyle: Object.assign({}, d.itemStyle, { decal }) }) : d));
-      const have = new Set(data.map((d) => d.name));  // 数据里没有的国家补一项;底色写明,不然有 visualMap 时颜色是空的,花纹画不出来
-      set.forEach((iso) => { if (!have.has(iso)) out.push({ name: iso, value: 0, itemStyle: { areaColor: "#f1f5f9", decal } }); });
+      const itemStyle = { areaColor: this.IGNORED_COLOR };
+      const out = data.map((d) => (set.has(d.name) ? Object.assign({}, d, { value: "-", leads: d.value || 0, itemStyle: Object.assign({}, d.itemStyle, itemStyle) }) : d));
+      const have = new Set(data.map((d) => d.name));
+      set.forEach((iso) => { if (!have.has(iso)) out.push({ name: iso, value: "-", leads: 0, itemStyle }); });
       return out;
     },
-    /* geo 底图(上面叠城市散点的地图):geo 自己的 regions 画不了花纹,所以叠一层只画忽略国别的地图系列(共用这张 geo);放在 series 最后,
-       别的系列的序号不变。叠上以后鼠标落在国家上算这个系列(seriesId "hatch")而不是 geo:页面要响应国家的(趋势机会)传 interactive,
-       并用 P.onGeo(p) 判断;不响应的(城市概况)缺省不接鼠标 */
-    hatchSeries(set, decal, interactive) {
-      return set && set.size ? [Object.assign({ id: "hatch", type: "map", geoIndex: 0 }, interactive ? {} : { silent: true, tooltip: { show: false } }, { data: this.hatchItems(set, decal) })] : [];
-    },
-    hatchItems(set, decal) { decal = decal || this.HATCH; return Array.from(set).map((iso) => ({ name: iso, itemStyle: { decal } })); },
-    onGeo(p) { return !!p && (p.componentType === "geo" || p.seriesId === "hatch"); },
+    /* geo 底图(上面叠城市散点的地图):忽略的国别放进 geo 的 regions 涂灰(放在页面自己的 regions 前面,页面的高亮优先) */
+    hatchRegions(set) { return set ? Array.from(set).map((iso) => ({ name: iso, itemStyle: { areaColor: this.IGNORED_COLOR } })) : []; },
+    onGeo(p) { return !!p && p.componentType === "geo"; },
     /* 提示框里的一行,与地图下方的图例说明 */
     hatchTip(iso, set) { return set && set.has(iso) ? '<br><span style="color:#64748b">已忽略:不再采集这一国的线索</span>' : ""; },
     hatchNote(mapEl, set) {

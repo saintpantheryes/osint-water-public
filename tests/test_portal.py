@@ -775,7 +775,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.select_option("#iPick", label="阿塞拜疆")
             page.wait_for_function("document.querySelector('#iList').innerText.includes('阿塞拜疆')", timeout=15000)
             assert ign() == "AZE"
-            hatched = "(() => { const o = echarts.getInstanceByDom(document.getElementById('map')).getOption(); const s = o.series[0]; return s.data.filter((d) => d.itemStyle && d.itemStyle.decal).map((d) => d.name); })()"
+            hatched = "(() => { const o = echarts.getInstanceByDom(document.getElementById('map')).getOption(); const s = o.series[0]; return s.data.filter((d) => d.itemStyle && d.itemStyle.areaColor === P.IGNORED_COLOR && d.value === '-').map((d) => d.name); })()"
             for url in ("/country.html?iso=AZE", "/overview.html"):
                 page.goto(base + url)
                 page.wait_for_selector(".hatch-note", timeout=15000)
