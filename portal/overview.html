@@ -205,10 +205,10 @@
     const raw = countries.map((c) => ({ name: P.get("country", c, "key"), value: Number(P.get("country", c, "lead_count")) || 0,
       opps: Number(P.get("country", c, "opp_count")) || 0, zh: P.get("country", c, "name_zh") || "" }));
     const data = P.hatchData(raw, bl);
-    const max = Math.max(1, ...data.map((d) => d.value));
+    const max = Math.max(1, ...raw.map((d) => d.value || 0));
     mc = echarts.init($("map"));
     const mapOption = {
-      tooltip: { trigger: "item", formatter: (p) => { const d = p.data || {}; return "<b>" + (d.zh || zh[p.name] || p.name) + "</b><br>线索 " + (d.value || 0) + " · 商机 " + (d.opps || 0) + P.hatchTip(p.name, bl); } },
+      tooltip: { trigger: "item", formatter: (p) => { const d = p.data || {}; return "<b>" + (d.zh || zh[p.name] || p.name) + "</b><br>线索 " + ((d.leads ?? d.value) || 0) + " · 商机 " + (d.opps || 0) + P.hatchTip(p.name, bl); } },
       visualMap: { min: 0, max, text: ["线索多", "少"], calculable: true, inRange: { color: ["#dbeafe", "#1d4ed8"] }, left: 10, bottom: 10 },
       series: [{ type: "map", map: "world", roam: true, nameProperty: "name", data, emphasis: { label: { show: false } }, itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" } }],
     };

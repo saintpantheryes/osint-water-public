@@ -85,8 +85,8 @@
       visualMap: opt.range ? { type: "continuous", dimension: 5, seriesIndex: 0, min: opt.range.min, max: opt.range.max, range: opt.range.sel, calculable: true, realtime: true,
         text: [state.by === "gdp" ? "生产总值高" : "人口多", "少"], formatter: (v) => fmtBy(Math.pow(10, v)), left: 10, bottom: 10,
         inRange: { color: ["#93c5fd", "#1e3a8a"] }, outOfRange: { color: "#cbd5e1", opacity: 0.25 } } : undefined,
-      geo: { map: "world", roam: true, center: opt.center, zoom: opt.zoom || 1.1, itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" }, emphasis: { disabled: true }, label: { show: false } },
-      series: [{ type: "scatter", coordinateSystem: "geo", data: cities.map(pt).filter(Boolean), symbolSize: (v) => 4 + 18 * Math.sqrt(v[2] / max), itemStyle: { opacity: 0.75 } }].concat(P.hatchSeries(bl)),
+      geo: { map: "world", roam: true, center: opt.center, zoom: opt.zoom || 1.1, itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" }, emphasis: { disabled: true }, label: { show: false }, regions: P.hatchRegions(bl) },
+      series: [{ type: "scatter", coordinateSystem: "geo", data: cities.map(pt).filter(Boolean), symbolSize: (v) => 4 + 18 * Math.sqrt(v[2] / max), itemStyle: { opacity: 0.75 } }],
     };
     mc.setOption(option);
     P.hatchNote(el, bl);
@@ -255,9 +255,9 @@
       mc.setOption({ animation: false, legend: { top: 6, left: 10, data: pts.filter((p) => p.data.length).map((p) => p.label) },
         tooltip: { trigger: "item", formatter: (p) => p.data ? "<b>" + P.esc(p.data.name) + "</b><br>" + P.esc(p.data.kind || "") + (p.data.value[2] ? " · " + p.data.value[2] + " 万吨/日" : "") : "" },
         geo: { map: "world", roam: true, center: [(Math.max(...lons) + Math.min(...lons)) / 2, (Math.max(...lats) + Math.min(...lats)) / 2], zoom: Math.min(400, 300 / (span * 1.4)),
-          itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" }, emphasis: { disabled: true }, label: { show: false } },
+          itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" }, emphasis: { disabled: true }, label: { show: false }, regions: P.hatchRegions(bl) },
         series: [{ name: "城市", type: "scatter", coordinateSystem: "geo", data: cxy ? [{ name: cname(ct), kind: "城市中心", value: cxy.concat([0]) }] : [], symbol: "diamond", symbolSize: 12, itemStyle: { color: "#64748b" }, z: 1 }]
-          .concat(pts.map((p) => ({ name: p.label, type: "scatter", coordinateSystem: "geo", data: p.data, symbolSize: (v) => 6 + 18 * Math.sqrt((v[2] || 0) / maxCap), itemStyle: { color: p.color, opacity: 0.8 }, z: 2 }))).concat(P.hatchSeries(bl)) });
+          .concat(pts.map((p) => ({ name: p.label, type: "scatter", coordinateSystem: "geo", data: p.data, symbolSize: (v) => 6 + 18 * Math.sqrt((v[2] || 0) / maxCap), itemStyle: { color: p.color, opacity: 0.8 }, z: 2 }))) });
       pmap = mc;
     };
     const showPlants = (k) => { if (k !== "plants") return; if (pmap) pmap.resize(); else drawPlants(); };
