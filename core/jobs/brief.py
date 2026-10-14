@@ -65,8 +65,9 @@ def _title(b: tstore.Base, r: dict, n: int = 60) -> str:
     """线索在简报里的名字:中文名称(项目名 → 中文摘要 → 从原题挑的「要点」,见 core.zh_name);
     只有要点或连要点都没有时把原题也带上,读的人能对上原文。"""
     g = lambda p: b.get("lead", r, p)
-    orig = (str(g("title") or "").strip().splitlines() or [""])[0][:n]
-    name, how = zh_name(orig, g("summary_zh"), g("project_name"), n)
+    full = (str(g("title") or "").strip().splitlines() or [""])[0]
+    name, how = zh_name(full, g("summary_zh"), g("project_name"), 1000)
+    name, orig = _short(name, n), _short(full, n)
     if how in ("项目名", "摘要"):
         return name
     return f"{name}(原题:{orig})" if name else orig
@@ -82,8 +83,9 @@ def build_daily(ctx: Ctx, today: date | None = None) -> tuple[str, set[str], set
     groups, other, empty = funder_groups(b.onto.raw)
 
     leads = b.rows("lead", props=["key", "title", "relevant", "category", "sectors", "country", "funder", "found_at", "status", "opportunity",
-                                   "suggested_opp", "maybe_new", "judged_by", "source", "summary_zh", "project_name", "amount", "origin"])
-    g = lambda r, p: b.get("lead", r, p)  # noqa: E731
+                                   "suggested_opp", "maybe_new", "judged_by", "source", "summary_zh", "project_name", "amount", "origin"]
+                  + (["amount_cny"] if b.has("lead", "amount_cny") else []))
+    g = lambda r, p: b.get("lead", r, p) if p != "amount_cny" or b.has("lead", p) else None  # noqa: E731
     day_of = {r["id"]: (tstore.day(g(r, "found_at"), tz) or "") for r in leads}
     today_leads = [r for r in leads if day_of[r["id"]] == d0]
     week_leads = [r for r in leads if week_start <= day_of[r["id"]] <= d0]
@@ -142,12 +144,16 @@ def build_daily(ctx: Ctx, today: date | None = None) -> tuple[str, set[str], set
     prio = {k: i for i, k in enumerate(CATEGORY_PRIORITY)}
     picks = sorted(rel, key=lambda r: (prio.get(str(g(r, "category") or ""), 99), 0 if g(r, "amount") else 1, day_of[r["id"]]))[:PICKS]
     pick_lines = [f"- {_cell(g(r, 'country')) or '未定国别'} · {g(r, 'category') or '未分类'} · {_title(b, r)}"
-                  + (f" · {g(r, 'amount')}" if g(r, "amount") else "") + f" [{g(r, 'key')}]" for r in picks]
+                  + (f" · {_amount(g(r, 'amount'), g(r, 'amount_cny'))}" if g(r, "amount") else "") + f" [{g(r, 'key')}]" for r in picks]
     if not pick_lines:
         pick_lines = ["- 今日没有新的相关线索。"]
 
     # ---- 商机动态
-    opp_lines = [f"- 今日新建商机 {len(new_opps)} 个" + ("(" + "、".join(f"{og(r, 'code')} {og(r, 'name_zh') or ''}".strip() for r in new_opps[:TOP]) + ")" if new_opps else "") + "。"]
+    # 机器每天按新线索推荐商机(阶段「建议」),和人立项跟踪的分开说,免得把推荐当成新立项
+    new_ai = [r for r in new_opps if str(og(r, "stage") or "建议") == "建议"]
+    new_set = [r for r in new_opps if r not in new_ai]
+    opp_list = lambda rs: "(" + "、".join(f"{og(r, 'code')} {og(r, 'name_zh') or ''}".strip() for r in rs[:TOP]) + ("等" if len(rs) > TOP else "") + ")" if rs else ""  # noqa: E731
+    opp_lines = [f"- 今日 AI 新推荐商机 {len(new_ai)} 个{opp_list(new_ai)};新立项跟踪 {len(new_set)} 个{opp_list(new_set)}。"]
     if changed:
         opp_lines.append("- 阶段有变化:" + "、".join(f"{c} → {s}" for c, s in changed[:TOP]) + ("等" if len(changed) > TOP else "") + "。")
     if ms:
@@ -205,6 +211,24 @@ def _insight(ctx: Ctx, chapters: list[tuple[str, str]], known: set[str]) -> tupl
     if bad:
         note += f"其中 {len(bad)} 个编号在今日数据里没找到,已标「未核到」;"
     return reporting._plain(fixed["insight"]), note
+
+
+def _short(s: str, n: int) -> str:
+    """截到 n 个字,留头留尾:同一项目的不同标段(如 TRONÇON 1 / 2)常常只有结尾不同,只留开头读着像重复。"""
+    s = (s or "").strip()
+    return s if len(s) <= n else f"{s[:n - 25].rstrip()}…{s[-24:].lstrip()}"
+
+
+def _amount(raw: object, cny: object) -> str:
+    """原文金额后面带上折合人民币(万元,汇率任务 A21 填的);原币就是人民币或没折算的只写原文。"""
+    s = str(raw).strip()
+    try:
+        w = float(cny)
+    except (TypeError, ValueError):
+        return s
+    if w <= 0 or "CNY" in s.upper() or "RMB" in s.upper():
+        return s
+    return f"{s}(约 {w:,.0f} 万元)" if w >= 1 else f"{s}(约 {w * 10000:,.0f} 元)"
 
 
 def _cell(x: object) -> str:

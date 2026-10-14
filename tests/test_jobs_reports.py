@@ -234,6 +234,24 @@ def test_daily_brief_is_built_after_collection_and_shown_as_summary(env, monkeyp
     assert "## 模型研判" in md2 and "[cccccccc]" in md2 and "12345678(未核到)" in md2 and "1 个编号在今日数据里没找到" in md2
 
 
+def test_daily_brief_tells_sections_apart_shows_rmb_and_ai_suggested_opps(env, monkeypatch):  # noqa: F811
+    """同一项目的不同标段只有结尾不同:截短时留尾;金额带折合人民币;机器推荐的商机和人立项的分开说。"""
+    from datetime import date as _date
+    from core.jobs import brief
+    fake, admin, abase, ctx = env
+    c, o, l1, l2 = _seed(abase)
+    opp = abase.create("opportunity", [{"code": "MAR-099", "name_zh": "推荐的", "stage": "建议"}])[0]
+    today = _date.fromisoformat(tstore.day(abase.record("opportunity", opp["id"])["createdTime"], abase.tz))  # 新建商机按创建时间算
+    head = "TRAVAUX D'ELARGISSEMENT ET MISE A NIVEAU DE LA ROUTE D'OURIKA (RP 2017) - TRAVAUX DE VOIRIE, ASSAINISSEMENT ET GENIE CIVIL"
+    abase.create("lead", [{"key": "ffffffff", "title": head + " - TRONÇON 2", "url": "https://example.org/f", "relevant": True, "category": "招标",
+                           "country": c["id"], "found_at": f"{today.isoformat()}T01:00:00.000Z", "amount": "51,953,580 MAD", "amount_cny": 3700,
+                           "status": "待处理", "origin": "机器采集"}])
+    md, _, _, _ = brief.build_daily(ctx, today)
+    line = next(x for x in md.splitlines() if "[ffffffff]" in x)
+    assert "TRONÇON 2" in line and "…" in line and "51,953,580 MAD(约 3,700 万元)" in line
+    assert "今日 AI 新推荐商机 1 个(MAR-099 推荐的);新立项跟踪 " in md and "今日新建商机" not in md
+
+
 def test_daily_brief_compares_with_median_of_past_week(env, monkeypatch):  # noqa: F811
     """一次批量导入(新信源第一次跑进来上千条)不该让平常的一天看着像「明显低于」:基准是前 7 天的中位数,不含今天。"""
     from datetime import timedelta
