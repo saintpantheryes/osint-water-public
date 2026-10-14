@@ -10,16 +10,17 @@
 </head>
 <body>
 <div id="nav"></div>
-<script>document.getElementById("nav").innerHTML = P.nav("area.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<script>document.getElementById("nav").innerHTML = P.nav("country.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
-  <!-- 两种样子(本体 V20):不带 id 是全部片区;带 ?id= 是一个片区(片区内城市的人口、商机、线索、大事记、中标与水厂一起看) -->
+  <!-- 两种样子(本体 V20):带 ?id= 是一个片区(片区内城市的人口、商机、线索、大事记、中标与水厂一起看),从国别概况「水务片区」页签、城市页、商机点进来;
+       不带 id 是全部片区(不在菜单里,留给旧链接)。2026-10-14 起片区挂在国别概况下,顶栏标国别概况 -->
   <section id="list" style="display:none">
     <h1>水务片区</h1>
     <p class="muted">共用一家水司、一批水源与干管的连片城市(大城市圈),例如大巴库。小国的水务市场按片区看:城市太碎,国别太粗。片区由人在表格「水务片区」里划定,商机可以挂到片区上。</p>
     <div class="panel" id="rows">读取中…</div>
   </section>
   <section id="one" style="display:none">
-    <div class="toolbar"><a href="area.html" id="back">← 全部片区</a><h1 style="margin:0" id="aname"></h1><span class="muted" id="aname2"></span><span id="rel"></span><span id="openRow" style="margin-left:auto"></span></div>
+    <div class="toolbar"><a href="country.html" id="back">← 国别概况</a><h1 style="margin:0" id="aname"></h1><span class="muted" id="aname2"></span><span id="rel"></span><span id="openRow" style="margin-left:auto"></span></div>
     <div id="cards"></div>
     <div class="panel" id="info">读取中…</div>
     <h2>包含城市</h2>
@@ -69,7 +70,6 @@
     $("aname").textContent = g(a, "name") || "";
     $("aname2").textContent = g(a, "name_en") || "";
     document.title = "全球水务开源情报 · " + (g(a, "name") || "水务片区");
-    P.backLink($("back"), "area.html", "全部片区");
     $("openRow").innerHTML = P.open("water_area", id, "在表格里打开这个片区 ↗");
     P.chronicle($("chron"), "city", cids).catch((e) => P.fail($("chron"), e));  /* 大事记、中标:自己读自己画 */
     P.awards($("awBox"), "city", cids).catch((e) => P.fail($("awBox"), e));
@@ -80,6 +80,8 @@
         props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "priority", "city"] }),
       crid ? one("country", crid).catch(() => null) : null,
     ]);
+    const iso = country ? (country.fields || {})[P.t("country").key] || "" : "";
+    P.backLink($("back"), iso ? "country.html?" + new URLSearchParams({ iso, t: "areas" }) : "country.html", (iso ? P.text(g(a, "country")) + "的" : "") + "水务片区");  // 回到它所在国别的片区页签
     const oppIds = opps.map((o) => o.id);
     const [leads, ...plants] = await Promise.all([
       P.records("lead", { filter: P.and(P.cond("lead", "relevant", "is", true), P.or(oppIds.length ? P.cond("lead", "opportunity", "isAnyOf", oppIds) : null, anyCity("lead", "city"))),

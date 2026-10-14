@@ -18,8 +18,8 @@ PORTAL = ROOT / "portal"
 KIT = ROOT / "deploy" / "teable"
 ONTO, TMAP = ontology.load(), ontology.load_map()
 ONTO_RAW = ontology.raw()
-# 菜单(使用方 2026-10-08 定,10-09 加「市场背景」):首页 + 四组,组内顺序也按这个;「后台数据表格」是表格本身
-MENU_SPEC = [("工作原理", ["工作流程", "本体", "信源", "后台数据表格 ↗"]), ("市场背景", ["国别概况", "城市概况", "水务片区", "趋势机会"]), ("项目线索", ["线索总览", "线索分析", "线索处理"]), ("商机跟进", ["商机总览", "日历", "报告"])]
+# 菜单(使用方 2026-10-08 定,10-09 加「市场背景」,10-14 水务片区挪进国别概况):首页 + 四组,组内顺序也按这个;「后台数据表格」是表格本身
+MENU_SPEC = [("工作原理", ["工作流程", "本体", "信源", "后台数据表格 ↗"]), ("市场背景", ["国别概况", "城市概况", "趋势机会"]), ("项目线索", ["线索总览", "线索分析", "线索处理"]), ("商机跟进", ["商机总览", "日历", "报告"])]
 NEW = "水务项目机会 新版"
 READ_PAGES = ("calendar.html", "country.html", "city.html", "trend.html", "analysis.html", "ontology.html", "contractor.html", "area.html")  # 只读
 WRITE_PAGES = ("index.html", "overview.html", "opps.html", "opp.html", "inbox.html", "reports.html", "sources.html")  # 信源页只改「启用」; 以登录人身份写(跟进、报告申请、阶段、归属;首页只在看完一条链接后按「收进线索库」建一行线索;线索总览只有清单里的「转为商机」)
@@ -2009,8 +2009,9 @@ def test_water_history_tab_and_city_chronicle():
 
 
 def test_water_area_page_sums_its_cities():
-    """水务片区(使用方 2026-10-13 要的,v2.18):市场背景下新页;清单列片区、包含城市与合计人口;一个片区汇总包含城市的人口、
-    商机(挂片区的 + 城市在片区里的)、线索、大事记、水厂与中标,不在片区里的城市不算。只读。"""
+    """水务片区(使用方 2026-10-13 要的,v2.18;10-14 从市场背景菜单挪进国别概况「基本信息」,v2.22):国别概况的片区页签列这国的片区、包含城市、
+    合计人口(占全国)与挂上的商机,没划片区的国家不出这个页签;一个片区汇总包含城市的人口、商机(挂片区的 + 城市在片区里的)、线索、大事记、水厂与中标,
+    不在片区里的城市不算,返回回到国别的片区页签。只读。"""
     from playwright.sync_api import Error as PWError, sync_playwright
     fake, admin = _fake_with_schema()
     c, o, ld = _seed(admin, fake)
@@ -2027,6 +2028,7 @@ def test_water_area_page_sums_its_cities():
                               {"name": "Ganja WWTP", "kind": "污水厂", "country": c["id"], "city": ganja["id"], "capacity": 5}])
     b.create("water_event", [{"key": "E1", "day": "2000-01-01", "日期原文": "2000", "title": "成立阿布歇隆水务公司", "kind": "机构改革", "country": c["id"], "city": baku["id"]},
                              {"key": "E2", "day": "2010-01-01", "日期原文": "2010", "title": "甘贾的事", "kind": "其他", "country": c["id"], "city": ganja["id"]}])
+    b.create("country", [{"name_zh": "摩洛哥", "ISO3": "MAR"}])  # 没划片区的国家
     cfg = schema.read_config(admin, NEW, ONTO)
     srv = _serve(fake, cfg)
     base = f"http://127.0.0.1:{srv.server_port}"
@@ -2041,12 +2043,15 @@ def test_water_area_page_sums_its_cities():
             page = browser.new_page(viewport={"width": 1366, "height": 900})
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(base + "/area.html")
-            page.wait_for_selector("#rows table", timeout=15000)
-            row = page.inner_text("#rows tbody tr")
+            page.goto(base + "/country.html?iso=AZE&t=areas")
+            page.wait_for_selector("#areas table", timeout=15000)
+            tabs = page.locator("#tabs .tgrp").first.locator("button").all_inner_texts()
+            assert [t.split(" ")[0] for t in tabs] == ["概况", "机构与法规", "规模以上城市", "水务片区"] and tabs[-1] == "水务片区 1"  # 基本信息组的最后一个
+            assert page.locator(".tab.on").get_attribute("data-t") == "areas"
+            row = page.inner_text("#areas tbody tr")
             assert "大巴库" in row and "巴库" in row and "苏姆盖特" in row and "277.8 万" in row and "\t1\t" in row  # 挂上的商机 1 个
-            assert "水务片区" in page.inner_text("#nav")
-            page.click("#rows a:has-text('大巴库')")
+            assert "水务片区" not in page.inner_text("#nav")  # 不在菜单里了
+            page.click("#areas a:has-text('大巴库')")
             page.wait_for_selector("#chron .chron", timeout=15000)
             page.wait_for_selector("#plants table", timeout=15000)
             k = page.inner_text("#cards")
@@ -2058,8 +2063,16 @@ def test_water_area_page_sums_its_cities():
             assert "霍夫桑污水厂" in page.inner_text("#plants") and "Ganja" not in page.inner_text("#plants")
             assert "成立阿布歇隆水务公司" in page.inner_text("#chron") and "甘贾的事" not in page.inner_text("#chron")
             assert "奥古兹—盖贝莱—巴库线" in page.inner_text("#info") and "同一家水司供水" in page.inner_text("#info")
+            assert page.locator("#nav .pagetabs a.on").inner_text() == "国别概况"
             if shots:
                 page.screenshot(path=str(shots / "area.png"), full_page=True)
+            page.goto(base + f"/area.html?id={area['id']}")  # 直接打开(没有来处):返回链接指回国别的片区页签
+            page.wait_for_selector("#cities table", timeout=15000)
+            assert page.locator("#back").get_attribute("href") == "country.html?iso=AZE&t=areas" and "水务片区" in page.inner_text("#back")
+            # 没划片区的国家:没有这个页签,网址点名要它也回到概况
+            page.goto(base + "/country.html?iso=MAR&t=areas")
+            page.wait_for_function("document.querySelector('#tabs button[data-t=opps] b') !== null", timeout=15000)
+            assert page.locator("#tabs button[data-t=areas]").count() == 0 and page.locator(".tab.on").get_attribute("data-t") == "info"
             phone = browser.new_page(viewport={"width": 390, "height": 760})
             phone.goto(base + f"/area.html?id={area['id']}")
             phone.wait_for_selector("#plants table", timeout=15000)
