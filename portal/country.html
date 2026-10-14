@@ -18,7 +18,7 @@
   <div class="cards" id="cards"></div>
   <div class="tabs grouped" id="tabs"></div>
   <div class="tab" data-t="info"><div id="info"></div></div>
-  <div class="tab" data-t="inst"><div id="inst"></div></div>
+  <div class="tab" data-t="inst"><div id="inst"></div><section id="lawBox"></section></div>
   <div class="tab" data-t="biz"><h2>营商环境(世界银行 B-READY)</h2><div id="biz"></div></div>
   <div class="tab" data-t="opps">
     <h2>商机(按我方阶段)</h2>
@@ -120,7 +120,8 @@
         props: ["name_zh", "name_en", "admin", "population", "area_km2", "density", "gdp", "gdp_year", "lead_count", "opp_count", "coords"] }) : Promise.resolve([]),
     ]);
     const areasP = hasArea ? P.records("water_area", { filter: P.and(P.cond("water_area", "country", "is", c.id)), props: ["name", "name_en", "cities", "utility"] }).catch((e) => { P.fail($("areas"), e); return []; }) : Promise.resolve([]);
-    const awP = P.awards($("awBox"), "country", c.id).catch((e) => { P.fail($("awBox"), e); return 0; });  /* 已中标项目(历史信息里的一个页签):自己读自己画,不等别的 */
+    const awP = P.awards($("awBox"), "country", c.id).catch((e) => { P.fail($("awBox"), e); return 0; });
+    const lawP = P.lawSection($("lawBox"), c.id, g("name_zh") || iso).catch((e) => { P.fail($("lawBox"), e); return 0; });  /* 法规原文、排放标准、本国定义(v2.24) */  /* 已中标项目(历史信息里的一个页签):自己读自己画,不等别的 */
     /* 水务历史资料:大事记在上、研究资料在下,各自读各自画;页签上的数是研究资料份数 */
     const docsP = Promise.all([P.chronicle($("chron"), "country", c.id).catch((e) => { P.fail($("chron"), e); return 0; }),
       P.studies($("studies"), c.id).catch((e) => { P.fail($("studies"), e); return 0; })]);
@@ -207,8 +208,8 @@
       P.tableHtml(["片区", "包含城市", "合计人口", "服务水司", "挂上的商机", ""], areas.map((a) => { const q = (p) => P.get("water_area", a, p), tot = P.linkIds(q("cities")).reduce((s, id) => s + (popOf[id] || 0), 0);
         return [P.raw('<a href="area.html?id=' + encodeURIComponent(a.id) + '"><b>' + P.esc(q("name") || "") + "</b></a>" + (q("name_en") ? '<br><span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")),
           P.text(q("cities")), P.raw(tot ? "<b>" + P.esc(wan(tot)) + "</b>" + (nat ? '<br><span class="muted small">占全国 ' + Math.round(tot * 100 / nat) + "%</span>" : "") : ""), q("utility") || "", String(nOpp[a.id] || 0), P.raw(P.open("water_area", a.id))]; }));
-    const [[, nDoc], nAw] = await Promise.all([docsP, awP]);
-    drawTabs({ areas: areas.length, docs: nDoc || undefined, awards: nAw === undefined ? undefined : nAw, opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
+    const [[, nDoc], nAw, nLaw] = await Promise.all([docsP, awP, lawP]);
+    drawTabs({ inst: nLaw || undefined, areas: areas.length, docs: nDoc || undefined, awards: nAw === undefined ? undefined : nAw, opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
   }
 
   try {

@@ -6,7 +6,7 @@
 schema: osint-water/teable-map@1
 base: 水务项目机会 新版
 timezone: Asia/Shanghai
-order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award, study, water_event, water_area]   # 建表顺序(关联字段在所有表建好后再加)
+order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award, study, water_event, water_area, law, law_clause, local_term, discharge_limit]   # 建表顺序(关联字段在所有表建好后再加)
 
 tables:
   lead:
@@ -61,6 +61,35 @@ tables:
     table: 水务片区
     primary: name
     optional: true   # 2026-10-13 新加的表
+  law:
+    table: 法规
+    primary: name
+    key: {name: 编号, note: LAW-国别码-文号简写(LAW-MAR-36-15);去重按它,人补录的可空}
+    optional: true   # 2026-10-14 新加的表:库里还没建时后台与页面跳过
+  law_clause:
+    table: 法规条文
+    primary:
+      name: 条文
+      formula: '{条号} & " · " & LEFT({原文}, 40)'
+      fallback: '{条号}'
+    key: {name: 编号, note: 法规编号 + 四位序号(LAW-MAR-36-15-0052);去重按它}
+    default_sort: [[顺序, asc]]
+    optional: true
+  local_term:
+    table: 国别定义
+    primary: concept
+    key: {name: 编号, note: 国别码-通用概念(MAR-排放标准);去重按它}
+    defaults: {verified: 待核实}
+    optional: true
+  discharge_limit:
+    table: 排放限值
+    primary:
+      name: 摘要
+      formula: '{指标} & " " & IF({限值原文}, {限值原文}, {限值}) & " " & {单位}'
+      fallback: '{指标}'
+    key: {name: 编号, note: 国别码-文号简写-指标-序号(MAR-1607-06-BOD5-1);去重按它}
+    defaults: {verified: 待核实}
+    optional: true
   opportunity:
     table: 商机
     primary: name_zh
@@ -153,6 +182,15 @@ links:
   water_area.country: {one_way: true}
   water_area.cities: {reverse: 水务片区}
   opportunity.area: {reverse: 商机}
+  law.country: {one_way: true}
+  law_clause.law: {reverse: 条文}
+  law_clause.country: {one_way: true}
+  local_term.country: {one_way: true}
+  local_term.law: {reverse: 国别定义}
+  local_term.clause: {reverse: 国别定义}
+  discharge_limit.country: {one_way: true}
+  discharge_limit.law: {reverse: 排放限值}
+  discharge_limit.clause: {reverse: 排放限值}
   company.countries: {one_way: true}
   preference.countries: {one_way: true}
 
@@ -183,6 +221,7 @@ derived:
   city.supply_count: {rollup: {via: 自来水厂, field: <primary>, expression: "countall({values})"}}
   city.sewage_count: {rollup: {via: 污水厂, field: <primary>, expression: "countall({values})"}}
   contractor.award_count: {rollup: {via: 中标项目, field: <primary>, expression: "countall({values})"}}
+  law.clause_count: {rollup: {via: 条文, field: <primary>, expression: "countall({values})"}}
   contractor.award_cny: {rollup: {via: 中标项目, field: 折合人民币(万元), expression: "sum({values})"}}
 
 # 表格里的视图(架构方案第 3 节)。每张表建表时有一个「全部」;条件里写字段名,schema 换成编号。
@@ -209,6 +248,12 @@ views:
     - {name: 按国别, group: [[所属国别, asc]], sort: [[中标时间, desc]]}
   water_event:
     - {name: 按国别, group: [[所属国别, asc]], sort: [[日期, desc]]}
+  law:
+    - {name: 按国别, group: [[所属国别, asc]]}
+  discharge_limit:
+    - {name: 待核实, filter: {and: [[核实状态, is, 待核实]]}, group: [[所属国别, asc]]}
+  local_term:
+    - {name: 待核实, filter: {and: [[核实状态, is, 待核实]]}, group: [[所属国别, asc]]}
   study:
     - {name: 按国别, group: [[所属国别, asc]], sort: [[发布日期, desc]]}
   source:

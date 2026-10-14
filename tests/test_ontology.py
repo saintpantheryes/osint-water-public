@@ -161,13 +161,15 @@ def test_opp_sectors_all_roll_up_to_a_lead_sector():
 
 
 def test_industry_terms_are_well_formed():
-    """行业术语(terms):领域取自线索领域;相关词不空、不重名;拉丁相关词不短于 4 个字母(太短的缩写会误中别的词,GIS 会中 logistics)。"""
+    """行业术语(terms):领域取自线索领域;不重名;拉丁相关词不短于 4 个字母(太短的缩写会误中别的词,GIS 会中 logistics)。
+    相关词空着的是只作法规概念的通用概念(v2.24,助手不拿它查线索),要有说明。"""
     sectors = set(_tax_values("lead_sectors"))
     names = [w for t in ONTO["terms"] for w in [t["term"], *(t.get("aliases") or [])]]
     assert len(names) == len(set(names)) and ONTO["terms"]
     for t in ONTO["terms"]:
         assert set(t["sectors"]) <= sectors and set(t["covers"]) <= sectors and set(t["sectors"]) <= set(t["covers"]), t["term"]
-        assert t["match"] and t["means"] and not [w for w in t["match"] if w.isascii() and len(w) < 4], t["term"]
+        assert t["means"] and not [w for w in t["match"] if w.isascii() and len(w) < 4], t["term"]
+    assert [t for t in ONTO["terms"] if t["match"]], "应有查线索用的术语"
 
 
 def test_semantic_layer_is_well_formed():

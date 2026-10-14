@@ -288,7 +288,7 @@
       const oid = P.linkId(g("opportunity"));
       return [P.day(g("day")), g("kind") || "", P.raw(oid ? '<a href="' + P.oppUrl(oid) + '">' + P.esc(P.text(g("opportunity"))) + "</a>" : P.esc(P.text(g("lead")))), P.text(g("country")), g("status") || "", (g("label") || "").slice(0, 60), P.raw(P.open("milestone", m.id))]; }));
   }
-  const NOUN = { lead: "条线索", opportunity: "个商机", milestone: "个时间节点", report: "份报告", award: "份已中标项目", country: "国国别" };
+  const NOUN = { lead: "条线索", opportunity: "个商机", milestone: "个时间节点", report: "份报告", award: "份已中标项目", country: "国国别", law: "部法规" };
   /* 已中标项目的表(与国别概况「已中标项目」页签同样的列):中标价写原币,旁边给约合人民币(后台按汇率折的「折合人民币(万元)」);问了规模的,工程量下面写读出的规模;
      有招标估价的,中标价下面写「招标估价的 87%」;中标时间下面写评标天数与投标家数(有的才写) */
   const CUR_ZH = { USD: "美元", EUR: "欧元", CNY: "元" };
@@ -605,6 +605,69 @@
     fold(body, el, "国");
   }
 
+  /* 法规(本体 v2.24):排放标准按国别列排放限值(同一国几种口径分开、写明出处条号、待核实的标出);本国定义;别的法规问题请后台按条文作答。
+     库里没有这国法规原文的直说没收,不说成「没有规定」 */
+  async function lawView(q, plan, body, el) {
+    if (!P.hasLaw()) { body.innerHTML = '<p class="muted">「法规」表还没建(管理员跑一次建表命令、导入法规原文后就能问)。</p>'; return; }
+    const lw = plan.law || {}, f = plan.filters, cs = f.countries.map((c) => ({ iso: c.iso3, name: c.name, id: (byIso[c.iso3] || {}).id }));
+    const d = await P.lawData(cs.filter((c) => c.id).map((c) => c.id));
+    const ofC = (oid, r) => P.linkId(P.get(oid, r, "country"));
+    const lawCs = [...new Set(d.laws.map((r) => ofC("law", r)))].map((id) => ({ id, name: nameOfCid[id] || "", iso: isoOfCid[id] || "" }));
+    const list = cs.length ? cs : lawCs;  // 没点国名:收了法规原文的各国
+    const nums = {}, h = [];
+    const noLaw = (c) => '<p><b>' + P.esc(c.name) + "</b>:库里还没收这国的法规原文,答不了" + (lw.kind === "limit" ? "排放标准" : "") + "(不是说这国没有规定)。" +
+      (c.iso ? '<a href="country.html?' + new URLSearchParams({ iso: c.iso, t: "inst" }) + '">国别概况「机构与法规」</a>里有法规名称和链接。' : "") + "</p>";
+    if (!list.length) { body.innerHTML = '<p class="muted">库里还没有任何国家的法规原文。</p>'; return; }
+    if (lw.kind === "limit" || lw.kind === "define" || lw.kind === "list") {
+      const bases = new Set();
+      list.forEach((c) => {
+        if (!c.id) { h.push('<div class="panel"><p><b>库里没有' + P.esc(c.name) + "这个国别。</b></p></div>"); return; }
+        const nLaw = d.laws.filter((r) => ofC("law", r) === c.id).length;
+        if (!nLaw) { h.push('<div class="panel">' + noLaw(c) + "</div>"); return; }
+        const head = list.length > 1 ? "<h2>" + P.esc(c.name) + "</h2>" : "";
+        if (lw.kind === "list") { h.push(head + '<div class="panel">' + P.lawListHtml(d, c.id) + "</div>"); return; }
+        if (lw.kind === "define") {
+          const t = P.lawTermsHtml(d, c.id, nums, lw.concepts);
+          h.push(head + '<div class="panel">' + (t || "<p>收了" + P.esc(c.name) + "的 " + nLaw + " 部法规原文,里面没摘到「" + P.esc((lw.concepts || []).join("、")) + "」的定义。</p>" + P.lawTermsHtml(d, c.id, nums)) + "</div>");
+          return;
+        }
+        const mine = d.limits.filter((r) => ofC("discharge_limit", r) === c.id);
+        mine.forEach((r) => bases.add(P.get("discharge_limit", r, "basis")));
+        const std = P.lawTermsHtml(d, c.id, nums, ["排放标准"]);
+        const lim = P.lawLimitsHtml(d, c.id, nums, lw.params);
+        const pm = (lw.params || []).length && mine.length && !mine.some((r) => lw.params.includes(P.get("discharge_limit", r, "param"))) ? "<p>" + P.esc(c.name) + "的法规里没有" + P.esc(lw.params.join("、")) + "的限值,下面是全部指标。</p>" : "";
+        const n = mine.filter((r) => !(lw.params || []).length || lw.params.includes(P.get("discharge_limit", r, "param"))).length || mine.length;
+        const lead = mine.length ? '<p class="lead-ans">' + P.esc(c.name) + "的污水排放标准:<b>" + n + " 项限值</b>,出自 " + new Set(mine.map((r) => P.linkId(P.get("discharge_limit", r, "law")))).size + " 部法规" +
+          (new Set(mine.map((r) => P.get("discharge_limit", r, "basis"))).size > 1 ? ",分几种口径,下面分开列" : "") + "。</p>" :
+          '<p class="lead-ans">' + P.esc(c.name) + ":收了 " + nLaw + " 部法规原文,还没摘到排放限值。</p>";
+        h.push(head + lead + (std ? '<div class="panel"><p class="small"><b>这国怎么定排放标准</b></p>' + std + "</div>" : "") + (lim ? '<div class="panel">' + pm + lim + "</div>" : ""));
+      });
+      if (lw.kind === "limit" && bases.size > 1) h.unshift('<div class="warn small">几国的口径不同(' + P.esc([...bases].join("、")) + "):受纳水体允许浓度是河湖里的浓度,不是污水厂出水的上限,不能和出水限值直接比。</div>");
+      body.innerHTML = h.join("") + '<p class="muted small">数据来自各国法规原文(表格「法规」「法规条文」「排放限值」「国别定义」);角标点开看条文。' +
+        (cs.length ? "" : "没说国家时列收了法规原文的各国。") + "</p>";
+      return;
+    }
+    /* 别的法规问题:后台按条文作答 */
+    body.innerHTML = '<p class="muted">查条文中…(要几秒到十几秒)</p>';
+    const r = await P.lawAsk(q, plan);
+    if (!r) return;
+    const cites = r.cites || [];
+    cites.forEach((x) => { x.id = x.key; x.zh = x.text_zh || ""; x.lawKey = x.law_key; });
+    const byN = {}; cites.forEach((x) => { byN[x.n] = x; });
+    const ans = r.answer ? P.esc(r.answer).replace(/\s*\[(\d+)\]/g, (m, n) => (byN[n] ? P.lref(byN[n], nums) : "")) : "";
+    const miss = (r.missing || []).map((m) => noLaw({ name: m.name, iso: m.iso3 }));
+    h.push(ans ? '<div class="panel"><p class="lead-ans">' + ans + "</p></div>" : "");
+    h.push(miss.join(""));
+    if (cites.length) {
+      h.push("<h2>查到的条文 " + cites.length + " 条</h2><div class=\"panel\">" + cites.map((x) => '<div class="law-cl"><div><b>' + P.esc(x.country) + " · " + P.esc(x.law) + "</b> " + P.esc(x.label) + P.lref(x, nums) +
+        (x.page ? ' <span class="muted small">原文第 ' + P.esc(x.page) + " 页</span>" : "") + ' <a class="small" href="' + P.esc(P.lawUrl(x.law_key, x.seq)) + '">全文 →</a></div>' +
+        '<div class="zh small">' + P.esc((x.text_zh || x.text || "").slice(0, 600)) + ((x.text_zh || x.text || "").length > 600 ? "……" : "") + "</div></div>").join("") + "</div>");
+    } else if (!miss.length) h.push("<p>在" + P.esc(Object.keys(r.searched || {}).join("、") || "收了原文的各国") + "的法规条文里没查到和这个问题直接相关的条文" + ((r.keywords || []).length ? "(按「" + P.esc(r.keywords.slice(0, 8).join("、")) + "」查的)" : "") + "。可以换个说法,或在国别概况「机构与法规」里看全文。</p>");
+    const n = Object.entries(r.searched || {}).map(([k, v]) => k + " " + v + " 条").join("、");
+    h.push('<p class="muted small">' + (r.answer ? "回答由模型" + (r.model ? "(" + P.esc(r.model) + ")" : "") + "只按上面这些条文写,每句后面的角标是依据;" : "") + (r.note ? P.esc(r.note) + ";" : "") + (n ? "查了 " + P.esc(n) + "。" : "") + "</p>");
+    body.innerHTML = h.join("");
+  }
+
   function understoodHtml(plan) {
     const tag = plan.parsed_by === "model" ? '<span class="tag intel" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
     const items = (plan.understood || []).map(([k, v]) => '<span class="chip-btn on" style="cursor:default">' + P.esc(k) + ":" + P.esc(v) + "</span>").join("");
@@ -697,7 +760,7 @@
   async function answer(q, el, prev) {
     const plan = await P.ask(q, prev);
     if (!plan) return;
-    lastPlan = ["help", "report"].includes(plan.intent) ? lastPlan : { q, object: plan.object, filters: plan.filters, measures: plan.measures || [], group_by: plan.group_by, order: plan.order || null };
+    lastPlan = ["help", "report"].includes(plan.intent) ? lastPlan : { q, object: plan.object, filters: plan.filters, measures: plan.measures || [], group_by: plan.group_by, order: plan.order || null, law: plan.law || null };
     if (prev && (plan.understood || []).some((x) => x[0] === "沿用上一问")) notePrev(q, prev);  // 历史里记下它接的是哪一问,以后点它照样接上
     const f = plan.filters, body = document.createElement("div");
     el.querySelector(".a-body").replaceWith(body); body.className = "a-body";
@@ -719,6 +782,7 @@
     if (oid === "award" && !hasAw()) { body.innerHTML = '<p class="muted">「已中标项目」表还没建(跑一次建表命令后就能问中标记录)。</p>'; return; }
     body.innerHTML = '<p class="muted">查表中…</p>';
     if (oid === "country") { await countryView(plan, body, el); return; }  // 营商环境(世行 B-READY):国别表或单国作答
+    if (oid === "law") { await lawView(q, plan, body, el); return; }  // 法规:排放限值、本国定义、条文(v2.24)  // 营商环境(世行 B-READY):国别表或单国作答
     if ((plan.measures || []).some((m) => m.id !== "count") && oid === "award") { await metricView(plan, body, el); return; }  // 问了平均、中位数、合计、比例这类指标
     if (plan.intent === "count") {
       let n, aw = null;
