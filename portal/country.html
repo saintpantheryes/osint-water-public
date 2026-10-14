@@ -37,6 +37,11 @@
     <p class="muted small">人口达到门槛(缺省 10 万)的城市,后台每月按 GeoNames 公开数据维护;面积、地区生产总值公开数据里没有,在城市表里补,密度随后自动算。</p>
     <div class="panel" id="cities"></div>
   </div>
+  <div class="tab" data-t="areas">
+    <h2>水务片区</h2>
+    <p class="muted small">共用一家水司、一批水源与干管的连片城市(大城市圈),例如大巴库。小国的水务市场按片区看:城市太碎,国别太粗。片区由人在表格「水务片区」里划定,商机可以挂到片区上;点片区名看片区里的人口、商机、线索、大事记、中标与水厂。</p>
+    <div class="panel" id="areas"></div>
+  </div>
   <div class="tab" data-t="docs"><section id="chron"></section><section id="studies"></section></div>
   <div class="tab" data-t="awards"><section id="awBox"></section></div>
 </main>
@@ -44,9 +49,9 @@
 (async function () {
   const $ = (id) => document.getElementById(id);
   let countries = [], mc = null, mapOption = null;
-  /* 页签分三组(使用方 2026-10-13 要的):基本信息(概况、机构与法规、城市)→ 历史信息(水务历史资料、已中标项目)→ 动态信息(商机、线索、时间节点);
-     选中的记在网址 t= 里,数字是这个国家的条数 */
-  const GROUPS = [["基本信息", [["info", "概况"], ["inst", "机构与法规"], ["cities", "规模以上城市"]]],
+  /* 页签分三组(使用方 2026-10-13 要的):基本信息(概况、机构与法规、城市、水务片区)→ 历史信息(水务历史资料、已中标项目)→ 动态信息(商机、线索、时间节点);
+     选中的记在网址 t= 里,数字是这个国家的条数。水务片区(使用方 2026-10-14 从市场背景菜单挪来)只在这个国家划了片区时出现 */
+  const GROUPS = [["基本信息", [["info", "概况"], ["inst", "机构与法规"], ["cities", "规模以上城市"], ["areas", "水务片区"]]],
     ["历史信息", [["docs", "水务历史资料"], ["awards", "已中标项目"]]],
     ["动态信息", [["opps", "商机"], ["leads", "最近 90 天线索"], ["ms", "未来 30 天节点"]]]];
   const TABS = GROUPS.flatMap(([, ts]) => ts);
@@ -60,7 +65,9 @@
     history.replaceState(null, "", urlOf($("pick").value));
   }
   function drawTabs(counts) {
-    $("tabs").innerHTML = GROUPS.map(([g, ts]) => '<div class="tgrp"><span class="tg">' + g + '</span><div class="tb">' + ts.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + (counts && counts[k] !== undefined ? " <b>" + counts[k] + "</b>" : "") + "</button>").join("") + "</div></div>").join("");
+    const shown = ([k]) => k !== "areas" || (counts ? counts.areas > 0 : tab === "areas");  // 片区页签:没划片区的国家不出现;数还没读到时只在网址点名要它时先露出
+    if (!TABS.some((t) => t[0] === tab && shown(t))) tab = "info";
+    $("tabs").innerHTML = GROUPS.map(([g, ts]) => '<div class="tgrp"><span class="tg">' + g + '</span><div class="tb">' + ts.filter(shown).map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + (counts && counts[k] !== undefined ? " <b>" + counts[k] + "</b>" : "") + "</button>").join("") + "</div></div>").join("");
     $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
     showTab(tab);
   }
@@ -102,14 +109,16 @@
     $("rel").innerHTML = P.marketLinks(iso, "", "country.html");
     const since = P.addDays(P.today(), -90), until = P.addDays(P.today(), 30), today = P.today();
     const hasCity = !!(P.cfg.tables && P.cfg.tables.city);  /* 「城市」表建了才有(表结构没更新时页签显示「未建表」) */
+    const hasArea = !!(P.cfg.tables && P.cfg.tables.water_area) && P.has("opportunity", "area");
     const listsP = Promise.all([  // 这几张清单只要国别编号:与读整条国别记录同时发出,不排队
-      P.records("opportunity", { filter: P.and(P.cond("opportunity", "country", "is", c.id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "priority"] }),
+      P.records("opportunity", { filter: P.and(P.cond("opportunity", "country", "is", c.id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "priority"].concat(hasArea ? ["area"] : []) }),
       P.records("lead", { filter: P.and(P.cond("lead", "country", "is", c.id), P.cond("lead", "relevant", "is", true), P.cond("lead", "found_at", "isOnOrAfter", P.onDay(since))),
         take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "category", "published", "found_at", "nearest_deadline", "summary_zh", "project_name", "opportunity", "status"] }),
       P.records("milestone", { filter: P.and(...P.between("milestone", "day", today, until)), props: ["opportunity", "lead", "country", "kind", "day", "status", "label"] }),
       hasCity ? P.records("city", { filter: P.and(P.cond("city", "country", "is", c.id)), orderBy: [{ fieldId: P.f("city", "population"), order: "desc" }],
         props: ["name_zh", "name_en", "admin", "population", "area_km2", "density", "gdp", "gdp_year", "lead_count", "opp_count", "coords"] }) : Promise.resolve([]),
     ]);
+    const areasP = hasArea ? P.records("water_area", { filter: P.and(P.cond("water_area", "country", "is", c.id)), props: ["name", "name_en", "cities", "utility"] }).catch((e) => { P.fail($("areas"), e); return []; }) : Promise.resolve([]);
     const awP = P.awards($("awBox"), "country", c.id).catch((e) => { P.fail($("awBox"), e); return 0; });  /* 已中标项目(历史信息里的一个页签):自己读自己画,不等别的 */
     /* 水务历史资料:大事记在上、研究资料在下,各自读各自画;页签上的数是研究资料份数 */
     const docsP = Promise.all([P.chronicle($("chron"), "country", c.id).catch((e) => { P.fail($("chron"), e); return 0; }),
@@ -185,8 +194,19 @@
       P.tableHtml(["城市", "行政区", "人口", "面积(km²)", "密度", "生产总值(亿美元)", "线索", "商机", ""], cities.map((ct) => { const q = (p) => P.get("city", ct, p);
         return [P.raw('<a href="city.html?id=' + encodeURIComponent(ct.id) + '"><b>' + P.esc(q("name_zh") || q("name_en") || "") + "</b></a>" + (q("name_en") && q("name_en") !== q("name_zh") ? ' <span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")), q("admin") || "", num(q("population")), num(q("area_km2")), num(q("density")),
           num(q("gdp")) + (q("gdp") && q("gdp_year") ? ' <span class="muted small">' + P.esc(String(q("gdp_year"))) + "</span>" : ""), String(q("lead_count") || 0), String(q("opp_count") || 0), P.raw(P.open("city", ct.id))]; }));
+    /* 水务片区:合计人口按这个国家的城市表加(片区里的城市都在规模以上城市里),占全国按「宏观与水务指标」的总人口;挂上的商机 = 所属片区是它的 */
+    const areas = await areasP;
+    const popOf = {}; cities.forEach((ct) => { popOf[ct.id] = Number(P.get("city", ct, "population")) || 0; });
+    const natRow = indRows.find((r) => /^总人口/.test(r.k)), natM = natRow && String(natRow.v).match(/([\d.,]+)\s*(亿|万)?/);
+    const nat = natM ? Number(natM[1].replace(/,/g, "")) * (natM[2] === "亿" ? 1e8 : natM[2] === "万" ? 1e4 : 1) : 0;
+    const wan = (n) => (n >= 1e4 ? (Math.round(n / 1e3) / 10).toLocaleString("zh-CN") + " 万" : num(n));
+    const nOpp = {}; opps.forEach((o) => { const a = hasArea && P.linkId(P.get("opportunity", o, "area")); if (a) nOpp[a] = (nOpp[a] || 0) + 1; });
+    $("areas").innerHTML = !areas.length ? '<p class="muted">这个国家还没划水务片区。</p>' :
+      P.tableHtml(["片区", "包含城市", "合计人口", "服务水司", "挂上的商机", ""], areas.map((a) => { const q = (p) => P.get("water_area", a, p), tot = P.linkIds(q("cities")).reduce((s, id) => s + (popOf[id] || 0), 0);
+        return [P.raw('<a href="area.html?id=' + encodeURIComponent(a.id) + '"><b>' + P.esc(q("name") || "") + "</b></a>" + (q("name_en") ? '<br><span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")),
+          P.text(q("cities")), P.raw(tot ? "<b>" + P.esc(wan(tot)) + "</b>" + (nat ? '<br><span class="muted small">占全国 ' + Math.round(tot * 100 / nat) + "%</span>" : "") : ""), q("utility") || "", String(nOpp[a.id] || 0), P.raw(P.open("water_area", a.id))]; }));
     const [[, nDoc], nAw] = await Promise.all([docsP, awP]);
-    drawTabs({ docs: nDoc || undefined, awards: nAw === undefined ? undefined : nAw, opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
+    drawTabs({ areas: areas.length, docs: nDoc || undefined, awards: nAw === undefined ? undefined : nAw, opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
   }
 
   try {
