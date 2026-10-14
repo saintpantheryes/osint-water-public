@@ -102,7 +102,7 @@
     const lines = (v) => P.esc(String(v || "")).replace(/\n/g, "<br>");
     const facts = [["所属国别", crid && country ? '<a href="country.html?' + new URLSearchParams({ iso: (country.fields || {})[P.t("country").key] || "" }) + '">' + P.esc(P.text(g(a, "country"))) + "</a>" : P.esc(P.text(g(a, "country")))],
       ["服务水司", P.esc(g(a, "utility") || "")], ["主要水源", lines(g(a, "sources"))], ["范围说明", lines(g(a, "scope"))], ["划分依据", lines(g(a, "basis"))], ["备注", lines(g(a, "note"))]].filter(([, v]) => v);
-    $("info").innerHTML = '<div class="facts">' + facts.map(([k, v]) => "<div><b>" + k + "</b><span>" + v + "</span></div>").join("") + "</div>";
+    $("info").innerHTML = P.factsHtml(facts.map(([k, v]) => [k, v, { html: true }]));
     cities.sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0));
     $("cities").innerHTML = !cities.length ? '<p class="muted">还没选包含的城市(在表格里选上)。</p>' : P.tableHtml(["城市", "行政区", "人口", "占片区", "总体水风险", "无安全饮用水"], cities.map((c) => { const q = (p) => P.get("city", c, p);
       return [P.raw('<a href="city.html?id=' + encodeURIComponent(c.id) + '"><b>' + P.esc(q("name_zh") || q("name_en") || "") + "</b></a>" + (q("name_en") ? ' <span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")),

@@ -323,6 +323,55 @@ def _seed(admin: tstore.Client, fake: FakeTeable):
     return c, o, ld
 
 
+# 名称-数值行与指标卡不变形(2026-10-14 使用方截图:营商环境里「365 天」的警示被挤成一字宽一列、说明压到隔壁、外企参标那格拉成一大块黄底)。
+# 各页的名称-数值行都由 P.factHtml 生成;这里在常用宽度下量一遍:每格都在自己那一行里,值那一栏不被挤窄,行与行不重叠,整页不横向滚
+LAYOUT = """(sel) => { const bad = [];
+  document.querySelectorAll(sel).forEach((root) => {
+    const rows = [...root.querySelectorAll('.facts > .fact')].filter((e) => e.offsetParent);
+    rows.forEach((row, i) => { const rr = row.getBoundingClientRect();
+      row.querySelectorAll('*').forEach((k) => { const r = k.getBoundingClientRect();
+        if (r.width && (r.right > rr.right + 1 || r.left < rr.left - 1)) bad.push('出格:' + k.textContent.slice(0, 20)); });
+      const v = row.querySelector(':scope > .fact-v');
+      if (!v || v.getBoundingClientRect().width < 80) bad.push('值被挤窄:' + row.textContent.slice(0, 20));
+      rows.slice(i + 1).forEach((o) => { const ro = o.getBoundingClientRect();
+        if (Math.min(rr.right, ro.right) - Math.max(rr.left, ro.left) > 1 && Math.min(rr.bottom, ro.bottom) - Math.max(rr.top, ro.top) > 1) bad.push('重叠:' + row.textContent.slice(0, 12)); }); });
+    root.querySelectorAll('.kpi').forEach((k) => { if (k.scrollWidth > k.clientWidth + 1) bad.push('卡片溢出:' + k.textContent.slice(0, 12)); });
+  });
+  if (document.documentElement.scrollWidth > innerWidth + 1) bad.push('整页横向滚动');
+  return bad; }"""
+
+
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_fact_rows_and_cards_keep_their_shape_at_common_widths():
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    tstore.Base(admin).update("country", c["id"], {"indicators": "\n".join(["GDP:720 亿美元(2025)(世行 WDI https://data.worldbank.org/x)", "通胀(CPI):12.5%(2025)(IMF WEO)",
+                                                                          "安全管理卫生服务覆盖率:31%(2022)(联合国 JMP)", "直接投资净流入:-2.1 亿美元(2024)(世行 WDI)"])})
+    srv = _serve(fake, schema.read_config(admin, NEW, ONTO))
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            for w in (1366, 1536, 1920, 390):  # 使用方常用的桌面宽度与手机
+                page = browser.new_page(viewport={"width": w, "height": 900})
+                for t in ("biz", "info"):
+                    page.goto(f"http://127.0.0.1:{srv.server_port}/country.html?iso=AZE&t={t}")
+                    page.wait_for_selector(f".tab[data-t={t}] .facts > .fact", timeout=15000)
+                    assert page.evaluate(LAYOUT, f".tab[data-t={t}]") == [], (w, t)
+                biz = page.locator("#biz")
+                assert biz.locator(".fact.is-warn .fact-w").inner_text() == "部分招标对外企设限,投标前要核实"
+                assert "超过 180 天,授标慢" in biz.locator(".fact.is-bad .fact-w").inner_text() and "发标到授标" in biz.locator(".fact.is-bad .fact-n").inner_text()
+                assert biz.locator(".kpi").nth(3).locator(".kn").inner_text() == "1.18"  # 「约 1.18 美元/m³」数字照样放大
+                page.close()
+            browser.close()
+    finally:
+        srv.shutdown()
+        srv.assistant.shutdown()
+
+
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
 def test_pages_open_in_a_browser_against_the_fake_table():
     from playwright.sync_api import Error as PWError, sync_playwright
@@ -434,7 +483,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             # 营商环境(B-READY,2026-10-14):四张大号指标卡,低于 50 分的标红写明含义;外企参标限制写明要核实;细项里对外企投标不利的标红;没覆盖的国家写明,不显示成 0
             page.click("#tabs button:has-text('营商环境')")
             bz = page.inner_text("#biz")
-            assert "66.0" in bz and "79.3" in bz and "约 1.18" in bz and "美元/m³" in bz and "2 AZN/m³" in bz and "365 天" in bz and "超过 180 天,授标慢" in bz
+            assert "66.0" in bz and "79.3" in bz and "约\n1.18" in bz and "美元/m³" in bz and "2 AZN/m³" in bz and "365 天" in bz and "超过 180 天,授标慢" in bz
             assert page.locator("#biz .kpi.bad").count() == 1 and "低于 50 分,偏弱" in page.inner_text("#biz .kpi.bad") and "公共采购得分" in page.inner_text("#biz .kpi.bad")
             assert "部分招标对外企设限" in bz and page.locator("#biz .bitems li.bad").count() == 1 and "对外企投标不利" in page.inner_text("#biz .bitems li.bad")
             assert "December 10, 2025" in bz and page.locator("#biz a[href*='businessready']").count() == 1
@@ -1137,7 +1186,7 @@ def test_country_key_figures_lead_and_negatives_are_red():
             assert "bad" in kp.nth(2).get_attribute("class") and "负增长" in kp.nth(2).inner_text()  # 负增长:大号数字标红
             ind = page.locator("details.sec:has(summary:text('宏观与水务指标')) .facts")
             assert "人均 GDP" not in ind.inner_text() and "经常账户" in ind.inner_text()  # 关键指标不在下面重复
-            assert ind.locator(".fact.bad").count() == 1 and "经常账户" in ind.locator(".fact.bad").inner_text()  # 只有逆差 ≥ 5% 标红,通胀 8.2% 不红
+            assert ind.locator(".fact.is-bad").count() == 1 and "经常账户" in ind.locator(".fact.is-bad").inner_text()  # 只有逆差 ≥ 5% 标红,通胀 8.2% 不红
             risk = page.locator("details.sec:has(summary:text('水风险与经济')) .kpis .kpi")
             assert risk.count() == 2 and "bad" in risk.nth(0).get_attribute("class")  # 用水压力 3.3 分(高)标红;人均 GDP 不红
             assert not errors, errors

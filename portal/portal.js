@@ -490,11 +490,24 @@
     },
     /* 「226 亿美元(2025)」→ ["226 亿美元", "2025"] */
     splitYear(text) { const m = String(text || "").match(/^(.*?)\s*[((](\d{4}(?:-\d{2})?)[))]\s*$/); return m ? [m[1], m[2]] : [String(text || ""), ""]; },
-    factHtml(label, value, srcHtml) {
-      const [main, year] = this.splitYear(value), bad = this.tone(label, this.num(main));
-      return '<div class="fact' + (bad ? " bad" : "") + '"' + (bad ? ' title="' + this.esc(bad) + '"' : "") + ">" + (label ? "<b>" + this.esc(label) + "</b>" : "") +
-        '<span class="v"><strong>' + this.esc(main) + "</strong>" + (year ? '<em class="yr">' + this.esc(year) + "</em>" : "") +
-        (bad ? '<em class="over">超警戒线:' + this.esc(bad) + "</em>" : "") + "</span>" + (srcHtml || "") + "</div>";
+    /* 名称-数值行(全站只有这一种写法,样式在 portal.css「名称-数值行」;2026-10-14 起各页不再各拼各的 <div><b><span>,免得样式互相串):
+       第一行「名称 | 值 年份 来源」,值太长就在自己那一栏里换行;下面一行是警示(红/橙),再下面一行是灰色说明,都在值那一栏,不挤值也不压到隔壁。
+       值是数或短词的加粗;html 的值(链接、成段说明)用正常粗细。
+       opts:字符串 = 来源(HTML,旧写法);或 { src: 来源 HTML, note: 说明文字, html: true 表示 value 已是 HTML(链接等), tone: "bad" | "warn", why: 警示原文 }。
+       不给 tone 的按 TONES 自动判断负面,警示写「超警戒线:门槛」 */
+    factHtml(label, value, opts) {
+      const o = typeof opts === "string" ? { src: opts } : opts || {};
+      const [main, year] = o.html ? [String(value), ""] : this.splitYear(value);
+      const auto = o.tone || o.html ? null : this.tone(label, this.num(main)), tone = o.tone || (auto ? "bad" : "");
+      const why = o.why || (auto ? "超警戒线:" + auto : "");
+      return '<div class="fact' + (tone ? " is-" + tone : "") + '">' + '<b class="fact-k">' + this.esc(label || "") + "</b>" +
+        '<span class="fact-v">' + (o.html ? "<span>" + main + "</span>" : "<strong>" + this.esc(main) + "</strong>") + (year ? '<em class="yr">' + this.esc(year) + "</em>" : "") + (o.src || "") + "</span>" +
+        (why ? '<span class="fact-w">' + this.esc(why) + "</span>" : "") + (o.note ? '<span class="fact-n">' + this.esc(o.note) + "</span>" : "") + "</div>";
+    },
+    /* 一组名称-数值行:rows = [[名称, 值, opts?], …],值为空的不列;一行都没有返回空串 */
+    factsHtml(rows) {
+      rows = rows.filter((r) => r && r[1] !== undefined && r[1] !== null && r[1] !== "");
+      return rows.length ? '<div class="facts">' + rows.map(([k, v, o]) => this.factHtml(k, v, o)).join("") + "</div>" : "";
     },
     /* 关键指标卡:items = [{label, value, year?, note?}];数字放大加粗,单位跟在后面小一号;负面的数字标红并写明原因 */
     kpiHtml(items) {
@@ -502,9 +515,9 @@
       if (!items.length) return "";
       return '<div class="kpis">' + items.map((x) => {
         const [main, y] = this.splitYear(String(x.value)), year = x.year || y;
-        const m = main.replace(/[−–]/g, "-").match(/^\s*(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/);
-        const bad = this.tone(x.label, this.num(main));
-        const big = m ? '<span class="kn">' + this.esc(main.trim().slice(0, main.trim().length - m[2].length).trim()) + "</span>" + (m[2] ? '<span class="ku">' + this.esc(m[2]) + "</span>" : "") : '<span class="kn kt">' + this.esc(main) + "</span>";
+        const m = main.replace(/[−–]/g, "-").match(/^\s*(约\s*)?(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/);  // 「约 1.18 美元/m³」:约 小字在前,数字放大
+        const bad = this.tone(x.label, this.num(m ? m[2] : main));
+        const big = m ? (m[1] ? '<span class="ku">约</span>' : "") + '<span class="kn">' + this.esc(m[2]) + "</span>" + (m[3] ? '<span class="ku">' + this.esc(m[3]) + "</span>" : "") : '<span class="kn kt">' + this.esc(main) + "</span>";
         return '<div class="kpi' + (bad ? " bad" : "") + '"><div class="kv">' + big + "</div>" + '<div class="kl">' + this.esc(x.label) + (year ? '<em class="yr">' + this.esc(year) + "</em>" : "") + "</div>" +
           (bad ? '<div class="kw">超警戒线:' + this.esc(bad) + "</div>" : "") + (x.note ? '<div class="kx">' + this.esc(x.note) + "</div>" : "") + "</div>";
       }).join("") + "</div>";
@@ -548,7 +561,7 @@
       const top = [lead, rows.find(([k]) => k === "人均 GDP(PPP)"), rows.find(([k]) => k.startsWith("世行涉水项目"))].filter(Boolean);
       const kp = top.map(([k, v]) => k.startsWith("世行") ? { label: "世行涉水项目", value: v.split(",")[0], note: v.split(",")[1] || "2020-10 至 2024" } : { label: k, value: v.replace(/\(.*\)$/, ""), note: (v.match(/\((.*)\)$/) || [])[1] ? "等级:" + v.match(/\((.*)\)$/)[1] : "" });
       const rest = rows.filter((r) => !top.includes(r));
-      return this.kpiHtml(kp) + (rest.length ? '<div class="facts">' + rest.map(([k, v]) => this.factHtml(k, v)).join("") + "</div>" : "") +
+      return this.kpiHtml(kp) + this.factsHtml(rest) +
         '<p class="muted small">分数 0–5:4 以上极高,3–4 高。来源:' + this.esc(this.get(oid, rec, "risk_source") || "WRI Aqueduct 4.0 等") + '。模型估计,作趋势参考' + (iso === "CHN" ? "(中国境内不做趋势机会分析)" : ';<a href="trend.html' + (iso ? "?" + new URLSearchParams({ c: iso }) : "") + '">看趋势机会 →</a>') + "</p>";
     },
     /* 营商环境(世界银行 B-READY;本体 V7「营商环境」页签,2026-10-14 使用方要):rec 是一整条国别记录。
@@ -568,10 +581,11 @@
         { label: "公共采购得分", value: sc("bready_procure"), note: "招投标规则、电子采购、授标与付款" },
         usd !== null ? { label: "商业水价", value: "约 " + usd.toFixed(2) + " 美元/m³", note: (loc !== null ? loc.toLocaleString("zh-CN", { maximumFractionDigits: 3 }) + " " + cur + "/m³," : "") + "水费 + 污水费,每月 1000 m³ 的商业用户" }
           : { label: "商业水价", value: "未公布", note: "这一期没有可用的数" }];
-      const fb = g("foreign_bid") || "", fbCls = /全部/.test(fb) ? " bad" : /部分|说法不一/.test(fb) ? " warn" : "";
-      const rows = [["大型工程授标天数", day("award_days"), "国际招标门槛以上的工程,从发标到授标(专家估计)"], ["政府合同回款天数", day("gov_pay_days"), "企业收到政府合同款的平均天数"],
-        ["企业供水可靠比例", n("water_reliable") === null ? "" : n("water_reliable").toFixed(1) + "%", "没遇到缺水的企业占比"], ["接水天数", day("water_conn_days"), "企业新接供水的天数(中位数)"],
-        ["纠纷解决得分", sc("bready_dispute"), "商事纠纷解决"]].filter(([, v]) => v);
+      const fb = g("foreign_bid") || "", fbTone = /全部/.test(fb) ? "bad" : /部分|说法不一/.test(fb) ? "warn" : "";
+      const rows = [["外企参标限制", fb || "—", { tone: fbTone, why: fbTone === "bad" ? "所有公共招标都对外企设限" : fbTone ? (/说法不一/.test(fb) ? "专家看法不一,投标前要核实" : "部分招标对外企设限,投标前要核实") : "" }],
+        ["大型工程授标天数", day("award_days"), { note: "国际招标门槛以上的工程,从发标到授标(专家估计)" }], ["政府合同回款天数", day("gov_pay_days"), { note: "企业收到政府合同款的平均天数" }],
+        ["企业供水可靠比例", n("water_reliable") === null ? "" : n("water_reliable").toFixed(1) + "%", { note: "没遇到缺水的企业占比" }], ["接水天数", day("water_conn_days"), { note: "企业新接供水的天数(中位数)" }],
+        ["纠纷解决得分", sc("bready_dispute"), { note: "商事纠纷解决" }]];
       const items = String(g("bready_items") || "").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
       const col = (grp) => {
         const li = items.filter((x) => x.startsWith("[" + grp + "]")).map((x) => {
@@ -582,9 +596,7 @@
         return li.length ? '<ul class="bitems">' + li.join("") + "</ul>" : '<p class="muted">(无)</p>';
       };
       return this.kpiHtml(kp) +
-        '<div class="panel"><div class="facts">' + '<div class="fact' + fbCls + '"><b>外企参标限制</b><span class="v"><strong>' + this.esc(fb || "—") + "</strong>" +
-          (fbCls === " bad" ? '<em class="over">所有公共招标都对外企设限</em>' : fbCls ? '<em class="over">' + (/说法不一/.test(fb) ? "专家看法不一,投标前要核实" : "部分招标对外企设限,投标前要核实") + "</em>" : "") + "</span></div>" +
-          rows.map(([k, v, why]) => this.factHtml(k, v, '<span class="src">' + this.esc(why) + "</span>")).join("") + "</div></div>" +
+        '<div class="panel">' + this.factsHtml(rows) + "</div>" +
         '<div class="bcols"><div class="panel"><h3>供水细项</h3>' + col("供水") + '</div><div class="panel"><h3>公共采购细项</h3>' + col("采购") + "</div></div>" +
         src.replace("</p>", "数据:" + this.esc(g("bready_edition") || "") + "。</p>");
     },

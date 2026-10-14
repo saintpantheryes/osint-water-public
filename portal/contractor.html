@@ -81,8 +81,7 @@
     const empty = (v) => v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length);
     const missing = [["中文名", "name_zh"], ["性质", "kind"], ["母公司或所属集团", "parent"], ["官网", "website"], ["主营领域", "sectors"], ["简介", "profile"]]
       .filter(([, p]) => P.has("contractor", p) && empty(g(r, p))).map(([l]) => l);
-    $("info").innerHTML = '<div class="facts">' + facts.map(([l, v]) => P.factHtml(l, String(v))).join("") +
-      (site ? '<div class="fact"><b>官网</b><span class="v"><a href="' + P.esc(site) + '" target="_blank" rel="noopener">' + P.esc(site) + " ↗</a></span></div>" : "") + "</div>" +
+    $("info").innerHTML = P.factsHtml(facts.map(([l, v]) => [l, String(v)]).concat(site ? [["官网", '<a href="' + P.esc(site) + '" target="_blank" rel="noopener">' + P.esc(site) + " ↗</a>", { html: true }]] : [])) +
       (g(r, "profile") ? "<p>" + P.esc(g(r, "profile")).replace(/\n/g, "<br>") + "</p>" : "") +
       (g(r, "note") ? '<p class="muted">备注:' + P.esc(g(r, "note")) + "</p>" : "") +
       (missing.length && !P.isGuest ? '<p class="muted small">还没填:' + missing.join("、") + "。在表格里补上,这里就显示。</p>" : "");

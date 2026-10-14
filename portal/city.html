@@ -217,7 +217,7 @@
       ["现行水价", g("tariff") != null && g("tariff") !== "" ? P.esc(String(g("tariff")) + " " + (g("tariff_currency") || "") + "/立方米") : ""], ["最近调价", P.esc(P.day(g("tariff_changed")) || "")],
       ["水价说明", P.esc(g("tariff_note") || "").replace(/\r?\n/g, "<br>")], ["水价来源", P.esc(g("tariff_source") || "")],
       ["数据来源", P.esc(g("source") || "")], ["备注", P.esc(g("note") || "")]].filter(([, v]) => v);
-    $("info").innerHTML = '<div class="facts">' + kv.map(([k, v]) => "<div><b>" + k + "</b><span>" + v + "</span></div>").join("") + "</div>" +
+    $("info").innerHTML = P.factsHtml(kv.map(([k, v]) => [k, v, { html: true }])) +
       (P.riskFacts("city", ct, iso) ? '<h3>水风险与经济(趋势参考)</h3>' + P.riskFacts("city", ct, iso) : "") +
       '<p class="muted small">面积、地区生产总值、水价公开数据里没有,在城市表里补上就显示,密度随后自动算。线索、商机的「城市」一栏由人选,选上了就出现在这里。</p>';
     $("opps").innerHTML = !opps.length ? '<p class="muted">还没有商机关联到这座城市。</p>' :
