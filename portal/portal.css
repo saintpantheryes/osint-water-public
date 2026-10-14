@@ -568,3 +568,15 @@ sup.sref a:hover { background: var(--brand); color: #fff; }
 .answer.flash .a-q { animation: qflash 1.2s ease-out; }
 @keyframes qflash { from { box-shadow: 0 0 0 4px rgba(14, 107, 168, .45); } to { box-shadow: 0 0 0 0 rgba(14, 107, 168, 0); } }
 .hist-pop li small { display: block; font-size: 12px; margin-top: 1px; }
+
+/* 营商环境页签(B-READY):细项两栏,答案靠右;对外企投标不利的标红 */
+.bcols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .bcols { grid-template-columns: 1fr; } }
+.bcols h3 { margin: 0 0 6px; font-size: 15px; }
+.bitems { list-style: none; margin: 0; padding: 0; }
+.bitems li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+.bitems li b { font-weight: 600; text-align: right; } .bitems li b.no { color: var(--muted); font-weight: 500; }
+.bitems li.bad b { color: #dc2626; } .bitems em.over { display: block; font-style: normal; font-size: 12px; color: #dc2626; font-weight: 500; }
+.facts .warn .v strong { color: #b45309; } .facts .warn em.over { color: #b45309; }
+.num-bad { color: #dc2626; font-weight: 700; } .num-warn { color: #b45309; font-weight: 600; }  /* 助手国别表:偏弱的数标红,外企参标「部分有限制」标橙 */
+.lead-ans { font-size: 17px; margin: 6px 0 10px; } .lead-ans b { font-size: 22px; }  /* 助手单国作答:问的那项先写成一句话,数放大 */

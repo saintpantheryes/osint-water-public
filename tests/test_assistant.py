@@ -508,6 +508,7 @@ def test_portal_answers_measures_follow_ups_and_keeps_history():
             body = a.locator(".a-body").inner_text()
             assert "按有招标估价的 3 份算(符合条件的共 4 份);其余 1 份没有(世界银行合同授予数据 1 份)" in body  # 没有估价的说清来自哪里
             a.locator("details.mlist summary").click()
+            a.locator("details.mlist tbody tr").first.wait_for(timeout=15000)  # 展开时才画表(toggle 事件),等它画完再数
             assert a.locator("details.mlist tbody tr").count() == 3 and "招标估价的 80%" in a.locator("details.mlist tbody tr").first.inner_text()  # 从低到高
             # 接着问:「那吉尔吉斯斯坦呢」沿用类别、时间、指标
             a = ask("那吉尔吉斯斯坦呢")
@@ -666,3 +667,49 @@ def test_caddy_routes_assistant_api_to_the_worker():
     assert "header_up X-Portal-Auth 1" in c  # 登录后来的请求打上标记,后台据此放行日历下载
     # 日历订阅路由不做登录检查、只转这一个文件、去掉外来的标记
     assert c.index("@ow_feed path /portal/feed/calendar.ics") < c.index("@ow_portal path") and "header_up -X-Portal-Auth" in c
+
+
+def test_country_business_environment_questions():
+    """营商环境(世界银行 B-READY,v2.23;使用方 2026-10-14 的问法):对象是国别,门槛、市场分级、外企参标、排序按提问读;说线索的「水价」不改查国别。"""
+    p = A.plan("供水得分低于 50 的市场国别", TODAY)
+    assert p["object"] == "country" and p["filters"]["tiers"] == ["重点", "市场"] and p["filters"]["metric"] == {"id": "bready_water", "min": None, "max": 50.0}
+    assert ["门槛", "供水得分低于 50 分"] in p["understood"] and p["measures"] == [{"id": "bready_water", "agg": "median"}]
+    p = A.plan("哪些国家不限制外企参标", TODAY)
+    assert p["object"] == "country" and p["filters"]["foreign"] == ["无限制"] and p["measures"][0]["id"] == "bready_procure"
+    assert A.plan("哪些国家限制外企参标", TODAY)["filters"]["foreign"] == ["部分招标有限制", "全部招标有限制"]
+    p = A.plan("摩洛哥商业水价多少", TODAY)
+    assert p["object"] == "country" and [c["iso3"] for c in p["filters"]["countries"]] == ["MAR"] and p["measures"][0]["id"] == "water_tariff_usd" and p["intent"] == "list"
+    p = A.plan("哪些国家政府回款最慢", TODAY)
+    assert p["order"] == {"id": "gov_pay_days", "dir": "desc"} and p["limit"] == A.MAX_LIMIT
+    assert A.plan("公共采购得分最差的国家", TODAY)["order"] == {"id": "bready_procure", "dir": "asc"}
+    assert A.plan("哪些国家水价最低", TODAY)["order"] == {"id": "water_tariff_usd", "dir": "asc"}
+    p = A.plan("营商环境最好的前5个国家", TODAY)
+    assert p["order"] == {"id": "bready_total", "dir": "desc"} and p["limit"] == 5
+    p = A.plan("授标天数超过180天的国家有几个", TODAY)
+    assert p["intent"] == "count" and p["filters"]["metric"] == {"id": "award_days", "min": 180.0, "max": None}
+    p = A.plan("阿塞拜疆外企参标有限制吗", TODAY)  # 点了国名:答这一国,不按外企参标把它筛掉
+    assert p["object"] == "country" and not p["filters"]["foreign"] and p["measures"][0]["id"] == "bready_procure"
+    # 接着问
+    p1 = A.plan("摩洛哥商业水价多少", TODAY)
+    prev = {"q": "摩洛哥商业水价多少", "object": "country", "filters": p1["filters"], "measures": p1["measures"], "group_by": None, "order": None}
+    p2 = A.plan("那吉尔吉斯斯坦呢", TODAY, prev=prev)
+    assert p2["object"] == "country" and [c["iso3"] for c in p2["filters"]["countries"]] == ["KGZ"] and p2["measures"][0]["id"] == "water_tariff_usd"
+    p1 = A.plan("哪些国家政府回款最慢", TODAY)
+    prev = {"q": "x", "object": "country", "filters": p1["filters"], "measures": p1["measures"], "group_by": None, "order": p1["order"]}
+    p2 = A.plan("那市场国别呢", TODAY, prev=prev)
+    assert p2["measures"][0]["id"] == "gov_pay_days" and p2["order"]["dir"] == "desc" and p2["filters"]["tiers"] == ["重点", "市场"]
+    assert A.plan("那评标天数呢", TODAY, prev=prev)["object"] == "award"  # 换成已中标项目的指标就查已中标项目
+    p = A.plan("哪些国家不限制外企参标", TODAY, prev={"q": "平均评标时间", "object": "award", "filters": {}, "measures": [{"id": "eval_days", "agg": "mean"}]})
+    assert p["object"] == "country"  # 上一问是已中标项目,这一问明说营商环境的不沿用
+    # 不误伤
+    for q, obj in (("水价调整的线索", "lead"), ("埃及水价改革", "lead"), ("平均评标时间", "award"), ("最近 30 天的招标按国家分", "lead"), ("在跟踪的商机有哪些", "opportunity")):
+        p = A.plan(q, TODAY)
+        assert p["object"] == obj and not p["unresolved"], (q, p["object"], p["unresolved"])
+
+
+def test_country_plan_from_model_uses_the_question():
+    p = A.from_model({"object": "country", "intent": "list", "countries": ["摩洛哥"], "measure": "water_tariff_usd"}, TODAY, "摩洛哥的水费贵不贵")
+    assert p["object"] == "country" and p["parsed_by"] == "model" and [c["iso3"] for c in p["filters"]["countries"]] == ["MAR"]
+    p = A.from_model({"object": "lead", "intent": "list", "countries": []}, TODAY, "供水得分低于 50 的市场国别")  # 模型当成线索的,按提问改成国别
+    assert p["object"] == "country" and p["filters"]["metric"]["max"] == 50.0
+    assert "country" in A.SCHEMA["properties"]["object"]["enum"] and "country 国别" in A.system_prompt(TODAY)

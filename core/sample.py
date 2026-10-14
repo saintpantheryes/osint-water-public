@@ -76,6 +76,13 @@ def build(today: date) -> dict[str, list[dict]]:
                   "water_agencies": f"{zh}国家水务主管部门(示例)", "water_soes": f"{zh}国家水务公司(示例)",
                   "access": "外资可参与国际竞争性招标;部分项目要求本地合作方(示例)"}
                  for iso, zh, reg, inc, tier, city in COUNTRIES]
+    for i, c in enumerate(countries[:-1]):  # 营商环境(B-READY)示例值;最后一国留空,看「这一期没有覆盖」的写法
+        c.update({"bready_total": 48.0 + 4 * i, "bready_water": 42.0 + 6 * i, "bready_procure": 46.0 + 3 * i, "bready_dispute": 50.0 + 2 * i,
+                  "water_tariff": 1.2 + 0.3 * i, "water_tariff_cur": "USD", "water_tariff_usd": round(1.2 + 0.3 * i, 2), "water_reliable": 76.0 + 3 * i,
+                  "water_conn_days": 7 + i, "foreign_bid": ["部分招标有限制", "无限制", "说法不一"][i % 3], "award_days": 120 + 30 * i, "gov_pay_days": 40 + 15 * i,
+                  "bready_items": "[供水] 法规设了降低漏损的目标:是(示例)\n[供水] 有独立于水司的投诉渠道:否(示例)\n[采购] 外企须与本地企业联合才能投标:否(示例)"
+                                  + ("\n[采购] 外企参标或授标受限:部分招标有(示例)" if i % 3 == 0 else ""),
+                  "bready_edition": "示例数据"})
     cities = [{"_k": f"C-{iso}", "key": str(9_000_000 + i), "name_zh": city[0], "name_en": city[1], "country": iso, "admin": "示例行政区",
                "coords": city[2], "population": city[3], "pop_year": today.year - 1, "source": "示例数据"}
               for i, (iso, zh, reg, inc, tier, city) in enumerate(COUNTRIES)]

@@ -385,6 +385,13 @@ def test_country_report_follows_the_azerbaijan_outline(env, monkeypatch):  # noq
     assert heads and all(h in titles for h in heads) and heads == [t for t in titles if t in heads]  # 章的顺序与成稿一致
     assert md.index("# 摘要") < md.index("# 第 1 章") and "# 附录" in md and "**目\u3000录**" in md
     assert '1,470' not in md and '759 [亿美元]{custom-style="KPI Unit"}' in md
+    assert "B-READY 2025 这一期没有覆盖" in md  # 营商环境(v2.23):没覆盖的写明
+    abase.update("country", c["id"], {"bready_total": 66, "bready_water": 79.3, "bready_procure": 45.7, "water_tariff": 2, "water_tariff_cur": "AZN", "water_tariff_usd": 1.18,
+                                      "foreign_bid": "部分招标有限制", "award_days": 365, "gov_pay_days": 7, "bready_edition": "B-READY 2025(数据版本 December 10, 2025)"})
+    md, *_ = reports.build_country(ctx, iso)
+    sec = md[md.index("营商环境(世界银行 B-READY)"):]
+    assert "总分 66.0 分;需要留意的是公共采购得分、外企参标限制、大型工程授标天数" in sec and "约 1.18 美元/m³(2 AZN/m³)" in sec
+    assert "45.7 分(超警戒线:低于 50 分,偏弱)" in sec and "365 天(超警戒线:超过 180 天,授标慢)" in sec and "7 天 |" in sec
     ctx.clf = _FakeWriter()
     md, *_ = reports.build_country(ctx, iso)
     assert "〔summary〕" in md and "〔risks〕" in md and "〔conclusion〕" in md and "## 2.3 宏观经济" in md

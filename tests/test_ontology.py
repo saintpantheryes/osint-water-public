@@ -180,7 +180,8 @@ def test_semantic_layer_is_well_formed():
     assert len(ids) == len(set(ids)) and "count" in ids
     seen: dict[str, str] = {}
     for m in sem["measures"]:
-        assert set(m) <= {"id", "name", "of", "field", "unit", "aggs", "needs", "missing", "words"}, m["id"]
+        assert set(m) <= {"id", "name", "of", "field", "unit", "aggs", "needs", "missing", "words", "better"}, m["id"]
+        assert m.get("better") in (None, "high", "low"), m["id"]
         assert m["name"] and set(m["of"]) <= objs and m["aggs"] and set(m["aggs"]) <= aggs, m["id"]
         if m["id"] == "count":
             continue

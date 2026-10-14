@@ -28,13 +28,14 @@ from core import fx, geo
 ROOT = Path(__file__).resolve().parent.parent
 ONTO_PATH = ROOT / "docs" / "ontology" / "ontology.yaml"
 
-OBJECTS = ("lead", "opportunity", "milestone", "report", "award")
-OBJECT_ZH = {"lead": "线索", "opportunity": "商机", "milestone": "时间节点", "report": "报告", "award": "已中标项目"}
+OBJECTS = ("lead", "opportunity", "milestone", "report", "award", "country")
+OBJECT_ZH = {"lead": "线索", "opportunity": "商机", "milestone": "时间节点", "report": "报告", "award": "已中标项目", "country": "国别"}
 INTENTS = ("count", "list", "chart", "report", "help")
 GROUPS = {"lead": ("country", "category", "sectors", "funder", "day", "status", "source"),
           "opportunity": ("country", "stage", "sectors", "funder"),
           "milestone": ("country", "kind", "day"), "report": ("kind", "country"),
-          "award": ("country", "sector", "contract_type", "delivery", "asset", "winner_country", "funder", "year")}
+          "award": ("country", "sector", "contract_type", "delivery", "asset", "winner_country", "funder", "year"),
+          "country": ()}  # 国别一国一行(营商环境指标),不再分组:页面列国别表
 GROUP_ZH = {"country": "国别", "category": "类别", "sectors": "领域", "funder": "资金来源", "day": "按天", "status": "处理状态",
             "source": "信源", "stage": "我方阶段", "kind": "类型", "sector": "类别", "contract_type": "合同类型", "delivery": "承包模式", "asset": "主体工程", "winner_country": "中标单位国别", "year": "年份"}
 GROUP_ALIAS = {"award": {"category": "sector", "sectors": "sector", "kind": "contract_type", "day": "year"}}  # 别的对象的分组说法 → 已中标项目的(它的「类别」就是领域)
@@ -129,10 +130,12 @@ OTHER_OBJECT_RE = re.compile(r"线索|公告|商机|项目机会|在跟|跟踪|�
 OBJECT_RE = re.compile(OTHER_OBJECT_RE.pattern + r"|中标|授予|授标|已授|合同|(?<![a-z])awards?(?![a-z])")
 FOLLOW_RE = re.compile(r"^\s*(?:那|那么|那就|其中|这些|这里面|这其中|它们|同样|换成|如果是|再看|再按|还是)")  # 接着上一问说的;很短的「……呢」也算(见 _follow_up)
 SECTOR_FIX = [("污水处理厂", "污水"), ("污水厂", "污水"), ("污水管网", "污水"), ("污水管", "污水"), ("排水管网", "排水"), ("雨水管网", "雨水")]  # 「污水厂」里的「水厂」、「污水管网」里的「管网」不算供水
-INHERIT = ("countries", "sectors", "categories", "funders", "contract_types", "deliveries", "assets", "winner_countries", "winners", "keywords", "price", "capacity")
+INHERIT = ("countries", "sectors", "categories", "funders", "contract_types", "deliveries", "assets", "winner_countries", "winners", "keywords", "price", "capacity",
+           "tiers", "foreign", "metric")
 INHERIT_ZH = {"countries": "国别", "sectors": "类别或领域", "categories": "类别", "funders": "资金来源", "contract_types": "合同类型", "deliveries": "承包模式",
               "assets": "主体工程", "winner_countries": "中标单位国别", "winners": "中标单位", "keywords": "关键词", "price": "金额", "capacity": "规模",
-              "time": "时间", "measures": "指标", "group_by": "分组"}
+              "time": "时间", "measures": "指标", "group_by": "分组",
+              "tiers": "市场分级", "foreign": "外企参标", "metric": "门槛"}
 
 
 def _words(x) -> list[str]:
@@ -186,6 +189,7 @@ class Vocab:
     measures: list[dict] = field(default_factory=list)  # 本体 semantic.measures(words 小写、长的在前)
     aggs: list[dict] = field(default_factory=list)  # 本体 semantic.aggs
     terms: list[dict] = field(default_factory=list)
+    market_tiers: list[str] = field(default_factory=list)  # 「市场国别」= 本体 glossary.threshold.tiers(重点、市场)
     not_collected: list[dict] = field(default_factory=list)  # 本体 data_scope.not_collected:不在采集范围的国家(iso3、口语 words、说明 note)  # 本体 terms:行业术语(triggers = 词本身 + 同义说法,小写、长的在前)
     words: dict[str, dict[str, list[str]]] = field(default_factory=dict)  # 维度 → 值 → 触发词(小写)
 
@@ -219,6 +223,7 @@ def vocab() -> Vocab:
         aggs=[{**a, "words": sorted({str(w).lower() for w in a.get("words") or []}, key=len, reverse=True)} for a in sem.get("aggs") or []],
         terms=[x for x in (make_term(t) for t in o.get("terms") or []) if x],
         not_collected=list((o.get("data_scope") or {}).get("not_collected") or []),
+        market_tiers=list(o["glossary"]["threshold"].get("tiers") or []),
     )
     def merge(values: list[str], extra: dict[str, list[str]], more: dict[str, list[str]] | None = None) -> dict[str, list[str]]:
         out = {}
@@ -253,9 +258,10 @@ def empty_plan() -> dict:
                         "tracked": None, "status": [], "relevant": None, "days": None, "from": None, "to": None, "future_days": None,
                         "kinds": [], "keywords": [], "terms": [],
                         "contract_types": [], "deliveries": [], "winner_countries": [], "winners": [], "capacity": None,
-                        "price": None, "assets": []},  # 后七项只对已中标项目;capacity = {min, max}(m³/日);price = {min, max, currency, rate}(原币,rate = 1 单位折人民币,近似)
+                        "price": None, "assets": [],
+                        "tiers": [], "foreign": [], "metric": None},  # 最后三项只对国别:市场分级、外企参标限制、指标门槛 {id, min, max};此前七项只对已中标项目;capacity = {min, max}(m³/日);price = {min, max, currency, rate}(原币,rate = 1 单位折人民币,近似)
             "group_by": None, "limit": DEFAULT_LIMIT, "understood": [], "unresolved": [], "parsed_by": "rules", "model": None, "note": "",
-            "measures": []}  # 问的指标 [{id, agg}](本体 semantic.measures);空 = 只数数量
+            "measures": [], "order": None}  # order 只对国别:{id, dir: asc|desc}(「最慢」「最高」);问的指标 [{id, agg}](本体 semantic.measures);空 = 只数数量
 
 
 # ---------------------------------------------------------------- 规则解析
@@ -654,7 +660,7 @@ def _measure_object(ms: list[dict], q: str, current: str) -> str:
     """问了指标(评标天数、招标估价……)而对象不对的:提问没明说查别的,就改查指标所属的对象(语义层 measures.of 的第一个)。"""
     for x in ms:
         m = measure_of(x["id"])
-        if m and x["id"] != "count" and current not in m["of"] and not OTHER_OBJECT_RE.search(_norm(q)):
+        if m and x["id"] != "count" and current not in m["of"] and not OTHER_OBJECT_RE.search(_norm(q)) and not (m["of"][0] == "country" and NEWS_RE.search(_norm(q))):
             return m["of"][0]
     return current
 
@@ -666,6 +672,111 @@ def _award_noise(k: str) -> bool:
                 or assets(t) or parse_measures(t) or re.fullmatch(r"的?(?:项目|信息|记录|结果|情况|合同)", t))
 
 
+# ---------------------------------------------------------------- 国别(营商环境,世界银行 B-READY;v2.23)
+# 2026-10-14 使用方要的问法:「供水得分低于 50 的市场国别」「哪些国家不限制外企参标」「摩洛哥商业水价多少」「哪些国家政府回款最慢」
+
+COUNTRY_RE = re.compile(r"营商环境|b-?ready|business ready|外企参标|外企.{0,4}(?:限制|设限|受限)|(?:限制|限)外企|外国企业.{0,4}限制|限制外国企业|对外企")
+NEWS_RE = re.compile(r"改革|调整|上涨|上调|涨价|下调|降价|新闻|动态|消息|项目|公告|政策|计划|规划|报道")  # 「埃及水价改革」「水价调整」说的是线索,不是 B-READY 的数
+TIER_WORDS = [("重点", ["重点国别", "重点国家", "重点市场"]), ("市场", ["市场国别", "市场国家", "市场级国别", "「市场」"])]
+FOREIGN_NONE = ["不限制外企", "不限外企", "外企不受限", "外企不受限制", "对外企没有限制", "对外企无限制", "没有外企限制", "外企无限制", "外企没有限制", "不限制外国企业",
+                "外企可以投标", "外企能投标", "外企能参标", "外企可以参标", "允许外企", "对外企开放"]
+FOREIGN_ALL = ["全部招标都限制外企", "所有招标都限制外企", "全部限制外企", "全部招标有限制", "全都限制外企"]
+FOREIGN_ANY = ["限制外企", "外企受限", "外企参标限制", "对外企设限", "外企有限制", "限制外国企业", "外企不能投标", "外企.{0,4}限制", "外企设限"]
+ORDER_HIGH = r"最高|最大|最多|最长|最贵|最慢|最久|最晚"  # 数越大排越前
+ORDER_LOW = r"最低|最小|最少|最短|最便宜|最快|最早"
+ORDER_BEST = r"最好|最强|最优|最佳|最容易|最方便"  # 按指标的 better 读
+ORDER_WORST = r"最差|最弱|最糟|最难|最不方便"
+_TH_NUM = r"(\d+(?:\.\d+)?)\s*(?:分|美元|%|％|天|个百分点)?"
+TH_MAX = [r"(?<!不)(?:低于|小于|少于|不到|不足|未达|<|＜)\s*" + _TH_NUM, _TH_NUM + r"\s*(?:以下|以内|之内)"]
+TH_MIN = [r"(?:不低于|不少于|至少|起码|>=|≥)\s*" + _TH_NUM, r"(?:超过|高于|大于|多于|>|＞)\s*" + _TH_NUM, _TH_NUM + r"\s*以上"]
+
+
+def _country_signal(text: str, ms: list[dict], current: str) -> bool:
+    """问的是国别的营商环境:提到营商环境、外企参标,或问了只有国别才有的指标(供水得分、商业水价、回款天数……)。"""
+    return bool(COUNTRY_RE.search(text)) or _measure_object(ms, text, current) == "country"
+
+
+def _thresholds(text: str) -> list[tuple[int, str, float]]:
+    out = []
+    for kind, pats in (("max", TH_MAX), ("min", TH_MIN)):
+        for pat in pats:
+            for m in re.finditer(pat, text):
+                if not any(a <= m.start() < b for a, b, *_ in out):
+                    out.append((m.start(), m.end(), kind, float(m.group(1))))
+    return [(a, k, v) for a, _, k, v in sorted(out)]
+
+
+def country_filters(text: str, ms: list[dict]) -> tuple[dict, dict | None]:
+    """国别的条件:市场分级、外企参标限制、指标门槛(「低于 50」「90 天以上」;按离它最近的、在它前面的指标)→ (条件, 排序)。"""
+    v = vocab()
+    f = {"tiers": [], "foreign": [], "metric": None}
+    for tier, ws in TIER_WORDS:
+        if any(w in text for w in ws):
+            f["tiers"] = ["重点"] if tier == "重点" else list(v.market_tiers)
+            break
+    if any(w in text for w in FOREIGN_NONE):
+        f["foreign"] = ["无限制"]
+    elif any(w in text for w in FOREIGN_ALL):
+        f["foreign"] = ["全部招标有限制"]
+    elif any(re.search(w, text) for w in FOREIGN_ANY):
+        f["foreign"] = ["部分招标有限制", "全部招标有限制"]
+    pos = _strike(text, {m["id"]: m["words"] for m in v.measures if "country" in m["of"] and m["words"]})
+    for at, kind, num in _thresholds(text):
+        before = [mid for p, mid in pos if p < at]
+        mid = before[-1] if before else (ms[0]["id"] if ms else None)
+        if not mid:
+            continue
+        cur = f["metric"] if f["metric"] and f["metric"]["id"] == mid else {"id": mid, "min": None, "max": None}
+        cur[kind] = num
+        f["metric"] = cur
+    order = None
+    mid = (ms[0]["id"] if ms else None) or (f["metric"] or {}).get("id")
+    m = measure_of(mid) if mid else None
+    if m:
+        hi = "desc" if m.get("better") != "low" else "asc"
+        lo = "asc" if hi == "desc" else "desc"
+        if re.search(ORDER_HIGH, text):
+            order = {"id": mid, "dir": "desc"}
+        elif re.search(ORDER_LOW, text):
+            order = {"id": mid, "dir": "asc"}
+        elif re.search(ORDER_BEST, text):
+            order = {"id": mid, "dir": hi}
+        elif re.search(ORDER_WORST, text):
+            order = {"id": mid, "dir": lo}
+    return f, order
+
+
+def country_plan(p: dict, text: str, ms: list[dict]) -> dict:
+    """对象是国别时的计划:国名、市场分级、外企参标、门槛、排序;指标只留国别有的,没问指标的给缺省(问外企参标的看公共采购得分,其余看总分)。"""
+    f = p["filters"]
+    p["object"] = "country"
+    for k in ("sectors", "sectors_fine", "categories", "funders", "stages", "status", "kinds", "keywords", "terms", "contract_types", "deliveries",
+              "winner_countries", "winners", "assets"):
+        f[k] = []
+    f["tracked"] = f["relevant"] = f["capacity"] = f["price"] = None
+    f["days"] = f["from"] = f["to"] = f["future_days"] = None  # B-READY 一期一个数,不按时间筛
+    p["understood"] = [x for x in p["understood"] if x[0] != "时间"]
+    p["group_by"] = None
+    p["measures"] = [x for x in ms if "country" in measure_of(x["id"])["of"]]
+    cf, p["order"] = country_filters(text, p["measures"])
+    f.update(cf)
+    if not p["measures"]:
+        mid = (f["metric"] or {}).get("id") or ("bready_procure" if f["foreign"] else "bready_total")
+        p["measures"] = [{"id": mid, "agg": measure_of(mid)["aggs"][0]}]
+        p["measure_default"] = True  # 没问指标、给的缺省:接着问时上一问的指标优先
+        if not p["order"]:
+            p["order"] = country_filters(text, p["measures"])[1]
+    if f["countries"]:  # 点了国名的问的是这几国本身(「阿塞拜疆外企参标有限制吗」):不再按外企参标、门槛、分级筛掉它们,页面逐国作答
+        f["tiers"], f["foreign"], f["metric"], p["order"] = [], [], None, None
+    p["intent"] = "count" if re.search(r"几个|多少个|多少国|几国|有多少", text) and not f["countries"] else "list"
+    m = re.search(r"(?:前|最\S{1,3}的)\s*(\d+|[一二两三四五六七八九十]+)\s*(?:个|国|名)", text)
+    if m and _num(m.group(1)):
+        p["limit"] = max(1, min(MAX_LIMIT, int(_num(m.group(1)))))
+    elif not f["countries"]:
+        p["limit"] = MAX_LIMIT  # 国别不多,缺省全列
+    return p
+
+
 def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
     """force_object:接着上一问、这一句没说查什么时,沿用上一问的对象(见 plan)。"""
     v = vocab()
@@ -674,7 +785,9 @@ def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
     f = p["filters"]
     ms = parse_measures(text)
     # 对象:已中标项目先认(「中标信息」不是商机阶段;「我们中标的商机」仍是商机,见 is_award_q);问了只有已中标项目才有的指标(评标天数、招标估价)的也是它
-    if force_object in OBJECTS:
+    if force_object == "country" or (COUNTRY_RE.search(text) and not re.search(r"线索|商机", text)) or _measure_object(ms, q, force_object if force_object in OBJECTS else "lead") == "country":
+        p["object"] = "country"
+    elif force_object in OBJECTS:
         p["object"] = force_object
     elif is_award_q(text) or _measure_object(ms, q, "lead") == "award":
         p["object"] = "award"
@@ -684,6 +797,13 @@ def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
         p["object"] = "milestone"
     elif re.search(r"周报|月报|日报|国别报告|项目报告|报告", text) and not re.search(r"生成|出一份|做一份|写一份|来一份|给我一份", text):
         p["object"] = "report"
+    if p["object"] == "country":  # 国别(营商环境):国名、市场分级、外企参标、门槛,不走下面线索与已中标项目的条件
+        for iso in geo.detect(q):
+            f["countries"].append({"iso3": iso, "name": geo.name_zh(iso)})
+        for x in v.not_collected:
+            if not f["countries"] and not re.search(r"国内外|国外", text) and any(w in text for w in x.get("words") or []):
+                f["countries"].append({"iso3": x["iso3"], "name": geo.name_zh(x["iso3"])})
+        return finish(country_plan(p, text, ms))
     # 意图
     if re.search(r"生成|出一份|做一份|写一份|来一份|给我一份", text) and "报告" in text:
         p["intent"] = "report"
@@ -772,7 +892,7 @@ def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
         _or_delivery(f)
     # 指标(语义层):只留这个对象有的;别的对象的指标说法放进「没认出来」
     p["measures"] = [x for x in ms if p["object"] in measure_of(x["id"])["of"]]
-    p["unresolved"] += [measure_of(x["id"])["name"] for x in ms if p["object"] not in measure_of(x["id"])["of"]]
+    p["unresolved"] += [measure_of(x["id"])["name"] for x in ms if p["object"] not in measure_of(x["id"])["of"] and "country" not in measure_of(x["id"])["of"]]  # 「水价调整的线索」里的「水价」不算没认出来
     # 时间
     t, label = parse_time(text, today)
     if t and award and t.get("future_days"):  # 「三年内」对已中标项目说的是过去
@@ -810,7 +930,7 @@ def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
 
 SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器。用户用中文(偶尔夹英文)提问,你只负责把问题翻译成一个查询计划(JSON),不回答问题、不编造数据。
 
-系统里有五类对象:
+系统里有六类对象:
 - lead 线索:从公开信源采集的公告与新闻,字段有国别、领域(粗分)、类别、出资方、发现时间、处理状态、是否相关。
 - opportunity 商机:我方在跟的项目,字段有国别、领域(细分)、我方阶段、资金。「我们 / 我方中标的」「中标的商机」= 商机 + 阶段「中标」。
 - milestone 时间节点:投标截止、开标、授标等日期,挂在商机或线索下。
@@ -818,6 +938,8 @@ SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器�
 - award 已中标项目:开发银行与各国采购网公开的中标记录(一份已授出的合同:谁中了什么标、中标价多少),字段有国别、类别(即领域粗分)、合同类型、
   中标价、中标时间、工程量(含规模,如「净水厂 5 万吨/日」)、中标单位及其国别、资金来源。问「中标信息 / 中标记录 / 中标结果 / 谁中标 / 中标单位 /
   中标价 / 合同授予 / awards」的都是它,不是商机(除非明说是我方的)。
+- country 国别:一国一行的营商环境(世界银行 B-READY 2025):营商环境总分、供水得分、公共采购得分、商业水价、外企参标限制、大型工程授标天数、
+  政府合同回款天数等。问「营商环境 / 外企参标 / 哪些国家水价最高 / 回款最慢」的是它;门槛(低于 50 分)、外企参标、市场分级、排序系统按提问自己读,你只填 object、countries、measure。
 
 字段取值(只能用这些,别的词放进 unresolved):
 - sectors(领域,粗分):{sectors}
@@ -834,7 +956,7 @@ SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器�
   winners(中标单位名称里要含的词);capacity_min / capacity_max(规模即日处理或供水能力的下限 / 上限,一律折成 m³/日:1 万吨/日 = 10000,1 MLD = 1000,
   1 L/s = 86.4;「5000m3/d 以上」= capacity_min 5000);sectors 就是它的「类别」;时间按中标时间。合同类型、承包模式、规模、金额不要放进 keywords
   (金额条件系统按提问自己读)。
-- 指标(measure,语义层;只能取这些 id,只问数量、清单的给 count):{measures}。问这些指标的一律是 award(除非明说查线索、商机)。
+- 指标(measure,语义层;只能取这些 id,只问数量、清单的给 count):{measures}。问这些指标的一律是括号里写的对象(除非明说查线索、商机)。
 - 算法(agg):{aggs};没说的给 null(系统用指标的缺省)。「平均评标时间」= measure eval_days、agg mean;「中标金额与招标金额什么比例」= price_ratio。
 - 给了「上一个问题」时:这一个没说查什么的,对象沿用上一个;以「那」「其中」开头或「……呢」这样的短句,条件沿用上一个,只换这一句说到的(系统会补,你只按这一句填)。
 - 时间:相对窗口用 days(最近 N 天,按发现时间 / 日期;「近三年」= 1095)或 future_days(未来 N 天,只对时间节点有意义);绝对区间用 from / to(YYYY-MM-DD)。今天是 {today}。
@@ -852,7 +974,7 @@ GUIDE = """输出格式:只输出一个 JSON 对象,不要任何其他文字。�
  "stages": [], "tracked": null, "status": [], "relevant": null, "days": 30, "from": null, "to": null, "future_days": null,
  "kinds": [], "keywords": [], "contract_types": [], "deliveries": [], "assets": [], "winner_countries": [], "winners": [], "capacity_min": null, "capacity_max": null,
  "measure": "count", "agg": null, "group_by": "country", "limit": 50, "unresolved": []}
-没有的字段给空数组或 null;object 只能取 lead / opportunity / milestone / report / award;intent 只能取 count / list / chart / report / help。"""
+没有的字段给空数组或 null;object 只能取 lead / opportunity / milestone / report / award / country;intent 只能取 count / list / chart / report / help。"""
 
 SCHEMA = {
     "type": "object",
@@ -951,6 +1073,16 @@ def from_model(data: dict, today: date, q: str = "", force_object: str | None = 
     if not ms and mm and mm["id"] != "count":
         ms = [{"id": mm["id"], "agg": data.get("agg") if data.get("agg") in mm["aggs"] else mm["aggs"][0]}]
     p["object"] = force_object if force_object in OBJECTS else _measure_object(ms, q, p["object"])  # 问评标天数、招标估价的,模型当成线索也改查已中标项目(10-13 用户反映)
+    if p["object"] == "country" or rules_parse(q, today, force_object)["object"] == "country":  # 国别(营商环境)的条件按提问读(门槛、外企参标、排序),模型多给的国名补上
+        cp = rules_parse(q, today, "country")
+        cp["parsed_by"], cp["model"] = "model", p["model"]
+        for c in _strs(data.get("countries")):
+            iso = geo.iso3(c)
+            if iso and all(x["iso3"] != iso for x in cp["filters"]["countries"]):
+                cp["filters"]["countries"].append({"iso3": iso, "name": geo.name_zh(iso)})
+        if cp["filters"]["countries"] and cp["intent"] == "count":
+            cp["intent"] = "list"
+        return finish(cp)
     award = p["object"] == "award"
     p["intent"] = data.get("intent") if data.get("intent") in INTENTS else "list"
     unresolved = _strs(data.get("unresolved"))
@@ -1047,7 +1179,8 @@ def from_model(data: dict, today: date, q: str = "", force_object: str | None = 
 
 
 FINISH_KEYS = {"对象", "国别", "区域", "类别", "领域", "资金来源", "我方阶段", "处理状态", "是否相关", "类型", "术语", "合同类型", "承包模式", "主体工程", "中标价",
-               "中标单位国别含", "中标单位含", "规模", "名称或中标单位含", "标题或摘要含", "分组", "呈现", "指标"}
+               "中标单位国别含", "中标单位含", "规模", "名称或中标单位含", "标题或摘要含", "分组", "呈现", "指标",
+               "市场分级", "外企参标", "门槛", "排序"}
 
 
 def finish(p: dict) -> dict:
@@ -1105,6 +1238,26 @@ def finish(p: dict) -> dict:
             u.append(["时间", f"未来 {f['future_days']} 天"])
     if award:  # 已中标项目的时间是中标时间
         u = [["中标时间", x[1]] if x[0] == "时间" else x for x in u]
+    if p["object"] == "country":
+        if f.get("tiers"):
+            u.append(["市场分级", "、".join(f["tiers"])])
+        if f.get("foreign"):
+            u.append(["外企参标", "无限制" if f["foreign"] == ["无限制"] else "、".join(f["foreign"])])
+        if f.get("metric") and measure_of(f["metric"]["id"]):
+            m, x = measure_of(f["metric"]["id"]), f["metric"]
+            num = lambda n: f"{n:g}" + ("%" if m["unit"] == "%" else " " + m["unit"])  # noqa: E731
+            u.append(["门槛", m["name"] + ("在 " + num(x["min"]) + " 至 " + num(x["max"]) + " 之间" if x["min"] is not None and x["max"] is not None
+                                          else "低于 " + num(x["max"]) if x["max"] is not None else "高于 " + num(x["min"]))])
+        if p.get("measures"):
+            u.append(["指标", "、".join(measure_of(x["id"])["name"] for x in p["measures"])])
+        o = p.get("order")
+        if o and measure_of(o["id"]):
+            u.append(["排序", measure_of(o["id"])["name"] + ("从高到低" if o["dir"] == "desc" else "从低到高")])
+        u.append(["呈现", "单国营商环境" if len(f["countries"]) == 1 else ("数一下,附国别表" if p["intent"] == "count" else "国别表")
+                  + "(世界银行 B-READY 2025;没覆盖的国家写明)"])
+        p["understood"] = u
+        p["scope_note"] = ""
+        return p
     if p.get("measures"):
         u.append(["指标", measure_label(p["measures"])])
     if p["group_by"]:
@@ -1133,7 +1286,11 @@ def _prev(prev) -> dict | None:
                "winner_countries": [geo.name_zh(geo.iso3(c)) for c in _strs(pf.get("winner_countries")) if geo.iso3(c)],
                "winners": [w[:60] for w in _strs(pf.get("winners"))][:5], "keywords": [w[:60] for w in _strs(pf.get("keywords"))][:5],
                "days": int(pf["days"]) if num(pf.get("days")) and 0 < pf["days"] <= 3660 else None, "from": _iso(pf.get("from")), "to": _iso(pf.get("to")),
-               "price": None, "capacity": None}
+               "price": None, "capacity": None,
+               "tiers": lst("tiers", v.market_tiers), "foreign": lst("foreign", ["无限制", "部分招标有限制", "全部招标有限制", "说法不一"]), "metric": None}
+    mt = pf.get("metric") if isinstance(pf.get("metric"), dict) else {}
+    if prev["object"] == "country" and measure_of(mt.get("id")) and (num(mt.get("min")) is not None or num(mt.get("max")) is not None):
+        f["metric"] = {"id": mt["id"], "min": num(mt.get("min")), "max": num(mt.get("max"))}
     pr, cap = pf.get("price") if isinstance(pf.get("price"), dict) else {}, pf.get("capacity") if isinstance(pf.get("capacity"), dict) else {}
     cur = pr.get("currency") if pr.get("currency") in [c for c, _ in PRICE_CUR] else None
     if cur and (num(pr.get("min")) or num(pr.get("max"))):
@@ -1146,7 +1303,9 @@ def _prev(prev) -> dict | None:
         if m and prev["object"] in m["of"] and x.get("agg") in m["aggs"]:
             ms.append({"id": m["id"], "agg": x["agg"]})
     gb = prev.get("group_by") if prev.get("group_by") in GROUPS[prev["object"]] else None
-    return {"object": prev["object"], "q": str(prev.get("q") or "")[:MAX_Q], "filters": f, "measures": ms[:3], "group_by": gb}
+    od = prev.get("order") if isinstance(prev.get("order"), dict) else {}
+    order = {"id": od["id"], "dir": od["dir"]} if prev["object"] == "country" and measure_of(od.get("id")) and od.get("dir") in ("asc", "desc") else None
+    return {"object": prev["object"], "q": str(prev.get("q") or "")[:MAX_Q], "filters": f, "measures": ms[:3], "group_by": gb, "order": order}
 
 
 def _follow_up(q: str) -> bool:
@@ -1159,15 +1318,22 @@ def _inherit(p: dict, prev: dict, q: str) -> None:
     """接着问:这一句没说的条件、指标、分组沿用上一问的(同一个对象时),「理解为」里写明沿用了哪几项。"""
     f, pf, got = p["filters"], prev["filters"], []
     for k in INHERIT:
+        if k in ("tiers", "foreign", "metric") and f.get("countries"):  # 「那吉尔吉斯斯坦呢」问的是这一国本身,不按上一问的筛
+            continue
+        if k == "countries" and p["object"] == "country" and (f.get("tiers") or f.get("foreign") or f.get("metric")):  # 「那市场国别呢」换成按条件列国别
+            continue
         if not f.get(k) and pf.get(k) and (p["object"] == "award" or k not in ("contract_types", "deliveries", "assets", "winner_countries", "winners", "price", "capacity")):
             f[k] = pf[k]
             got.append(INHERIT_ZH[k])
     if not (f.get("days") or f.get("from") or f.get("to") or f.get("future_days")) and (pf.get("days") or pf.get("from") or pf.get("to")):
         f["days"], f["from"], f["to"] = pf.get("days"), pf.get("from"), pf.get("to")
         got.append(INHERIT_ZH["time"])
-    if not p["measures"] and prev["measures"]:
+    if (not p["measures"] or p.pop("measure_default", False)) and prev["measures"]:
         p["measures"] = prev["measures"]
         got.append(INHERIT_ZH["measures"])
+    if p["object"] == "country" and not p.get("order") and prev.get("order") and not f.get("countries"):
+        p["order"] = prev["order"]
+        got.append("排序")
     if not p["group_by"] and prev["group_by"] and not re.search(r"不分|不用分|合起来|总的", q):
         p["group_by"] = prev["group_by"]
         got.append(INHERIT_ZH["group_by"])
