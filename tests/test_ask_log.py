@@ -21,6 +21,7 @@ def _own_terms():
     yield
     A.set_terms(None)
     A.set_phrases(None)
+    A.set_learned(None)
 
 
 def _back(q, prev=None):
@@ -227,13 +228,13 @@ def test_portal_ask_back_loosening_and_feedback():
             # 「项目」没说清:照线索答,上面给「已中标项目」「我们跟踪的商机」两个按钮
             page.goto(base + "/index.html?q=" + quote("阿塞拜疆有哪些项目"))
             page.wait_for_function(done, arg=1, timeout=15000)
-            a = page.locator(".answer").nth(0)
+            a = page.locator("#a1")
             note = a.locator(".ask-back").inner_text()
             assert "「项目」可以指招标线索、已中标项目或我们跟踪的商机,这次按招标线索算的" in note and "已中标项目" in note and "我们跟踪的商机" in note
             assert a.locator(".a-body tbody tr").count() == 3
             a.locator(".ask-back button", has_text="我们跟踪的商机").click()
             page.wait_for_function(done, arg=2, timeout=15000)
-            a2 = page.locator(".answer").nth(1)
+            a2 = page.locator("#a2")
             assert a2.locator(".a-q").inner_text() == "阿塞拜疆有哪些项目(只看商机)" and "对象:商机" in a2.locator(".understood").inner_text() and a2.locator(".ask-back").count() == 0
             # 0 条:去掉一个条件(这里是关键词)再查,上面写明
             page.fill("#q", "阿塞拜疆标题含「不存在的词」的线索")
@@ -251,15 +252,17 @@ def test_portal_ask_back_loosening_and_feedback():
             a.locator(".a-fb button", has_text="答错了").click()
             a.locator(".a-fb textarea").fill("我想看已中标项目")
             a.locator(".a-fb button", has_text="提交").click()
-            a.locator(".a-fb", has_text="进了错题本").wait_for(timeout=15000)
+            a.locator(".a-fb", has_text="下面按你的说明重答").wait_for(timeout=15000)
+            page.wait_for_function("() => { const r = document.querySelector('.answer.refix'); return r && r.querySelector('.a-fb'); }", timeout=15000)
+            assert "模型现在用不了,没法按你的说明重新理解" in page.locator(".answer.refix").inner_text()  # 没配模型:照旧进错题本
             a2.locator(".a-fb button", has_text="答对了").click()
             a2.locator(".a-fb", has_text="记下了").wait_for(timeout=15000)
-            rows = {b.get("ask_log", r, "question"): r for r in b.rows("ask_log")}
+            rows = {b.get("ask_log", r, "question"): r for r in reversed(b.rows("ask_log"))}  # 同一句(重答)取先问的那行
             r1, r2 = rows["阿塞拜疆有哪些项目"], rows["阿塞拜疆有哪些项目(只看商机)"]
             assert (b.get("ask_log", r1, "verdict"), b.get("ask_log", r1, "status"), b.get("ask_log", r1, "note")) == ("答错了", "待看", "我想看已中标项目")
             assert "Ganja WWTP EOI" in b.get("ask_log", r1, "result") and b.get("ask_log", r1, "asker") == "管理员 <admin@example.org>"
             assert b.get("ask_log", r2, "verdict") == "答对了" and b.get("ask_log", r2, "expected").startswith("对象:商机")
-            assert len(rows) == 4
+            assert len(b.rows("ask_log")) == 5  # 四问 + 一次重答
             if os.environ.get("PORTAL_SHOTS"):
                 for i, nm in ((0, "助手_歧义与反馈"), (2, "助手_零条放宽")):
                     page.locator(".answer").nth(i).screenshot(path=str(Path(os.environ["PORTAL_SHOTS"]) / f"{nm}.png"))

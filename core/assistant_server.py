@@ -27,6 +27,7 @@ import sys
 import threading
 import time
 import traceback
+from collections import OrderedDict
 from datetime import date, datetime
 from hmac import compare_digest as hmac_compare
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -75,6 +76,8 @@ class Assistant:
         self.law_lib = law.Library(self.db) if self.terms_base is not None else None  # 法规条文(真实库;十分钟内不重读)
         self.rechecked: str | None = None  # 错题本复查过的那天
         self.who = ask_log.who  # 登录 cookie → 提问人(测试可换)
+        self.raws: OrderedDict[str, dict] = OrderedDict()  # 提问编号 → 那次模型给的解析(JSON);用户对当场重答点了「答对了」时记进错题本(只留最近 1000 问)
+        self._raws_lock = threading.Lock()
 
     @property
     def today(self) -> date:
@@ -144,6 +147,7 @@ class Assistant:
             assistant.set_terms([{p: b.get("term", r, p) for p in props if b.has("term", p)} for r in b.rows("term")])
             # 语义层说法(指标、算法、主体工程、法规问法、排放指标的口语):表没建时用本体的
             assistant.set_phrases([{p: b.get("phrase", r, p) for p in ("target", "kind", "words")} for r in b.rows("phrase")] if "phrase" in b.t else None)
+            assistant.set_learned(ask_log.learned_rows(b))  # 错题本里学会的(人改成「不改」或清空「学到的解析」的不再用)
         except Exception as e:  # noqa: BLE001  读表出错:沿用上一次读到的(或本体初始词),下次重连
             self._terms_db = None
             self.log(f"读行业术语表出错,沿用上一次的:{type(e).__name__}: {e}")
@@ -173,12 +177,17 @@ class Assistant:
             self.log(f"连不上表格,这一问不记:{type(e).__name__}: {e}")
             return False
 
-    def log_ask(self, q: str, prev: dict | None, p: dict, cookie: str | None) -> str | None:
-        """A44:记这一问(另起线程写表,不拖慢回答)→ 这一行的编号;没建表 → None。"""
+    def log_ask(self, q: str, prev: dict | None, p: dict, cookie: str | None, raw: dict | None = None) -> str | None:
+        """A44:记这一问(另起线程写表,不拖慢回答)→ 这一行的编号;没建表 → None。raw:模型给的解析,留着备用户认可重答时记进错题本。"""
         if not q.strip() or not self.can_log():
             return None
         now = datetime.now(self.tz).replace(tzinfo=None)
         key = ask_log.new_key(now)
+        if isinstance(raw, dict):
+            with self._raws_lock:
+                self.raws[key] = raw
+                while len(self.raws) > 1000:
+                    self.raws.popitem(last=False)
         prev_q = str((prev or {}).get("q") or "") if any(x[0] == "沿用上一问" for x in p.get("understood") or []) else ""
 
         def run():
@@ -202,12 +211,27 @@ class Assistant:
             self.log(f"错题本复查出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
             return None
 
-    def ask(self, q: str, prev: dict | None = None) -> dict:
-        """prev:页面带来的上一问的计划(接着问时沿用对象、条件;assistant.plan 逐项校验)。"""
+    def learn(self, key: str, fixes: str, q: str, prev_q: str, understood: str) -> bool:
+        """用户对当场重答点了「答对了」:原来那一问(fixes)记下这次重答的解析,马上生效(不等重读表)。"""
+        with self._raws_lock:
+            raw = self.raws.get(key)
+        if not raw:
+            return False
+        prev_q = prev_q if "沿用上一问" in understood else ""  # 没沿用上一问的,学成单问(同记提问 A44)
+        assistant.add_learned(q, prev_q, raw)
+        try:
+            return ask_log.learn(self.db(), fixes, raw, understood)
+        except Exception as e:  # noqa: BLE001  表没写上:这次进程里已经学会,重启后要重教
+            self.log(f"错题本记「学到的解析」出错:{type(e).__name__}: {e}")
+            return False
+
+    def ask(self, q: str, prev: dict | None = None, fix: dict | None = None) -> dict:
+        """prev:页面带来的上一问的计划(接着问时沿用对象、条件;assistant.plan 逐项校验)。fix:答错了以后按说明当场重答({understood, note})。
+        返回的计划里 _raw 是模型给的解析(接口不发给页面,见 do_POST)。"""
         self._maybe_forgive()
         self.refresh_terms()
         try:
-            p = assistant.plan(q, self.today, self.clf, prev)
+            p = assistant.plan(q, self.today, self.clf, prev, fix)
         except Exception as e:  # noqa: BLE001  解析出错也要给页面一个能用的计划
             self.log(f"助手解析出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
             p = assistant.rules_parse(q, self.today) if q.strip() else assistant.finish(assistant.empty_plan())
@@ -386,6 +410,8 @@ def make_handler(bot: Assistant):
                 try:
                     out = ask_log.feedback(bot.db(), str(data.get("key") or "")[:40], str(data.get("verdict") or ""), str(data.get("note") or ""),
                                            str(data.get("result") or ""), info)
+                    if out.get("ok") and data.get("verdict") == "答对了" and data.get("fixes"):  # 对当场重答点的「答对了」:原来那一问学会这次的理解
+                        out["learned"] = bot.learn(str(data.get("key") or "")[:40], str(data["fixes"])[:40], info["q"], info["prev_q"], info["understood"])
                 except ValueError as e:
                     out = {"ok": False, "error": str(e)}
                 except Exception as e:  # noqa: BLE001
@@ -410,10 +436,16 @@ def make_handler(bot: Assistant):
                 self._send(200, out)
                 return
             prev = data.get("prev") if isinstance(data.get("prev"), dict) else None
-            out = bot.ask(q, prev)
+            member = (self.headers.get("X-Portal-Auth") == "1" or bot.allow_link_without_auth) and not self._outsider()
+            fx_ = data.get("fix") if isinstance(data.get("fix"), dict) and member else None  # 当场重答只给登录的内部帐号
+            fix = {"understood": str(fx_.get("understood") or "")[:600], "note": str(fx_.get("note") or "")[:500]} if fx_ and str(fx_.get("note") or "").strip() else None
+            out = bot.ask(q, prev, fix)
+            raw = out.pop("_raw", None)
             out["ok"] = True
-            if (self.headers.get("X-Portal-Auth") == "1" or bot.allow_link_without_auth) and not self._outsider():  # 游客的提问不记
-                out["log_key"] = bot.log_ask(q, prev, out, self.headers.get("Cookie"))
+            if fix:
+                out["refixed"] = True
+            if member:  # 游客的提问不记
+                out["log_key"] = bot.log_ask(q, prev, out, self.headers.get("Cookie"), raw)
             self._send(200, out)
 
     return H
