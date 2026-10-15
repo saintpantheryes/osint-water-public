@@ -15,19 +15,19 @@
 <main>
   <h1>线索总览</h1>
   <div class="filters" id="filters">
-    <div class="frow"><b>区域</b><span id="fRegion" class="frow" style="padding:0"></span></div>
-    <div class="frow"><b>国别</b><span id="fCountry" class="frow" style="padding:0"></span><button type="button" class="chip-btn more" id="moreC">更多国家 ▾</button></div>
-    <div class="frow" id="rowMore" style="display:none"><b></b><span id="fCountry2" class="frow" style="padding:0"></span></div>
-    <div class="frow"><b>领域</b><span id="fSector" class="frow" style="padding:0"></span></div>
-    <div class="frow"><b>类别</b><span id="fCat" class="frow" style="padding:0"></span></div>
-    <div class="frow"><b>资金来源</b><span id="fFunder" class="frow" style="padding:0"></span></div>
-    <div class="frow"><b>时间</b><span id="fWin" class="frow" style="padding:0"></span></div>
-    <div class="frow"><b>搜索</b><input id="fText" placeholder="搜标题、项目名、中文摘要或线索号" size="30" aria-label="搜线索"><span class="muted" id="fNote" style="margin-left:auto"></span></div>
+    <div class="frow"><b>区域</b><span id="fRegion" class="frow"></span></div>
+    <div class="frow"><b>国别</b><span id="fCountry" class="frow"></span><button type="button" class="chip-btn more" id="moreC">更多国家 ▾</button></div>
+    <div class="frow" id="rowMore" style="display:none"><b></b><span id="fCountry2" class="frow"></span></div>
+    <div class="frow"><b>领域</b><span id="fSector" class="frow"></span></div>
+    <div class="frow"><b>类别</b><span id="fCat" class="frow"></span></div>
+    <div class="frow"><b>资金来源</b><span id="fFunder" class="frow"></span></div>
+    <div class="frow"><b>时间</b><span id="fWin" class="frow"></span></div>
+    <div class="frow"><b>搜索</b><input id="fText" placeholder="搜标题、项目名、中文摘要或线索号" size="30" aria-label="搜线索"><span class="muted push" id="fNote"></span></div>
   </div>
   <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
   <div class="home">
     <div class="col">
-      <h2>漏斗:信源采集 → 相关 → 归入商机 → 归入跟踪中的商机 → 写进报告(数线索条数,每级是上一级的子集;点一级,右边出清单)<a href="analysis.html" class="more" style="display:inline;margin-left:10px;font-weight:400">多维度分析与每日简报 →</a></h2>
+      <h2>漏斗:信源采集 → 相关 → 归入商机 → 归入跟踪中的商机 → 写进报告(数线索条数,每级是上一级的子集;点一级,右边出清单)<a href="analysis.html" class="more inline">多维度分析与每日简报 →</a></h2>
       <div class="panel"><div id="funnel" class="chart"></div><p class="muted small" id="funnel-note"></p></div>
       <h2>各国线索与商机(点国家看国别概况;滚轮缩放,<a href="#" id="mapReset">复位</a>)</h2>
       <div class="panel"><div id="map" class="chart tall"></div></div>

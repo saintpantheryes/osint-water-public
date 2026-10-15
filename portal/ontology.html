@@ -13,16 +13,16 @@
 <div id="nav"></div>
 <script>document.getElementById("nav").innerHTML = P.nav("ontology.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
-  <div class="toolbar"><h1 style="margin:0">本体</h1><span id="ver" class="muted"></span>
-    <span class="muted small" style="margin-left:auto">这页只读:系统里有哪些对象、它们之间的关系、每个选项的定义与口径,全部按本体文件显示;要改本体暂时还是改文件(下一步做页面上改)</span></div>
+  <div class="toolbar"><h1>本体</h1><span id="ver" class="muted"></span>
+    <span class="muted small push">这页只读:系统里有哪些对象、它们之间的关系、每个选项的定义与口径,全部按本体文件显示;要改本体暂时还是改文件(下一步做页面上改)</span></div>
   <div id="cards"></div>
   <div class="onto">
     <div class="col wide">
       <div class="panel">
-        <div class="toolbar" style="margin:0 0 6px"><h2 style="margin:0">对象与关系</h2><span class="muted small">点一个对象看它的属性;箭头是「谁关联谁」,线上是关联的名字</span></div>
-        <div id="objs" class="chips" style="margin-bottom:6px"></div>
+        <div class="toolbar tight"><h2>对象与关系</h2><span class="muted small">点一个对象看它的属性;箭头是「谁关联谁」,线上是关联的名字</span></div>
+        <div id="objs" class="chips tight"></div>
         <div id="graph" class="chart tall"></div>
-        <div class="legend small"><span><i style="background:#0e6ba8"></i>公开数据(机器采集、整理)</span><span><i style="background:#15803d"></i>业务数据(人填)</span><span><i style="background:#fff;border:2px solid #111827;width:10px;height:10px"></i>核心对象</span></div>
+        <div class="legend small"><span><i class="sw-c1"></i>公开数据(机器采集、整理)</span><span><i class="sw-c5"></i>业务数据(人填)</span><span><i class="sw-core"></i>核心对象</span></div>
       </div>
     </div>
     <div class="col"><div class="panel" id="detail"><p class="muted">读取中…</p></div></div>
@@ -111,7 +111,7 @@
     const o = O.objects.find((x) => x.id === oid);
     if (!o) { $("detail").innerHTML = '<p class="muted">点左边的对象</p>'; return; }
     const open = P.cfg && P.cfg.tables && P.cfg.tables[oid] ? ' <a class="open" href="' + P.tableUrl(oid) + '" target="_blank" rel="noopener">在表格里打开 ↗</a>' : "";
-    let h = '<h2 style="margin:0 0 4px">' + esc(o.name) + ' <span class="muted small">' + esc(o.id) + "</span>" + open + "</h2>";
+    let h = '<h2 class="tight">' + esc(o.name) + ' <span class="muted small">' + esc(o.id) + "</span>" + open + "</h2>";
     h += '<p class="small"><span class="tag" style="background:' + (BAND[o.band] || "#6b7280") + ';color:#fff">' + (o.band === "business" ? "业务数据" : "公开数据") + "</span>" + (o.core ? '<span class="tag">核心对象</span>' : "") + "</p>";
     h += "<p>" + esc(o.definition) + "</p><p class=\"small\"><b class=\"muted\">标识</b> " + esc(o.key) + "</p>";
     if (o.states) {
@@ -126,7 +126,7 @@
     for (const by of ["ai", "human", "derived"]) {
       const ps = o.properties.filter((p) => p.by === by);
       if (!ps.length) continue;
-      h += '<h4 class="muted small" style="margin:8px 0 2px">' + BY[by] + "</h4><table class=\"props\"><tbody>" + ps.map((p) => {
+      h += '<h4 class="muted small sub">' + BY[by] + "</h4><table class=\"props\"><tbody>" + ps.map((p) => {
         const en = (p.type === "enum" || p.type === "enums") && p.taxonomy ? '<div class="small">' + taxLink(p.taxonomy, "选项:" + p.enum.join(" / ")) + "</div>" : "";
         const extra = [p.required ? "必填" : "", p.format ? "写法:" + p.format : "", p.where ? "在哪算:" + p.where : "", p.note || ""].filter(Boolean).join(";");
         return "<tr><td><b>" + esc(p.name) + "</b><div class=\"muted small\">" + esc(p.id) + "</div></td><td class=\"small\">" + typeZh(p.type) + en + (extra ? '<div class="muted">' + esc(extra) + "</div>" : "") + "</td></tr>";
@@ -146,14 +146,14 @@
       const n = t.groups.reduce((s, g) => s + g.values.length, 0);
       return '<details class="sec panel" id="tax-' + esc(tid) + '"><summary>' + esc(t.name) + ' <span class="muted small">' + esc(tid) + " · " + n + " 个值 · 用在 " + "</span>" + '<span class="small">' + used + "</span></summary>" +
         (t.note ? '<p class="muted small">' + esc(t.note) + "</p>" : "") +
-        t.groups.map((g) => (t.groups.length > 1 || g.name !== "全部" ? "<h4 class=\"small\" style=\"margin:8px 0 2px\">" + esc(g.name) + "</h4>" : "") +
+        t.groups.map((g) => (t.groups.length > 1 || g.name !== "全部" ? "<h4 class=\"small sub\">" + esc(g.name) + "</h4>" : "") +
           P.tableHtml(["值", "英文键", "定义", "边界", "示例"], g.values.map((v) => [v.v + (v.parent ? "(上级:" + v.parent + ")" : ""), v.code, v.def || "", v.boundary || "", v.example || ""]))).join("") + "</details>";
     }).join("");
     wire($("tax"));
   }
   function drawGlossary() {
-    $("glossary").innerHTML = "<h2 style=\"margin-top:0\">口径(同一个词在页面、报告、表格视图里只定一次)</h2>" + P.tableHtml(["口径", "含义", "用在哪"], Object.entries(O.glossary).map(([k, g]) => [g.term + "(" + k + ")", g.means + (g.example ? ";示例 " + g.example : ""), (g.used_in || []).join("、")]));
-    $("groupings").innerHTML = Object.entries(O.groupings).map(([gid, g]) => '<div class="panel"><h3 style="margin-top:0">' + esc(g.name) + ' <span class="muted small">' + esc(gid) + " · 作用于 " + (g.over || []).map(propName).join("、") + "</span></h3><p class=\"small\">" + esc(g.def) + "</p>" +
+    $("glossary").innerHTML = "<h2 class=\"mt0\">口径(同一个词在页面、报告、表格视图里只定一次)</h2>" + P.tableHtml(["口径", "含义", "用在哪"], Object.entries(O.glossary).map(([k, g]) => [g.term + "(" + k + ")", g.means + (g.example ? ";示例 " + g.example : ""), (g.used_in || []).join("、")]));
+    $("groupings").innerHTML = Object.entries(O.groupings).map(([gid, g]) => '<div class="panel"><h3 class="mt0">' + esc(g.name) + ' <span class="muted small">' + esc(gid) + " · 作用于 " + (g.over || []).map(propName).join("、") + "</span></h3><p class=\"small\">" + esc(g.def) + "</p>" +
       (g.groups ? P.tableHtml(["组", "英文键", "出资方文本里包含任一个即归这组"], g.groups.map((x) => [x.v, x.code, (x.patterns || []).join("、")])) : "") +
       '<p class="muted small">' + (g.other ? "有值但不属于任何一组 → 「" + esc(g.other) + "」;" : "") + (g.empty ? "没有值 → 「" + esc(g.empty) + "」" : "") + (g.note ? "<br>" + esc(g.note) : "") + "</p></div>").join("");
   }
@@ -193,7 +193,7 @@
     $("semMeasures").innerHTML = P.tableHtml(["指标", "单位", "算法(第一个是缺省)", "缺数时怎么说", "说法"],
       ms.map((x) => [x.target, unit(x.m), (x.m.aggs || []).map(x.aggName).join("、"), x.m.missing || "", shown(x)])) +
       '<p class="muted small">加说法、删说法在表里改;要加新指标(程序得会算)仍改本体文件。</p>';
-    $("semWords").innerHTML = KIND_ORDER.slice(1).map((k) => '<div class="panel"><h3 style="margin-top:0">' + esc(k) + "</h3>" +
+    $("semWords").innerHTML = KIND_ORDER.slice(1).map((k) => '<div class="panel"><h3 class="mt0">' + esc(k) + "</h3>" +
       P.tableHtml(["指向", "说法"], seed.filter((x) => x.kind === k).map((x) => [x.target, shown(x)])) + "</div>").join("") +
       (bad.length ? '<div class="note n-warn">表里这 ' + bad.length + " 行的指向本体里没有,助手不用:" + esc(bad.map((r) => (P.get("phrase", r, "kind") || "未填类别") + " · " + (P.get("phrase", r, "target") || "未填指向")).join(";")) + "。指向要照上面的名字写。</div>" : "");
     // 行业术语:平时读 Teable「行业术语」表(助手也读它);表没建、读不到(游客)时显示本体里的初始词

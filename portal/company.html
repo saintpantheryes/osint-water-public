@@ -12,7 +12,7 @@
 <div id="nav"></div>
 <script>document.getElementById("nav").innerHTML = P.nav("me.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
-  <h1>我方资料 <span class="muted" style="font-size:14px;font-weight:400">(<a href="me.html">我的</a> › 我方资料)</span></h1>
+  <h1>我方资料 <span class="muted h-sub">(<a href="me.html">我的</a> › 我方资料)</span></h1>
   <p class="muted">我们公司自己的资质证书、历史业绩与其他公司资料,一行一项。勾了「写进报告」的,生成国别报告、项目报告的<b>内部版</b>时按适用国别与领域挑出来附在正文后(公开版不附,游客看不到)。适用国别留空 = 全球通用;适用领域留空 = 各领域都适用。</p>
   <div class="two">
     <div class="col">
@@ -20,23 +20,23 @@
         <div class="row"><label>类别</label><select id="cKind"></select></div>
         <div class="row"><label>名称</label><input id="cName" placeholder="如:市政公用工程施工总承包特级 / 某国净水厂 EPC"></div>
         <div class="row"><label>内容</label><textarea id="cContent" rows="4" placeholder="资质:发证机关、等级、有效期;业绩:项目概况、合同额、工期、业主、我方角色"></textarea></div>
-        <div class="row"><label>适用领域</label><span id="cSectors" class="frow" style="padding:0;flex:1"></span></div>
-        <div class="row"><label>适用国别</label><span id="cCountries" class="frow" style="padding:0;flex:1"></span></div>
+        <div class="row"><label>适用领域</label><span id="cSectors" class="frow grow"></span></div>
+        <div class="row"><label>适用国别</label><span id="cCountries" class="frow grow"></span></div>
         <div class="row"><label></label><select id="cCountryPick" class="inline"><option value="">+ 加一个国别</option></select></div>
         <div class="row"><label>年份</label><input id="cYear" type="number" placeholder="业绩的完工年 / 资质的发证年" min="1900" max="2100"></div>
         <div class="row"><label>金额</label><input id="cAmount" placeholder="原文怎么写就怎么记,如 1.2 亿美元"></div>
         <div class="row"><label>附件</label><input id="cFile" type="file"></div>
-        <div class="row"><label>写进报告</label><label style="flex:1;color:inherit"><input id="cFor" type="checkbox" checked> 国别 / 项目报告的内部版附上它</label></div>
+        <div class="row"><label>写进报告</label><label class="check"><input id="cFor" type="checkbox" checked> 国别 / 项目报告的内部版附上它</label></div>
         <div class="row"><label>备注</label><input id="cNote" placeholder="(可不填)"></div>
         <div class="row"><label></label><button class="primary" id="cSave">保存</button><button id="cCancel" style="display:none">取消</button><span class="muted" id="cMsg"></span></div>
       </div>
     </div>
     <div class="col wide">
       <div class="filters">
-        <div class="frow"><b>类别</b><span id="fKind" class="frow" style="padding:0"></span></div>
-        <div class="frow"><b>领域</b><span id="fSector" class="frow" style="padding:0"></span></div>
+        <div class="frow"><b>类别</b><span id="fKind" class="frow"></span></div>
+        <div class="frow"><b>领域</b><span id="fSector" class="frow"></span></div>
         <div class="frow"><b>国别</b><select id="fCountry" class="inline"><option value="">全部国别</option></select></div>
-        <div class="frow"><b>搜索</b><input id="fText" placeholder="搜名称、内容" size="18"><span class="muted" id="count" style="margin-left:auto"></span></div>
+        <div class="frow"><b>搜索</b><input id="fText" placeholder="搜名称、内容" size="18"><span class="muted push" id="count"></span></div>
       </div>
       <div class="panel" id="list">读取中…</div>
       <p class="muted">要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开公司资料表 ↗</a></p>

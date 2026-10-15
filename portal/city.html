@@ -19,9 +19,9 @@
     <div class="backbar" id="lrel"></div>
     <div class="filters" id="filters">
       <div class="frow"><b>国别</b><select id="fCountry" aria-label="国别"><option value="">全部国别</option></select></div>
-      <div class="frow"><b>地图按</b><span id="fBy" class="frow" style="padding:0"></span><span class="muted small" id="rangeNote"></span></div>
-      <div class="frow"><b>关联</b><span id="fHas" class="frow" style="padding:0"></span></div>
-      <div class="frow"><b>搜索</b><input id="fText" placeholder="搜城市中文名、英文名或行政区" size="30" aria-label="搜城市"><span class="muted" id="fNote" style="margin-left:auto"></span></div>
+      <div class="frow"><b>地图按</b><span id="fBy" class="frow"></span><span class="muted small" id="rangeNote"></span></div>
+      <div class="frow"><b>关联</b><span id="fHas" class="frow"></span></div>
+      <div class="frow"><b>搜索</b><input id="fText" placeholder="搜城市中文名、英文名或行政区" size="30" aria-label="搜城市"><span class="muted push" id="fNote"></span></div>
     </div>
     <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
     <h2>分布(拖左下角滑块按<span id="byName">人口</span>筛城市,清单跟着变;颜色越深数越大,红圈是有线索或商机;点圆点看这座城市;滚轮缩放,<a href="#" id="mapReset">复位</a>)</h2>
@@ -30,7 +30,7 @@
     <div class="panel" id="rows">读取中…</div>
   </section>
   <section id="one" style="display:none">
-    <div class="toolbar"><a href="city.html" id="back">← 全部城市</a><h1 style="margin:0" id="cname"></h1><span class="muted" id="cname2"></span><span id="openRow" style="margin-left:auto"></span></div>
+    <div class="toolbar"><a href="city.html" id="back">← 全部城市</a><h1 id="cname"></h1><span class="muted" id="cname2"></span><span class="push" id="openRow"></span></div>
     <div class="backbar" id="rel"></div>
     <div id="ccards"></div>
     <div class="tabs" id="tabs"></div>
