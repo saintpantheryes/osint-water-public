@@ -238,24 +238,27 @@
     $("semCards").innerHTML = P.kpiHtml([[ms.length, "指标"], [seed.length - ms.length, "其他指向"], [nWords, "说法"], [terms.length, "行业术语"], [groups.length ? local.length + " / " + groups.length + " 国" : "0", "本国定义"]]
       .map(([n, l]) => ({ label: l, value: String(n) })));
   }
-  /* 错题本(本体 ask_log,v2.26):表「助手提问记录」里点过反馈的;待看、复查不通过的列出来 */
+  /* 错题本(本体 ask_log,v2.26):表「助手提问记录」里点过反馈的;待看、复查不通过的列出来;v2.27 当场改正学会的(学到的解析不空)另列 */
   async function drawLog() {
     const box = $("semLog");
     if (P.isGuest || !P.cfg.tables.ask_log) { box.innerHTML = '<p class="muted">' + (P.isGuest ? "示例里没有错题本。" : "表格「助手提问记录」还没建(管理员跑一次建表命令就有)。") + "</p>"; return; }
     let rows = [];
-    try { rows = await P.records("ask_log", { props: ["question", "verdict", "note", "status", "expected", "recheck", "asked_at", "understood"], orderBy: [{ fieldId: P.f("ask_log", "asked_at"), order: "desc" }] }); }
+    try { rows = await P.records("ask_log", { props: ["question", "verdict", "note", "status", "expected", "recheck", "asked_at", "understood"].concat(P.has("ask_log", "learned") ? ["learned"] : []), orderBy: [{ fieldId: P.f("ask_log", "asked_at"), order: "desc" }] }); }
     catch (e) { P.fail(box, e); return; }
     const g = (r, p) => P.get("ask_log", r, p) || "";
     const right = rows.filter((r) => g(r, "verdict") === "答对了").length, wrong = rows.filter((r) => g(r, "verdict") === "答错了");
     const open = wrong.filter((r) => g(r, "status") === "待看" || !g(r, "status")), failed = rows.filter((r) => /^不通过/.test(g(r, "recheck")));
-    const watched = rows.filter((r) => g(r, "expected") && g(r, "status") !== "不改").length;
+    const watched = rows.filter((r) => g(r, "expected") && g(r, "status") !== "不改").length, learned = rows.filter((r) => g(r, "learned") && g(r, "status") !== "不改");
     $("semOpen5").innerHTML = openLink("ask_log");
     const cards = P.kpiHtml([{ label: "提问", value: String(rows.length) }, { label: "答对了", value: String(right) }, { label: "答错了", value: String(wrong.length) },
-      { label: "待看", value: String(open.length), tone: open.length ? "warn" : "" }, { label: "每天复查", value: String(watched), note: failed.length ? failed.length + " 句不通过" : "" }]);
+      { label: "待看", value: String(open.length), tone: open.length ? "warn" : "" }, { label: "当场学会", value: String(learned.length), note: "同一句以后直接按它答" },
+      { label: "每天复查", value: String(watched), note: failed.length ? failed.length + " 句不通过" : "" }]);
     const list = (rs, head) => P.tableHtml(head, rs.slice(0, 30).map((r) => [g(r, "question"), (g(r, "understood") || "").split("\n").join(";"), g(r, "note") || g(r, "recheck"), P.day(g(r, "asked_at"))]));
     box.innerHTML = cards +
       (failed.length ? '<div class="panel"><h3 class="mt0">复查不通过 ' + failed.length + " 句</h3>" + list(failed, ["提问", "当时的理解", "复查", "提问时间"]) + "</div>" : "") +
-      '<div class="panel"><h3 class="mt0">待看 ' + open.length + " 句</h3>" + (open.length ? list(open, ["提问", "当时的理解", "哪里不对", "提问时间"]) : '<p class="empty">没有待看的错题。</p>') + "</div>";
+      '<div class="panel"><h3 class="mt0">待看 ' + open.length + " 句</h3>" + (open.length ? list(open, ["提问", "当时的理解", "哪里不对", "提问时间"]) : '<p class="empty">没有待看的错题。</p>') + "</div>" +
+      (learned.length ? '<div class="panel"><h3 class="mt0">当场学会 ' + learned.length + ' 句</h3><p class="muted small">答错后写了哪里不对、助手重答、提问人点了「答对了」的。不想再用的,在表里把处理状态改成「不改」。</p>' +
+        P.tableHtml(["提问", "现在的理解", "当时说哪里不对", "提问时间"], learned.slice(0, 30).map((r) => [g(r, "question"), (g(r, "expected") || "").split("\n").join(";"), g(r, "note"), P.day(g(r, "asked_at"))])) + "</div>" : "");
   }
   function drawRules() {
     $("rules").innerHTML = P.tableHtml(["编号", "规则", "内容", "怎么落实", "为什么"], O.rules.map((r) => [r.id, r.name, r.text, r.enforce || "", r.why || r.note || ""]));

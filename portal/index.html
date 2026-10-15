@@ -289,7 +289,7 @@
       const oid = P.linkId(g("opportunity"));
       return [P.day(g("day")), g("kind") || "", P.raw(oid ? '<a href="' + P.oppUrl(oid) + '">' + P.esc(P.text(g("opportunity"))) + "</a>" : P.esc(P.text(g("lead")))), P.text(g("country")), g("status") || "", (g("label") || "").slice(0, 60), P.raw(P.open("milestone", m.id))]; }));
   }
-  const NOUN = { lead: "条线索", opportunity: "个商机", milestone: "个时间节点", report: "份报告", award: "份已中标项目", country: "国国别", law: "部法规" };
+  const NOUN = { lead: "条线索", opportunity: "个商机", milestone: "个时间节点", report: "份报告", award: "份已中标项目", country: "国国别", law: "部法规", city: "座城市" };
   /* 已中标项目的表(与国别概况「已中标项目」页签同样的列):中标价写原币,旁边给约合人民币(后台按汇率折的「折合人民币(万元)」);问了规模的,工程量下面写读出的规模;
      有招标估价的,中标价下面写「招标估价的 87%」;中标时间下面写评标天数与投标家数(有的才写) */
   const CUR_ZH = { USD: "美元", EUR: "欧元", CNY: "元" };
@@ -606,6 +606,47 @@
     fold(body, el, "国");
   }
 
+  /* 城市(本体 city,v2.27):规模以上城市,按国别、人口门槛筛,按人口排;问数量的给卡片再附清单,按国别分的给国别表。
+     没点名国别时忽略国别的城市不算(同城市概况);点名了就照常列 */
+  const people = (n) => (n >= 1e8 ? (n / 1e8).toFixed(2) + " 亿" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString("zh-CN") + " 万" : String(n || 0));
+  async function cityView(plan, body, el) {
+    const f = plan.filters;
+    if (!P.cfg.tables || !P.cfg.tables.city) { body.innerHTML = '<p class="empty">「城市」表还没建(跑一次建表命令后就能问城市)。</p>'; return; }
+    const cids = countryIds(f), conds = [];
+    if (f.countries.length || (f.regions || []).length) conds.push(cids.length ? P.cond("city", "country", "isAnyOf", cids) : P.cond("city", "country", "is", "__none__"));
+    else if (igIds.size) conds.push(P.cond("city", "country", "isNoneOf", [...igIds]));
+    const all = await P.records("city", { filter: P.and(...conds), props: ["name_zh", "name_en", "country", "admin", "population", "lead_count", "opp_count"], orderBy: [{ fieldId: P.f("city", "population"), order: "desc" }] });
+    const pop = (r) => Number(P.get("city", r, "population")) || 0, lo = f.pop ? f.pop.min : null, hi = f.pop ? f.pop.max : null;
+    const rows = all.filter((r) => (lo === null || lo === undefined || pop(r) >= lo) && (hi === null || hi === undefined || pop(r) < hi));
+    if ((plan.order || {}).dir === "asc") rows.reverse();
+    const one = f.countries.length === 1 ? f.countries[0] : null;
+    const more = one && byIso[one.iso3] ? '<a href="country.html?' + new URLSearchParams({ iso: one.iso3, t: "cities" }) + '">在国别概况看' + P.esc(one.name) + "的规模以上城市 →</a>" : '<a href="city.html">城市概况(地图、按人口筛)→</a>';
+    const where = f.countries.length ? f.countries.map((c) => c.name).join("、") : "我们的国别(忽略的不算)";
+    if (!rows.length) {
+      const why = all.length ? where + "有 " + all.length + " 座规模以上城市,人口都不在这个范围(最多的" + P.esc(P.get("city", all[0], "name_zh") || "") + " " + people(pop(all[0])) + ")。"
+        : f.countries.length ? "库里还没有" + P.esc(where) + "的规模以上城市记录(后台每月 1 日补全,新加的国别第二天补;标了忽略的国别不再补)。" : "城市表里还没有记录。";
+      body.innerHTML = '<div class="kpis n2">' + kpiCard("符合条件的城市", ["0", "座"], "") + "</div><p>" + why + "</p><p>" + more + "</p>";
+      return;
+    }
+    const sum = rows.reduce((a, r) => a + pop(r), 0), big = rows.filter((r) => pop(r) >= 1e6).length;
+    const h = ['<div class="kpis n3">' + kpiCard((f.pop ? "符合条件的" : "规模以上") + "城市", [String(rows.length), "座"], where) + kpiCard("合计人口", [people(sum).replace(/ .*$/, ""), people(sum).replace(/^[\d,.]+/, "").trim() || "人"], "") +
+      kpiCard("百万人口以上", [String(big), "座"], "") + "</div>"];
+    const cityLink = (r) => P.raw('<a href="city.html?id=' + encodeURIComponent(r.id) + '">' + P.esc(P.get("city", r, "name_zh") || P.get("city", r, "name_en") || "") + "</a>");
+    if (plan.group_by === "country") {
+      const by = new Map();
+      rows.forEach((r) => { const k = P.text(P.get("city", r, "country")) || "(没挂国别)", x = by.get(k) || { n: 0, pop: 0, top: r }; x.n++; x.pop += pop(r); by.set(k, x); });
+      const list = [...by.entries()].sort((a, b) => b[1].n - a[1].n);
+      h.push('<p class="small">按国别分 ' + list.length + " 国,城市多的在前。</p>" + P.tableHtml(["国别", "城市数", "合计人口", "人口最多的城市"], list.map(([k, x]) => [k, String(x.n), people(x.pop), P.get("city", x.top, "name_zh") || ""])));
+    } else {
+      const lim = Math.min(plan.limit || 50, 200), shown = rows.slice(0, lim);
+      h.push('<p class="small">按人口从' + ((plan.order || {}).dir === "asc" ? "少到多" : "多到少") + "排" + (rows.length > lim ? ",列前 " + lim + " 座(共 " + rows.length + " 座)" : ",共 " + rows.length + " 座") + "。</p>" +
+        P.tableHtml(["城市", "国别", "行政区", "人口", "线索", "商机"], shown.map((r) => [cityLink(r), P.text(P.get("city", r, "country")), P.get("city", r, "admin") || "", people(pop(r)),
+          String(P.get("city", r, "lead_count") || 0), String(P.get("city", r, "opp_count") || 0)])));
+    }
+    body.innerHTML = h.join("") + "<p>" + more + '</p><p class="muted small">规模以上城市:人口达到门槛(缺省 10 万)的城市,人口取 GeoNames 的最新数。</p>';
+    fold(body, el, "座");
+  }
+
   /* 法规(本体 v2.24):排放标准按国别列排放限值(同一国几种口径分开、写明出处条号、待核实的标出);本国定义;别的法规问题请后台按条文作答。
      库里没有这国法规原文的直说没收,不说成「没有规定」 */
   async function lawView(q, plan, body, el) {
@@ -672,7 +713,7 @@
   }
 
   function understoodHtml(plan) {
-    const tag = plan.parsed_by === "model" ? '<span class="tag t-ok" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
+    const tag = plan.parsed_by === "learned" ? '<span class="tag t-ok" title="这一句以前答错过,提问人写了哪里不对、认可了重答的理解;改了表里「助手提问记录」的处理状态为「不改」就不再用">按纠正过的理解</span>' : plan.parsed_by === "model" ? '<span class="tag t-ok" title="由模型(' + P.esc(plan.model || "") + ')把问题翻成条件">模型解析</span>' : '<span class="tag" title="没配模型密钥或模型没结果:按词表解析">词表解析</span>';
     const items = (plan.understood || []).map(([k, v]) => '<span class="chip-btn on static">' + P.esc(k) + ":" + P.esc(v) + "</span>").join("");
     const un = (plan.unresolved || []).length ? '<span class="muted small">没认出来:' + plan.unresolved.map(P.esc).join("、") + "</span>" : "";
     return '<div class="frow understood"><b>理解为</b>' + items + tag + un + "</div>";
@@ -797,8 +838,8 @@
   }
 
   /* prev:上一问(接着问时后台沿用它的对象、条件与指标;「理解为」里写明沿用了哪几项)。返回计划(答对、答错按钮要用) */
-  async function answer(q, el, prev) {
-    let plan = await P.ask(q, prev);
+  async function answer(q, el, prev, fix) {
+    let plan = await P.ask(q, prev, fix);
     if (!plan) return null;
     lastPlan = ["help", "report"].includes(plan.intent) ? lastPlan : { q, object: plan.object, filters: plan.filters, measures: plan.measures || [], group_by: plan.group_by, order: plan.order || null, law: plan.law || null };
     if (prev && (plan.understood || []).some((x) => x[0] === "沿用上一问")) notePrev(q, prev);  // 历史里记下它接的是哪一问,以后点它照样接上
@@ -808,6 +849,11 @@
     wireAskBack(el, plan);
     if (plan.note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<p class="muted small">' + P.esc(plan.note) + "</p>");
     if (plan.scope_note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="note n-warn small">' + P.esc(plan.scope_note) + "</div>");  // 本体 data_scope:不在采集范围的国家
+    if (plan.intent === "help" && plan.unsupported) {  // 问的不在助手会查的几类里:直说,不硬套
+      body.innerHTML = '<div class="note n-warn">这一问问的是「' + P.esc(plan.unsupported) + "」,助手现在还不会查。</div>" +
+        '<p class="small">助手能查:线索、商机、时间节点、报告、已中标项目、营商环境、法规、规模以上城市。要是理解错了,点下面「答错了」写一句你要查什么,助手当场重答。</p>';
+      return plan;
+    }
     if (plan.intent === "help") {
       body.innerHTML = '<p>没听懂这句。可以这样问:</p><ul class="list">' + (plan.examples || []).map((e) => '<li><a href="#" class="ex">' + P.esc(e) + "</a></li>").join("") + "</ul>";
       body.querySelectorAll(".ex").forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); submit(a.textContent, { fresh: true }); }; });
@@ -823,7 +869,8 @@
     if (oid === "award" && !hasAw()) { body.innerHTML = '<p class="empty">「已中标项目」表还没建(跑一次建表命令后就能问中标记录)。</p>'; return plan; }
     body.innerHTML = '<p class="muted">查表中…</p>';
     if (oid === "country") { await countryView(plan, body, el); return plan; }  // 营商环境(世行 B-READY):国别表或单国作答
-    if (oid === "law") { await lawView(q, plan, body, el); return plan; }  // 法规:排放限值、本国定义、条文(v2.24)
+    if (oid === "law") { await lawView(q, plan, body, el); return plan; }
+    if (oid === "city") { await cityView(plan, body, el); return plan; }  // 规模以上城市(v2.27)  // 法规:排放限值、本国定义、条文(v2.24)
     if (["lead", "award", "milestone"].includes(oid) && !(oid === "award" && plan.filters.capacity) && (await countOf(oid, plan.filters)) === 0) {
       const lo = await loosen(plan), u = unitOf(oid);
       el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="note n-warn small loosened">' + (lo
@@ -851,8 +898,21 @@
   }
 
   /* 错题本(本体 ask_log,A45):答完一问,下面给「答对了」「答错了」;答错了可写一句哪里不对。记在表格「助手提问记录」这一问的那一行
-     (助手接口记的;没建表、游客时接口不给编号,这里也不显示) */
-  function feedbackBar(el, plan, prev) {
+     (助手接口记的;没建表、游客时接口不给编号,这里也不显示)。
+     v2.27 当场改正:写了哪里不对的,马上按这句说明重答(下面另起一块);对重答点「答对了」的,原来那一问学会这次的理解(fixes = 原来那一问的编号),
+     同一句以后直接按它答。重答还不对的可以再写、再重答,学到的都记在原来那一问上 */
+  async function refix(el, plan, prev, note, origKey) {
+    const q = el.dataset.q, sub = document.createElement("section");
+    sub.className = "answer refix"; sub.dataset.q = q;
+    sub.innerHTML = '<div class="a-head"><div class="a-q">' + P.esc(q) + '</div><p class="muted small">按你的说明重答:' + P.esc(note) + '</p></div><div class="a-body"><p class="muted">重新理解中…</p></div>';
+    el.after(sub);
+    sub.scrollIntoView({ block: "start", behavior: "smooth" });
+    try {
+      const p2 = await answer(q, sub, prev, { key: origKey, note, understood: (plan.understood || []).map((x) => x[0] + ":" + x[1]).join("\n") });
+      feedbackBar(sub, p2, prev, origKey);
+    } catch (e) { P.fail(sub.querySelector(".a-body"), e); }
+  }
+  function feedbackBar(el, plan, prev, fixes) {
     if (!plan || !plan.log_key) return;
     const bar = document.createElement("div");
     bar.className = "a-fb";
@@ -860,21 +920,24 @@
     el.appendChild(bar);
     const send = async (verdict, note) => {
       const result = (el.querySelector(".loosened") ? el.querySelector(".loosened").innerText + " " : "") + (el.querySelector(".a-body").innerText || "").replace(/\s+/g, " ").slice(0, 300);
-      const r = await P.feedback({ key: plan.log_key, verdict, note: note || "", result, q: el.dataset.q, prev_q: prev && prev.q ? prev.q : "", understood: (plan.understood || []).map((x) => x[0] + ":" + x[1]).join("\n") });
-      if (r && r.ok) bar.innerHTML = '<span class="muted small">' + (verdict === "答对了" ? "记下了,谢谢。以后每天会按这个理解复查一遍。" : "记下了。这一问进了错题本,改好后每天复查。") + "</span>";
-      else throw new Error((r && r.error) || "没记上");
+      const r = await P.feedback({ key: plan.log_key, verdict, note: note || "", result, q: el.dataset.q, prev_q: prev && prev.q ? prev.q : "", understood: (plan.understood || []).map((x) => x[0] + ":" + x[1]).join("\n"),
+        fixes: fixes || "" });
+      if (!r || !r.ok) throw new Error((r && r.error) || "没记上");
+      bar.innerHTML = '<span class="muted small">' + (verdict === "答对了" ? (fixes && r.learned ? "记住了。以后再问这一句,直接按这个理解答;说法差不多的问题也会参考它。" : "记下了,谢谢。以后每天会按这个理解复查一遍。")
+        : note ? "记下了,下面按你的说明重答。" : "记下了。这一问进了错题本,改好后每天复查。") + "</span>";
+      if (verdict === "答错了" && note) refix(el, plan, prev, note, fixes || plan.log_key);
     };
     bar.onclick = async (ev) => {
       const b = ev.target.closest("button");
       if (!b) return;
       if (b.dataset.v === "答对了") { b.disabled = true; try { await send("答对了"); } catch (e) { b.disabled = false; P.toast(e.message || String(e), true); } return; }
       if (b.dataset.v === "答错了") {
-        bar.innerHTML = '<label class="small">哪里不对(可以不写)<textarea rows="2" placeholder="比如:我问的是已中标项目,不是线索"></textarea></label>' +
+        bar.innerHTML = '<label class="small">哪里不对(写了就当场按你说的重答;不写只记进错题本)<textarea rows="2" placeholder="比如:我问的是规模以上城市的个数,不是营商环境"></textarea></label>' +
           '<div class="a-fb-act"><button type="button" class="btn primary" data-go="1">提交</button><button type="button" class="btn quiet" data-no="1">取消</button></div>';
         bar.querySelector("textarea").focus();
         return;
       }
-      if (b.dataset.no) { bar.remove(); feedbackBar(el, plan, prev); return; }
+      if (b.dataset.no) { bar.remove(); feedbackBar(el, plan, prev, fixes); return; }
       if (b.dataset.go) { b.disabled = true; try { await send("答错了", bar.querySelector("textarea").value.trim()); } catch (e) { b.disabled = false; P.toast(e.message || String(e), true); } }
     };
   }

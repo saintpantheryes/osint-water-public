@@ -449,8 +449,8 @@
       if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪,反馈没记上");
       return r.json();
     },
-    async ask(q, prev) {  // prev:上一问的计划(接着问时后台沿用它的对象、条件与指标,见 core/assistant.py 的 plan)
-      const r = await fetch("api/assistant/ask", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(prev ? { q, prev } : { q }) });
+    async ask(q, prev, fix) {  // prev:上一问的计划(接着问时后台沿用它的对象、条件与指标,见 core/assistant.py 的 plan);fix:答错了以后按说明当场重答 {key, note, understood}
+      const r = await fetch("api/assistant/ask", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(Object.assign({ q }, prev ? { prev } : {}, fix ? { fix } : {})) });
       if (r.status === 401 || r.status === 403) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }
       if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪(后台任务没起来或还没更新到这一版);其余页面照常可用");
       if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));

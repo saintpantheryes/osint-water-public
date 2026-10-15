@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from functools import lru_cache
@@ -28,15 +29,16 @@ from core import fx, geo, law, semantic
 ROOT = Path(__file__).resolve().parent.parent
 ONTO_PATH = ROOT / "docs" / "ontology" / "ontology.yaml"
 
-OBJECTS = ("lead", "opportunity", "milestone", "report", "award", "country", "law")
-OBJECT_ZH = {"lead": "线索", "opportunity": "商机", "milestone": "时间节点", "report": "报告", "award": "已中标项目", "country": "国别", "law": "法规"}
+OBJECTS = ("lead", "opportunity", "milestone", "report", "award", "country", "law", "city")
+OBJECT_ZH = {"lead": "线索", "opportunity": "商机", "milestone": "时间节点", "report": "报告", "award": "已中标项目", "country": "国别", "law": "法规", "city": "城市"}
 INTENTS = ("count", "list", "chart", "report", "help")
 GROUPS = {"lead": ("country", "category", "sectors", "funder", "day", "status", "source"),
           "opportunity": ("country", "stage", "sectors", "funder"),
           "milestone": ("country", "kind", "day"), "report": ("kind", "country"),
           "award": ("country", "sector", "contract_type", "delivery", "asset", "winner_country", "funder", "year"),
           "country": (),  # 国别一国一行(营商环境指标),不再分组:页面列国别表
-          "law": ()}  # 法规问答(core/law.py):页面按种类列排放限值、本国定义或条文
+          "law": (),
+          "city": ("country",)}  # 城市:一城一行(规模以上城市),只按国别分;法规问答(core/law.py):页面按种类列排放限值、本国定义或条文
 GROUP_ZH = {"country": "国别", "category": "类别", "sectors": "领域", "funder": "资金来源", "day": "按天", "status": "处理状态",
             "source": "信源", "stage": "我方阶段", "kind": "类型", "sector": "类别", "contract_type": "合同类型", "delivery": "承包模式", "asset": "主体工程", "winner_country": "中标单位国别", "year": "年份"}
 GROUP_ALIAS = {"award": {"category": "sector", "sectors": "sector", "kind": "contract_type", "day": "year"}}  # 别的对象的分组说法 → 已中标项目的(它的「类别」就是领域)
@@ -128,15 +130,15 @@ AWARD_GROUPS = [  # 已中标项目的分组说法,先于通用的认(通用的�
 
 # 语义层(本体 semantic 节,v2.21):指标、算法与分类值的口语都在本体里,这里只认「提问里明说了查什么」与「接着问」的说法
 OTHER_OBJECT_RE = re.compile(r"线索|公告|商机|项目机会|在跟|跟踪|跟进|节点|截止日?|到期|日程|时间表|报告|日报|周报|月报")  # 明说了查已中标项目以外的
-OBJECT_RE = re.compile(OTHER_OBJECT_RE.pattern + r"|中标|授予|授标|已授|合同|(?<![a-z])awards?(?![a-z])")
+OBJECT_RE = re.compile(OTHER_OBJECT_RE.pattern + r"|中标|授予|授标|已授|合同|(?<![a-z])awards?(?![a-z])|城市|都市")
 FOLLOW_RE = re.compile(r"^\s*(?:那|那么|那就|其中|这些|这里面|这其中|它们|同样|换成|如果是|再看|再按|还是)")  # 接着上一问说的;很短的「……呢」也算(见 _follow_up)
 SECTOR_FIX = [("污水处理厂", "污水"), ("污水厂", "污水"), ("污水管网", "污水"), ("污水管", "污水"), ("排水管网", "排水"), ("雨水管网", "雨水")]  # 「污水厂」里的「水厂」、「污水管网」里的「管网」不算供水
 INHERIT = ("countries", "sectors", "categories", "funders", "contract_types", "deliveries", "assets", "winner_countries", "winners", "keywords", "price", "capacity",
-           "tiers", "foreign", "metric")
+           "tiers", "foreign", "metric", "pop")
 INHERIT_ZH = {"countries": "国别", "sectors": "类别或领域", "categories": "类别", "funders": "资金来源", "contract_types": "合同类型", "deliveries": "承包模式",
               "assets": "主体工程", "winner_countries": "中标单位国别", "winners": "中标单位", "keywords": "关键词", "price": "金额", "capacity": "规模",
               "time": "时间", "measures": "指标", "group_by": "分组",
-              "tiers": "市场分级", "foreign": "外企参标", "metric": "门槛"}
+              "tiers": "市场分级", "foreign": "外企参标", "metric": "门槛", "pop": "人口"}
 
 
 def _words(x) -> list[str]:
@@ -269,7 +271,7 @@ def empty_plan() -> dict:
                         "kinds": [], "keywords": [], "terms": [],
                         "contract_types": [], "deliveries": [], "winner_countries": [], "winners": [], "capacity": None,
                         "price": None, "assets": [],
-                        "tiers": [], "foreign": [], "metric": None},  # 最后三项只对国别:市场分级、外企参标限制、指标门槛 {id, min, max};此前七项只对已中标项目;capacity = {min, max}(m³/日);price = {min, max, currency, rate}(原币,rate = 1 单位折人民币,近似)
+                        "tiers": [], "foreign": [], "metric": None, "pop": None},  # pop 只对城市:人口 {min, max}(人)  # 最后三项只对国别:市场分级、外企参标限制、指标门槛 {id, min, max};此前七项只对已中标项目;capacity = {min, max}(m³/日);price = {min, max, currency, rate}(原币,rate = 1 单位折人民币,近似)
             "group_by": None, "limit": DEFAULT_LIMIT, "understood": [], "unresolved": [], "parsed_by": "rules", "model": None, "note": "",
             "measures": [], "order": None}  # order 只对国别:{id, dir: asc|desc}(「最慢」「最高」);问的指标 [{id, agg}](本体 semantic.measures);空 = 只数数量
 
@@ -787,6 +789,68 @@ def country_plan(p: dict, text: str, ms: list[dict]) -> dict:
     return p
 
 
+CITY_RE = re.compile(r"城市|都市|城镇")
+NOT_CITY_RE = re.compile(OTHER_OBJECT_RE.pattern + r"|中标|授予|授标|合同|营商|水价|法律|法规|标准|水厂|污水厂|淡化厂|片区")  # 「埃及城市供水项目的线索」「城市污水排放标准」不是问城市本身
+_POP_NUM = r"(\d+(?:\.\d+)?|[一二两三四五六七八九十百千]+)\s*(千万|百万|万|million|m(?![a-z³3²]))"
+POP_MIN = [r"(?:超过|多于|大于|不少于|不低于|至少|>=|≥|>|＞)\s*" + _POP_NUM, _POP_NUM + r"\s*(?:人口|人)?\s*(?:以上|级)"]
+POP_MAX = [r"(?:不到|少于|低于|小于|不足|<|＜)\s*" + _POP_NUM, _POP_NUM + r"\s*(?:人口|人)?\s*以下"]
+POP_MULT = {"万": 1e4, "百万": 1e6, "千万": 1e7, "million": 1e6, "m": 1e6}
+
+
+def is_city_q(text: str) -> bool:
+    """问的是城市本身(多少个城市、哪些城市、人口最多的城市;本体 city):说了城市、又没说查线索、商机、中标、营商环境、法规这些。"""
+    return bool(CITY_RE.search(text)) and not NOT_CITY_RE.search(text) and not is_award_q(text)
+
+
+def parse_pop(text: str) -> dict | None:
+    """「人口超过 100 万」「50 万以上」「百万人口」→ {min, max}(人);没说 → None。「规模以上」不是人口门槛(规模以上城市本来就是表里的全部)。"""
+    out = {"min": None, "max": None}
+    for kind, pats in (("min", POP_MIN), ("max", POP_MAX)):
+        for pat in pats:
+            m = re.search(pat, text)
+            if m and _num(m.group(1)):
+                out[kind] = _num(m.group(1)) * POP_MULT[m.group(2)]
+                break
+    if out["min"] is None and out["max"] is None and re.search(r"(?<![\d一二两三四五六七八九十])(百万|千万)\s*(?:人口|级|以上)", text):
+        out["min"] = 1e7 if "千万" in text else 1e6
+    return out if out["min"] is not None or out["max"] is not None else None
+
+
+def pop_label(x: dict | None) -> str:
+    if not x:
+        return ""
+    w = lambda n: f"{n / 1e4:g} 万"  # noqa: E731
+    if x.get("min") is not None and x.get("max") is not None:
+        return f"{w(x['min'])} 至 {w(x['max'])}"
+    return f"{w(x['min'])}以上" if x.get("min") is not None else f"少于 {w(x['max'])}"
+
+
+def city_plan(p: dict, q: str, text: str) -> dict:
+    """对象是城市时的计划(本体 city,规模以上城市):国名、人口门槛、按人口排(缺省从多到少)、前几座;按国别分的给分组。"""
+    v = vocab()
+    f = p["filters"]
+    p["object"] = "city"
+    for iso in geo.detect(q):
+        f["countries"].append({"iso3": iso, "name": geo.name_zh(iso)})
+    for x in v.not_collected:
+        if not f["countries"] and not re.search(r"国内外|国外", text) and any(w in text for w in x.get("words") or []):
+            f["countries"].append({"iso3": x["iso3"], "name": geo.name_zh(x["iso3"])})
+    f["pop"] = parse_pop(text)
+    p["order"] = {"id": "population", "dir": "asc" if re.search(r"最小|最少|人口少", text) else "desc"}
+    if re.search(r"按(国家|国别|国)|分国|各国|哪些国家|哪个国家", text):
+        p["intent"], p["group_by"] = "chart", "country"
+    elif re.search(r"多少|几个|几座|数量|总数|共有", text):
+        p["intent"] = "count"
+    else:
+        p["intent"] = "list"
+    m = re.search(r"(?:前|最大的?|最小的?|人口最多的?|人口最少的?)\s*(\d+|[一二两三四五六七八九十]+)\s*(?:个|座|大)?", text)
+    if m and _num(m.group(1)):
+        p["limit"] = max(1, min(MAX_LIMIT, int(_num(m.group(1)))))
+        if p["intent"] == "count":
+            p["intent"] = "list"
+    return p
+
+
 def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
     """force_object:接着上一问、这一句没说查什么时,沿用上一问的对象(见 plan)。"""
     v = vocab()
@@ -794,6 +858,8 @@ def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
     p = empty_plan()
     f = p["filters"]
     ms = parse_measures(text)
+    if force_object == "city" or (force_object is None and is_city_q(text)):  # 城市本身(多少个规模以上城市、人口最多的城市)
+        return finish(city_plan(p, q, text))
     # 对象:已中标项目先认(「中标信息」不是商机阶段;「我们中标的商机」仍是商机,见 is_award_q);问了只有已中标项目才有的指标(评标天数、招标估价)的也是它
     if force_object == "country" or (COUNTRY_RE.search(text) and not re.search(r"线索|商机", text)) or _measure_object(ms, q, force_object if force_object in OBJECTS else "lead") == "country":
         p["object"] = "country"
@@ -940,7 +1006,7 @@ def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
 
 SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器。用户用中文(偶尔夹英文)提问,你只负责把问题翻译成一个查询计划(JSON),不回答问题、不编造数据。
 
-系统里有七类对象:
+系统里有八类对象:
 - lead 线索:从公开信源采集的公告与新闻,字段有国别、领域(粗分)、类别、出资方、发现时间、处理状态、是否相关。
 - opportunity 商机:我方在跟的项目,字段有国别、领域(细分)、我方阶段、资金。「我们 / 我方中标的」「中标的商机」= 商机 + 阶段「中标」。
 - milestone 时间节点:投标截止、开标、授标等日期,挂在商机或线索下。
@@ -952,6 +1018,10 @@ SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器�
   政府合同回款天数等。问「营商环境 / 外企参标 / 哪些国家水价最高 / 回款最慢」的是它;门槛(低于 50 分)、外企参标、市场分级、排序系统按提问自己读,你只填 object、countries、measure。
 - law 法规:收了原文的各国水务相关法规(水法、供排水与污水、排放标准、PPP 与特许经营、公共采购、环评)的条文、排放限值、本国对某个概念的定义。
   问「法律 / 法规怎么规定」「特许经营最长几年」「污水排放标准」「某国法律里污水怎么定义」的是它;你只填 object、countries、keywords(要在条文里找的中文词)。
+- city 城市:各国规模以上城市(人口达到门槛)一城一行:所属国别、人口、面积、生产总值、水风险。问「有多少个(规模以上)城市 / 哪些城市 / 人口最多的城市 /
+  百万人口以上的城市」的是它(不是营商环境,也不是线索);你只填 object、countries、intent(人口门槛、排序系统按提问自己读)。
+- 问的东西不在上面八类里(比如水厂、污水厂的数量,人口、GDP 的历年变化,某家公司的介绍):unsupported 写它问的是什么(几个字,如「污水厂」),
+  object 照样填最接近的一类;在八类里的 unsupported 给 null。宁可填 unsupported,也不要硬套成别的对象。
 
 字段取值(只能用这些,别的词放进 unresolved):
 - sectors(领域,粗分):{sectors}
@@ -985,8 +1055,8 @@ GUIDE = """输出格式:只输出一个 JSON 对象,不要任何其他文字。�
 {"object": "lead", "intent": "chart", "countries": ["埃及"], "sectors": ["供水"], "categories": ["招标"], "funders": ["世界银行"],
  "stages": [], "tracked": null, "status": [], "relevant": null, "days": 30, "from": null, "to": null, "future_days": null,
  "kinds": [], "keywords": [], "contract_types": [], "deliveries": [], "assets": [], "winner_countries": [], "winners": [], "capacity_min": null, "capacity_max": null,
- "measure": "count", "agg": null, "group_by": "country", "limit": 50, "unresolved": []}
-没有的字段给空数组或 null;object 只能取 lead / opportunity / milestone / report / award / country / law;intent 只能取 count / list / chart / report / help。"""
+ "measure": "count", "agg": null, "group_by": "country", "limit": 50, "unresolved": [], "unsupported": null}
+没有的字段给空数组或 null;object 只能取 lead / opportunity / milestone / report / award / country / law / city;intent 只能取 count / list / chart / report / help。"""
 
 SCHEMA = {
     "type": "object",
@@ -1005,11 +1075,11 @@ SCHEMA = {
         "winners": {"type": "array", "items": {"type": "string"}}, "capacity_min": {"anyOf": [{"type": "number"}, {"type": "null"}]},
         "capacity_max": {"anyOf": [{"type": "number"}, {"type": "null"}]},
         "group_by": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "limit": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
-        "unresolved": {"type": "array", "items": {"type": "string"}},
+        "unresolved": {"type": "array", "items": {"type": "string"}}, "unsupported": {"anyOf": [{"type": "string"}, {"type": "null"}]},
     },
     "required": ["object", "intent", "countries", "sectors", "categories", "funders", "stages", "tracked", "status", "relevant", "days", "from",
                  "to", "future_days", "kinds", "keywords", "contract_types", "deliveries", "assets", "winner_countries", "winners", "capacity_min", "capacity_max",
-                 "measure", "agg", "group_by", "limit", "unresolved"],
+                 "measure", "agg", "group_by", "limit", "unresolved", "unsupported"],
     "additionalProperties": False,
 }
 
@@ -1085,7 +1155,22 @@ def from_model(data: dict, today: date, q: str = "", force_object: str | None = 
     if not ms and mm and mm["id"] != "count":
         ms = [{"id": mm["id"], "agg": data.get("agg") if data.get("agg") in mm["aggs"] else mm["aggs"][0]}]
     p["object"] = force_object if force_object in OBJECTS else _measure_object(ms, q, p["object"])  # 问评标天数、招标估价的,模型当成线索也改查已中标项目(10-13 用户反映)
-    if p["object"] == "country" or rules_parse(q, today, force_object)["object"] == "country":  # 国别(营商环境)的条件按提问读(门槛、外企参标、排序),模型多给的国名补上
+    uns = str(data.get("unsupported") or "").strip()[:30]
+    if uns and p["object"] != "city" and not is_city_q(_norm(q)) and not (force_object in OBJECTS):  # 问的不在系统的几类对象里:直说不会查,不硬套(10-15 用户反映「规模以上城市」答成了营商环境)
+        p["intent"], p["unsupported"] = "help", uns
+        finish(p)
+        p["understood"] = [["问的是", uns + "(助手还不会查)"]]
+        return p
+    rp = rules_parse(q, today, force_object)
+    if p["object"] == "city" or rp["object"] == "city":  # 城市:条件按提问读(人口门槛、排序、前几座),模型多给的国名补上
+        cp = rules_parse(q, today, "city")
+        cp["parsed_by"], cp["model"] = "model", p["model"]
+        for c in _strs(data.get("countries")):
+            iso = geo.iso3(c)
+            if iso and all(x["iso3"] != iso for x in cp["filters"]["countries"]):
+                cp["filters"]["countries"].append({"iso3": iso, "name": geo.name_zh(iso)})
+        return finish(cp)
+    if p["object"] == "country" or rp["object"] == "country":  # 国别(营商环境)的条件按提问读(门槛、外企参标、排序),模型多给的国名补上
         cp = rules_parse(q, today, "country")
         cp["parsed_by"], cp["model"] = "model", p["model"]
         for c in _strs(data.get("countries")):
@@ -1192,7 +1277,7 @@ def from_model(data: dict, today: date, q: str = "", force_object: str | None = 
 
 FINISH_KEYS = {"对象", "国别", "区域", "类别", "领域", "资金来源", "我方阶段", "处理状态", "是否相关", "类型", "术语", "合同类型", "承包模式", "主体工程", "中标价",
                "中标单位国别含", "中标单位含", "规模", "名称或中标单位含", "标题或摘要含", "分组", "呈现", "指标",
-               "市场分级", "外企参标", "门槛", "排序"}
+               "市场分级", "外企参标", "门槛", "排序", "范围", "人口"}
 
 
 def finish(p: dict) -> dict:
@@ -1270,6 +1355,16 @@ def finish(p: dict) -> dict:
         p["understood"] = u
         p["scope_note"] = ""
         return p
+    if p["object"] == "city":
+        u.insert(1, ["范围", "规模以上城市(人口达到门槛,缺省 10 万)"])
+        if f.get("pop"):
+            u.append(["人口", pop_label(f["pop"])])
+        u.append(["排序", "人口从少到多" if (p.get("order") or {}).get("dir") == "asc" else "人口从多到少"])
+        u.append(["呈现", "按国别统计" if p["group_by"] else "数一下,附清单" if p["intent"] == "count" else f"清单(最多 {p['limit']} 座)"])
+        p["understood"] = u
+        scope = {x["iso3"]: x["note"] for x in v.not_collected}
+        p["scope_note"] = "".join(dict.fromkeys(scope[c["iso3"]] for c in f["countries"] if c["iso3"] in scope))
+        return p
     if p.get("measures"):
         u.append(["指标", measure_label(p["measures"])])
     if p["group_by"]:
@@ -1309,6 +1404,8 @@ def _prev(prev) -> dict | None:
         f["price"] = {"min": num(pr.get("min")), "max": num(pr.get("max")), "currency": cur, "rate": _rate(cur)}
     if num(cap.get("min")) or num(cap.get("max")):
         f["capacity"] = {"min": num(cap.get("min")), "max": num(cap.get("max"))}
+    pop = pf.get("pop") if isinstance(pf.get("pop"), dict) else {}
+    f["pop"] = {"min": num(pop.get("min")), "max": num(pop.get("max"))} if prev["object"] == "city" and (num(pop.get("min")) or num(pop.get("max"))) else None
     ms = []
     for x in prev.get("measures") or []:
         m = measure_of(x.get("id")) if isinstance(x, dict) else None
@@ -1342,7 +1439,7 @@ def _inherit(p: dict, prev: dict, q: str) -> None:
         if not f.get(k) and pf.get(k) and (p["object"] == "award" or k not in ("contract_types", "deliveries", "assets", "winner_countries", "winners", "price", "capacity")):
             f[k] = pf[k]
             got.append(INHERIT_ZH[k])
-    if not (f.get("days") or f.get("from") or f.get("to") or f.get("future_days")) and (pf.get("days") or pf.get("from") or pf.get("to")):
+    if p["object"] != "city" and not (f.get("days") or f.get("from") or f.get("to") or f.get("future_days")) and (pf.get("days") or pf.get("from") or pf.get("to")):  # 城市不按时间
         f["days"], f["from"], f["to"] = pf.get("days"), pf.get("from"), pf.get("to")
         got.append(INHERIT_ZH["time"])
     if (not p["measures"] or p.pop("measure_default", False)) and prev["measures"]:
@@ -1417,15 +1514,67 @@ def law_plan(q: str, lw: dict, by: str, model: str | None = None) -> dict:
     return p
 
 
-def plan(q: str, today: date, clf=None, prev=None) -> dict:
-    """一句提问 → 计划(见 _plan);有歧义的说法(本体 semantic.ambiguous)另附 ask_back:照缺省答,页面给按钮换另一种理解。"""
-    p = _plan(q, today, clf, prev)
+# ---------------------------------------------------------------- 错题本里学到的(本体 ask_log.learned,A45)
+
+_learned: list[dict] = []  # [{q, prev, data}]:q、prev 是 _lkey 后的提问与上一问;data 是用户认可的那次模型解析(JSON)
+_learned_lock = threading.Lock()
+
+
+def _lkey(q: str) -> str:
+    return re.sub(r"[\s,，。.?？!！、;；:：\"'“”「」()()]+", "", _norm(q or ""))
+
+
+def set_learned(rows: list[dict] | None) -> None:
+    """服务启动、隔一会儿重读「助手提问记录」里「学到的解析」不空、没标「不改」的行:[{q, prev_q, data}]。"""
+    out = []
+    for r in rows or []:
+        if isinstance(r.get("data"), dict) and _lkey(r.get("q")):
+            out.append({"q": _lkey(r["q"]), "prev": _lkey(r.get("prev_q") or ""), "data": r["data"], "raw_q": str(r["q"])[:MAX_Q]})
+    with _learned_lock:
+        _learned[:] = out
+
+
+def add_learned(q: str, prev_q: str, data: dict) -> None:
+    """当场学会一句(用户点了重答的「答对了」):同一句(连同上一问)以后直接按它,不等重读表。"""
+    k, pk = _lkey(q), _lkey(prev_q)
+    with _learned_lock:
+        _learned[:] = [x for x in _learned if (x["q"], x["prev"]) != (k, pk)] + [{"q": k, "prev": pk, "data": data, "raw_q": q[:MAX_Q]}]
+
+
+def learned_for(q: str, prev_q: str = "") -> dict | None:
+    k, pk = _lkey(q), _lkey(prev_q)
+    with _learned_lock:
+        return next((x["data"] for x in reversed(_learned) if x["q"] == k and x["prev"] == pk), None)
+
+
+def _grams(s: str) -> set[str]:
+    return {s[i:i + 2] for i in range(len(s) - 1)} or {s}
+
+
+def similar_learned(q: str, k: int = 3, floor: float = 0.3) -> list[dict]:
+    """说法差不多的纠正过的问题(按两字片段重合度),给模型当参考例子;同一句的不算(那句直接用)。"""
+    g, key = _grams(_lkey(q)), _lkey(q)
+    with _learned_lock:
+        pool = list(_learned)
+    scored = sorted(((len(g & _grams(x["q"])) / len(g | _grams(x["q"])), x) for x in pool if x["q"] != key), key=lambda t: -t[0])
+    return [x for sc, x in scored if sc >= floor][:k]
+
+
+def _example_text(xs: list[dict]) -> str:
+    keep = lambda d: {a: b for a, b in d.items() if not a.startswith("_") and b not in (None, [], "")}  # noqa: E731
+    return "\n".join(f"问:{x['raw_q']}\n解析:{json.dumps(keep(x['data']), ensure_ascii=False)}" for x in xs)
+
+
+def plan(q: str, today: date, clf=None, prev=None, fix: dict | None = None) -> dict:
+    """一句提问 → 计划(见 _plan);有歧义的说法(本体 semantic.ambiguous)另附 ask_back:照缺省答,页面给按钮换另一种理解。
+    fix:用户点了「答错了」并写了哪里不对 {understood, note}:不用错题本里学到的,带着这句说明请模型重新理解(当场重答)。"""
+    p = _plan(q, today, clf, prev, fix)
     if (q or "").strip() and p["intent"] not in ("help", "report"):
         p["ask_back"] = ask_back((q or "").strip()[:MAX_Q], p, today)
     return p
 
 
-def _plan(q: str, today: date, clf=None, prev=None) -> dict:
+def _plan(q: str, today: date, clf=None, prev=None, fix: dict | None = None) -> dict:
     """一句提问 → 计划。配了模型就用模型解析(规则结果兜底:模型没结果、出错或认不出任何条件时用规则的),没配就只用规则。
     prev:页面带来的上一问的计划(接着问):这一句没明说查什么的沿用它的对象(问了别的对象才有的指标的除外);像追问的再沿用条件、指标与分组。"""
     q = (q or "").strip()[:MAX_Q]
@@ -1434,26 +1583,40 @@ def _plan(q: str, today: date, clf=None, prev=None) -> dict:
         p["intent"] = "help"
         return finish(p)
     prev = _prev(prev)
-    lw = law.detect(q, prev)
-    if lw:  # 法规问题(排放标准、本国定义、条文):不走线索 / 中标的解析
-        return law_plan(q, lw, "rules")
     force = None
     if prev and not OBJECT_RE.search(_norm(q)):
         force = _measure_object(parse_measures(q), q, prev["object"])
+        if force == "city" and not _follow_up(q):  # 问完城市再问「阿塞拜疆的项目有多少」:不是接着问城市
+            force = None
+    hit = None if fix else (learned_for(q, prev["q"] if prev else "") or (learned_for(q) if not _follow_up(q) else None))  # 学会的单问:前面问过别的也照样用
+    lw = None if hit else law.detect(q, prev)
+    if lw:  # 法规问题(排放标准、本国定义、条文):不走线索 / 中标的解析
+        return law_plan(q, lw, "rules")
     rules = rules_parse(q, today, force)
     out = None
-    if clf is None or not getattr(clf, "enabled", False):
+    if hit is not None:  # 错题本里学会了这一句(用户认可过的理解):直接按它,不再问模型
+        p = from_model(hit, today, q, force)
+        p["parsed_by"], p["_raw"] = "learned", hit
+    elif clf is None or not getattr(clf, "enabled", False):
         rules["note"] = "" if clf is None else (getattr(clf, "fatal", "") or getattr(clf, "note", "") or "未配置模型密钥,按词表解析")
+        if fix:
+            rules["note"] = "模型现在用不了,没法按你的说明重新理解,下面还是按词表解析的;这一问已记进错题本。"
         p = rules
     else:
         ask = q if not prev or not prev["q"] else f"上一个问题(查的是{OBJECT_ZH[prev['object']]}):{prev['q']}\n这一个问题:{q}"
+        if fix:  # 当场重答:把上一次的理解和用户说的哪里不对一起交给模型
+            ask += f"\n\n(上一次把这个问题理解为:{str(fix.get('understood') or '')[:600]}\n用户说这样理解不对:{str(fix.get('note') or '')[:500]}\n请按用户的说明重新理解;用户说的是系统还不会查的东西时,填 unsupported。)"
+        ex = similar_learned(q)
+        if ex:  # 错题本里纠正过的、说法差不多的问题:给模型当参考
+            ask += "\n\n参考:下面是用户纠正过的类似问题和认可的解析,照这个思路理解(条件按这一句自己的说法填):\n" + _example_text(ex)
         out = clf.ask(system_prompt(today), ask, SCHEMA, GUIDE)
         if not out or "_error" in out:
             rules["note"] = "模型没有返回可用结果,按词表解析" + (f"({out['_error']})" if out and out.get("_error") else "")
             p = rules
         else:
             p = from_model(out, today, q, force)
-            if p["intent"] == "help" and rules["intent"] != "help":
+            p["_raw"] = out
+            if p["intent"] == "help" and rules["intent"] != "help" and not p.get("unsupported"):
                 p = rules
                 p["note"] = "模型没看懂,按词表解析"
     if p["object"] == "law":  # 模型认作法规问题、提问里又没有法规说法的(「摩洛哥特许经营最长多少年」):按条文查

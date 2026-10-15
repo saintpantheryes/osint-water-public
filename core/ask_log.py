@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import secrets
@@ -91,7 +92,7 @@ def who(cookie: str | None) -> str:
 
 def record(base: tstore.Base, key: str, q: str, prev_q: str, p: dict, asker: str, now: datetime) -> None:
     """A44:记一行提问(只新建)。"""
-    by = "模型" + (f"({p['model']})" if p.get("model") else "") if p.get("parsed_by") == "model" else "词表"
+    by = "模型" + (f"({p['model']})" if p.get("model") else "") if p.get("parsed_by") == "model" else "错题本里学会的" if p.get("parsed_by") == "learned" else "词表"
     row = {"question": q[:500], "key": key, "understood": understood_text(p), "asked_at": now.isoformat(timespec="seconds"), "parsed_by": by}
     if prev_q:
         row["prev_q"] = prev_q[:500]
@@ -132,6 +133,41 @@ def feedback(base: tstore.Base, key: str, verdict: str, note: str = "", result: 
         vals["status"] = "待看"
     base.update("ask_log", rec["id"], {k: v for k, v in vals.items() if base.has("ask_log", k)})
     return {"ok": True}
+
+
+def learn(base: tstore.Base, key: str, data: dict, understood: str, wait: float = 4.0) -> bool:
+    """A45 当场改正:用户答错了、写了哪里不对,助手按说明重答,用户对重答点了「答对了」→ 原来那一问的行记下「学到的解析」(重答时模型给的 JSON),
+    「应理解为」空着的写这次的理解,处理状态空着或「待看」的改「已修好」。之后同一句直接按它答,说法差不多的给模型当参考(assistant.set_learned)。"""
+    rec, t0 = find(base, key), time.monotonic()
+    while rec is None and time.monotonic() - t0 < wait:
+        time.sleep(0.5)
+        rec = find(base, key)
+    if rec is None or not base.has("ask_log", "learned"):
+        return False
+    vals: dict = {"learned": json.dumps({k: v for k, v in data.items() if not k.startswith("_")}, ensure_ascii=False)}
+    if not base.get("ask_log", rec, "expected") and understood:
+        vals["expected"] = understood
+    if base.get("ask_log", rec, "status") in (None, "", "待看"):
+        vals["status"] = "已修好"
+    base.update("ask_log", rec["id"], {k: v for k, v in vals.items() if base.has("ask_log", k)})
+    return True
+
+
+def learned_rows(base: tstore.Base) -> list[dict]:
+    """「学到的解析」不空、处理状态不是「不改」的行 → [{q, prev_q, data}](assistant.set_learned 用)。人把状态改成「不改」或清空这一格就不再用。"""
+    if "ask_log" not in base.t or not base.has("ask_log", "learned"):
+        return []
+    out = []
+    for r in base.rows("ask_log", filter=base.filter(base.cond("ask_log", "learned", "isNotEmpty")), props=["question", "prev_q", "learned", "status"]):
+        if base.get("ask_log", r, "status") == "不改":
+            continue
+        try:
+            data = json.loads(str(base.get("ask_log", r, "learned") or ""))
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            out.append({"q": str(base.get("ask_log", r, "question") or ""), "prev_q": str(base.get("ask_log", r, "prev_q") or ""), "data": data})
+    return out
 
 
 def recheck(base: tstore.Base, today: date, clf=None, log=print) -> dict:
