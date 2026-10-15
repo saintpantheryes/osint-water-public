@@ -22,8 +22,8 @@
     <p class="muted">机器找到了可能的所属商机但没把握,或者觉得像个新项目。归入后线索记为「已处理」;忽略的记为「已忽略」,不再出现。</p>
     <div class="filters">
       <div class="frow"><b>国别</b><select id="fC" class="inline"><option value="">全部国别</option></select></div>
-      <div class="frow"><b>类别</b><span id="fK" class="frow" style="padding:0"></span></div>
-      <div class="frow"><b>建议</b><span id="fS" class="frow" style="padding:0"></span><span class="muted" id="fAssignNote" style="margin-left:auto"></span></div>
+      <div class="frow"><b>类别</b><span id="fK" class="frow"></span></div>
+      <div class="frow"><b>建议</b><span id="fS" class="frow"></span><span class="muted push" id="fAssignNote"></span></div>
     </div>
     <div class="batch"><label><input type="checkbox" id="allAssign"> 全选当前显示的</label><span class="muted" id="selAssign">未勾选</span>
       <button type="button" class="primary" id="bSug">批量归入机器建议的商机</button><button type="button" id="bIgn">批量忽略</button></div>
@@ -33,8 +33,8 @@
     <p class="muted">机器新建的「建议」商机。「跟踪」把阶段改为跟踪中并把你记为负责人(没负责人时);「不跟进」只改阶段。两者都会自动留一条跟进。</p>
     <div class="filters">
       <div class="frow"><b>国别</b><select id="gC" class="inline"><option value="">全部国别</option></select></div>
-      <div class="frow"><b>公开进度</b><span id="gP" class="frow" style="padding:0"></span></div>
-      <div class="frow"><b>核实</b><span id="gV" class="frow" style="padding:0"></span><span class="muted" id="fSuggestNote" style="margin-left:auto"></span></div>
+      <div class="frow"><b>公开进度</b><span id="gP" class="frow"></span></div>
+      <div class="frow"><b>核实</b><span id="gV" class="frow"></span><span class="muted push" id="fSuggestNote"></span></div>
     </div>
     <div class="batch"><label><input type="checkbox" id="allSuggest"> 全选当前显示的</label><span class="muted" id="selSuggest">未勾选</span>
       <button type="button" class="primary" id="bTrack">批量跟踪</button><button type="button" id="bDrop">批量不跟进</button></div>

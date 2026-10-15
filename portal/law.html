@@ -13,11 +13,11 @@
 <script>document.getElementById("nav").innerHTML = P.nav("country.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
   <!-- 本体 V21 法规全文(不进菜单):从国别概况「机构与法规」页签、助手答案的出处角标点进来(law.html?k=法规编号#c条文序号) -->
-  <div class="toolbar"><a href="country.html" id="back">← 国别概况</a><h1 style="margin:0" id="lname">法规全文</h1><span id="openRow" style="margin-left:auto"></span></div>
+  <div class="toolbar"><a href="country.html" id="back">← 国别概况</a><h1 id="lname">法规全文</h1><span class="push" id="openRow"></span></div>
   <div class="panel" id="info">读取中…</div>
   <section id="ext"></section>
   <h2 id="clh">条文</h2>
-  <div class="filters"><div class="frow"><b>页内搜索</b><input id="q" type="search" placeholder="中文或原文里的词,如 特许、concession" style="flex:1;min-width:180px"><span class="muted small" id="qn"></span></div></div>
+  <div class="filters"><div class="frow"><b>页内搜索</b><input class="grow" id="q" type="search" placeholder="中文或原文里的词,如 特许、concession"><span class="muted small" id="qn"></span></div></div>
   <div class="panel" id="clauses">读取中…</div>
 </main>
 <script>
@@ -39,7 +39,7 @@
     $("info").innerHTML = P.factsHtml([["原文名称", g("name_orig")], ["国别", cname], ["类别", g("kind")], ["文号", g("number")], ["颁布日期", P.day(g("issued"))], ["现行状态", g("status")],
       ["收的版本", g("version")], ["语言", g("language")], ["取自", g("source")]].filter((x) => x[1]).map(([k, v]) => [k, P.esc(v), { html: true }])
       .concat(g("url") ? [["原文", '<a href="' + P.esc(g("url")) + '" target="_blank" rel="noopener">打开原文 ↗</a>', { html: true }]] : [])) +
-      (g("summary") ? '<div class="small" style="margin-top:8px">' + P.esc(g("summary")).replace(/\n/g, "<br>") + "</div>" : "");
+      (g("summary") ? '<div class="small gap-top">' + P.esc(g("summary")).replace(/\n/g, "<br>") + "</div>" : "");
     /* 这部法规摘出的排放限值与本国定义(放条文前面,角标点开就是下面那一条) */
     const [d, rows] = await Promise.all([P.lawData([crid]), P.records("law_clause", { filter: P.and(P.cond("law_clause", "law", "is", lw.id)), orderBy: [{ fieldId: P.f("law_clause", "seq"), order: "asc" }],
       props: ["key", "label", "seq", "heading", "text", "text_zh", "page"] })]);

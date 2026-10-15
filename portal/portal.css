@@ -8,7 +8,7 @@
   --warn: #b45309; --warn-soft: #fffbeb; --warn-line: #fde68a; /* 提醒:要核实、有积压 */
   --ok: #15803d; --ok-soft: #dcfce7;                           /* 正面:中标、已核实 */
   --info: #1d4ed8; --info-soft: #dbeafe;                       /* 进行中:跟踪中、已投标 */
-  --c1: #0e6ba8; --c2: #0d9488; --c3: #6d28d9; --c4: #b45309; --c5: #15803d; --c6: #94a3b8; /* 分类色:图表、日历、地图 */
+  --c1: #0e6ba8; --c2: #0d9488; --c3: #6d28d9; --c4: #b45309; --c5: #15803d; --c6: #94a3b8; --loan: #7c3aed; /* 分类色:图表、日历、地图 */
   --fs-xs: 12px; --fs-sm: 13px; --fs-md: 15px; --fs-lg: 17px; --fs-xl: 20px; --fs-num: 30px;
   --r-sm: 6px; --r-md: 10px; --r-pill: 999px;
 }
@@ -363,7 +363,7 @@ body.guest .form button, body.guest .form input, body.guest .form select, body.g
 .im-world { position: absolute; left: 4%; right: 4%; top: 14%; width: 92%; height: 62%; }
 .im-world .land { fill: #dfe5ed; stroke: #f6f8fb; stroke-width: 1; }
 .im-world circle { transform-box: fill-box; transform-origin: center; animation: im-pulse 3s ease-in-out infinite; }
-.im-world .ds { fill: var(--c2); } .im-world .dl { fill: #7c3aed; } .im-world .db { fill: var(--bad); }
+.im-world .ds { fill: var(--c2); } .im-world .dl { fill: var(--loan); } .im-world .db { fill: var(--bad); }
 @keyframes im-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .7; } }
 /* 图卡:国别概况的样子,四个关键数字,不利的标红 */
 .im-kpi { background: linear-gradient(160deg, #eef3f8, #dbe5f0); display: flex; align-items: center; justify-content: center; }
@@ -605,3 +605,25 @@ sup.sref a:hover { background: var(--brand); color: #fff; }
 .law-cl details summary { cursor: pointer; color: var(--brand); font-size: 13px; }
 .law-head { color: #334155; font-weight: 700; margin: 16px 0 4px; }
 .lead-ans .muted { font-weight: 400; }
+
+/* 版式小工具:页面里不再临时写 style=,统一用这些类(只有随数据变的颜色、初始隐藏、动画错峰留在行内) */
+.push { margin-left: auto; }                                   /* 推到这一行最右 */
+.grow { flex: 1; } input.grow { min-width: 180px; }
+.frow > .frow, .filters .frow > .frow, .form .row > .frow { padding: 0; }  /* 筛选行、表单行里套的一组选项 */
+.toolbar > h1, .toolbar > h2 { margin: 0; }
+.toolbar.tight, .tight { margin: 0 0 6px; }
+.mt0 { margin-top: 0; } .gap-top { margin-top: 8px; }
+h4.sub { margin: 8px 0 2px; }
+.h-sub { font-size: var(--fs-sm); font-weight: 400; }          /* 标题后面的小字路径 */
+.title-xl { font-size: var(--fs-xl); font-weight: 700; }
+.ok-text { color: var(--ok); }
+.more.inline { display: inline; margin-left: 10px; font-weight: 400; }
+.form label.check { flex: 1; color: inherit; }
+.it-act.fit { min-width: 0; } .it-act.inline { min-width: 0; flex-direction: row; gap: 6px; }
+.chip-btn.static { cursor: default; } .chip-btn.static a { color: inherit; }
+.chip-btn > .chip-x { all: unset; cursor: pointer; margin-left: 4px; }
+code.url { font-size: var(--fs-xs); word-break: break-all; }
+.sw-c1 { background: var(--c1); } .sw-c2 { background: var(--c2); } .sw-c3 { background: var(--c3); }
+.sw-c4 { background: var(--c4); } .sw-c5 { background: var(--c5); } .sw-c6 { background: var(--c6); }
+.sw-loan { background: var(--loan); } .sw-bad { background: var(--bad); }
+.legend i.sw-core { background: var(--card); border: 2px solid var(--ink-strong); width: 10px; height: 10px; }  /* 核心对象:白底黑框 */

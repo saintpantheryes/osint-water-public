@@ -16,9 +16,9 @@
   <p class="muted">机器每天北京时间 08:30 去这些网站、接口与订阅收集线索。这里看每个信源最近一次采集得怎样、带来了多少条线索;有问题的排在最前、标红。编辑者可以直接停用或重新启用一个信源,从下一次采集起生效。新增信源要按网站结构写抓取规则,请把网址交给系统维护人。</p>
   <div id="kpis"></div>
   <div class="filters">
-    <div class="frow"><b>状态</b><span id="fState" class="frow" style="padding:0"></span></div>
-    <div class="frow"><b>范围</b><span id="fScope" class="frow" style="padding:0"></span></div>
-    <div class="frow"><b>搜索</b><input id="fText" placeholder="搜名称、网址" size="18"><span class="muted" id="count" style="margin-left:auto"></span></div>
+    <div class="frow"><b>状态</b><span id="fState" class="frow"></span></div>
+    <div class="frow"><b>范围</b><span id="fScope" class="frow"></span></div>
+    <div class="frow"><b>搜索</b><input id="fText" placeholder="搜名称、网址" size="18"><span class="muted push" id="count"></span></div>
   </div>
   <div class="panel" id="list">读取中…</div>
   <p class="muted" id="tblp">要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开信源表 ↗</a></p>
@@ -67,7 +67,7 @@
       const name = "<b>" + P.esc(g(r, "name") || g(r, "key") || "") + "</b>" + (url ? '<br><a class="small" href="' + P.esc(url) + '" target="_blank" rel="noopener">' + P.esc(String(url).replace(/^https?:\/\//, "").slice(0, 48)) + " ↗</a>" : "");
       const st = '<span class="' + (s.bad ? "over" : s.key === "off" ? "muted" : "") + '"' + (s.tip ? ' title="' + P.esc(s.tip) + '"' : "") + ">" + P.esc(s.text) + "</span>";
       const sw = writable
-        ? '<span class="it-act" style="min-width:0"><button type="button" data-id="' + r.id + '" class="chip-btn' + (on ? " on" : "") + '" title="' + (on ? "点一下停用:下一次采集起不再抓它" : "点一下重新启用") + '">' + (on ? "✓ 启用" : "已停用") + "</button></span>"
+        ? '<span class="it-act fit"><button type="button" data-id="' + r.id + '" class="chip-btn' + (on ? " on" : "") + '" title="' + (on ? "点一下停用:下一次采集起不再抓它" : "点一下重新启用") + '">' + (on ? "✓ 启用" : "已停用") + "</button></span>"
         : (on ? "启用" : '<span class="muted">停用</span>');
       return [P.raw(name), g(r, "kind") || "", scopeName(scopeOf(r)), when(g(r, "last_run")), P.raw(st), String(Number(g(r, "lead_count")) || 0), P.raw(sw), P.raw(P.open("source", r.id))];
     })) : '<p class="muted">' + (rows.length ? "没有符合筛选的。" : "表里还没有信源:后台第一次采集时会按采集清单建好。") + "</p>";

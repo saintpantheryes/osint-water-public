@@ -18,7 +18,7 @@
   <div class="two">
     <div class="col">
       <div class="panel" id="who">读取中…</div>
-      <div class="panel"><h3 style="margin:0 0 6px">入口</h3>
+      <div class="panel"><h3 class="tight">入口</h3>
         <ul class="list">
           <li><a href="/setting" target="_blank" rel="noopener">帐号设置 ↗</a> <span class="muted small">改密码、头像、通知</span></li>
           <li><a href="company.html">我方资料</a> <span class="muted small">我们公司的资质证书与历史业绩,勾了的写进报告</span></li>
@@ -58,7 +58,7 @@
   function renderCountries() {
     const ids = mine();
     $("cCount").textContent = ids.length ? ids.length + " 个" : "";
-    $("countries").innerHTML = ids.length ? '<div class="frow">' + ids.map((id) => '<span class="chip-btn on" style="cursor:default"><a href="country.html?iso=' + encodeURIComponent(ciso[id] || "") + '" style="color:inherit">' + P.esc(cname[id] || id) + '</a> <button type="button" data-id="' + P.esc(id) + '" title="取消关注" style="all:unset;cursor:pointer;margin-left:4px">×</button></span>').join("") + "</div>"
+    $("countries").innerHTML = ids.length ? '<div class="frow">' + ids.map((id) => '<span class="chip-btn on static"><a href="country.html?iso=' + encodeURIComponent(ciso[id] || "") + '">' + P.esc(cname[id] || id) + '</a> <button class="chip-x" type="button" data-id="' + P.esc(id) + '" title="取消关注">×</button></span>').join("") + "</div>"
       : '<p class="empty">还没关注国别。</p>';
     $("countries").querySelectorAll("button").forEach((b) => { b.onclick = () => setCountries(ids.filter((x) => x !== b.dataset.id)); });
     $("cPick").querySelectorAll("option").forEach((op) => { if (op.value) op.disabled = ids.includes(op.value); });
@@ -66,7 +66,7 @@
   function renderSubs() {
     const subs = pref ? P.subsOf(pref) : [];
     $("sCount").textContent = subs.length ? subs.length + " 条" : "";
-    $("subs").innerHTML = subs.length ? P.tableHtml(["名称", "链接", ""], subs.map((s, i) => [s.name, P.raw("<code style=\"font-size:12px;word-break:break-all\">" + P.esc(s.url) + "</code>"),
+    $("subs").innerHTML = subs.length ? P.tableHtml(["名称", "链接", ""], subs.map((s, i) => [s.name, P.raw("<code class=\"url\">" + P.esc(s.url) + "</code>"),
       P.raw('<span class="it-act"><button type="button" class="chip-btn" data-a="copy" data-i="' + i + '">复制链接</button> <a class="chip-btn" href="' + P.esc(s.url) + '">打开</a> <button type="button" class="chip-btn" data-a="del" data-i="' + i + '">删除</button></span>')]))
       : '<p class="empty">还没保存订阅。</p>';
     $("subs").querySelectorAll('button[data-a="copy"]').forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(subs[+b.dataset.i].url); P.toast("已复制"); } catch (e) { P.toast("复制失败,请手动选中复制", true); } }; });
@@ -110,7 +110,7 @@
       const whole = groups.filter((g) => g.xs.length && g.xs.every((i) => ign.has(i)));
       const inWhole = new Set(whole.flatMap((g) => g.xs));
       const singles = Array.from(ign).filter((i) => !inWhole.has(i)).sort((a, b) => P.zhCmp(zh[a] || a, zh[b] || b));
-      const chip = (label, attr, title) => '<span class="chip-btn blk" style="cursor:default">' + P.esc(label) + ' <button type="button" ' + attr + ' title="' + title + '" style="all:unset;cursor:pointer;margin-left:4px">×</button></span>';
+      const chip = (label, attr, title) => '<span class="chip-btn blk static">' + P.esc(label) + ' <button class="chip-x" type="button" ' + attr + ' title="' + title + '">×</button></span>';
       $("iList").innerHTML = n ? '<div class="frow">' + whole.map((g) => chip(g.label + "(全部)", 'data-g="' + g.key + '"', "恢复全部" + g.label)).concat(singles.map((i) => chip(zh[i] || i, 'data-i="' + i + '"', "恢复"))).join("") + "</div>"
         : '<p class="empty">没有忽略的国别。</p>';
       $("iList").querySelectorAll("button").forEach((b) => { b.onclick = () => { const nx = new Set(ign);
@@ -147,7 +147,7 @@
     await P.load();
     [me, role] = await Promise.all([P.me(), P.role()]);
     const tag = role === "none" ? "游客 · 只读" : (P.ROLE_ZH[role] || role || "");
-    $("who").innerHTML = '<div style="font-size:20px;font-weight:700">' + P.esc(me.name || me.email || "未登录") + "</div>" + (me.email ? '<div class="muted">' + P.esc(me.email) + "</div>" : "") + (tag ? '<div class="muted small">在表格里的角色:' + P.esc(tag) + "</div>" : "");
+    $("who").innerHTML = '<div class="title-xl">' + P.esc(me.name || me.email || "未登录") + "</div>" + (me.email ? '<div class="muted">' + P.esc(me.email) + "</div>" : "") + (tag ? '<div class="muted small">在表格里的角色:' + P.esc(tag) + "</div>" : "");
     $("logout2").onclick = (e) => { e.preventDefault(); const l = document.getElementById("logout"); if (l) l.click(); };
     if (P.isGuest) { P.guest("游客帐号是大家共用的,没有自己的关注与订阅。"); $("countries").innerHTML = $("subs").innerHTML = $("ignoreBox").innerHTML = '<p class="empty">游客帐号没有这一项。</p>'; $("cPick").style.display = "none"; return; }
     if (!hasTable()) { $("countries").innerHTML = $("subs").innerHTML = $("ignoreBox").innerHTML = '<p class="empty">库里还没有「个人设置」表(管理员跑一次建表命令就有)。</p>'; $("cPick").style.display = "none"; return; }

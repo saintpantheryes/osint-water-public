@@ -19,12 +19,12 @@
     <select id="fOpp"><option value="">全部商机</option></select>
     <select id="fOwner"><option value="">全部负责人</option></select>
     <label class="chk"><input type="checkbox" id="fLeads"> 也显示未归商机的线索截止</label>
-    <span style="margin-left:auto"><a id="icsDl" class="chip-btn" href="api/assistant/calendar.ics" download="water-osint.ics" title="按当前的国别、商机筛选,导出今天前后(前 30 天、后 365 天)的节点与到期,苹果日历、Outlook 直接打开导入">下载 .ics</a>
+    <span class="push"><a id="icsDl" class="chip-btn" href="api/assistant/calendar.ics" download="water-osint.ics" title="按当前的国别、商机筛选,导出今天前后(前 30 天、后 365 天)的节点与到期,苹果日历、Outlook 直接打开导入">下载 .ics</a>
       <button type="button" id="subBtn" class="chip-btn" title="给一条订阅链接,加到手机或电脑的日历里后自动更新">订阅到日历</button></span>
   </div>
   <!-- 订阅说明:点「订阅到日历」展开;链接由后台给(含整个团队共用的订阅令牌),不经登录检查,所以只含日历里本来就有的公开节点与到期 -->
   <div class="panel subbox" id="subbox" hidden></div>
-  <p class="legend"><span><i style="background:#0e6ba8"></i>跟踪中商机的时间节点</span><span><i style="background:#94a3b8"></i>未归商机的线索截止(勾选才显示)</span><span><i style="background:#15803d"></i>跟进</span><span><i style="background:#b45309"></i>下一步到期</span><span><i style="background:#6d28d9"></i>报告</span></p>
+  <p class="legend"><span><i class="sw-c1"></i>跟踪中商机的时间节点</span><span><i class="sw-c6"></i>未归商机的线索截止(勾选才显示)</span><span><i class="sw-c5"></i>跟进</span><span><i class="sw-c4"></i>下一步到期</span><span><i class="sw-c3"></i>报告</span></p>
   <div id="cal" class="cal">读取中…</div>
   <h2>本月清单</h2>
   <div class="panel" id="list"></div>

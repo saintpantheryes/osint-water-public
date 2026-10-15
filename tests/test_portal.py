@@ -2335,7 +2335,20 @@ def test_portal_css_takes_colors_from_the_tokens():
     lits = {h.lower() for h in re.findall(r"#[0-9a-fA-F]{6}\b", rest)}
     in_spec = lits & {v.lower() for v in tokens.values() if len(v) == 7}
     assert not in_spec, f"这些颜色规范里有,请写成 var(--…):{sorted(in_spec)}"
-    assert len(set(re.findall(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b", rest))) <= 69, "portal.css 里新加了散色值;请用 :root 里的颜色"
+    assert len(set(re.findall(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b", rest))) <= 67, "portal.css 里新加了散色值;请用 :root 里的颜色"
+
+
+def test_pages_style_through_classes_not_inline():
+    """界面规范第六步:页面里不再临时写 style=,版式统一走 portal.css 里的类(.push / .grow / .tight / .sw-c1… 等)。
+    只有三种留在行内:随数据变的颜色(background:' + 变量)、初始隐藏(display:none,脚本再打开)、地图点的动画错峰,
+    以及 P.kpiHtml 按卡片个数给的 --cols。"""
+    allowed = re.compile(r"^(display:none|animation-delay:[\d.]+s|--cols:.*|background:)$")
+    bad = []
+    for f in sorted(PORTAL.glob("*.html")) + [PORTAL / "portal.js"]:
+        for m in re.finditer(r"style=\\?[\"']([^\"'\\]*)", f.read_text(encoding="utf-8")):
+            if not allowed.match(m.group(1).strip()):
+                bad.append(f"{f.name}: style=\"{m.group(1)}\"")
+    assert not bad, "页面里又写了行内样式,请换成 portal.css 里的类:\n" + "\n".join(bad)
 
 
 def test_notes_and_buttons_have_one_shape_each():

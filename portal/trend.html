@@ -19,16 +19,16 @@
 <main>
   <h1>趋势机会</h1>
   <p class="muted" id="intro">按公开数据推算哪里<b>缺水</b>又<b>有钱建</b>:是方向参考,不是具体项目,数字不计入线索、商机;只看中国以外。
-    <span class="legend-dot" style="background:#0d9488"></span>自付型:水风险高、人均 GDP 也高,多半自筹或 PPP
-    <span class="legend-dot" style="background:#7c3aed"></span>贷款型:水风险高、所在国近年有开发性贷款进水务
-    <span class="legend-dot" style="background:#dc2626"></span>两类都是</p>
+    <span class="legend-dot sw-c2"></span>自付型:水风险高、人均 GDP 也高,多半自筹或 PPP
+    <span class="legend-dot sw-loan"></span>贷款型:水风险高、所在国近年有开发性贷款进水务
+    <span class="legend-dot sw-bad"></span>两类都是</p>
   <div class="filters" id="filters">
     <div class="frow"><b>国别</b><select id="fCountry" aria-label="国别"><option value="">全部国别</option></select></div>
-    <div class="frow"><b>水风险按</b><span id="fRisk" class="frow" style="padding:0"></span></div>
-    <div class="frow"><b>水风险 ≥</b><span id="fMin" class="frow" style="padding:0"></span><span class="muted small">分(0–5;3 = 高,4 = 极高)</span></div>
-    <div class="frow"><b>人均 GDP ≥</b><span id="fGdp" class="frow" style="padding:0"></span><span class="muted small">PPP 美元,自付型用</span></div>
-    <div class="frow"><b>贷款判定</b><span class="muted small">所在国世行涉水项目 ≥ 1,或近一年开发性金融线索 ≥</span><span id="fLoan" class="frow" style="padding:0"></span><span class="muted small">条</span></div>
-    <div class="frow"><b>显示</b><span id="fShow" class="frow" style="padding:0"></span><span class="muted" id="fNote" style="margin-left:auto"></span></div>
+    <div class="frow"><b>水风险按</b><span id="fRisk" class="frow"></span></div>
+    <div class="frow"><b>水风险 ≥</b><span id="fMin" class="frow"></span><span class="muted small">分(0–5;3 = 高,4 = 极高)</span></div>
+    <div class="frow"><b>人均 GDP ≥</b><span id="fGdp" class="frow"></span><span class="muted small">PPP 美元,自付型用</span></div>
+    <div class="frow"><b>贷款判定</b><span class="muted small">所在国世行涉水项目 ≥ 1,或近一年开发性金融线索 ≥</span><span id="fLoan" class="frow"></span><span class="muted small">条</span></div>
+    <div class="frow"><b>显示</b><span id="fShow" class="frow"></span><span class="muted push" id="fNote"></span></div>
   </div>
   <div class="backbar" id="rel"></div>
   <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>

@@ -416,7 +416,7 @@
     hatchRegions(set) { return set ? Array.from(set).map((iso) => ({ name: iso, itemStyle: { areaColor: this.IGNORED_COLOR } })) : []; },
     onGeo(p) { return !!p && p.componentType === "geo"; },
     /* 提示框里的一行,与地图下方的图例说明 */
-    hatchTip(iso, set) { return set && set.has(iso) ? '<br><span style="color:#64748b">已忽略:不再采集这一国的线索</span>' : ""; },
+    hatchTip(iso, set) { return set && set.has(iso) ? '<br><span class="muted">已忽略:不再采集这一国的线索</span>' : ""; },
     hatchNote(mapEl, set) {
       if (!mapEl || !set || !set.size || (mapEl.nextElementSibling && mapEl.nextElementSibling.classList.contains("hatch-note"))) return;
       const p = document.createElement("p");
@@ -687,9 +687,9 @@
         return list;  // rows 已按中标时间从新到旧
       };
       el.innerHTML = head + '<div class="filters">' + DIMS.map((x) => '<div class="frow"><b' + (TIPS[x.k] ? ' title="' + this.esc(TIPS[x.k]) + '"' : "") + ">" + x.label +
-        '</b><span class="frow aw-' + x.k + '" style="padding:0"></span></div>').join("") +
-        '<div class="frow"><b>排序</b><span class="frow aw-o" style="padding:0"></span></div>' +
-        '<div class="frow"><b>搜索</b><input class="aw-q" placeholder="' + (firm ? "搜名称、项目或国别" : "搜名称、中标单位或国别(如:中国)") + '" size="30" aria-label="搜已中标项目"><span class="muted small aw-n" style="margin-left:auto"></span></div></div>' +
+        '</b><span class="frow aw-' + x.k + '"></span></div>').join("") +
+        '<div class="frow"><b>排序</b><span class="frow aw-o"></span></div>' +
+        '<div class="frow"><b>搜索</b><input class="aw-q" placeholder="' + (firm ? "搜名称、项目或国别" : "搜名称、中标单位或国别(如:中国)") + '" size="30" aria-label="搜已中标项目"><span class="muted small aw-n push"></span></div></div>' +
         '<div class="aw-k"></div><div class="panel aw-t"></div>';
       const $ = (c) => el.querySelector(c), PAGE = 20;  // 表一次列 20 份,「再列」往下加
       let show = PAGE;
@@ -914,7 +914,7 @@
       const KINDS = this.values("event_kind").concat(["中标"]).filter((k) => items.some((x) => x.kind === k));
       const st = { k: [] }, YEARS = 12;
       let all = false;
-      el.innerHTML = head + '<div class="filters"><div class="frow"><b>类别</b><span class="frow ch-k" style="padding:0"></span><span class="muted small ch-n" style="margin-left:auto"></span></div></div><div class="panel ch-t"></div>';
+      el.innerHTML = head + '<div class="filters"><div class="frow"><b>类别</b><span class="frow ch-k"></span><span class="muted small ch-n push"></span></div></div><div class="panel ch-t"></div>';
       const $ = (c) => el.querySelector(c);
       const render = () => {
         this.chips($(".ch-k"), [["", "全部 " + items.length]].concat(KINDS.map((k) => [k, k + " " + items.filter((x) => x.kind === k).length])), st, "k", render, true);
@@ -950,7 +950,7 @@
       const st = { k: [] };
       el.innerHTML = head + sums.map((r) => '<details class="sec dg-wrap" open><summary>' + this.esc(g(r, "name_zh") || g(r, "name") || "综述") + ' <span class="muted small">' + this.esc(this.day(g(r, "published")) || "") +
         " · 点数字后面的小角标看出处页码</span> " + this.open("study", r.id, "↗") + '</summary><div class="panel">' + this.digestHtml(g(r, "summary"), r.id) + "</div></details>").join("") +
-        (docs.length ? '<div class="filters"><div class="frow"><b>类型</b><span class="frow sd-k" style="padding:0"></span></div></div><div class="panel sd-t"></div>' : "");
+        (docs.length ? '<div class="filters"><div class="frow"><b>类型</b><span class="frow sd-k"></span></div></div><div class="panel sd-t"></div>' : "");
       if (!docs.length) return rows.length;
       const $ = (c) => el.querySelector(c);
       const render = () => {

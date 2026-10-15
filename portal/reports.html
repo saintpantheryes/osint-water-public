@@ -27,20 +27,20 @@
       <div class="form"><h3>上传一个报告模板</h3>
         <p class="muted small">Word 文件(.docx):页面、字体、字号、页眉页脚取自它,正文章节仍由后台按报告类型生成。</p>
         <div class="row"><label>名称</label><input id="tpName" placeholder="如:集团标准版式"></div>
-        <div class="row"><label>适用类型</label><span id="tpKinds" class="frow" style="padding:0;flex:1"></span></div>
+        <div class="row"><label>适用类型</label><span id="tpKinds" class="frow grow"></span></div>
         <div class="row"><label>文件</label><input id="tpFile" type="file" accept=".docx"></div>
-        <div class="row"><label>缺省</label><label style="flex:1;color:inherit"><input id="tpDefault" type="checkbox"> 这些类型没指定模板时就用它</label></div>
+        <div class="row"><label>缺省</label><label class="check"><input id="tpDefault" type="checkbox"> 这些类型没指定模板时就用它</label></div>
         <div class="row"><label>说明</label><input id="tpNote" placeholder="(可不填)"></div>
         <div class="row"><label></label><button class="primary" id="tpSave">上传</button><span class="muted" id="tpMsg"></span></div>
       </div>
     </div>
     <div class="col wide">
       <div class="filters">
-        <div class="frow"><b>类型</b><span id="fKind" class="frow" style="padding:0"></span></div>
-        <div class="frow"><b>版本</b><span id="fEd" class="frow" style="padding:0"></span></div>
-        <div class="frow"><b>状态</b><span id="fSt" class="frow" style="padding:0"></span></div>
+        <div class="frow"><b>类型</b><span id="fKind" class="frow"></span></div>
+        <div class="frow"><b>版本</b><span id="fEd" class="frow"></span></div>
+        <div class="frow"><b>状态</b><span id="fSt" class="frow"></span></div>
         <div class="frow"><b>国别</b><select id="fCountry" class="inline"><option value="">全部国别</option></select></div>
-        <div class="frow"><b>搜索</b><input id="fText" placeholder="搜国别、商机、期间" size="18"><span class="muted" id="count" style="margin-left:auto"></span></div>
+        <div class="frow"><b>搜索</b><input id="fText" placeholder="搜国别、商机、期间" size="18"><span class="muted push" id="count"></span></div>
       </div>
       <div class="panel" id="list">读取中…</div>
       <p class="muted">要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开报告表 ↗</a></p>
@@ -100,7 +100,7 @@
     $("tpls").innerHTML = tpls.length ? P.tableHtml(["名称", "适用类型", "缺省", "文件", "说明", ""], tpls.map((r) => {
       const f = lastFile(r);
       return [tg(r, "name"), (tg(r, "kinds") || []).join("、"), tg(r, "is_default") ? "✓" : "", P.raw(f ? '<a href="' + P.esc(P.fileUrl(f)) + '" target="_blank" rel="noopener">' + P.esc(f.name) + "</a>" : '<span class="over">还没传文件</span>'), tg(r, "note") || "",
-        P.raw('<span class="it-act" style="min-width:0;flex-direction:row;gap:6px"><button type="button" data-a="file" data-id="' + r.id + '">换文件</button>' + (tg(r, "is_default") ? "" : '<button type="button" data-a="def" data-id="' + r.id + '">设为缺省</button>') + P.open("template", r.id) + "</span>")];
+        P.raw('<span class="it-act inline"><button type="button" data-a="file" data-id="' + r.id + '">换文件</button>' + (tg(r, "is_default") ? "" : '<button type="button" data-a="def" data-id="' + r.id + '">设为缺省</button>') + P.open("template", r.id) + "</span>")];
     })) : '<p class="empty">还没有模板,现在用的是程序自带的版式;在左边传一个就会用它。</p>';
     $("tpls").querySelectorAll('button[data-a="file"]').forEach((b) => { b.onclick = () => replaceFile(b.dataset.id, b); });
     $("tpls").querySelectorAll('button[data-a="def"]').forEach((b) => { b.onclick = () => setDefault(b.dataset.id, b); });
