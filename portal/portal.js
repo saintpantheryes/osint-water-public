@@ -417,6 +417,15 @@
     onGeo(p) { return !!p && p.componentType === "geo"; },
     /* 提示框里的一行,与地图下方的图例说明 */
     hatchTip(iso, set) { return set && set.has(iso) ? '<br><span class="muted">已忽略:不再采集这一国的线索</span>' : ""; },
+    /* 忽略国别的数据默认不列、不算(使用方 2026-10-15:灰色国别不再采集,城市概况、线索页面里也别再出现):页面上一行说明 + 「显示 / 不显示」。
+       el 是 p.ig-note;parts 是 [「3 条线索」…](为 0 的别传);shown = 现在已露出;toggle = 点按钮时 */
+    igNote(el, parts, shown, toggle) {
+      if (!el) return;
+      if (!parts.length) { el.innerHTML = ""; return; }
+      el.innerHTML = (shown ? "已显示忽略国别(地图上灰色,不再采集)的 " + parts.join("、") + "。" : "忽略国别(地图上灰色,不再采集)的 " + parts.join("、") + "没算进来。") +
+        ' <button type="button" class="btn quiet">' + (shown ? "不显示" : "显示") + "</button>";
+      el.querySelector("button").onclick = toggle;
+    },
     hatchNote(mapEl, set) {
       if (!mapEl || !set || !set.size || (mapEl.nextElementSibling && mapEl.nextElementSibling.classList.contains("hatch-note"))) return;
       const p = document.createElement("p");

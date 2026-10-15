@@ -1717,6 +1717,150 @@ def test_city_page_lists_cities_and_opens_one():
     assert all(m == "GET" for m, _ in fake.calls[seeded:]), "城市概况只读"
 
 
+def test_city_and_trend_pages_leave_out_cities_of_ignored_countries():
+    """使用方 2026-10-15:灰色(忽略)的国别不再采集,城市概况却还列着中国的城市、算进卡片。忽略国别的城市默认不进卡片、地图、清单和国别下拉,
+    筛选框下面说没算进来几座,点「显示」能临时露出(网址 ig=1);直接选了忽略的国别照常列;搜到的只在忽略国别里时空清单说清楚。趋势机会同样不算。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    cn, tr = b.create("country", [{"name_zh": "中国", "ISO3": "CHN"}, {"name_zh": "土耳其", "ISO3": "TUR"}])
+    b.create("city", [{"key": "1", "name_zh": "东莞市", "name_en": "Dongguan", "country": cn["id"], "coords": "23.02,113.75", "population": 9644871},
+                      {"key": "2", "name_zh": "伊斯坦布尔", "name_en": "Istanbul", "country": tr["id"], "coords": "41.01,28.98", "population": 15460000, "water_risk": 4.0, "gdp_pc": 30000},
+                      {"key": "3", "name_zh": "甘贾", "name_en": "Ganja", "country": c["id"], "coords": "40.68,46.36", "population": 335600, "water_risk": 4.5, "gdp_pc": 30000}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    shots = Path(os.environ.get("PORTAL_SHOTS", "")) if os.environ.get("PORTAL_SHOTS") else None
+    names = lambda page: [r.split("\t")[0].split(" ")[0] for r in page.locator("#rows tbody tr").all_inner_texts()]
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            # 没设过忽略 = 默认忽略中国:东莞不列、不算
+            page.goto(base + "/city.html")
+            page.wait_for_selector("#rows table", timeout=15000)
+            assert names(page) == ["伊斯坦布尔", "巴库", "甘贾"] and "3\n城市" in page.inner_text("#cards")
+            assert "忽略国别(地图上灰色,不再采集)的 1 座城市没算进" in page.inner_text("#igNote") and "中国" not in page.inner_text("#fCountry")
+            pts = "() => echarts.getInstanceByDom(document.getElementById('map')).getOption().series[0].data.map((d) => d.name)"
+            assert "东莞市" not in page.evaluate(pts)
+            if shots:
+                page.screenshot(path=str(shots / "city_ignored.png"), full_page=True)
+            # 「显示」临时露出,再点收起
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 4")
+            assert names(page)[:2] == ["伊斯坦布尔", "东莞市"] and "ig=1" in page.url and "4\n城市" in page.inner_text("#cards") and "中国" in page.inner_text("#fCountry")
+            assert "东莞市" in page.evaluate(pts)
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 3")
+            assert "ig=" not in page.url
+            # 搜到的只在忽略国别里:空清单说为什么
+            page.fill("#fText", "dongguan")
+            page.wait_for_function("!document.querySelector('#rows tbody')")
+            assert "忽略的国别里有 1 座符合" in page.inner_text("#rows")
+            # 直接点名忽略的国别(比如从它的国别概况点过来):照常列,并说明
+            page.goto(base + "/city.html?c=CHN")
+            page.wait_for_selector("#rows table", timeout=15000)
+            assert names(page) == ["东莞市"] and "中国是你忽略的国别" in page.inner_text("#igNote") and page.eval_on_selector("#fCountry", "e => e.value") == "CHN"
+            # 「我的」里再忽略土耳其:城市概况、趋势机会都不再算伊斯坦布尔
+            page.goto(base + "/me.html")
+            page.wait_for_function("document.querySelector('#iConts button') && !document.querySelector('#iList').innerText.includes('读取')", timeout=15000)
+            click = "(iso) => { const c = echarts.getInstanceByDom(document.getElementById('iMap')); c.getZr().handler.dispatch('click', {}); c.trigger('click', {name: iso}); }"
+            page.evaluate(click, "TUR")
+            page.wait_for_function("document.querySelector('#iList').innerText.includes('土耳其')", timeout=15000)
+            page.goto(base + "/city.html")
+            page.wait_for_selector("#rows table", timeout=15000)
+            assert names(page) == ["巴库", "甘贾"] and "的 2 座城市没算进" in page.inner_text("#igNote")
+            page.goto(base + "/trend.html")
+            page.wait_for_selector("#rows table", timeout=15000)
+            assert "伊斯坦布尔" not in page.inner_text("#rows") and "土耳其" not in page.inner_text("#crows") and "土耳其" not in page.inner_text("#fCountry")
+            assert "甘贾" in page.inner_text("#rows") and "忽略的国别" in page.inner_text("#intro")
+            phone = browser.new_page(viewport={"width": 390, "height": 760})  # 手机:筛选收起时这行说明和「显示」也看得见,整页不横向溢出
+            phone.goto(base + "/city.html")
+            phone.wait_for_selector("#igNote button", timeout=15000)
+            box = phone.locator("#igNote button").bounding_box()
+            assert box["x"] + box["width"] <= 390 and phone.evaluate("document.documentElement.scrollWidth") <= 390
+            if shots:
+                phone.screenshot(path=str(shots / "city_ignored_phone.png"), full_page=False)
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+
+
+def test_lead_pages_leave_out_leads_of_ignored_countries():
+    """使用方 2026-10-15「隐藏」:忽略国别(不再采集)以前采到的旧线索,线索总览、线索分析、线索处理默认不列、不算,国别筛选里也不列;
+    说明行写没算进来几条,点「显示」露出(网址 ig=1),再点收起。AI 推荐的商机同样。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    today = _today().isoformat()
+    cn = b.create("country", [{"name_zh": "中国", "ISO3": "CHN"}])[0]  # 没设过忽略 = 默认忽略中国
+    cs = b.create("opportunity", [{"code": "CHN-001", "name_zh": "东莞污水厂", "country": cn["id"], "stage": "建议"}])[0]
+    b.create("lead", [{"key": "dddddddd", "title": "Dongguan WWTP tender", "url": "https://example.org/d", "relevant": True, "category": "招标", "country": cn["id"],
+                       "found_at": today + "T05:00:00.000Z", "maybe_new": True, "status": "待处理", "origin": "机器采集"},
+                      {"key": "eeeeeeee", "title": "Hefei pipeline", "url": "https://example.org/e", "relevant": False, "category": "意向书", "country": cn["id"],
+                       "found_at": today + "T06:00:00.000Z", "status": "已处理", "origin": "机器采集", "suggested_opp": cs["id"]}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    kpi = lambda page, label: page.locator(f"#cards .kpi:has(.kl:text-is('{label}')) .kn").inner_text()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            # 线索总览:卡片只数阿塞拜疆的 3 条;国别一排没有中国;搜中国的线索搜不到
+            page.goto(base + "/overview.html")
+            page.wait_for_function("document.querySelector('#igNote button')", timeout=15000)
+            assert kpi(page, "线索") == "3" and "2 条线索没算进来" in page.inner_text("#igNote") and "中国" not in page.inner_text("#fCountry")
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelector('#igNote').innerText.includes('已显示')", timeout=15000)
+            assert kpi(page, "线索") == "5" and "ig=1" in page.url and "中国" in page.inner_text("#fCountry")
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelector('#igNote').innerText.includes('没算进来')", timeout=15000)
+            assert kpi(page, "线索") == "3" and "ig=" not in page.url
+            page.fill("#fText", "Dongguan")
+            page.press("#fText", "Enter")
+            page.wait_for_function("document.getElementById('drillTitle').textContent.includes('Dongguan') && !document.querySelector('#drill').innerText.includes('读取')", timeout=15000)
+            assert "没有符合的线索" in page.inner_text("#drill") and "1 条线索没算进来" in page.inner_text("#igNote")
+            # 线索分析:同样
+            page.goto(base + "/analysis.html")
+            page.wait_for_function("document.querySelector('#igNote button')", timeout=15000)
+            assert kpi(page, "线索") == "3" and "2 条线索没算进来" in page.inner_text("#igNote") and "中国" not in page.inner_text("#fCountry")
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelector('#igNote').innerText.includes('已显示')", timeout=15000)
+            assert kpi(page, "线索") == "5" and "ig=1" in page.url
+            # 线索处理:待确认归属里中国那条、AI 推荐的中国商机都不列,页签上的数也不算
+            page.goto(base + "/inbox.html")
+            page.wait_for_function("document.querySelector('#igNote button')", timeout=15000)
+            assert page.inner_text("#nAssign") == "2" and page.inner_text("#nSuggest") == "1"
+            assert "2 条待确认归属的线索、1 个 AI 推荐的商机没算进来" in page.inner_text("#igNote") and "Dongguan" not in page.inner_text("#assign")
+            page.click("#igNote button")
+            page.wait_for_function("document.getElementById('nAssign').textContent === '4'", timeout=15000)
+            assert page.inner_text("#nSuggest") == "2" and "Dongguan" in page.inner_text("#assign") and "ig=1" in page.url
+            phone = browser.new_page(viewport={"width": 390, "height": 760})  # 手机:说明行看得见、不横向溢出
+            for path in ("overview.html", "analysis.html", "inbox.html"):
+                phone.goto(base + "/" + path)
+                phone.wait_for_selector("#igNote button", timeout=15000)
+                box = phone.locator("#igNote button").bounding_box()
+                assert box["x"] + box["width"] <= 390 and phone.evaluate("document.documentElement.scrollWidth") <= 390, path
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+
+
 def test_trend_page_marks_self_funded_and_loan_driven_cities():
     """趋势机会(使用方 2026-10-09 要的):水风险高且人均 GDP 高 = 自付型,水风险高且所在国有开发性贷款进水务 = 贷款型,同一张地图上,门槛可调;
     城市页与国别页「概况」里列出水风险与经济。只读。"""

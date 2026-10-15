@@ -23,6 +23,7 @@
     <div class="frow"><b>国别</b><span id="fCountry" class="frow"></span><button type="button" class="chip-btn more" id="moreC">更多国家 ▾</button><span class="muted small push" id="fNote"></span></div>
     <div class="frow" id="rowMore" style="display:none"><b></b><span id="fCountry2" class="frow"></span></div>
   </div>
+  <p class="muted small ig-note" id="igNote"></p>
   <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
   <div class="tabs" id="tabs"></div>
   <div class="tab" data-t="trend">
@@ -59,10 +60,10 @@
   const $ = (id) => document.getElementById(id);
   const BLUE = "#0e6ba8", GREY = "#cbd5e1", PAL = ["#0e6ba8", "#15803d", "#b45309", "#6d28d9", "#be185d", "#0f766e", "#64748b", "#ca8a04", "#1d4ed8", "#9f1239", "#4d7c0f", "#7c3aed"];
   const q = new URLSearchParams(location.search);
-  const state = { w: q.get("w") || "30", rel: q.get("rel") || "", r: q.get("r") || "", c: q.get("c") || "" };
+  const state = { w: q.get("w") || "30", rel: q.get("rel") || "", r: q.get("r") || "", c: q.get("c") || "", ig: q.get("ig") === "1" ? "1" : "" };
   const TABS = [["trend", "每日新增"], ["country", "国别"], ["kind", "类别与领域"], ["source", "资金来源与信源"], ["status", "判定·状态·归属"]];
   let tab = TABS.some(([k]) => k === q.get("t")) ? q.get("t") : "trend";
-  let leads = [], countries = [], cname = {}, cregion = {}, charts = {};
+  let leads = [], countries = [], cname = {}, cregion = {}, charts = {}, bl = new Set(), igIds = new Set(), nIgn = 0;  // bl:忽略的国别(ISO3);igIds:它们在国别表里的编号
   const g = (l, p) => P.get("lead", l, p);
   const dayOf = (l) => P.day(g(l, "found_at"));
   const inRegion = (c) => !state.r || P.regionOf(c) === state.r;
@@ -74,7 +75,11 @@
   function current() {
     const today = P.today(), since = state.w === "" ? "" : P.addDays(today, -Number(state.w));
     const ids = state.c ? new Set([state.c]) : state.r ? new Set(countries.filter(inRegion).map((c) => c.id)) : null;
-    return leads.filter((l) => (!since || dayOf(l) >= since) && (!state.rel || g(l, "relevant") === true) && (!ids || ids.has(P.linkId(g(l, "country")))));
+    const pass = leads.filter((l) => (!since || dayOf(l) >= since) && (!state.rel || g(l, "relevant") === true) && (!ids || ids.has(P.linkId(g(l, "country")))));
+    /* 忽略国别的线索默认不算(点「显示」露出,网址 ig=1);直接选了一个忽略的国别就照常算它 */
+    const isIg = (l) => igIds.has(P.linkId(g(l, "country")));
+    nIgn = igIds.has(state.c) ? 0 : pass.filter(isIg).length;
+    return state.ig || !nIgn ? pass : pass.filter((l) => !isIg(l));
   }
   function count(rows, key) { const m = new Map(); rows.forEach((l) => { const ks = key(l); (Array.isArray(ks) ? ks : [ks]).forEach((k) => { if (k === undefined || k === null) return; m.set(k, (m.get(k) || 0) + 1); }); }); return m; }
   const sortDesc = (m) => [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -100,6 +105,7 @@
   async function refresh() {
     const rows = current();
     history.replaceState(null, "", location.pathname + "?" + new URLSearchParams(Object.assign({}, state, { t: tab })));
+    P.igNote($("igNote"), nIgn ? [nIgn.toLocaleString("zh-CN") + " 条线索"] : [], !!state.ig, () => { state.ig = state.ig ? "" : "1"; chipRows(); refresh().catch((e) => P.fail($("cards"), e)); });
     const rel = rows.filter((l) => g(l, "relevant") === true);
     const pending = rows.filter((l) => g(l, "status") === "待处理").length, assign = rows.filter(toAssign).length;
     const inOpp = rel.filter((l) => P.linkId(g(l, "opportunity"))).length, uploads = rows.filter((l) => g(l, "origin") === "用户上传").length;
@@ -219,7 +225,7 @@
   }
 
   function chipRows() {
-    const withLeads = countries.filter((c) => Number(P.get("country", c, "lead_count")) > 0);
+    const withLeads = countries.filter((c) => Number(P.get("country", c, "lead_count")) > 0 && (state.ig || !igIds.has(c.id) || c.id === state.c));  // 忽略的国别不列(露出时才列)
     const opt = (c) => [c.id, (P.get("country", c, "name_zh") || P.get("country", c, "key")) + " " + (Number(P.get("country", c, "lead_count")) || 0)];
     const on = () => refresh().catch((e) => P.fail($("cards"), e));
     const nReg = {}; withLeads.forEach((c) => { const r = P.regionOf(c); nReg[r] = (nReg[r] || 0) + (Number(P.get("country", c, "lead_count")) || 0); });
@@ -243,6 +249,7 @@
     catOrder = P.choices("lead", "category"); secOrder = P.choices("lead", "sectors");
     const [cs, ls] = await Promise.all([P.countries(), P.records("lead", { props: ["key", "title", "url", "relevant", "category", "sectors", "country", "funder", "found_at", "status", "opportunity", "suggested_opp", "maybe_new", "judged_by", "source", "origin", "summary_zh", "project_name"] }), P.zhTerms()]);
     countries = cs; leads = ls;
+    bl = await P.ignored(); igIds = new Set(cs.filter((c) => bl.has(P.get("country", c, "key"))).map((c) => c.id));
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); cregion[c.id] = P.regionOf(c); });
     chipRows(); drawTabs();
     await refresh();

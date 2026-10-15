@@ -18,7 +18,7 @@
 <script>document.getElementById("nav").innerHTML = P.nav("trend.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
   <h1>趋势机会</h1>
-  <p class="muted" id="intro">按公开数据推算哪里<b>缺水</b>又<b>有钱建</b>:是方向参考,不是具体项目,数字不计入线索、商机;只看中国以外。
+  <p class="muted" id="intro">按公开数据推算哪里<b>缺水</b>又<b>有钱建</b>:是方向参考,不是具体项目,数字不计入线索、商机;只看中国以外,你忽略的国别(地图上灰色)也不算。
     <span class="legend-dot sw-c2"></span>自付型:水风险高、人均 GDP 也高,多半自筹或 PPP
     <span class="legend-dot sw-loan"></span>贷款型:水风险高、所在国近年有开发性贷款进水务
     <span class="legend-dot sw-bad"></span>两类都是</p>
@@ -60,6 +60,7 @@
   const num = (v, d) => (v === undefined || v === null || v === "" ? "" : Number(v).toLocaleString("zh-CN", { maximumFractionDigits: d === undefined ? 0 : d }));
   const people = (n) => (n >= 1e8 ? (n / 1e8).toFixed(2) + " 亿" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString("zh-CN") + " 万" : String(n || 0));
   const latlon = (v) => { const m = String(v || "").match(/(-?\d+(?:\.\d+)?)\s*[,,]\s*(-?\d+(?:\.\d+)?)/); return m ? [Number(m[2]), Number(m[1])] : null; };
+  let bl = new Set();  // 登录人忽略的国别:地图上涂灰,城市不算
   const val = (oid, r, p) => { const v = P.get(oid, r, p); return v === undefined || v === null || v === "" ? null : Number(v); };
 
   try {
@@ -76,10 +77,12 @@
       P.records("country", { props: has("country", ["name_zh", "key", "income_group", "water_stress", "water_stress_2030", "drought", "flood", "gdp_pc", "wb_water_n", "wb_water_musd"]) }),
       P.records("city", { props: has("city", ["name_zh", "name_en", "country", "coords", "population", "lead_count", "opp_count", "water_risk", "water_stress", "water_stress_2030", "gdp_pc"]) }),
       P.records("lead", { props: ["country", "funder", "found_at"] })]);
+    bl = await P.ignored();  // 忽略的国别不再采集:它们的城市、国别不进卡片、地图和清单(地图上涂灰)
+    const out = (iso) => EXCLUDE.has(iso) || bl.has(iso);
     const byId = {}; countries.forEach((c) => { byId[c.id] = c; });
-    const keep = (ct) => { const c = byId[P.linkId(P.get("city", ct, "country"))]; return !(c && EXCLUDE.has(P.get("country", c, "key"))); };
+    const keep = (ct) => { const c = byId[P.linkId(P.get("city", ct, "country"))]; return !(c && out(P.get("country", c, "key"))); };
     cities.splice(0, cities.length, ...cities.filter(keep));
-    countries.splice(0, countries.length, ...countries.filter((c) => !EXCLUDE.has(P.get("country", c, "key"))));
+    countries.splice(0, countries.length, ...countries.filter((c) => !out(P.get("country", c, "key"))));
     /* 每个国别近一年的开发性金融线索 */
     const devLeads = {};
     leads.forEach((l) => {
@@ -106,7 +109,7 @@
     $("rel").addEventListener("click", (e) => { if (e.target.id === "allC") { e.preventDefault(); pickCountry(""); } });
     const isoSet = new Set(countries.filter((c) => used.has(c.id)).map((c) => P.get("country", c, "key")));
     const zhOf = {};
-    let mc = null, bl = new Set();  // bl:登录人忽略的国别,地图上涂灰
+    let mc = null;
     const draw = () => {
       const qs = new URLSearchParams(Object.entries(state).filter(([k, v]) => v && v !== DEFAULT[k])).toString();
       history.replaceState(null, "", "trend.html" + (qs ? "?" + qs : ""));
@@ -172,7 +175,6 @@
     P.chips($("fLoan"), LOANS, state, "l", draw);
     P.chips($("fShow"), SHOWS, state, "s", draw);
     $("fCountry").onchange = () => { state.c = $("fCountry").value; draw(); };
-    bl = await P.ignored();
     P.hatchNote($("map"), bl);
     await fetch("world.geo.json").then((r) => r.json()).then((geo) => { geo.features.forEach((f) => { zhOf[f.properties.name] = f.properties.zh || f.properties.name; }); echarts.registerMap("world", geo); });
     draw();

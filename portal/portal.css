@@ -608,6 +608,7 @@ sup.sref a:hover { background: var(--brand); color: #fff; }
 
 /* 版式小工具:页面里不再临时写 style=,统一用这些类(只有随数据变的颜色、初始隐藏、动画错峰留在行内) */
 .push { margin-left: auto; }                                   /* 推到这一行最右 */
+.ig-note:empty { display: none; }                         /* 城市概况:没有忽略国别的城市时这行不占地方 */
 .grow { flex: 1; } input.grow { min-width: 180px; }
 .frow > .frow, .filters .frow > .frow, .form .row > .frow { padding: 0; }  /* 筛选行、表单行里套的一组选项 */
 .toolbar > h1, .toolbar > h2 { margin: 0; }
