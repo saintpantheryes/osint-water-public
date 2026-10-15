@@ -9,9 +9,11 @@
     tz: TZ,
     onto: null,
     async load() {
-      /* 角色那一问(GET /api/base/{库})要库编号:上次记下的编号先拿来,跟配置、本体同时发,省掉一整轮来回;编号对不上再按配置重问 */
-      let bid = ""; try { bid = localStorage.getItem("ow.base") || ""; } catch (e) { /* 隐私模式读不到就照旧 */ }
-      const early = bid ? this._baseFetch(bid) : null;
+      /* 角色那一问(GET /api/base/{库})要库编号:上次记下的编号先拿来,跟配置、本体同时发,省掉一整轮来回;编号对不上再按配置重问。
+         顶栏先画的页面在 nav() 里已经发出去了(连同「这是谁」那一问),这里不再发第二遍 */
+      this._askEarly();
+      const bid = this._baseEarlyId;
+      const early = this._baseEarly;
       const [r, o] = await Promise.all([fetch("config.json", { cache: "no-store" }), fetch("ontology.json")]);
       if (!r.ok) throw new Error("读不到 config.json(" + r.status + ")");
       if (!o.ok) throw new Error("读不到 ontology.json(" + o.status + ")");
@@ -20,7 +22,7 @@
       this.tz = this.cfg.timezone || TZ;
       const id = this.cfg.base && this.cfg.base.id;
       if (id) { try { localStorage.setItem("ow.base", id); } catch (e) { /* 记不下也不碍事 */ } }
-      if (early && id === bid) this._baseEarly = early;
+      if (!(early && id === bid)) this._baseEarly = null;  /* 记下的编号对不上(换了库):早发的那一问作废,按配置重问 */
       await this.role();  /* 登录人在库里的角色:不在库里的(游客)之后所有读表请求改走后台的只读通道 */
       this.followed();  /* 关注的国别:先发出去不等,清单与国别下拉用到时再等(P.followed) */
       if (this._navEarly) this.navFill();  /* 顶栏在读配置之前就先画好了:这时补上「后台数据表格」与帐号区 */
@@ -86,7 +88,21 @@
       return r.json();
     },
     /* 写:以登录人的身份;关联、人员字段按 config 里的形状(one = {id},many = [{id}]) */
-    async me() { if (!this._me) this._me = await this.api("/auth/user"); return this._me || {}; },
+    /* 「这是谁」只问一次:几处同时要(帐号区、线索处理页……)共用同一个请求 */
+    me() {
+      if (!this._mep) this._mep = this.api("/auth/user").then((m) => m || {}).catch((e) => { this._mep = null; throw e; });  /* 问失败的下次再问 */
+      return this._mep;
+    },
+    /* 顶栏一画好就先问「这是谁」与登录角色(角色那一问要库编号,用上次记下的),不等配置与本体:登录人的名字几百毫秒就能出来,
+       不用等配置、本体(几百 KB)、角色一串问完再问。编号对不上的,load() 作废这一问、按配置重问 */
+    _askEarly() {
+      if (!this._mep) this.me().catch(() => {});
+      if (this._baseEarly === undefined) {
+        let bid = ""; try { bid = localStorage.getItem("ow.base") || ""; } catch (e) { /* 隐私模式读不到就照旧 */ }
+        this._baseEarlyId = bid;
+        this._baseEarly = bid ? this._baseFetch(bid) : null;
+      }
+    },
     /* 登录人在库里的角色(owner/creator/editor/commenter/viewer);不在库里(403 / 404)记 "none" = 游客;问不到就空 */
     ROLE_ZH: { owner: "所有者", creator: "创建者", editor: "编辑者", commenter: "评论者", viewer: "查看者", none: "游客" },
     _baseFetch(id) { return fetch("/api/base/" + id, { credentials: "same-origin", headers: { Accept: "application/json" } }); },
@@ -266,6 +282,7 @@
       /* 各页紧跟在 <div id="nav"> 后面的一小段脚本里调(不等读配置与角色),读表那几秒顶栏和页签已经在了,不会先露出没有顶栏的版式、读完再跳成带页签的:
          这时「后台数据表格」先藏着(还不知道是不是游客)、帐号区空着,load() 读完角色由 navFill() 补上。读完配置以后才调的照旧一次画全 */
       this._navEarly = !this.cfg;
+      if (this._navEarly) { this._askEarly(); setTimeout(() => this.account(), 0); }  /* 名字先出来,角色、「后台数据表格」读完配置再补 */
       const table = this.cfg ? "/base/" + this.cfg.base.id : "/space";
       const link = ([h, n, d]) => {
         const tip = d ? ' title="' + this.esc(d) + '"' : "";
@@ -336,20 +353,29 @@
       });
     },
     /* 帐号区(平铺导航的右端 / 菜单卡片的底部):登录人、在库里的角色、「帐号设置」(表格的设置页)、「退出登录」。游客帐号标成「游客 · 只读」。 */
+    /* 名字一回来就先画(角色还没问到时不带角色标签、不带「我的」);角色回来再画一遍补上。顶栏先画的页面这里会进两次:
+       nav() 一次(只等名字)、load() 读完角色后 navFill() 一次(名字与角色都齐) */
     async account() {
       const el = document.getElementById("acct"); if (!el) return;
-      let me = {}, role = "";
-      try { [me, role] = await Promise.all([this.me(), this.role()]); } catch (e) { console.warn("读不到登录人", e); }
-      const ro = role === "viewer" || role === "commenter" || role === "none";
-      const who = this.esc(me.name || me.email || "未登录"), tag = role === "none" ? "游客 · 只读" : ro ? "只读" : (this.ROLE_ZH[role] || "");
-      el.innerHTML = '<span class="who" title="' + this.esc(me.email || "") + '">' + who + (tag ? ' <b class="' + (ro ? "ro" : "rw") + '">' + tag + "</b>" : "") + "</span>" +
-        (role === "none" ? "" : '<a href="me.html">我的</a>') + '<a href="/setting" target="_blank" rel="noopener">帐号设置</a><a href="#" id="logout">退出登录</a>';
-      document.getElementById("logout").onclick = async (e) => {
-        e.preventDefault();
-        /* 表格的登出接口是 POST /api/auth/signout(线上核过:/api/auth/logout 是 404,所以之前点了没反应) */
-        try { await fetch("/api/auth/signout", { method: "POST", credentials: "same-origin" }); } catch (err) { console.warn("退出失败", err); }
-        location.href = "/auth/login?redirect=%2Fportal%2F";
+      let me = {};
+      try { me = await this.me(); } catch (e) { console.warn("读不到登录人", e); }
+      if (!me) return;  /* 没登录:api() 已转去登录页 */
+      const paint = (role) => {
+        const ro = role === "viewer" || role === "commenter" || role === "none";
+        const who = this.esc(me.name || me.email || "未登录"), tag = role === "none" ? "游客 · 只读" : ro ? "只读" : (this.ROLE_ZH[role] || "");
+        el.innerHTML = '<span class="who" title="' + this.esc(me.email || "") + '">' + who + (tag ? ' <b class="' + (ro ? "ro" : "rw") + '">' + tag + "</b>" : "") + "</span>" +
+          (role === "none" || role === undefined ? "" : '<a href="me.html">我的</a>') + '<a href="/setting" target="_blank" rel="noopener">帐号设置</a><a href="#" id="logout">退出登录</a>';
+        document.getElementById("logout").onclick = async (e) => {
+          e.preventDefault();
+          /* 表格的登出接口是 POST /api/auth/signout(线上核过:/api/auth/logout 是 404,所以之前点了没反应) */
+          try { await fetch("/api/auth/signout", { method: "POST", credentials: "same-origin" }); } catch (err) { console.warn("退出失败", err); }
+          location.href = "/auth/login?redirect=%2Fportal%2F";
+        };
       };
+      if (!this.cfg) { paint(this._role); return; }  /* 配置还没读完:角色问不了(要库编号),先只画名字;navFill() 会再来一次 */
+      let role = "";
+      try { role = await this.role(); } catch (e) { console.warn("读不到角色", e); }
+      paint(role);
     },
     /* 「我的」:登录人在「个人设置」表里的那一行(关注国别、日历订阅;A24)。库里没建这张表 → null;游客 → null;
        create 为真且还没有行时建一行(名称 = 登录人显示名,账号 = 登录人)。别人的行页面不读不改。 */
