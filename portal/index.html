@@ -759,34 +759,80 @@
     };
   }
 
-  /* prev:上一问(接着问时后台沿用它的对象、条件与指标;「理解为」里写明沿用了哪几项) */
+  /* 有歧义的说法(本体 semantic.ambiguous):照缺省答,上面写明按哪一种算的;另几种是按钮,点了按改写后的问题重问 */
+  function askBackHtml(plan) {
+    return (plan.ask_back || []).map((a, i) => '<div class="note n-info small ask-back">' + P.esc(a.question) + ",这次按<b>" + P.esc(a.chosen) + "</b>算的;也可以按:" +
+      a.options.map((o, j) => '<button type="button" class="btn quiet" data-ab="' + i + "-" + j + '">' + P.esc(o.label) + "</button>").join("") + "</div>").join("");
+  }
+  function wireAskBack(el, plan) {
+    el.querySelectorAll("[data-ab]").forEach((b) => { const [i, j] = b.dataset.ab.split("-").map(Number); b.onclick = () => submit(plan.ask_back[i].options[j].q, { fresh: true }); });
+  }
+
+  /* 发前核对(图一 ⑮):按条件查出 0 条时,逐个去掉一个条件再数(国别不去),第一个查得到的照它答,上面写明去掉了哪一项。
+     只做线索、已中标项目、时间节点(表格能直接数);问了规模的已中标项目另有说明(capNote),不在这里放宽 */
+  const DROPS = [["keywords", ["标题或摘要含", "名称或中标单位含"]], ["terms", ["术语"]], ["categories", ["类别"]], ["status", ["处理状态"]], ["relevant", ["是否相关"]],
+    ["funders", ["资金来源"]], ["winners", ["中标单位含"]], ["winner_countries", ["中标单位国别含"]], ["price", ["中标价"]], ["contract_types", ["合同类型"]],
+    ["deliveries", ["承包模式"]], ["assets", ["主体工程"]], ["kinds", ["类型"]], ["sectors", ["领域", "类别"]], ["time", ["时间", "中标时间"]]];
+  const filled = (f, k) => (k === "time" ? !!(f.days || f.from || f.to || f.future_days) : k === "relevant" ? f.relevant === true || f.relevant === false : Array.isArray(f[k]) ? f[k].length > 0 : !!f[k]);
+  async function countOf(oid, f) {
+    if (oid === "lead") return P.count("lead", P.and(...leadConds(f)));
+    if (oid === "award") return P.count("award", P.and(...awConds(f)));
+    return P.count("milestone", P.and(...msConds(f)));
+  }
+  async function loosen(plan) {
+    for (const [k, labels] of DROPS) {
+      if (!filled(plan.filters, k)) continue;
+      const p2 = JSON.parse(JSON.stringify(plan)), f2 = p2.filters;
+      if (k === "time") { f2.days = f2.from = f2.to = f2.future_days = null; } else if (k === "relevant") f2.relevant = null; else if (k === "price") f2.price = null; else f2[k] = [];
+      if (k === "sectors") f2.sectors_fine = [];
+      const n = await countOf(plan.object, f2);
+      if (n > 0) {
+        const lab = (plan.understood || []).filter((x) => labels.includes(x[0]));
+        const said = lab.length ? lab.map((x) => "「" + x[0] + ":" + x[1] + "」").join("") : "一个条件";
+        p2.understood = (p2.understood || []).filter((x) => !labels.includes(x[0]));
+        return { plan: p2, said, n };
+      }
+    }
+    return null;
+  }
+
+  /* prev:上一问(接着问时后台沿用它的对象、条件与指标;「理解为」里写明沿用了哪几项)。返回计划(答对、答错按钮要用) */
   async function answer(q, el, prev) {
-    const plan = await P.ask(q, prev);
-    if (!plan) return;
+    let plan = await P.ask(q, prev);
+    if (!plan) return null;
     lastPlan = ["help", "report"].includes(plan.intent) ? lastPlan : { q, object: plan.object, filters: plan.filters, measures: plan.measures || [], group_by: plan.group_by, order: plan.order || null, law: plan.law || null };
     if (prev && (plan.understood || []).some((x) => x[0] === "沿用上一问")) notePrev(q, prev);  // 历史里记下它接的是哪一问,以后点它照样接上
-    const f = plan.filters, body = document.createElement("div");
+    const body = document.createElement("div");
     el.querySelector(".a-body").replaceWith(body); body.className = "a-body";
-    el.querySelector(".a-head").insertAdjacentHTML("beforeend", understoodHtml(plan));
+    el.querySelector(".a-head").insertAdjacentHTML("beforeend", understoodHtml(plan) + askBackHtml(plan));
+    wireAskBack(el, plan);
     if (plan.note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<p class="muted small">' + P.esc(plan.note) + "</p>");
     if (plan.scope_note) el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="note n-warn small">' + P.esc(plan.scope_note) + "</div>");  // 本体 data_scope:不在采集范围的国家
     if (plan.intent === "help") {
       body.innerHTML = '<p>没听懂这句。可以这样问:</p><ul class="list">' + (plan.examples || []).map((e) => '<li><a href="#" class="ex">' + P.esc(e) + "</a></li>").join("") + "</ul>";
       body.querySelectorAll(".ex").forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); submit(a.textContent, { fresh: true }); }; });
-      return;
+      return plan;
     }
     if (plan.intent === "report") {
-      const c = f.countries[0];
+      const c = plan.filters.countries[0];
       body.innerHTML = '<p>生成报告由助手直接发起要到第二步;现在可以到报告页申请,后台两分钟内生成 Word:</p><p><a class="btn" href="reports.html' + (c && byIso[c.iso3] ? "?country=" + encodeURIComponent(byIso[c.iso3].id) : "") + '">去报告页' + (c ? "(" + P.esc(c.name) + ")" : "") + " →</a></p>";
-      return;
+      return plan;
     }
     const oid = plan.object;
-    if (!NOUN[oid]) { body.innerHTML = '<p class="muted">系统刚更新过,这个页面还是旧的:请刷新页面后再问一次。</p>'; return; }  // 助手接口认得、旧页面不认得的对象
-    if (oid === "award" && !hasAw()) { body.innerHTML = '<p class="empty">「已中标项目」表还没建(跑一次建表命令后就能问中标记录)。</p>'; return; }
+    if (!NOUN[oid]) { body.innerHTML = '<p class="muted">系统刚更新过,这个页面还是旧的:请刷新页面后再问一次。</p>'; return plan; }  // 助手接口认得、旧页面不认得的对象
+    if (oid === "award" && !hasAw()) { body.innerHTML = '<p class="empty">「已中标项目」表还没建(跑一次建表命令后就能问中标记录)。</p>'; return plan; }
     body.innerHTML = '<p class="muted">查表中…</p>';
-    if (oid === "country") { await countryView(plan, body, el); return; }  // 营商环境(世行 B-READY):国别表或单国作答
-    if (oid === "law") { await lawView(q, plan, body, el); return; }  // 法规:排放限值、本国定义、条文(v2.24)  // 营商环境(世行 B-READY):国别表或单国作答
-    if ((plan.measures || []).some((m) => m.id !== "count") && oid === "award") { await metricView(plan, body, el); return; }  // 问了平均、中位数、合计、比例这类指标
+    if (oid === "country") { await countryView(plan, body, el); return plan; }  // 营商环境(世行 B-READY):国别表或单国作答
+    if (oid === "law") { await lawView(q, plan, body, el); return plan; }  // 法规:排放限值、本国定义、条文(v2.24)
+    if (["lead", "award", "milestone"].includes(oid) && !(oid === "award" && plan.filters.capacity) && (await countOf(oid, plan.filters)) === 0) {
+      const lo = await loosen(plan), u = unitOf(oid);
+      el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="note n-warn small loosened">' + (lo
+        ? "按你说的条件查到 0 " + u + "。去掉" + P.esc(lo.said) + "后有 " + lo.n + " " + u + ",下面" + (plan.intent === "count" ? "数" : "列") + "的是这些。"
+        : "按你说的条件查到 0 " + u + ";每次去掉一个条件(国别不去)也都是 0 " + u + "。") + "</div>");
+      if (lo) plan = lo.plan;
+    }
+    const f = plan.filters;
+    if ((plan.measures || []).some((m) => m.id !== "count") && oid === "award") { await metricView(plan, body, el); return plan; }  // 问了平均、中位数、合计、比例这类指标
     if (plan.intent === "count") {
       let n, aw = null;
       if (oid === "lead") n = await P.count("lead", P.and(...leadConds(f)));
@@ -796,11 +842,41 @@
       else n = (await oppRows(f)).length;
       body.innerHTML = '<div class="kpis">' + kpiCard(NOUN[oid].slice(1), [String(n), unitOf(oid)], "") + "</div>" + (aw ? capNote(plan, aw, false) : "") + '<p><a href="#" class="show-list">列出清单</a> · ' + linkOut(plan) + "</p>";
       body.querySelector(".show-list").onclick = async (ev) => { ev.preventDefault(); const a = ev.currentTarget, d = document.createElement("div"); a.replaceWith(document.createTextNode("清单在下面")); body.appendChild(d); d.innerHTML = '<p class="muted">读取中…</p>'; try { d.innerHTML = await listHtml(plan, Math.min(plan.limit || 50, 200)); fold(d, el, unitOf(oid)); } catch (e) { P.fail(d, e); } };
-      return;
+      return plan;
     }
-    if (plan.intent === "chart") { await chart(plan, body, el); return; }
+    if (plan.intent === "chart") { await chart(plan, body, el); return plan; }
     body.innerHTML = await listHtml(plan, plan.limit || 50) + "<p>" + linkOut(plan) + "</p>";
     fold(body, el, unitOf(oid));
+    return plan;
+  }
+
+  /* 错题本(本体 ask_log,A45):答完一问,下面给「答对了」「答错了」;答错了可写一句哪里不对。记在表格「助手提问记录」这一问的那一行
+     (助手接口记的;没建表、游客时接口不给编号,这里也不显示) */
+  function feedbackBar(el, plan, prev) {
+    if (!plan || !plan.log_key) return;
+    const bar = document.createElement("div");
+    bar.className = "a-fb";
+    bar.innerHTML = '<span class="muted small">这次答得对吗?</span><button type="button" class="btn quiet" data-v="答对了">答对了</button><button type="button" class="btn quiet" data-v="答错了">答错了</button>';
+    el.appendChild(bar);
+    const send = async (verdict, note) => {
+      const result = (el.querySelector(".loosened") ? el.querySelector(".loosened").innerText + " " : "") + (el.querySelector(".a-body").innerText || "").replace(/\s+/g, " ").slice(0, 300);
+      const r = await P.feedback({ key: plan.log_key, verdict, note: note || "", result, q: el.dataset.q, prev_q: prev && prev.q ? prev.q : "", understood: (plan.understood || []).map((x) => x[0] + ":" + x[1]).join("\n") });
+      if (r && r.ok) bar.innerHTML = '<span class="muted small">' + (verdict === "答对了" ? "记下了,谢谢。以后每天会按这个理解复查一遍。" : "记下了。这一问进了错题本,改好后每天复查。") + "</span>";
+      else throw new Error((r && r.error) || "没记上");
+    };
+    bar.onclick = async (ev) => {
+      const b = ev.target.closest("button");
+      if (!b) return;
+      if (b.dataset.v === "答对了") { b.disabled = true; try { await send("答对了"); } catch (e) { b.disabled = false; P.toast(e.message || String(e), true); } return; }
+      if (b.dataset.v === "答错了") {
+        bar.innerHTML = '<label class="small">哪里不对(可以不写)<textarea rows="2" placeholder="比如:我问的是已中标项目,不是线索"></textarea></label>' +
+          '<div class="a-fb-act"><button type="button" class="btn primary" data-go="1">提交</button><button type="button" class="btn quiet" data-no="1">取消</button></div>';
+        bar.querySelector("textarea").focus();
+        return;
+      }
+      if (b.dataset.no) { bar.remove(); feedbackBar(el, plan, prev); return; }
+      if (b.dataset.go) { b.disabled = true; try { await send("答错了", bar.querySelector("textarea").value.trim()); } catch (e) { b.disabled = false; P.toast(e.message || String(e), true); } }
+    };
   }
   async function listHtml(plan, limit) {
     const f = plan.filters, oid = plan.object;
@@ -1006,7 +1082,7 @@
       if (file || link) lastPlan = null;  // 看链接、看文件之后再问的,不接这一问
       if (file) await linkAnswer(link ? link[0].replace(/[.,;:!?]+$/, "") : "", link ? q.replace(link[0], " ").replace(/\s+/g, " ").trim() : q, el, file);
       else if (link) await linkAnswer(link[0].replace(/[.,;:!?]+$/, ""), q.replace(link[0], " ").replace(/\s+/g, " ").trim(), el);
-      else await answer(q, el, prev);
+      else feedbackBar(el, await answer(q, el, prev), prev);
     } catch (e) { P.fail(el.querySelector(".a-body"), e); }
   }
 

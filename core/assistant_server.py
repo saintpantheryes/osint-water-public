@@ -4,6 +4,8 @@
     POST /ask   {"q": "最近 7 天埃及有哪些新线索"}  →  core.assistant.plan 的计划(JSON)
     POST /link  {"url": "https://…", "note": "用户附言"} →  core.link_check.check 的分析(读原文、信源、库里相关、旁证、入库建议);
                                                        游客不能用(要查真实的库)
+    POST /feedback {"key": "Q…", "verdict": "答对了" | "答错了", "note": "哪里不对", "result": "答出了什么", "q", "prev_q", "understood"}
+                                                    →  core.ask_log.feedback:记在「助手提问记录」这一行(/ask 返回的 log_key);游客不能用
     POST /law   {"q": "…", "law": 计划里的 law, "countries": ["MAR"]}  →  core.law.answer:按国别与关键词查法规条文,配了模型的按条文作答(带出处序号);
                                                        游客不能用
     GET  /health                                    →  {"ok": true, "llm": "deepseek-v4-pro(DeepSeek)" | null, "note": "…"}
@@ -31,7 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote
 from zoneinfo import ZoneInfo
 
-from core import assistant, calendar_feed, guest as guest_mod, law, link_check, tstore
+from core import ask_log, assistant, calendar_feed, guest as guest_mod, law, link_check, tstore
 from core.jobs import common
 from core.profile import Profile, load_profile
 from core.watch.llm import Classifier, LLMConfig
@@ -40,6 +42,7 @@ DEFAULT_PORT = 8765
 UPLOAD_JSON = 17_000_000  # 「看链接」带文件时的请求体上限:12 MB 文件转 base64 后约 16 MB
 FORGIVE_AFTER = 600  # 秒:模型连续出错停用后,过这么久再试
 TERMS_EVERY = 60  # 秒:隔这么久重读一次 Teable「行业术语」表(人在表里加的词下一个提问就用上)
+RECHECK_AT = (8, 40)  # 本地时间:每天这之后复查一遍错题本(系统 08:00 自动更新之后)
 
 
 class Assistant:
@@ -70,6 +73,8 @@ class Assistant:
         self._terms_db_at = 0.0
         self.link_kw: dict = {}  # 测试用:注入 fetch / outside
         self.law_lib = law.Library(self.db) if self.terms_base is not None else None  # 法规条文(真实库;十分钟内不重读)
+        self.rechecked: str | None = None  # 错题本复查过的那天
+        self.who = ask_log.who  # 登录 cookie → 提问人(测试可换)
 
     @property
     def today(self) -> date:
@@ -156,6 +161,46 @@ class Assistant:
             ids = {tstore.link_id(b.get("law", r, "country")) for r in b.rows("law", props=["country"])}
             countries = [str(b.get("country", r, "key")) for r in b.rows("country", props=["key"]) if r["id"] in ids]
         return law.answer(self.law_lib, q, law_plan, countries[:10], self.clf, log=self.log)
+
+    def can_log(self) -> bool:
+        """库里建了「助手提问记录」表(没建时不记、页面不给答对答错按钮)。"""
+        if self.terms_base is None:
+            return False
+        try:
+            return "ask_log" in self.db().t
+        except Exception as e:  # noqa: BLE001
+            self._terms_db = None
+            self.log(f"连不上表格,这一问不记:{type(e).__name__}: {e}")
+            return False
+
+    def log_ask(self, q: str, prev: dict | None, p: dict, cookie: str | None) -> str | None:
+        """A44:记这一问(另起线程写表,不拖慢回答)→ 这一行的编号;没建表 → None。"""
+        if not q.strip() or not self.can_log():
+            return None
+        now = datetime.now(self.tz).replace(tzinfo=None)
+        key = ask_log.new_key(now)
+        prev_q = str((prev or {}).get("q") or "") if any(x[0] == "沿用上一问" for x in p.get("understood") or []) else ""
+
+        def run():
+            try:
+                ask_log.record(self.db(), key, q, prev_q, p, self.who(cookie), now)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"记提问出错:{type(e).__name__}: {e}")
+        threading.Thread(target=run, name="ask-log", daemon=True).start()
+        return key
+
+    def maybe_recheck(self) -> dict | None:
+        """A46:每天本地 08:40 以后复查一遍错题本(一天一次;出错只记日志,明天再来)。"""
+        now = datetime.now(self.tz)
+        if self.terms_base is None or (now.hour, now.minute) < RECHECK_AT or self.rechecked == now.date().isoformat():
+            return None
+        self.rechecked = now.date().isoformat()
+        try:
+            self.refresh_terms()
+            return ask_log.recheck(self.db(), now.date(), self.clf, log=self.log)
+        except Exception as e:  # noqa: BLE001
+            self.log(f"错题本复查出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+            return None
 
     def ask(self, q: str, prev: dict | None = None) -> dict:
         """prev:页面带来的上一问的计划(接着问时沿用对象、条件;assistant.plan 逐项校验)。"""
@@ -295,7 +340,7 @@ def make_handler(bot: Assistant):
 
         def do_POST(self):  # noqa: N802
             path = self.path.split("?")[0]
-            if path not in ("/ask", "/link", "/law"):
+            if path not in ("/ask", "/link", "/law", "/feedback"):
                 self._send(404, {"ok": False, "error": "not found"})
                 return
             n = int(self.headers.get("Content-Length") or 0)
@@ -327,6 +372,27 @@ def make_handler(bot: Assistant):
                     out = {"ok": False, "error": f"分析出错({type(e).__name__})"}
                 self._send(200, out)
                 return
+            if path == "/feedback":
+                if self.headers.get("X-Portal-Auth") != "1" and not bot.allow_link_without_auth:
+                    self._send(403, {"ok": False, "error": "请先登录"})
+                    return
+                if self._outsider():
+                    self._send(403, {"ok": False, "error": "游客帐号不能反馈"})
+                    return
+                if not bot.can_log():
+                    self._send(200, {"ok": False, "error": "库里还没有「助手提问记录」表"})
+                    return
+                info = {k: str(data.get(k) or "")[:2000] for k in ("q", "prev_q", "understood")}
+                try:
+                    out = ask_log.feedback(bot.db(), str(data.get("key") or "")[:40], str(data.get("verdict") or ""), str(data.get("note") or ""),
+                                           str(data.get("result") or ""), info)
+                except ValueError as e:
+                    out = {"ok": False, "error": str(e)}
+                except Exception as e:  # noqa: BLE001
+                    bot.log(f"记反馈出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+                    out = {"ok": False, "error": f"没记上({type(e).__name__})"}
+                self._send(200, out)
+                return
             if path == "/law":
                 if self.headers.get("X-Portal-Auth") != "1" and not bot.allow_link_without_auth:
                     self._send(403, {"ok": False, "error": "请先登录"})
@@ -343,8 +409,11 @@ def make_handler(bot: Assistant):
                     out = {"ok": False, "error": f"查条文出错({type(e).__name__})"}
                 self._send(200, out)
                 return
-            out = bot.ask(q, data.get("prev") if isinstance(data.get("prev"), dict) else None)
+            prev = data.get("prev") if isinstance(data.get("prev"), dict) else None
+            out = bot.ask(q, prev)
             out["ok"] = True
+            if (self.headers.get("X-Portal-Auth") == "1" or bot.allow_link_without_auth) and not self._outsider():  # 游客的提问不记
+                out["log_key"] = bot.log_ask(q, prev, out, self.headers.get("Cookie"))
             self._send(200, out)
 
     return H
@@ -367,6 +436,12 @@ def start_in_thread(profile: Profile | None, port: int, use_llm: bool = True, tz
         log(f"助手接口没起来(端口 {port}):{e}")
         return None
     threading.Thread(target=srv.serve_forever, name="assistant", daemon=True).start()
+
+    def daily():  # 错题本复查(A46):十分钟看一次到没到点
+        while True:
+            bot.maybe_recheck()
+            time.sleep(600)
+    threading.Thread(target=daily, name="ask-recheck", daemon=True).start()
     log(f"助手接口已启动:端口 {port},模型 {bot.llm_label() or '未配置(按词表解析)'}")
     return srv
 

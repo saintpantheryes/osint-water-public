@@ -353,7 +353,12 @@ company = obj(296, member[1] + member[3] + 22, 310, "公司资料", sections=[
 pref = obj(296, company[1] + company[3] + 22, 310, "个人设置", sections=[
     ("hu", "人写(「我的」页,A24)", "名称 · 账号 · 关注国别 · 忽略国别(采集不再涉及) · 日历订阅(名称 | 链接) · 备注"),
 ])
-B2_BOT = max(fy + fh, ky + kh, pref[1] + pref[3], ty + th) + 30
+# 助手提问记录(业务对象,v2.26):跟进记录下面;每问一句一行,答错的是错题本
+asklog = obj(880, fy + fh + 22, 350, "助手提问记录", sections=[
+    ("ai", "机器写(A44)", "提问 · 编号 · 接着哪一问 · 理解为 · 解析方式 · 提问人 · 提问时间 · 复查(A46,每天)"),
+    ("hu", "人写(答案下面的按钮,A45)", "反馈(答对了 / 答错了) · 哪里不对 · 答出了什么 · 处理状态 · 应理解为"),
+])
+B2_BOT = max(fy + fh, ky + kh, pref[1] + pref[3], ty + th, asklog[1] + asklog[3]) + 30
 R(40, B2_TOP, 1500, B2_BOT - B2_TOP, "#FFF6F5", C["band_b"], sw=1.5, rx=8)
 out.insert(next(i for i, s in enumerate(out) if "成员" in s) - 3, out.pop())
 T(56, B2_TOP + 26, "人 · 业务数据(公司内部的跟进与判断)", size=15, fill="#455A64", weight="bold")

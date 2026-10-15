@@ -319,6 +319,12 @@ body.guest .form button, body.guest .form input, body.guest .form select, body.g
 .answer .panel { margin: 8px 0; }
 .answer .chart { height: 280px; }
 .answer .chart.tall { height: 440px; }
+/* 助手:有歧义时另几种理解(文字按钮跟在说明后面);答案下面的「答对了」「答错了」(错题本,v2.26) */
+.answer .ask-back .btn.quiet { padding-block: 0; }
+.answer .a-fb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.answer .a-fb label { display: flex; flex-direction: column; gap: 4px; flex: 1 1 100%; }
+.answer .a-fb textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-md); width: 100%; box-sizing: border-box; resize: vertical; }
+.answer .a-fb-act { display: flex; gap: 8px; }
 .answer h2 { font-size: 15px; margin: 12px 0 6px; }
 .hero-page.guest .hero-main .guest-note { text-align: left; }
 @media (max-width: 640px) { .hero-top { padding: 12px 16px; } .hero-top .brand-en { display: none; } .hero-card { width: 100%; border-radius: 20px; } .hero-ask input { font-size: 16px; }
