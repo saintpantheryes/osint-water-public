@@ -484,7 +484,7 @@
       [/直接投资净流入/, (v) => v < 0, "净流出"], [/人口增速/, (v) => v < 0, "人口减少"],
       [/基本饮水|基本卫生/, (v) => v < 80, "覆盖率 < 80%"], [/安全管理饮水|安全管理卫生/, (v) => v < 50, "覆盖率 < 50%"],
       [/淡水压力/, (v) => v >= 75, "取水 ≥ 75% 可再生量"], [/无安全饮用水|无卫生设施/, (v) => v >= 20, "≥ 20% 人口"], [/未处理污水/, (v) => v >= 50, "≥ 50%"],
-      [/水风险|用水压力|干旱风险|洪水风险/, (v) => v >= 3, "风险高(≥ 3 分)"],
+      [/水风险|用水压力|干旱风险|洪水风险/, (v) => v >= 3 && v <= 5, "风险高(≥ 3 分)"],  // 分数只在 0–5;超过 5 的是「有水风险数据的城市 3,116」这类个数,不是分数
       [/营商环境总分|供水得分|公共采购得分|纠纷解决得分/, (v) => v < 50, "低于 50 分,偏弱"], [/企业供水可靠/, (v) => v < 80, "不到 80%,缺水的企业多"],
       [/授标天数/, (v) => v > 180, "超过 180 天,授标慢"], [/回款天数/, (v) => v > 90, "超过 90 天,回款慢"],
     ],
@@ -528,7 +528,7 @@
     },
     /* 指标卡(界面规范:全站数字卡片只这一种,2026-10-14 起国别、城市、线索总览等顶上那排数也用它):
        items = [{label, value, year?, note?, tone?, why?, href?, attrs?}];数字放大加粗,单位跟在后面小一号;
-       负面(按 TONES 自动判断,或 tone: "bad")数字标红、下面写原因;tone: "warn" 是琥珀色提醒(待处理这类有积压的数);
+       负面(按 TONES 自动判断,或 tone: "bad";tone: false 不判断,用于名字里带指标词的个数)数字标红、下面写原因;tone: "warn" 是琥珀色提醒(待处理这类有积压的数);
        有 href 的整张卡可点(attrs 是附加的属性串,如 data-i、target) */
     kpiHtml(items) {
       items = items.filter((x) => x && x.value !== "" && x.value !== null && x.value !== undefined);
@@ -538,7 +538,7 @@
       return '<div class="kpis" style="--cols:' + cols + ";--cols-md:" + colsMd + '">' + items.map((x) => {
         const [main, y] = this.splitYear(String(x.value)), year = x.year || y;
         const m = main.replace(/[−–]/g, "-").match(/^\s*(约\s*)?(-?\d[\d,]*(?:\.\d+)?\+?(?:\s?\/\s?\d[\d,]*)?)\s*(.*)$/);  // 「约 1.18 美元/m³」:约 小字在前;「200+」「13 / 98」整个放大
-        const auto = x.tone ? null : this.tone(x.label, this.num(m ? m[2] : main)), tone = x.tone || (auto ? "bad" : ""), why = x.why || (auto ? "超警戒线:" + auto : "");
+        const auto = x.tone || x.tone === false ? null : this.tone(x.label, this.num(m ? m[2] : main)), tone = x.tone || (auto ? "bad" : ""), why = x.why || (auto ? "超警戒线:" + auto : "");
         const big = m ? (m[1] ? '<span class="ku">约</span>' : "") + '<span class="kn">' + this.esc(m[2]) + "</span>" + (m[3] ? '<span class="ku">' + this.esc(m[3]) + "</span>" : "") : '<span class="kn kt">' + this.esc(main) + "</span>";
         const tag = x.href ? "a" : "div";
         return "<" + tag + ' class="kpi' + (tone ? " is-" + tone : "") + '"' + (x.href ? ' href="' + this.esc(x.href) + '"' : "") + (x.attrs ? " " + x.attrs : "") + '><div class="kv">' + big + "</div>" +

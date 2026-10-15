@@ -1906,6 +1906,19 @@ def test_trend_page_marks_self_funded_and_loan_driven_cities():
             page.click("#fShow .chip-btn[data-v='self']")
             page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 2")
             assert "m=2" in page.url and "s=self" in page.url and page.locator("#map canvas").count() >= 1
+            # 使用方 2026-10-15:「显示」也管地图和右边的城市数(以前只管清单,点了地图还是三种颜色、写着共几座城市,看着像没筛)
+            dots = "() => Object.fromEntries(echarts.getInstanceByDom(document.getElementById('map')).getOption().series.map((s) => [s.name, [s.data.length, s.itemStyle.color]]))"
+            assert page.evaluate(dots)["贷款型"][0] == 0 and page.evaluate(dots)["两类都是"] == [2, "#0d9488"]  # 只看自付型:贷款型的点不画,两类都是的也用自付型的颜色
+            assert page.inner_text("#fNote") == "符合 2 座 / 共 4 座城市"  # 种子里另有一座没水风险数据的巴库
+            page.click("#fShow .chip-btn[data-v='loan']")
+            page.wait_for_function("document.getElementById('fNote').textContent.startsWith('符合 3 座')")
+            assert page.evaluate(dots)["贷款型"][0] == 1 and page.evaluate(dots)["两类都是"][1] == "#7c3aed"
+            page.click("#fShow .chip-btn[data-v='both']")
+            page.wait_for_function("document.getElementById('fNote').textContent.startsWith('符合 2 座')")
+            assert page.evaluate(dots)["贷款型"][0] == 0 and page.evaluate(dots)["两类都是"][1] == "#dc2626"
+            # 最后一张卡是「有水风险数据的城市」个数,不是风险分数,不标红(以前「3,116 / 3,116」被当成 ≥ 3 分标了「超警戒线」)
+            assert page.locator("#cards .kpi.is-bad").count() == 0 and "超警戒线" not in page.inner_text("#cards")
+            page.click("#fShow .chip-btn[data-v='self']")
             assert "是" in page.inner_text("#crows") and "300" in page.inner_text("#crows")
             assert "北京" not in page.inner_text("#rows") and "中国" not in page.inner_text("#crows") and "中国" not in page.inner_text("#fCountry")
             # 城市页、国别页的概况里列出水风险与经济
