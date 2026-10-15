@@ -14,6 +14,7 @@
 <main>
   <h1>线索处理</h1>
   <p class="muted" id="intro">机器做完它能做的,剩下要人定的线索都在这里:确认归属,决定 AI 推荐的商机跟不跟。每条一键处理,也可以勾选后批量处理,处理完就消失。商机的「下一步已逾期」「待核更新」在<a href="opps.html?t=over">商机总览</a>。</p>
+  <p class="muted small ig-note" id="igNote"></p>
   <div class="tabs" id="tabs">
     <button type="button" data-t="assign" class="on">线索归属待确认<b id="nAssign">…</b></button>
     <button type="button" data-t="suggest">AI 推荐的商机<b id="nSuggest">…</b></button>
@@ -46,6 +47,9 @@
 (async function () {
   const $ = (id) => document.getElementById(id);
   let me = null, opps = [], cname = {}, ciso = {};
+  /* 忽略国别(地图上灰色,不再采集)的线索、AI 推荐的商机默认不列、不算;点「显示」露出(网址 ig=1) */
+  let igIds = new Set(), igShow = new URLSearchParams(location.search).get("ig") === "1";
+  const igOk = (it) => igShow || !igIds.has(it.dataset.cid);
   const g = (o, p) => P.get("opportunity", o, p);
   const oppById = {};
   const trunc = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n) + "…" : s; };
@@ -58,9 +62,12 @@
   }
   function refreshCounts() {
     [["assign", "nAssign"], ["suggest", "nSuggest"]].forEach(([box, n]) => {
-      const k = $(box).querySelectorAll(".item").length; $(n).textContent = k; if (!k) $(box).innerHTML = '<p class="empty">没有了 ✓</p>';
+      const all = [...$(box).querySelectorAll(".item")], k = all.filter(igOk).length; $(n).textContent = k; if (!all.length) $(box).innerHTML = '<p class="empty">没有了 ✓</p>';
     });
     applyFilter("assign"); applyFilter("suggest");
+    const ig = (box) => [...$(box).querySelectorAll(".item")].filter((it) => igIds.has(it.dataset.cid)).length, a = ig("assign"), b = ig("suggest");
+    P.igNote($("igNote"), [a ? a + " 条待确认归属的线索" : "", b ? b + " 个 AI 推荐的商机" : ""].filter(Boolean), igShow, () => {
+      igShow = !igShow; history.replaceState(null, "", location.pathname + (igShow ? "?ig=1" : "") + location.hash); refreshCounts(); });
   }
   /* 标签页:地址栏 #suggest 之类直接打开对应页;原来的 #over、#review(下一步已逾期、待核更新)已挪到商机总览 */
   if (/^#(over|review)$/.test(location.hash)) { location.replace("opps.html?t=" + location.hash.slice(1)); return; }
@@ -68,7 +75,7 @@
     if (!$("tab-" + t)) t = "assign";
     $("tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
     document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x.id === "tab-" + t));
-    if (location.hash !== "#" + t) history.replaceState(null, "", location.pathname + "#" + t);
+    if (location.hash !== "#" + t) history.replaceState(null, "", location.pathname + location.search + "#" + t);
   }
   $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
   showTab((location.hash || "#assign").slice(1));
@@ -88,7 +95,7 @@
   };
   function applyFilter(box) {
     const f = F[box], items = [...$(box).querySelectorAll(".item")];
-    const ok = (it, skip) => f.dims.every((d) => d === skip || !f.st[d.key] || d.of(it) === f.st[d.key]);
+    const ok = (it, skip) => igOk(it) && f.dims.every((d) => d === skip || !f.st[d.key] || d.of(it) === f.st[d.key]);
     let n = 0;
     items.forEach((it) => { const y = ok(it); it.style.display = y ? "" : "none"; if (y) n++; else { const cb = it.querySelector(".sel"); if (cb) cb.checked = false; } });
     f.dims.forEach((d) => {
@@ -179,6 +186,7 @@
     const [u, os, cs] = await Promise.all([P.me(), P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "public_stage", "lead_count", "verified", "ai_reason", "scope"] }), P.countries()]);
     me = u; opps = os; opps.forEach((o) => { oppById[o.id] = o; });
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); ciso[c.id] = P.get("country", c, "key"); });
+    const bl = await P.ignored(); igIds = new Set(cs.filter((c) => bl.has(P.get("country", c, "key"))).map((c) => c.id));
     const [leads, pending] = await Promise.all([
       P.records("lead", { viewId: P.view("lead", "待确认归属"), take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "country", "category", "summary_zh", "suggested_opp", "suggest_reliable", "maybe_new", "project_name", "status", "found_at"] }),
       P.count("lead", P.and(P.cond("lead", "relevant", "is", true), P.cond("lead", "status", "is", "待处理"))),

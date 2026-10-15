@@ -167,9 +167,8 @@
       const cOne = state.c && bl.has(state.c) && countries.find((c) => P.get("country", c, "key") === state.c);
       $("fNote").textContent = all.length ? "共 " + zh(showIg() ? all.length : all.length - nIgn) + " 座" : "";
       /* 筛选框下面一行(手机上筛选收起时也看得见):忽略国别的城市没算进来几座、点「显示」露出来 */
-      $("igNote").innerHTML = !nIgn ? "" : cOne ? P.esc(P.get("country", cOne, "name_zh") || state.c) + "是你忽略的国别(地图上灰色,不再采集),这里照常列出它的城市。" :
-        state.ig ? "已显示忽略国别(地图上灰色,不再采集)的 " + zh(nIgn) + ' 座城市。<button type="button" class="btn quiet" id="igT">不显示</button>' :
-          "忽略国别(地图上灰色,不再采集)的 " + zh(nIgn) + ' 座城市没算进卡片、地图和清单。<button type="button" class="btn quiet" id="igT">显示</button>';
+      if (cOne) $("igNote").textContent = (P.get("country", cOne, "name_zh") || state.c) + "是你忽略的国别(地图上灰色,不再采集),这里照常列出它的城市。";
+      else P.igNote($("igNote"), nIgn ? [zh(nIgn) + " 座城市"] : [], !!state.ig, () => { state.ig = state.ig ? "" : "1"; fillSel(); draw(); });
       $("listTitle").textContent = "城市清单(" + ($("rangeNote").dataset.sel && (state.lo || state.hi) ? ($("byName").textContent + " " + $("rangeNote").dataset.sel + ",") : "") + "按人口从多到少" + (rows.length > SHOW ? ",列出前 " + SHOW + " 座,筛选或搜索看其余的" : "") + ")";
       $("rows").innerHTML = !rows.length ? '<p class="empty">没有符合条件的城市' + (hiddenN ? "(忽略的国别里有 " + zh(hiddenN) + " 座符合,没列出;要看点筛选框下面的「显示」)" : "") + "。</p>" :
         P.tableHtml(["城市", "国别", "行政区", "人口", "面积(km²)", "密度", "生产总值(亿美元)", "线索", "商机"].concat(plantCols ? ["自来水厂", "污水厂"] : []), rows.slice(0, SHOW).map((ct) => { const g = (p) => P.get("city", ct, p);
@@ -180,7 +179,6 @@
     P.chips($("fBy"), BY, state, "by", () => { state.lo = state.hi = ""; draw(); });
     P.chips($("fHas"), HAS, state, "h", draw);
     $("fCountry").onchange = () => { state.c = $("fCountry").value; fillSel(); draw(); };
-    $("igNote").onclick = (e) => { if (e.target.id !== "igT") return; state.ig = state.ig ? "" : "1"; fillSel(); draw(); };
     $("fText").value = state.q;
     let tt = 0; $("fText").oninput = () => { clearTimeout(tt); tt = setTimeout(() => { state.q = $("fText").value.trim(); draw(); }, 250); };
     $("mapReset").onclick = (e) => { e.preventDefault(); if (map) { map.mc.clear(); map.mc.setOption(map.option); } };

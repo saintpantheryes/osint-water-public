@@ -1752,11 +1752,11 @@ def test_city_and_trend_pages_leave_out_cities_of_ignored_countries():
             if shots:
                 page.screenshot(path=str(shots / "city_ignored.png"), full_page=True)
             # 「显示」临时露出,再点收起
-            page.click("#igT")
+            page.click("#igNote button")
             page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 4")
             assert names(page)[:2] == ["伊斯坦布尔", "东莞市"] and "ig=1" in page.url and "4\n城市" in page.inner_text("#cards") and "中国" in page.inner_text("#fCountry")
             assert "东莞市" in page.evaluate(pts)
-            page.click("#igT")
+            page.click("#igNote button")
             page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 3")
             assert "ig=" not in page.url
             # 搜到的只在忽略国别里:空清单说为什么
@@ -1782,11 +1782,79 @@ def test_city_and_trend_pages_leave_out_cities_of_ignored_countries():
             assert "甘贾" in page.inner_text("#rows") and "忽略的国别" in page.inner_text("#intro")
             phone = browser.new_page(viewport={"width": 390, "height": 760})  # 手机:筛选收起时这行说明和「显示」也看得见,整页不横向溢出
             phone.goto(base + "/city.html")
-            phone.wait_for_selector("#igT", timeout=15000)
-            box = phone.locator("#igT").bounding_box()
+            phone.wait_for_selector("#igNote button", timeout=15000)
+            box = phone.locator("#igNote button").bounding_box()
             assert box["x"] + box["width"] <= 390 and phone.evaluate("document.documentElement.scrollWidth") <= 390
             if shots:
                 phone.screenshot(path=str(shots / "city_ignored_phone.png"), full_page=False)
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+
+
+def test_lead_pages_leave_out_leads_of_ignored_countries():
+    """使用方 2026-10-15「隐藏」:忽略国别(不再采集)以前采到的旧线索,线索总览、线索分析、线索处理默认不列、不算,国别筛选里也不列;
+    说明行写没算进来几条,点「显示」露出(网址 ig=1),再点收起。AI 推荐的商机同样。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    today = _today().isoformat()
+    cn = b.create("country", [{"name_zh": "中国", "ISO3": "CHN"}])[0]  # 没设过忽略 = 默认忽略中国
+    cs = b.create("opportunity", [{"code": "CHN-001", "name_zh": "东莞污水厂", "country": cn["id"], "stage": "建议"}])[0]
+    b.create("lead", [{"key": "dddddddd", "title": "Dongguan WWTP tender", "url": "https://example.org/d", "relevant": True, "category": "招标", "country": cn["id"],
+                       "found_at": today + "T05:00:00.000Z", "maybe_new": True, "status": "待处理", "origin": "机器采集"},
+                      {"key": "eeeeeeee", "title": "Hefei pipeline", "url": "https://example.org/e", "relevant": False, "category": "意向书", "country": cn["id"],
+                       "found_at": today + "T06:00:00.000Z", "status": "已处理", "origin": "机器采集", "suggested_opp": cs["id"]}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    kpi = lambda page, label: page.locator(f"#cards .kpi:has(.kl:text-is('{label}')) .kn").inner_text()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            # 线索总览:卡片只数阿塞拜疆的 3 条;国别一排没有中国;搜中国的线索搜不到
+            page.goto(base + "/overview.html")
+            page.wait_for_function("document.querySelector('#igNote button')", timeout=15000)
+            assert kpi(page, "线索") == "3" and "2 条线索没算进来" in page.inner_text("#igNote") and "中国" not in page.inner_text("#fCountry")
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelector('#igNote').innerText.includes('已显示')", timeout=15000)
+            assert kpi(page, "线索") == "5" and "ig=1" in page.url and "中国" in page.inner_text("#fCountry")
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelector('#igNote').innerText.includes('没算进来')", timeout=15000)
+            assert kpi(page, "线索") == "3" and "ig=" not in page.url
+            page.fill("#fText", "Dongguan")
+            page.press("#fText", "Enter")
+            page.wait_for_function("document.getElementById('drillTitle').textContent.includes('Dongguan') && !document.querySelector('#drill').innerText.includes('读取')", timeout=15000)
+            assert "没有符合的线索" in page.inner_text("#drill") and "1 条线索没算进来" in page.inner_text("#igNote")
+            # 线索分析:同样
+            page.goto(base + "/analysis.html")
+            page.wait_for_function("document.querySelector('#igNote button')", timeout=15000)
+            assert kpi(page, "线索") == "3" and "2 条线索没算进来" in page.inner_text("#igNote") and "中国" not in page.inner_text("#fCountry")
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelector('#igNote').innerText.includes('已显示')", timeout=15000)
+            assert kpi(page, "线索") == "5" and "ig=1" in page.url
+            # 线索处理:待确认归属里中国那条、AI 推荐的中国商机都不列,页签上的数也不算
+            page.goto(base + "/inbox.html")
+            page.wait_for_function("document.querySelector('#igNote button')", timeout=15000)
+            assert page.inner_text("#nAssign") == "2" and page.inner_text("#nSuggest") == "1"
+            assert "2 条待确认归属的线索、1 个 AI 推荐的商机没算进来" in page.inner_text("#igNote") and "Dongguan" not in page.inner_text("#assign")
+            page.click("#igNote button")
+            page.wait_for_function("document.getElementById('nAssign').textContent === '4'", timeout=15000)
+            assert page.inner_text("#nSuggest") == "2" and "Dongguan" in page.inner_text("#assign") and "ig=1" in page.url
+            phone = browser.new_page(viewport={"width": 390, "height": 760})  # 手机:说明行看得见、不横向溢出
+            for path in ("overview.html", "analysis.html", "inbox.html"):
+                phone.goto(base + "/" + path)
+                phone.wait_for_selector("#igNote button", timeout=15000)
+                box = phone.locator("#igNote button").bounding_box()
+                assert box["x"] + box["width"] <= 390 and phone.evaluate("document.documentElement.scrollWidth") <= 390, path
             assert not errors, errors
             browser.close()
     finally:

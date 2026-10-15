@@ -142,13 +142,13 @@
 (async function () {
   const $ = (id) => document.getElementById(id);
   const PAL = ["#0e6ba8", "#15803d", "#b45309", "#6d28d9", "#be185d", "#0f766e", "#64748b", "#ca8a04", "#1d4ed8", "#9f1239", "#4d7c0f", "#7c3aed"];
-  let countries = [], byIso = {}, nameOfCid = {}, isoOfCid = {}, seq = 0, ready = null, lastPlan = null;
+  let countries = [], byIso = {}, nameOfCid = {}, isoOfCid = {}, seq = 0, ready = null, lastPlan = null, igIds = new Set();  // igIds:忽略国别在国别表里的编号
   const charts = [];
 
   /* ---------- 计划 → 表格的条件 ---------- */
   function countryIds(f) {
     const ids = f.countries.map((c) => (byIso[c.iso3] || {}).id).filter(Boolean);
-    if (f.regions && f.regions.length) countries.filter((c) => f.regions.includes(P.regionOf(c))).forEach((c) => ids.push(c.id));
+    if (f.regions && f.regions.length) countries.filter((c) => f.regions.includes(P.regionOf(c)) && !igIds.has(c.id)).forEach((c) => ids.push(c.id));  // 按区域问:忽略的国别不算
     return [...new Set(ids)];
   }
   function dateConds(oid, prop, f) {
@@ -163,6 +163,7 @@
     const c = [];
     const cids = countryIds(f);
     if (f.countries.length || (f.regions || []).length) c.push(cids.length ? P.cond("lead", "country", "isAnyOf", cids) : P.cond("lead", "country", "is", "__none__"));
+    else if (igIds.size) c.push(P.cond("lead", "country", "isNoneOf", [...igIds]));  // 没点名国别:忽略国别(不再采集)的旧线索不算,与线索页面一致;点名了就照常查
     if (f.sectors.length) c.push(P.cond("lead", "sectors", "hasAnyOf", f.sectors));
     if (f.categories.length) c.push(P.cond("lead", "category", "isAnyOf", f.categories));
     if (f.funders.length) c.push(P.or(...f.funders.map((g) => P.funderCond("lead", "funder", g))));
@@ -1063,7 +1064,9 @@
   ready = (async function () {
     await P.load();
     sizeHero();
-    [countries] = await Promise.all([P.countries(), P.zhTerms()]);  // 两样互不依赖,同时取
+    let bl;
+    [countries, , bl] = await Promise.all([P.countries(), P.zhTerms(), P.ignored()]);  // 几样互不依赖,同时取
+    igIds = new Set(countries.filter((c) => bl.has(P.get("country", c, "key"))).map((c) => c.id));
     countries.forEach((c) => { byIso[P.get("country", c, "key")] = c; isoOfCid[c.id] = P.get("country", c, "key"); nameOfCid[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); });
   })();
   try {
