@@ -25,7 +25,7 @@
   const $ = (id) => document.getElementById(id);
   try {
     await P.load();
-    if (!P.hasLaw()) { $("info").innerHTML = '<p class="muted">「法规」表还没建(跑一次建表命令、导入法规后就有)。</p>'; $("clauses").innerHTML = ""; return; }
+    if (!P.hasLaw()) { $("info").innerHTML = '<p class="empty">「法规」表还没建(跑一次建表命令、导入法规后就有)。</p>'; $("clauses").innerHTML = ""; return; }
     const key = new URLSearchParams(location.search).get("k") || "";
     const laws = key ? await P.records("law", { filter: P.and(P.cond("law", "key", "is", key)), props: ["key", "name", "name_orig", "kind", "number", "issued", "status", "version", "language", "country", "url", "source", "summary", "clause_count"] }) : [];
     const lw = laws[0];

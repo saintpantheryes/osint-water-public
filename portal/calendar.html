@@ -125,7 +125,7 @@
       let r = null;
       try { const q = feedQs(); const resp = await fetch("api/assistant/feed-link" + (q ? "?" + q : ""), { credentials: "same-origin", headers: { Accept: "application/json" } }); r = resp.ok ? await resp.json() : { ok: false, error: "助手服务未就绪(后台任务没起来或还没更新到这一版)" }; }
       catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
-      if (!r || !r.ok) { box.innerHTML = '<div class="err">拿不到订阅链接:' + P.esc((r && r.error) || "未知原因") + "</div>"; return; }
+      if (!r || !r.ok) { box.innerHTML = '<div class="note n-bad">拿不到订阅链接:' + P.esc((r && r.error) || "未知原因") + "</div>"; return; }
       box.innerHTML = "<b>订阅到日历</b>(自动更新,每 6 小时刷一次;只含跟踪中商机的时间节点、跟进到期与国别级节点,按当前的国别 / 商机筛选)" +
         '<code id="subUrl">' + P.esc(r.url) + "</code>" +
         '<button type="button" class="chip-btn" id="subCopy">复制链接</button> <a class="chip-btn" href="' + P.esc(r.url) + '">在日历程序里打开</a> ' +

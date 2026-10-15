@@ -123,7 +123,7 @@
     render();
     /* 下一步已逾期(本体 glossary.overdue)与待核更新(glossary.review) */
     if (!P.isGuest) {
-      const today = P.today(), trunc = (x, n) => { x = String(x || ""); return x.length > n ? x.slice(0, n) + "…" : x; }, none = '<p class="muted">没有了 ✓</p>';
+      const today = P.today(), trunc = (x, n) => { x = String(x || ""); return x.length > n ? x.slice(0, n) + "…" : x; }, none = '<p class="empty">没有了 ✓</p>';
       const over = P.tracked(opps).filter((o) => P.day(g(o, "next_due")) && P.day(g(o, "next_due")) < today).sort((a, b) => P.day(g(a, "next_due")).localeCompare(P.day(g(b, "next_due"))));
       $("over").innerHTML = over.map((o) => '<div class="item"><div class="it-main"><div class="it-title">' + P.oppLink(o) + ' <span class="muted">' + P.esc(P.text(g(o, "owner")) || "无负责人") + "</span></div><div>" + P.esc(g(o, "next_step") || "(下一步没写)") + ' · <span class="over">到期 ' + P.day(g(o, "next_due")) + "</span></div></div>" +
         '<div class="it-act"><a class="btn" href="' + P.oppUrl(o.id) + '">去记跟进</a></div></div>').join("") || none;

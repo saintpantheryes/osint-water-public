@@ -113,7 +113,7 @@
     guest(note) {
       document.body.classList.add("guest");
       const main = document.querySelector("main") || document.body;
-      const el = document.createElement("div"); el.className = "warn guest-note";
+      const el = document.createElement("div"); el.className = "note n-info guest-note";
       el.textContent = note || (this.isGuest ? "当前是游客帐号:页面上的线索、商机、国别、时间节点和报告都是编出来的示例数据,用来演示系统怎么用,不是真实内容;不能登记、申请或订阅。"
         : "当前帐号只有查看权限(游客演示帐号):可以浏览全部页面,登记跟进、申请报告、归入和改负责人这些操作不可用。");
       main.insertBefore(el, main.firstChild);
@@ -459,7 +459,7 @@
       if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
       return r.json();
     },
-    fail(el, e) { console.error(e); el.innerHTML = '<div class="err">读不到数据:' + this.esc(e && e.message ? e.message : e) + "</div>"; },
+    fail(el, e) { console.error(e); el.innerHTML = '<div class="note n-bad">读不到数据:' + this.esc(e && e.message ? e.message : e) + "</div>"; },
     tableHtml(head, rows) {
       if (!rows.length) return '<p class="muted">(无)</p>';
       return "<table><thead><tr>" + head.map((h) => "<th>" + this.esc(h) + "</th>").join("") + "</tr></thead><tbody>" +
@@ -586,7 +586,7 @@
     bready(rec, name) {
       const src = '<p class="muted small">来源:<a href="' + this.BREADY_URL + '" target="_blank" rel="noopener">世界银行 Business Ready(B-READY)↗</a>' +
         "。分数 0–100,专家问卷加企业调查,测的是这国最大的商业城市;总分是三大支柱(监管框架、公共服务、运行效率)的平均。世行不给国家排名,这里也只看分数和含义。</p>";
-      if (!this.has("country", "bready_edition")) return '<p class="muted">「营商环境」的字段还没建(跑一次建表命令后就有)。</p>';
+      if (!this.has("country", "bready_edition")) return '<p class="empty">「营商环境」的字段还没建(跑一次建表命令后就有)。</p>';
       const g = (p) => this.get("country", rec, p), n = (p) => { const v = g(p); return v === undefined || v === null || v === "" ? null : Number(v); };
       if (n("bready_total") === null) return '<div class="panel"><p><b>世界银行 B-READY 这一期没有覆盖' + this.esc(name || "这个国家") + "。</b></p>" +
         '<p class="muted">2025 年这一期评了 101 个经济体(2024 年 50 个),世行计划扩大到约 180 个;新一期出来、数据文件换掉后这里自动补上。</p></div>' + src;
@@ -646,7 +646,7 @@
       const head = firm ? '<h2 id="awards">中标记录</h2><p class="muted small">这家供应商在公开中标记录里的全部合同(联合体的合同全额计入每一家)。</p>' :
         '<h2 id="awards">已中标项目</h2><p class="muted small">公开的中标记录(世界银行、亚洲开发银行、欧洲复兴开发银行贷款里 10 万美元以上的水务合同;摩洛哥、吉尔吉斯斯坦另有本国公共采购网的结果,摩洛哥 100 万迪拉姆以上、吉尔吉斯斯坦 10 万美元以上)和人工补录的,作报价与竞争对手的参考;不计入线索、商机。' +
         (this.cfg.tables && this.cfg.tables.contractor ? '点供应商看它在各国的全部中标,<a href="contractor.html">全部供应商 →</a>' : "") + "</p>";
-      if (!(this.cfg.tables && this.cfg.tables.award) || !this.has("award", prop)) { el.innerHTML = head + '<p class="muted">「已中标项目」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
+      if (!(this.cfg.tables && this.cfg.tables.award) || !this.has("award", prop)) { el.innerHTML = head + '<p class="empty">「已中标项目」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
       el.innerHTML = head + '<div class="panel">读取中…</div>';
       const many = (this.t("award").links || {})[prop] === "many", hasW = this.has("award", "winners");
       const rows = await this.records("award", { filter: this.and(many ? this.cond("award", prop, "hasAnyOf", [].concat(rid)) : Array.isArray(rid) ? this.cond("award", prop, "isAnyOf", rid) : this.cond("award", prop, "is", rid)),
@@ -658,7 +658,7 @@
       const year = (r) => (this.day(g(r, "awarded")) || "").slice(0, 4);
       const ctry = (r) => this.text(g(r, "country")) || "";
       rows.sort((a, b) => String(this.day(g(b, "awarded")) || "").localeCompare(String(this.day(g(a, "awarded")) || "")));
-      if (!rows.length) { el.innerHTML = head + '<p class="muted">还没有记录。' + (prop === "city" ? "导入时合同名称里写了这座城市的才挂到城市上,其余只在国别概况里;" : "") + "别的来源的中标结果可以在表格「已中标项目」里补一行。</p>"; return 0; }
+      if (!rows.length) { el.innerHTML = head + '<p class="empty">还没有记录。' + (prop === "city" ? "导入时合同名称里写了这座城市的才挂到城市上,其余只在国别概况里;" : "") + "别的来源的中标结果可以在表格「已中标项目」里补一行。</p>"; return 0; }
       const st = { s: [], a: [], ct: [], d: [], m: [], y: [], c: [], q: "", o: "new" };
       const big = (n) => (n >= 1e8 ? (n / 1e8).toFixed(n >= 1e10 ? 0 : 2) + " 亿" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString("zh-CN") + " 万" : Math.round(n).toLocaleString("zh-CN"));
       const curZh = (c) => ({ USD: "美元", EUR: "欧元", CNY: "元" }[c] || (c ? " " + c : ""));
@@ -709,7 +709,7 @@
         $(".aw-k").insertAdjacentHTML("beforeend", this.awExtraKpis(list));
         $(".aw-n").textContent = "共 " + rows.length + " 份";
         const place = prop === "country" || Array.isArray(rid) ? "城市" : firm ? "国别" : "";
-        $(".aw-t").innerHTML = !list.length ? '<p class="muted">没有符合条件的已中标项目。</p>' :
+        $(".aw-t").innerHTML = !list.length ? '<p class="empty">没有符合条件的已中标项目。</p>' :
           this.tableHtml(["中标时间", "名称", "类别", "合同类型", "中标价", "工程量", firm ? "联合体伙伴" : "中标单位"].concat(place ? [place] : [], ["资金来源", ""]), list.slice(0, show).map((r) => {
             const zh = g(r, "name_zh"), en = g(r, "name") || "", u = g(r, "url");
             const nm = (zh ? "<b>" + this.esc(zh) + '</b><br><span class="muted small">' + this.esc(en) + "</span>" : "<b>" + this.esc(en) + "</b>") +
@@ -890,7 +890,7 @@
         "「中标」是已中标项目里每年最大的三份。人工可在表格「水务事件」里补。</p>";
       const hasE = this.cfg.tables && this.cfg.tables.water_event && this.has("water_event", prop);
       const hasA = this.cfg.tables && this.cfg.tables.award && this.has("award", prop);
-      if (!hasE && !hasA) { el.innerHTML = head + '<p class="muted">「水务事件」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
+      if (!hasE && !hasA) { el.innerHTML = head + '<p class="empty">「水务事件」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
       el.innerHTML = head + '<div class="panel">读取中…</div>';
       const RAW = "日期原文";
       const [evs, aws] = await Promise.all([
@@ -909,7 +909,7 @@
       Object.values(byYear).forEach((arr) => arr.sort((a, b) => b.w - a.w).slice(0, 3).forEach(({ r, d, w }) => items.push({
         y: d.slice(0, 4), when: d, kind: "中标", title: (ga(r, "winner") || "") + (ga(r, "winner_country") ? "(" + ga(r, "winner_country") + ")" : "") + " 中标「" + (ga(r, "name_zh") || ga(r, "name") || "") + "」," + cny(w),
         src: "已中标项目", url: ga(r, "url") || "", city: byCity ? { id: this.linkId(ga(r, "city")), name: this.text(ga(r, "city")) } : null, open: r.id, oid: "award" })));
-      if (!items.length) { el.innerHTML = head + '<p class="muted">还没有记录。' + (prop === "city" ? "原文里写明了" + (many ? "片区里某座城市" : "这座城市") + "的大事才挂到城市上,其余在国别概况里。" : "") + "</p>"; return 0; }
+      if (!items.length) { el.innerHTML = head + '<p class="empty">还没有记录。' + (prop === "city" ? "原文里写明了" + (many ? "片区里某座城市" : "这座城市") + "的大事才挂到城市上,其余在国别概况里。" : "") + "</p>"; return 0; }
       items.sort((a, b) => b.when.localeCompare(a.when));
       const KINDS = this.values("event_kind").concat(["中标"]).filter((k) => items.some((x) => x.kind === k));
       const st = { k: [] }, YEARS = 12;
@@ -922,7 +922,7 @@
         const years = [...new Set(list.map((x) => x.y))];
         const shown = all ? years : years.slice(0, YEARS);
         $(".ch-n").textContent = list.length + " 件 · " + (years.length > 1 ? years[years.length - 1] + "–" + years[0] + " 年" : years.length ? years[0] + " 年" : "");
-        $(".ch-t").innerHTML = !list.length ? '<p class="muted">没有这一类的大事。</p>' : '<div class="chron">' + shown.map((y) => '<div class="cy"><div class="cyl">' + this.esc(y) + "</div><ul>" +
+        $(".ch-t").innerHTML = !list.length ? '<p class="empty">没有这一类的大事。</p>' : '<div class="chron">' + shown.map((y) => '<div class="cy"><div class="cyl">' + this.esc(y) + "</div><ul>" +
           list.filter((x) => x.y === y).map((x) => {
             const when = x.when.length > 7 ? '<span class="cw">' + this.esc(x.when.slice(5, 10)) + "</span>" : x.when.length > 4 ? '<span class="cw">' + Number(x.when.slice(5, 7)) + " 月</span>" : "";  // 只到月的写「12 月」
             const city = x.city && x.city.id ? ' <a class="muted small" href="city.html?id=' + encodeURIComponent(x.city.id) + '">' + this.esc(x.city.name) + "</a>" : "";
@@ -939,12 +939,12 @@
     /* 研究资料(本体 V7):国别概况「水务历史资料」页签里,综述展开在前,其余按类型筛选、按发布日期从新到旧列表。→ 份数 */
     async studies(el, rid) {
       const head = '<h2 id="studies">研究资料</h2><p class="muted small">世界银行等机构公开的项目评估、完成报告、环境社会评估与行业研究,点标题看原文;综述是本系统读这些资料后整理的要点(每个数字注明出处页码)。人工可在表格「研究资料」里补别的来源。</p>';
-      if (!(this.cfg.tables && this.cfg.tables.study)) { el.innerHTML = head + '<p class="muted">「研究资料」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
+      if (!(this.cfg.tables && this.cfg.tables.study)) { el.innerHTML = head + '<p class="empty">「研究资料」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
       el.innerHTML = head + '<div class="panel">读取中…</div>';
       const rows = await this.records("study", { filter: this.and(this.cond("study", "country", "is", rid)), props: ["name", "name_zh", "kind", "publisher", "published", "language", "project", "url", "summary", "note"] });
       const g = (r, p) => this.get("study", r, p);
       rows.sort((a, b) => String(this.day(g(b, "published")) || "").localeCompare(String(this.day(g(a, "published")) || "")));
-      if (!rows.length) { el.innerHTML = head + '<p class="muted">这个国家还没有研究资料。</p>'; return 0; }
+      if (!rows.length) { el.innerHTML = head + '<p class="empty">这个国家还没有研究资料。</p>'; return 0; }
       const sums = rows.filter((r) => g(r, "kind") === "综述"), docs = rows.filter((r) => g(r, "kind") !== "综述");
       const KINDS = this.values("study_kind").filter((k) => k !== "综述" && docs.some((r) => (g(r, "kind") || "") === k));
       const st = { k: [] };
@@ -1106,10 +1106,10 @@
       const d = await this.lawData([rid]), nums = {};
       const lim = this.lawLimitsHtml(d, rid, nums), terms = this.lawTermsHtml(d, rid, nums), list = this.lawListHtml(d, rid);
       const sec = (label, html, open, note) => '<details class="sec"' + (open ? " open" : "") + "><summary>" + label + '</summary><div class="panel">' + (note ? '<p class="muted small">' + note + "</p>" : "") + html + "</div></details>";
-      el.innerHTML = !d.laws.length ? sec("法规原文", '<p class="muted">还没收' + this.esc(name) + "的法规原文:上面的法规简表只有名称和链接。要收的话把原文网址告诉管理员加进法规清单。</p>", true) :
+      el.innerHTML = !d.laws.length ? sec("法规原文", '<p class="empty">还没收' + this.esc(name) + "的法规原文:上面的法规简表只有名称和链接。要收的话把原文网址告诉管理员加进法规清单。</p>", true) :
         sec("排放标准", lim || '<p class="muted">收了' + this.esc(name) + "的 " + d.laws.length + " 部法规原文,还没摘出排放限值(可能这几部法规里没有,或在别的部令、技术规范里)。</p>", true,
           "从法规原文摘出的限值;同一国不同口径(出水浓度上限、去除率、受纳水体允许浓度)分开列,不能直接比。角标点开看条文。") +
-        sec("本国定义", terms || '<p class="muted">还没摘出本国定义。</p>', true, "通用概念(「行业术语」表里的词)在这国法规里怎么定义,和通用说法差在哪;助手回答这国的问题时按这里的定义。") +
+        sec("本国定义", terms || '<p class="empty">还没摘出本国定义。</p>', true, "通用概念(「行业术语」表里的词)在这国法规里怎么定义,和通用说法差在哪;助手回答这国的问题时按这里的定义。") +
         sec("法规原文", list, true, "点名称看全文(条文中文与原文对照);中文由后台逐批译,没译到的先显示原文。");
       return d.laws.length;
     },

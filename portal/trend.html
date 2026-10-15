@@ -151,7 +151,7 @@
       const SHOW = 300;
       $("fNote").textContent = "共 " + cities.length.toLocaleString("zh-CN") + " 座城市";
       $("listTitle").textContent = "城市(" + (SHOWS.find(([k]) => k === state.s)[1]) + "," + rname() + "从高到低" + (rows.length > SHOW ? ",列出前 " + SHOW + " 座" : "") + ")";
-      $("rows").innerHTML = !rows.length ? '<p class="muted">没有符合条件的城市;把门槛调低试试。</p>' :
+      $("rows").innerHTML = !rows.length ? '<p class="empty">没有符合条件的城市;把门槛调低试试。</p>' :
         P.tableHtml(["城市", "国别", "类型", rname(), "用水压力", "2030 年", "人均 GDP(美元)", "人口", "线索", "商机"], rows.slice(0, SHOW).map(({ ct, k }) => {
           const c = byId[P.linkId(P.get("city", ct, "country"))], f = (p, d) => num(val("city", ct, p), d);
           return [P.raw('<a href="city.html?id=' + encodeURIComponent(ct.id) + '"><b>' + P.esc(P.get("city", ct, "name_zh") || P.get("city", ct, "name_en") || "") + "</b></a>"),
@@ -161,7 +161,7 @@
             String(P.get("city", ct, "lead_count") || 0), String(P.get("city", ct, "opp_count") || 0)]; }));
       /* 国别对照 */
       const cs = countries.filter((c) => used.has(c.id) && (!one || c.id === one.id)).sort((a, b) => (cg(b, "water_stress") || -1) - (cg(a, "water_stress") || -1));
-      $("crows").innerHTML = !cs.length ? '<p class="muted">没有国别。</p>' : P.tableHtml(["国别", "用水压力", "2030 年", "干旱", "洪水", "人均 GDP(美元)", "世行涉水项目", "承诺额(百万美元)", "近一年开发性金融线索", "收入组与贷款类别", "贷款型"],
+      $("crows").innerHTML = !cs.length ? '<p class="empty">没有国别。</p>' : P.tableHtml(["国别", "用水压力", "2030 年", "干旱", "洪水", "人均 GDP(美元)", "世行涉水项目", "承诺额(百万美元)", "近一年开发性金融线索", "收入组与贷款类别", "贷款型"],
         cs.map((c) => [P.raw(cLink(c)),
           num(cg(c, "water_stress"), 1), num(cg(c, "water_stress_2030"), 1), num(cg(c, "drought"), 1), num(cg(c, "flood"), 1), num(cg(c, "gdp_pc")),
           num(cg(c, "wb_water_n")), num(cg(c, "wb_water_musd")), String(devLeads[c.id] || 0), P.get("country", c, "income_group") || "", loanCountry(c) ? "是" : ""]));

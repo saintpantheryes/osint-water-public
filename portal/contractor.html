@@ -52,7 +52,7 @@
       const q = st.q.toLowerCase();
       const rows = all.filter((r) => (!st.n || g(r, "nationality") === st.n) && (!q || [g(r, "name"), g(r, "name_zh"), g(r, "parent")].join(" ").toLowerCase().includes(q)));
       $("fNote").textContent = "共 " + rows.length.toLocaleString("zh-CN") + " 家";
-      $("rows").innerHTML = !all.length ? '<p class="muted">还没有供应商:导入已中标项目时按中标记录建行。</p>' : !rows.length ? '<p class="muted">没有符合条件的供应商。</p>' :
+      $("rows").innerHTML = !all.length ? '<p class="empty">还没有供应商:导入已中标项目时按中标记录建行。</p>' : !rows.length ? '<p class="empty">没有符合条件的供应商。</p>' :
         P.tableHtml(["供应商", "注册国", "性质", "中标", "合计(折合人民币)"], rows.slice(0, SHOW).map((r) => [
           P.raw('<a href="contractor.html?id=' + encodeURIComponent(r.id) + '"><b>' + P.esc(g(r, "name_zh") || g(r, "name") || "") + "</b></a>" + (g(r, "name_zh") ? '<br><span class="muted small">' + P.esc(g(r, "name") || "") + "</span>" : "")),
           P.raw('<span class="nw">' + P.esc(g(r, "nationality") || "") + "</span>"), g(r, "kind") || "", n(r) + " 份", Number(g(r, "award_cny")) ? cny(Number(g(r, "award_cny"))) : "—"]))
@@ -67,7 +67,7 @@
   async function one(id) {
     P.awards($("awBox"), "winners", id).catch((e) => P.fail($("awBox"), e));  /* 它的全部中标记录:自己读自己画 */
     const r = await P.api("/table/" + P.t("contractor").id + "/record/" + id, { fieldKeyType: "id" });
-    if (!r || !r.fields) { $("info").innerHTML = '<div class="err">没有这家供应商</div>'; return; }
+    if (!r || !r.fields) { $("info").innerHTML = '<div class="note n-bad">没有这家供应商</div>'; return; }
     const nm = g(r, "name_zh") || g(r, "name") || "";
     $("fname").textContent = nm;
     if (g(r, "name_zh") && g(r, "name")) $("fname2").textContent = g(r, "name");
@@ -91,7 +91,7 @@
     await P.load();
     if (!(P.cfg.tables && P.cfg.tables.contractor)) {
       $("one").style.display = "none"; $("list").style.display = "";
-      $("rows").innerHTML = '<p class="muted">「供应商」表还没建(跑一次建表命令后这里就有)。</p>';
+      $("rows").innerHTML = '<p class="empty">「供应商」表还没建(跑一次建表命令后这里就有)。</p>';
       return;
     }
     const id = q0.get("id");

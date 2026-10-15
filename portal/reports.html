@@ -93,7 +93,7 @@
   }
   /* 模板:清单、要报告时的下拉、上传、换文件、设缺省 */
   async function loadTpls() {
-    if (!hasTpl()) { $("tpls").innerHTML = '<p class="muted">库里还没有「报告模板」表(管理员跑一次建表命令就有)。</p>'; return; }
+    if (!hasTpl()) { $("tpls").innerHTML = '<p class="empty">库里还没有「报告模板」表(管理员跑一次建表命令就有)。</p>'; return; }
     tpls = await P.records("template", { props: ["name", "kinds", "file", "is_default", "note"] });
     tpls.sort((a, b) => String(tg(a, "name") || "").localeCompare(String(tg(b, "name") || "")));
     $("tplCount").textContent = tpls.length ? tpls.length + " 个" : "";
@@ -101,7 +101,7 @@
       const f = lastFile(r);
       return [tg(r, "name"), (tg(r, "kinds") || []).join("、"), tg(r, "is_default") ? "✓" : "", P.raw(f ? '<a href="' + P.esc(P.fileUrl(f)) + '" target="_blank" rel="noopener">' + P.esc(f.name) + "</a>" : '<span class="over">还没传文件</span>'), tg(r, "note") || "",
         P.raw('<span class="it-act" style="min-width:0;flex-direction:row;gap:6px"><button type="button" data-a="file" data-id="' + r.id + '">换文件</button>' + (tg(r, "is_default") ? "" : '<button type="button" data-a="def" data-id="' + r.id + '">设为缺省</button>') + P.open("template", r.id) + "</span>")];
-    })) : '<p class="muted">还没有模板,现在用的是程序自带的版式;在左边传一个就会用它。</p>';
+    })) : '<p class="empty">还没有模板,现在用的是程序自带的版式;在左边传一个就会用它。</p>';
     $("tpls").querySelectorAll('button[data-a="file"]').forEach((b) => { b.onclick = () => replaceFile(b.dataset.id, b); });
     $("tpls").querySelectorAll('button[data-a="def"]').forEach((b) => { b.onclick = () => setDefault(b.dataset.id, b); });
     fillTplPick();

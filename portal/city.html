@@ -152,7 +152,7 @@
         .map(([v, l]) => ({ label: l, value: String(v) })));
       $("fNote").textContent = all.length ? "共 " + all.length.toLocaleString("zh-CN") + " 座" : "";
       $("listTitle").textContent = "城市清单(" + ($("rangeNote").dataset.sel && (state.lo || state.hi) ? ($("byName").textContent + " " + $("rangeNote").dataset.sel + ",") : "") + "按人口从多到少" + (rows.length > SHOW ? ",列出前 " + SHOW + " 座,筛选或搜索看其余的" : "") + ")";
-      $("rows").innerHTML = !rows.length ? '<p class="muted">没有符合条件的城市。</p>' :
+      $("rows").innerHTML = !rows.length ? '<p class="empty">没有符合条件的城市。</p>' :
         P.tableHtml(["城市", "国别", "行政区", "人口", "面积(km²)", "密度", "生产总值(亿美元)", "线索", "商机"].concat(plantCols ? ["自来水厂", "污水厂"] : []), rows.slice(0, SHOW).map((ct) => { const g = (p) => P.get("city", ct, p);
           return [nameCell(ct), countryCell(ct), g("admin") || "", num(g("population")), num(g("area_km2")), num(g("density")),
             P.raw(P.esc(num(g("gdp"))) + (g("gdp") && g("gdp_year") ? ' <span class="muted small">' + P.esc(String(g("gdp_year"))) + "</span>" : "")), String(g("lead_count") || 0), String(g("opp_count") || 0)]
@@ -166,7 +166,7 @@
     $("mapReset").onclick = (e) => { e.preventDefault(); if (map) { map.mc.clear(); map.mc.setOption(map.option); } };
     if (!all.length) {
       $("cards").innerHTML = ""; $("map").parentNode.style.display = "none";
-      $("rows").innerHTML = '<p class="muted">城市表已经建好,还没有数据:后台每月按 GeoNames 公开数据把人口 10 万以上的城市建进来,第一次在下一轮自动任务里补上(最晚第二天早上)。</p>';
+      $("rows").innerHTML = '<p class="empty">城市表已经建好,还没有数据:后台每月按 GeoNames 公开数据把人口 10 万以上的城市建进来,第一次在下一轮自动任务里补上(最晚第二天早上)。</p>';
       return;
     }
     try { await world(); } catch (e) { $("map").innerHTML = '<p class="muted">地图没画出来:' + P.esc(e.message) + "</p>"; }
@@ -186,7 +186,7 @@
     P.chronicle($("chron"), "city", id).catch((e) => P.fail($("chron"), e));  /* 水务大事记(在已中标项目上面) */
     P.awards($("awBox"), "city", id).catch((e) => P.fail($("awBox"), e));  /* 已中标项目(页面最下面) */
     const full = await P.api("/table/" + P.t("city").id + "/record/" + id, { fieldKeyType: "id" });
-    if (!full || !full.fields) { $("info").innerHTML = '<div class="err">没有这座城市</div>'; return; }
+    if (!full || !full.fields) { $("info").innerHTML = '<div class="note n-bad">没有这座城市</div>'; return; }
     const ct = full, g = (p) => P.get("city", ct, p), c = countryOf(ct);
     $("cname").textContent = cname(ct);
     if (g("name_en") && g("name_en") !== cname(ct)) $("cname2").textContent = g("name_en");
@@ -198,8 +198,8 @@
     const [opps, leads, supply, sewage] = await listsP;
     /* 水厂:规模从大到小;改造扩建一行一次,原样分行显示 */
     const plantTable = (oid, list, empty) => {
-      if (list === null) return '<p class="muted">「' + empty + '」表还没建(跑一次建表命令后这里就有)。</p>';
-      if (!list.length) return '<p class="muted">还没有' + empty + '挂在这座城市。</p>';
+      if (list === null) return '<p class="empty">「' + empty + '」表还没建(跑一次建表命令后这里就有)。</p>';
+      if (!list.length) return '<p class="empty">还没有' + empty + '挂在这座城市。</p>';
       list.sort((a, b) => (Number(P.get(oid, b, "capacity")) || 0) - (Number(P.get(oid, a, "capacity")) || 0));
       const lvl = oid === "sewage_plant";
       return P.tableHtml(["名称", "类型", "状态", "规模(万吨/日)", "服务人口", "建设时间"].concat(lvl ? ["处理级别"] : [], ["工艺", "改造扩建", "运营方", ""]), list.map((x) => { const q = (p) => P.get(oid, x, p);
@@ -220,10 +220,10 @@
     $("info").innerHTML = P.factsHtml(kv.map(([k, v]) => [k, v, { html: true }])) +
       (P.riskFacts("city", ct, iso) ? '<h3>水风险与经济(趋势参考)</h3>' + P.riskFacts("city", ct, iso) : "") +
       '<p class="muted small">面积、地区生产总值、水价公开数据里没有,在城市表里补上就显示,密度随后自动算。线索、商机的「城市」一栏由人选,选上了就出现在这里。</p>';
-    $("opps").innerHTML = !opps.length ? '<p class="muted">还没有商机关联到这座城市。</p>' :
+    $("opps").innerHTML = !opps.length ? '<p class="empty">还没有商机关联到这座城市。</p>' :
       P.tableHtml(["编号", "名称", "我方阶段", "投资规模", "负责人", "公开进度", "下一节点", ""], opps.map((o) => { const q = (p) => P.get("opportunity", o, p);
         return [P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(q("code") || "") + "</a>"), q("name_zh"), q("stage") || "建议", P.sizeText("opportunity", o), P.text(q("owner")), q("public_stage"), q("next_milestone"), P.raw(P.open("opportunity", o.id))]; }));
-    $("leads").innerHTML = !leads.length ? '<p class="muted">还没有线索关联到这座城市。</p>' :
+    $("leads").innerHTML = !leads.length ? '<p class="empty">还没有线索关联到这座城市。</p>' :
       P.tableHtml(["标题", "类别", "发布", "最近截止", "所属商机", "处理状态", ""], leads.slice(0, 100).map((l) => { const q = (p) => P.get("lead", l, p);
         return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), q("nearest_deadline"), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
     const TABS = [["info", "概况"], ["opps", "商机 <b>" + opps.length + "</b>"], ["leads", "线索 <b>" + leads.length + (leads.length >= 200 ? "+" : "") + "</b>"], ["plants", "水厂 <b>" + nPlants + "</b>"]];
@@ -273,7 +273,7 @@
     await P.load();
     if (!(P.cfg.tables && P.cfg.tables.city)) {
       $("one").style.display = "none"; $("list").style.display = ""; $("cards").innerHTML = ""; $("map").parentNode.style.display = "none";
-      $("rows").innerHTML = '<p class="muted">「城市」表还没建(跑一次建表命令后这里就有)。</p>';
+      $("rows").innerHTML = '<p class="empty">「城市」表还没建(跑一次建表命令后这里就有)。</p>';
       return;
     }
     [countries] = await Promise.all([P.countries(), P.zhTerms()]);  // 两样互不依赖,同时取

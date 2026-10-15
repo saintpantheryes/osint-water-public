@@ -92,7 +92,7 @@
     $("list").querySelectorAll('input[data-a="file"]').forEach((i) => { i.onchange = () => addFile(i.dataset.id, i); });
   }
   async function load() {
-    if (!hasTable()) { $("list").innerHTML = '<p class="muted">库里还没有「公司资料」表(管理员跑一次建表命令就有)。</p>'; $("count").textContent = ""; return; }
+    if (!hasTable()) { $("list").innerHTML = '<p class="empty">库里还没有「公司资料」表(管理员跑一次建表命令就有)。</p>'; $("count").textContent = ""; return; }
     rows = await P.records("company", { props: ["kind", "name", "content", "sectors", "countries", "year", "amount", "file", "for_report", "note"] });
     const ko = {}; P.values("company_kind").forEach((v, i) => { ko[v] = i; });
     rows.sort((a, b) => (ko[g(a, "kind")] ?? 9) - (ko[g(b, "kind")] ?? 9) || (Number(g(b, "year")) || 0) - (Number(g(a, "year")) || 0) || String(g(a, "name") || "").localeCompare(String(g(b, "name") || "")));
