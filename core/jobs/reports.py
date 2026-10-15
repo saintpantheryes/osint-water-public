@@ -227,7 +227,7 @@ def _parent_sectors(fine: list[str]) -> set[str]:
 
 
 def company_rows(ctx: Ctx, country_rid: str | None, sectors: set[str] | None) -> list[dict]:
-    """要附进报告的公司资料:勾了「写进报告」;适用国别含该国或为空(全球通用);适用领域与给定领域有交集或为空(各领域都适用)。
+    """要附进报告的公司资料:勾了「写进报告」;归属为本单位(空也算);适用国别含该国或为空(全球通用);适用领域与给定领域有交集或为空(各领域都适用)。
     sectors 为 None 表示不按领域筛(国别报告)。库里还没建「公司资料」表 → 空。"""
     b = ctx.base
     if "company" not in b.t or not b.has("company", "for_report"):
@@ -237,8 +237,11 @@ def company_rows(ctx: Ctx, country_rid: str | None, sectors: set[str] | None) ->
     except tstore.TStoreError as e:
         ctx.log(f"  ! 读不到公司资料表,报告不附:{e}")
         return []
+    has_owner = b.has("company", "owner")
     out = []
     for r in rows:
+        if has_owner and str(b.get("company", r, "owner") or "本单位") != "本单位":
+            continue  # 兄弟单位、合作方的业绩只做记录,不当本单位业绩附进报告(v2.28)
         cs = tstore.link_ids(b.get("company", r, "countries"))
         if cs and country_rid not in cs:
             continue

@@ -765,6 +765,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.wait_for_function("document.querySelector('#cKind option') && !document.querySelector('#list').innerText.includes('读取中')", timeout=15000)
             assert "还没有我方资料" in page.inner_text("#list") and "公司资料" not in page.inner_text("#nav")  # 不在主菜单,从「我的」进
             page.select_option("#cKind", "业绩")
+            assert page.input_value("#cOwner") == "本单位"  # 归属缺省本单位(v2.28)
             page.fill("#cName", "巴库净水厂扩建")
             page.fill("#cContent", "EPC 总承包,2023 年完工")
             page.click("#cSectors .chip-btn:has-text('供水')")
@@ -774,8 +775,8 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.set_input_files("#cFile", {"name": "完工证明.pdf", "mimeType": "application/pdf", "buffer": b"%PDF fake"})
             page.click("#cSave")
             page.wait_for_function("document.querySelector('#list').innerText.includes('巴库净水厂扩建')", timeout=15000)
-            cr = b.rows("company", props=["kind", "name", "sectors", "countries", "year", "amount", "file", "for_report"])
-            assert len(cr) == 1 and b.get("company", cr[0], "kind") == "业绩" and b.get("company", cr[0], "sectors") == ["供水"] and tstore.link_ids(b.get("company", cr[0], "countries")) == [c["id"]]
+            cr = b.rows("company", props=["kind", "name", "sectors", "countries", "year", "amount", "file", "for_report", "owner"])
+            assert len(cr) == 1 and b.get("company", cr[0], "kind") == "业绩" and b.get("company", cr[0], "owner") == "本单位" and b.get("company", cr[0], "sectors") == ["供水"] and tstore.link_ids(b.get("company", cr[0], "countries")) == [c["id"]]
             assert b.get("company", cr[0], "year") == 2023 and b.get("company", cr[0], "for_report") is True and b.get("company", cr[0], "file")[0]["name"] == "完工证明.pdf"
             assert "完工证明.pdf" in page.inner_text("#list") and "✓ 附进报告" in page.inner_text("#list")
             page.click("#list button[data-a='for']")
@@ -787,6 +788,14 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.click("#cSave")
             page.wait_for_function("document.querySelector('#list').innerText.includes('(一期)')", timeout=15000)
             assert len(b.rows("company")) == 1
+            # 兄弟单位的业绩:记进来但标出来、不给「附进报告」按钮;按归属筛选能分开
+            b.create("company", [{"kind": "业绩", "name": "中铁一局西安污水厂", "year": 2013, "owner": "兄弟单位", "for_report": True}])
+            page.reload()
+            page.wait_for_function("document.querySelector('#list').innerText.includes('中铁一局西安污水厂')", timeout=15000)
+            assert page.locator("#list .tag:has-text('兄弟单位')").count() == 1 and "不附(非本单位)" in page.inner_text("#list") and page.locator("#list button[data-a='for']").count() == 1
+            page.click("#fOwner .chip-btn:has-text('兄弟单位')")
+            assert "中铁一局西安污水厂" in page.inner_text("#list") and "巴库净水厂扩建" not in page.inner_text("#list") and "1 / 2 项" in page.inner_text("#count")
+            page.click("#fOwner .chip-btn:has-text('全部')")
             # 「我的」页:帐号与角色;关注一个国别 → 个人设置表建一行(账号 = 登录人);日历页「存到我的」→ 订阅出现在这里,可删
             page.goto(base + "/me.html")
             page.wait_for_function("document.querySelector('#cPick option') && !document.querySelector('#countries').innerText.includes('读取中')", timeout=15000)
