@@ -443,6 +443,12 @@
     },
     /* 「助手」页:把一句提问送给后台的助手接口(portal.caddy 转到后台任务进程里的 core/assistant_server.py),拿回查询计划;
        接口只做理解,数据仍由本页带着登录 cookie 向表格查。这不是写表格的操作。 */
+    /* 「助手」页答案下面的「答对了」「答错了」(本体 ask_log,A45):经助手接口记进表格「助手提问记录」(查看者帐号也能反馈) */
+    async feedback(data) {
+      const r = await fetch("api/assistant/feedback", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(data) });
+      if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪,反馈没记上");
+      return r.json();
+    },
     async ask(q, prev) {  // prev:上一问的计划(接着问时后台沿用它的对象、条件与指标,见 core/assistant.py 的 plan)
       const r = await fetch("api/assistant/ask", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(prev ? { q, prev } : { q }) });
       if (r.status === 401 || r.status === 403) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }

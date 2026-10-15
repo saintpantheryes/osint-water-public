@@ -1358,6 +1358,52 @@ def _inherit(p: dict, prev: dict, q: str) -> None:
         p["understood"].append(["沿用上一问", "、".join(got)])
 
 
+@lru_cache(maxsize=1)
+def ambiguous() -> dict[str, dict]:
+    """本体 semantic.ambiguous:有歧义的说法 → {id: 条目}。"""
+    o = yaml.safe_load(ONTO_PATH.read_text(encoding="utf-8"))
+    return {a["id"]: a for a in ((o.get("semantic") or {}).get("ambiguous") or [])}
+
+
+PROJECT_RE = re.compile(r"项目(?!机会)|工程(?!量)")
+LEAD_UNIT_RE = re.compile(r"(?:几|多少)\s*条")  # 「多少条」问的是线索
+AWARD_ONLY = ("contract_types", "deliveries", "assets", "winner_countries", "winners", "price", "capacity")
+CONGO_RE = re.compile(r"(?<!民主)刚果(?!\s*[((]?\s*[金布])(?!民主|共和国)")
+YEARS_RE = re.compile(r"(?:最近|近|过去)\s*(\d+|[一二两三四五六七八九十]+)\s*年(?!代|度)")
+
+
+def ask_back(q: str, p: dict, today: date) -> list[dict]:
+    """有歧义的说法(本体 semantic.ambiguous,图一「口径有歧义,请你确认」):[{id, question, chosen, options:[{label, q}]}]。
+    chosen 是这次照缺省按哪一种算的;options 是另几种,q 是改写后的问题(点了重问,改写后的不再有这个歧义)。没有歧义 → []。"""
+    amb, out, f, t = ambiguous(), [], p["filters"], _norm(q)
+    a = amb.get("project_object")
+    inherited = any(x[0] == "沿用上一问" for x in p.get("understood") or [])
+    if (a and p["object"] in ("lead", "award", "opportunity") and PROJECT_RE.search(t) and not OBJECT_RE.search(t) and not LEAD_UNIT_RE.search(t)
+            and not inherited and not any(m["id"] != "count" for m in p.get("measures") or []) and not any(f.get(k) for k in AWARD_ONLY)
+            and not f.get("tracked") and not f.get("stages")):
+        cur = next((o for o in a["options"] if o["object"] == p["object"]), None)
+        if cur:
+            out.append({"id": a["id"], "question": a["question"], "chosen": cur["label"],
+                        "options": [{"label": o["label"], "q": q + o["append"]} for o in a["options"] if o is not cur]})
+    a = amb.get("congo")
+    isos = {c["iso3"] for c in f.get("countries") or []}
+    if a and CONGO_RE.search(q) and isos & {"COG", "COD"} and not {"COG", "COD"} <= isos:
+        cur = next((o for o in a["options"] if o["iso3"] in isos), None)
+        if cur:
+            out.append({"id": a["id"], "question": a["question"], "chosen": cur["label"],
+                        "options": [{"label": o["label"], "q": CONGO_RE.sub(o["replace"], q)} for o in a["options"] if o is not cur]})
+    a = amb.get("recent_years")
+    m = YEARS_RE.search(q)
+    n = _num(m.group(1)) if m else None
+    if a and m and n and n == int(n) and n >= 2 and f.get("days") == round(n * UNIT_DAYS["年"]):
+        n, y = int(n), today.year
+        fill = lambda s: s.format(n=n, days=f["days"], y0=y - n + 1, y1=y - n, y2=y - 1)  # noqa: E731
+        alt = {"since": f"{y - n + 1} 年以来", "whole": f"{y - n}–{y - 1} 年"}
+        out.append({"id": a["id"], "question": fill(a["question"]), "chosen": fill(a["options"][0]["label"]),
+                    "options": [{"label": fill(o["label"]), "q": q[:m.start()] + alt[o["how"]] + q[m.end():]} for o in a["options"] if o["how"] in alt]})
+    return out
+
+
 def law_plan(q: str, lw: dict, by: str, model: str | None = None) -> dict:
     """law.detect 的结果 → 计划(对象「法规」)。"""
     p = empty_plan()
@@ -1372,6 +1418,14 @@ def law_plan(q: str, lw: dict, by: str, model: str | None = None) -> dict:
 
 
 def plan(q: str, today: date, clf=None, prev=None) -> dict:
+    """一句提问 → 计划(见 _plan);有歧义的说法(本体 semantic.ambiguous)另附 ask_back:照缺省答,页面给按钮换另一种理解。"""
+    p = _plan(q, today, clf, prev)
+    if (q or "").strip() and p["intent"] not in ("help", "report"):
+        p["ask_back"] = ask_back((q or "").strip()[:MAX_Q], p, today)
+    return p
+
+
+def _plan(q: str, today: date, clf=None, prev=None) -> dict:
     """一句提问 → 计划。配了模型就用模型解析(规则结果兜底:模型没结果、出错或认不出任何条件时用规则的),没配就只用规则。
     prev:页面带来的上一问的计划(接着问):这一句没明说查什么的沿用它的对象(问了别的对象才有的指标的除外);像追问的再沿用条件、指标与分组。"""
     q = (q or "").strip()[:MAX_Q]

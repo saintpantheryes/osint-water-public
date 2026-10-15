@@ -269,6 +269,48 @@ def _score(c: dict, zh: list[str], orig: list[str]) -> float:
     return s / (1 + len(t) / 6000)  # 很长的附表别总排前面
 
 
+NUM_RE = re.compile(r"\d+(?:[.,]\d+|[\u00a0\u202f ]\d{3}(?!\d))*")
+USD_RE = re.compile(r"[((][^()()]*(?:美元|USD|\$)[^()()]*[))]|约合?\s*[\d.,]+\s*(?:万|亿)?\s*美元")  # 括注的约合美元是模型按汇率折的,不在条文里
+
+
+def _values(tok: str) -> set[float]:
+    """一个数字写法 → 可能的值:1 000 / 1,000 / 1.000 是一千,也可能 1,5 是 1.5(法文小数点)、1.000 是 1(小数)。
+    中间有空格的(「1 000」,也可能是「BOD5 300」被连上)另把空格隔开的每一段也算上。"""
+    t = re.sub(r"[\u00a0\u202f ]", " ", tok)
+    out = set()
+    for s in {t.replace(" ", "").replace(",", ""), t.replace(" ", "").replace(".", "").replace(",", "."), t.replace(" ", "").replace(",", ".")}:
+        try:
+            out.add(round(float(s), 6))
+        except ValueError:
+            pass
+    return out
+
+
+def unsupported(answer: str, cites: list[dict]) -> list[str]:
+    """回答里出现、所引条文(原文、中文译文、法规名、条号)里都找不到的数。不查:角标 [n]、括注的约合美元、年份(1900–2099)。"""
+    text = USD_RE.sub(" ", re.sub(r"\[\d+\]", " ", answer))
+    have: set[float] = set()
+    for c in cites:
+        for tok in NUM_RE.findall(" ".join(str(c.get(k) or "") for k in ("text", "text_zh", "law", "label"))):
+            have |= _values(tok)
+            have |= {v for part in re.split(r"[\u00a0\u202f ]", tok) for v in _values(part)}
+    bad = []
+    for m in NUM_RE.finditer(text):
+        tok = m.group(0).strip()
+        whole = _values(tok)
+        k = {"万": 1e4, "亿": 1e8}.get(text[m.end():m.end() + 2].strip()[:1])
+        if k:  # 「1 万迪拉姆」:条文里写的是 10 000
+            whole |= {round(v * k, 6) for v in whole}
+        if whole & have or any(v.is_integer() and 1900 <= v <= 2099 for v in whole):
+            continue
+        parts = [_values(x) for x in re.split(r"[\u00a0\u202f ]", tok) if x]
+        if len(parts) > 1 and all(p & have or any(v.is_integer() and 1900 <= v <= 2099 for v in p) for p in parts):
+            continue
+        if tok not in bad:
+            bad.append(tok)
+    return bad
+
+
 def answer(lib: Library, q: str, law_plan: dict, countries: list[str], clf=None, log=print) -> dict:
     """按条文作答 → {ok, answer, cites:[{n, key, law, law_key, label, page, text, text_zh, url}], searched:{国名: 条数}, missing:[{name, iso3}], note}"""
     kw = [str(x) for x in law_plan.get("keywords") or []][:8]
@@ -316,6 +358,19 @@ def answer(lib: Library, q: str, law_plan: dict, countries: list[str], clf=None,
     if not out or out.get("_error"):
         res["note"] = "模型没回答成,列出查到的条文" + (f"({out['_error']})" if out and out.get("_error") else "")
         return res
+    bad = unsupported(str(out.get("answer") or ""), cites)
+    if bad:  # 发前核对(图一 ⑮、图二 ⑩):回答里的数在条文里找不到 → 指出来让模型重写一次;还对不上就不用这段回答,只列条文
+        log(f"法规回答的数字在条文里找不到,重写一次:{'、'.join(bad)}")
+        again = clf.ask(ANSWER_SYSTEM, json.dumps({"问题": q, "条文": ctx, "上一次的回答": out.get("answer"),
+                                                   "要改": "上一次的回答里这些数在条文原文里找不到:" + "、".join(bad) + "。只写条文里有的数,条文没写的说「查到的条文没有直接规定」"}, ensure_ascii=False),
+                        ANSWER_SCHEMA, ANSWER_GUIDE)
+        if again and not again.get("_error") and not unsupported(str(again.get("answer") or ""), cites):
+            out = again
+        else:
+            res["note"] = "模型写的回答里有数(" + "、".join(bad) + ")在条文原文里找不到,没有采用,下面直接列条文"
+            res["checked"] = {"ok": False, "numbers": bad}
+            return res
+    res["checked"] = {"ok": True}
     res["answer"] = str(out.get("answer") or "").strip()[:2000]
     used = {int(x) for x in out.get("used") or [] if isinstance(x, int) or str(x).isdigit()}
     if used:

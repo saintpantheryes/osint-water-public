@@ -36,6 +36,8 @@
     <h2>算法、主体工程、法规问法与排放指标的说法 <span id="semOpen2"></span></h2><div id="semWords"><p class="muted">读取中…</p></div>
     <h2>行业术语 <span class="muted small">跨领域的词不当成某一个领域</span> <span id="semOpen3"></span></h2><div class="panel" id="terms"><p class="muted">读取中…</p></div>
     <h2>本国定义 <span class="muted small">通用概念在各国法规里怎么定义;助手回答一国的问题时按这国的</span> <span id="semOpen4"></span></h2><div class="panel" id="semLocal"><p class="muted">读取中…</p></div>
+    <h2>有歧义的说法 <span class="muted small">先照缺省答,答案上面写明按哪一种算的,另几种给按钮</span></h2><div class="panel" id="semAmb"></div>
+    <h2>错题本 <span class="muted small">答案下面点「答错了」的提问;改好后写上应理解为,每天系统更新后重问一遍</span> <span id="semOpen5"></span></h2><div id="semLog"><p class="muted">读取中…</p></div>
   </div>
   <div class="tab" data-t="glossary"><div class="panel" id="glossary"></div><h2>归组(页面筛选用,底下的字段是自由文本)</h2><div id="groupings"></div></div>
   <div class="tab" data-t="rules"><div class="panel" id="rules"></div></div>
@@ -230,9 +232,30 @@
       P.raw(isoOf[g.id] ? '<a href="country.html?iso=' + encodeURIComponent(isoOf[g.id]) + '&t=inst">' + esc(g.name) + "</a>" : esc(g.name)), g.n, g.ok, g.n - g.ok, [...g.concepts].join("、")])) +
       '<p class="muted small">核对过原文的在表里把核实状态改成「已核实」,之后机器不再动它。</p>'
       : '<p class="muted">' + (P.isGuest ? "示例数据里没有本国定义。" : "还没有本国定义(表格「国别定义」是空的或还没建)。") + "</p>";
+    $("semAmb").innerHTML = P.tableHtml(["说法", "什么时候算没说清", "可以是"], ((O.semantic || {}).ambiguous || []).map((a) => [a.name, a.when || "", a.options.map((o) => o.label.replace(/\{[^}]+\}/g, "N")).join(";")]));
+    await drawLog();
     const nWords = seed.reduce((s, x) => s + ((words(x) || x.words || []).length), 0);
     $("semCards").innerHTML = P.kpiHtml([[ms.length, "指标"], [seed.length - ms.length, "其他指向"], [nWords, "说法"], [terms.length, "行业术语"], [groups.length ? local.length + " / " + groups.length + " 国" : "0", "本国定义"]]
       .map(([n, l]) => ({ label: l, value: String(n) })));
+  }
+  /* 错题本(本体 ask_log,v2.26):表「助手提问记录」里点过反馈的;待看、复查不通过的列出来 */
+  async function drawLog() {
+    const box = $("semLog");
+    if (P.isGuest || !P.cfg.tables.ask_log) { box.innerHTML = '<p class="muted">' + (P.isGuest ? "示例里没有错题本。" : "表格「助手提问记录」还没建(管理员跑一次建表命令就有)。") + "</p>"; return; }
+    let rows = [];
+    try { rows = await P.records("ask_log", { props: ["question", "verdict", "note", "status", "expected", "recheck", "asked_at", "understood"], orderBy: [{ fieldId: P.f("ask_log", "asked_at"), order: "desc" }] }); }
+    catch (e) { P.fail(box, e); return; }
+    const g = (r, p) => P.get("ask_log", r, p) || "";
+    const right = rows.filter((r) => g(r, "verdict") === "答对了").length, wrong = rows.filter((r) => g(r, "verdict") === "答错了");
+    const open = wrong.filter((r) => g(r, "status") === "待看" || !g(r, "status")), failed = rows.filter((r) => /^不通过/.test(g(r, "recheck")));
+    const watched = rows.filter((r) => g(r, "expected") && g(r, "status") !== "不改").length;
+    $("semOpen5").innerHTML = openLink("ask_log");
+    const cards = P.kpiHtml([{ label: "提问", value: String(rows.length) }, { label: "答对了", value: String(right) }, { label: "答错了", value: String(wrong.length) },
+      { label: "待看", value: String(open.length), tone: open.length ? "warn" : "" }, { label: "每天复查", value: String(watched), note: failed.length ? failed.length + " 句不通过" : "" }]);
+    const list = (rs, head) => P.tableHtml(head, rs.slice(0, 30).map((r) => [g(r, "question"), (g(r, "understood") || "").split("\n").join(";"), g(r, "note") || g(r, "recheck"), P.day(g(r, "asked_at"))]));
+    box.innerHTML = cards +
+      (failed.length ? '<div class="panel"><h3 class="mt0">复查不通过 ' + failed.length + " 句</h3>" + list(failed, ["提问", "当时的理解", "复查", "提问时间"]) + "</div>" : "") +
+      '<div class="panel"><h3 class="mt0">待看 ' + open.length + " 句</h3>" + (open.length ? list(open, ["提问", "当时的理解", "哪里不对", "提问时间"]) : '<p class="empty">没有待看的错题。</p>') + "</div>";
   }
   function drawRules() {
     $("rules").innerHTML = P.tableHtml(["编号", "规则", "内容", "怎么落实", "为什么"], O.rules.map((r) => [r.id, r.name, r.text, r.enforce || "", r.why || r.note || ""]));

@@ -119,8 +119,9 @@ def test_caddy_route_asks_the_table_who_you_are_then_serves_files():
 
 # ---------- 真的打开一遍(有 Playwright 与本地 Chromium 时) ----------
 
-def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data: bool = False):
-    """本机小服务:/api/* 转给内存版 Teable(带上 token 模拟登录态,缺省管理员),config.json 用刚生成的编号,其余是 portal/ 的静态文件。"""
+def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data: bool = False, log_asks: bool = False):
+    """本机小服务:/api/* 转给内存版 Teable(带上 token 模拟登录态,缺省管理员),config.json 用刚生成的编号,其余是 portal/ 的静态文件。
+    log_asks:提问与反馈也转给真的助手接口(记进内存库的「助手提问记录」,错题本);缺省不记,页面只读"""
     import mimetypes
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -167,6 +168,15 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(body)
+                return
+            if log_asks and (self.path.startswith("/api/assistant/ask") or self.path.startswith("/api/assistant/feedback")):  # 错题本:像 Caddy 那样带上登录标记转给真的助手接口
+                n = int(self.headers.get("Content-Length") or 0)
+                r = httpx.post(f"http://127.0.0.1:{self.assistant_port}" + self.path[len("/api/assistant"):], content=self.rfile.read(n), timeout=30,
+                               headers={"X-Portal-Auth": "1", "Content-Type": "application/json", "Cookie": "auth_session=" + token})
+                self.send_response(r.status_code)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(r.content)
                 return
             if self.path.startswith("/api/assistant/"):  # 主机上由 Caddy 转给后台任务进程里的助手接口;这里直接调它
                 from core.assistant_server import Assistant
@@ -242,6 +252,9 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
                     guest=guest_mod.Guest(base_factory=lambda: tstore.Base(_guest_client()),
                                           outsider=lambda cookie: fake.tokens.get(str(cookie or "").split("=", 1)[-1], ("", "none"))[1] == "none"))
     bot.feed_token = "test-token"
+    if log_asks:  # 记提问用机器账号写真实库(同主机上的助手接口)
+        bot.who = lambda cookie: "管理员 <admin@example.org>"
+        bot.terms_base = lambda: tstore.Base(tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None))
     asrv = serve_assistant(bot, 0, host="127.0.0.1")
     threading.Thread(target=asrv.serve_forever, daemon=True).start()
     H.assistant_port = asrv.server_port
