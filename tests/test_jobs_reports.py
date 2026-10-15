@@ -292,7 +292,7 @@ def test_daily_brief_requested_for_a_past_day_uses_that_day(env, monkeypatch):  
 
 
 def test_internal_country_and_project_reports_append_company_profile(env, monkeypatch):  # noqa: F811
-    """A23:勾了「写进报告」的公司资料按适用国别与领域附在国别 / 项目报告的内部版后;公开版不附;没勾的不附。"""
+    """A23:勾了「写进报告」的公司资料按适用国别与领域附在国别 / 项目报告的内部版后;公开版不附;没勾的不附;归属不是本单位的不附(v2.28)。"""
     fake, admin, abase, ctx = env
     monkeypatch.setattr(reports, "_to_docx", _fake_docx)
     c, o, l1, l2 = _seed(abase)
@@ -303,6 +303,7 @@ def test_internal_country_and_project_reports_append_company_profile(env, monkey
         {"kind": "业绩", "name": "巴库净水厂扩建", "countries": [c["id"]], "sectors": ["供水"], "year": 2023, "amount": "1.2 亿美元", "for_report": True},
         {"kind": "业绩", "name": "第比利斯污水厂", "countries": [other["id"]], "sectors": ["污水"], "year": 2022, "for_report": True},  # 别国
         {"kind": "其他", "name": "公司简介", "content": "中英文简介", "for_report": False},                               # 没勾
+        {"kind": "业绩", "name": "兄弟单位的巴库污水厂", "countries": [c["id"]], "sectors": ["污水"], "year": 2021, "for_report": True, "owner": "兄弟单位"},  # 非本单位:只做记录
     ])
     abase.create("report", [{"kind": "国别报告", "country": c["id"], "day": "2026-10-05", "edition": "内部版", "gen_status": "待生成"},
                             {"kind": "国别报告", "country": c["id"], "day": "2026-10-05", "edition": "公开版", "gen_status": "待生成"},
@@ -314,10 +315,10 @@ def test_internal_country_and_project_reports_append_company_profile(env, monkey
         mds[_val(abase, "report", r, "kind") + str(_val(abase, "report", r, "edition") or "")] = (ctx.cache.root.parent / "reports" / key.replace(".docx", ".md")).read_text(encoding="utf-8")
     internal = mds["国别报告内部版"]
     assert "## 附录 C 我方资质与相关业绩" in internal and "市政公用工程施工总承包特级" in internal and "巴库净水厂扩建" in internal
-    assert "第比利斯污水厂" not in internal and "公司简介" not in internal
+    assert "第比利斯污水厂" not in internal and "公司简介" not in internal and "兄弟单位的巴库污水厂" not in internal
     assert "我方资质" not in mds["国别报告公开版"]
     project = mds["项目报告"]  # 商机领域污水:供水的业绩不附,全球通用的资质附
-    assert "市政公用工程施工总承包特级" in project and "巴库净水厂扩建" not in project and "第比利斯污水厂" not in project
+    assert "市政公用工程施工总承包特级" in project and "巴库净水厂扩建" not in project and "第比利斯污水厂" not in project and "兄弟单位的巴库污水厂" not in project
 
 
 class _FakeTranslator:

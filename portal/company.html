@@ -13,11 +13,12 @@
 <script>document.getElementById("nav").innerHTML = P.nav("me.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
   <h1>我方资料 <span class="muted h-sub">(<a href="me.html">我的</a> › 我方资料)</span></h1>
-  <p class="muted">我们公司自己的资质证书、历史业绩与其他公司资料,一行一项。勾了「写进报告」的,生成国别报告、项目报告的<b>内部版</b>时按适用国别与领域挑出来附在正文后(公开版不附,游客看不到)。适用国别留空 = 全球通用;适用领域留空 = 各领域都适用。</p>
+  <p class="muted">我们公司自己的资质证书、历史业绩与其他公司资料,一行一项。勾了「写进报告」的,生成国别报告、项目报告的<b>内部版</b>时按适用国别与领域挑出来附在正文后(公开版不附,游客看不到)。适用国别留空 = 全球通用;适用领域留空 = 各领域都适用。集团内兄弟单位、合作方的业绩也可以记在这里,「归属」选成兄弟单位或合作方:只做记录、供参考,报告不附、不当本单位业绩。</p>
   <div class="two">
     <div class="col">
       <div class="form" id="form"><h3 id="formTitle">新增一项</h3>
         <div class="row"><label>类别</label><select id="cKind"></select></div>
+        <div class="row"><label>归属</label><select id="cOwner"></select></div>
         <div class="row"><label>名称</label><input id="cName" placeholder="如:市政公用工程施工总承包特级 / 某国净水厂 EPC"></div>
         <div class="row"><label>内容</label><textarea id="cContent" rows="4" placeholder="资质:发证机关、等级、有效期;业绩:项目概况、合同额、工期、业主、我方角色"></textarea></div>
         <div class="row"><label>适用领域</label><span id="cSectors" class="frow grow"></span></div>
@@ -34,6 +35,7 @@
     <div class="col wide">
       <div class="filters">
         <div class="frow"><b>类别</b><span id="fKind" class="frow"></span></div>
+        <div class="frow"><b>归属</b><span id="fOwner" class="frow"></span></div>
         <div class="frow"><b>领域</b><span id="fSector" class="frow"></span></div>
         <div class="frow"><b>国别</b><select id="fCountry" class="inline"><option value="">全部国别</option></select></div>
         <div class="frow"><b>搜索</b><input id="fText" placeholder="搜名称、内容" size="18"><span class="muted push" id="count"></span></div>
@@ -48,7 +50,10 @@
   const $ = (id) => document.getElementById(id);
   let rows = [], countries = [], cname = {}, editing = null;
   const g = (r, p) => P.get("company", r, p);
-  const flt = { k: "", s: "", c: "", q: "" };
+  const flt = { k: "", o: "", s: "", c: "", q: "" };
+  const hasOwner = () => P.has("company", "owner");
+  const ownerOf = (r) => (hasOwner() && g(r, "owner")) || "本单位";
+  const ownerTag = (r) => { const o = ownerOf(r); return o === "本单位" ? "" : ' <span class="tag t-warn">' + P.esc(o) + "</span>"; };
   const form = { sectors: [], countries: [] };
   const hasTable = () => !!(P.cfg.tables || {}).company;
   const files = (r) => (g(r, "file") || []).map((a) => '<a href="' + P.esc(P.fileUrl(a)) + '" target="_blank" rel="noopener">' + P.esc(a.name) + "</a>").join("<br>");
@@ -62,6 +67,7 @@
     $("formTitle").textContent = r ? "改这一项" : "新增一项";
     $("cCancel").style.display = r ? "" : "none";
     $("cKind").value = r ? (g(r, "kind") || P.values("company_kind")[0]) : P.values("company_kind")[0];
+    $("cOwner").value = r ? ownerOf(r) : "本单位";
     $("cName").value = r ? (g(r, "name") || "") : "";
     $("cContent").value = r ? (g(r, "content") || "") : "";
     $("cYear").value = r && g(r, "year") ? g(r, "year") : "";
@@ -76,15 +82,15 @@
   }
   function render() {
     const q = flt.q.trim().toLowerCase();
-    const shown = rows.filter((r) => (!flt.k || g(r, "kind") === flt.k) && (!flt.s || (g(r, "sectors") || []).includes(flt.s) || !(g(r, "sectors") || []).length)
+    const shown = rows.filter((r) => (!flt.k || g(r, "kind") === flt.k) && (!flt.o || ownerOf(r) === flt.o) && (!flt.s || (g(r, "sectors") || []).includes(flt.s) || !(g(r, "sectors") || []).length)
       && (!flt.c || (g(r, "countries") || []).some((x) => x.id === flt.c) || !(g(r, "countries") || []).length)
       && (!q || ((g(r, "name") || "") + " " + (g(r, "content") || "")).toLowerCase().includes(q)));
     $("count").textContent = shown.length + " / " + rows.length + " 项";
     $("list").innerHTML = shown.length ? P.tableHtml(["类别", "名称", "适用领域", "适用国别", "年份", "金额", "附件", "写进报告", ""], shown.map((r) => [
-      g(r, "kind") || "", P.raw("<b>" + P.esc(g(r, "name") || "") + "</b>" + (g(r, "content") ? '<br><span class="muted small">' + P.esc(String(g(r, "content")).slice(0, 120)) + "</span>" : "")),
+      g(r, "kind") || "", P.raw("<b>" + P.esc(g(r, "name") || "") + "</b>" + ownerTag(r) + (g(r, "content") ? '<br><span class="muted small">' + P.esc(String(g(r, "content")).slice(0, 120)) + "</span>" : "")),
       (g(r, "sectors") || []).join("、") || P.raw('<span class="muted">各领域</span>'), (g(r, "countries") || []).map((x) => cname[x.id] || x.title).join("、") || P.raw('<span class="muted">全球</span>'),
       g(r, "year") ? String(g(r, "year")) : "", g(r, "amount") || "", P.raw(files(r) || '<span class="muted">—</span>'),
-      P.raw('<span class="it-act"><button type="button" data-a="for" data-id="' + r.id + '" class="chip-btn' + (g(r, "for_report") ? " on" : "") + '">' + (g(r, "for_report") ? "✓ 附进报告" : "不附") + "</button></span>"),
+      ownerOf(r) !== "本单位" ? P.raw('<span class="muted small">不附(非本单位)</span>') : P.raw('<span class="it-act"><button type="button" data-a="for" data-id="' + r.id + '" class="chip-btn' + (g(r, "for_report") ? " on" : "") + '">' + (g(r, "for_report") ? "✓ 附进报告" : "不附") + "</button></span>"),
       P.raw('<span class="it-act"><button type="button" data-a="edit" data-id="' + r.id + '" class="chip-btn">改</button> <label class="chip-btn" title="再传一个附件">传附件<input type="file" data-a="file" data-id="' + r.id + '" style="display:none"></label></span> ' + P.open("company", r.id)),
     ])) : '<p class="muted">' + (rows.length ? "没有符合筛选的。" : "还没有我方资料,在左边加第一项。") + "</p>";
     $("list").querySelectorAll('button[data-a="for"]').forEach((b) => { b.onclick = () => toggleFor(b.dataset.id, b); });
@@ -93,7 +99,7 @@
   }
   async function load() {
     if (!hasTable()) { $("list").innerHTML = '<p class="empty">库里还没有「公司资料」表(管理员跑一次建表命令就有)。</p>'; $("count").textContent = ""; return; }
-    rows = await P.records("company", { props: ["kind", "name", "content", "sectors", "countries", "year", "amount", "file", "for_report", "note"] });
+    rows = await P.records("company", { props: ["kind", "name", "content", "sectors", "countries", "year", "amount", "file", "for_report", "note"].concat(hasOwner() ? ["owner"] : []) });
     const ko = {}; P.values("company_kind").forEach((v, i) => { ko[v] = i; });
     rows.sort((a, b) => (ko[g(a, "kind")] ?? 9) - (ko[g(b, "kind")] ?? 9) || (Number(g(b, "year")) || 0) - (Number(g(a, "year")) || 0) || String(g(a, "name") || "").localeCompare(String(g(b, "name") || "")));
     render();
@@ -112,6 +118,7 @@
     const name = $("cName").value.trim();
     if (!name) { P.toast("要有名称", true); return; }
     const values = { kind: $("cKind").value, name, content: $("cContent").value.trim(), sectors: form.sectors, countries: form.countries,
+      owner: hasOwner() ? $("cOwner").value : undefined,
       year: $("cYear").value ? Number($("cYear").value) : undefined, amount: $("cAmount").value.trim(), for_report: $("cFor").checked, note: $("cNote").value.trim() };
     const btn = $("cSave"); btn.disabled = true; $("cMsg").textContent = "保存中…";
     try {
@@ -136,11 +143,14 @@
     if (!(await P.canWrite())) P.guest();
     if (hasTable()) $("tbl").href = P.tableUrl("company"); else $("tbl").parentElement.style.display = "none";
     $("cKind").innerHTML = P.values("company_kind").map((v) => '<option value="' + P.esc(v) + '">' + P.esc(v) + "</option>").join("");
+    $("cOwner").innerHTML = P.values("company_owner").map((v) => '<option value="' + P.esc(v) + '">' + P.esc(v) + "</option>").join("");
+    if (!hasOwner()) $("cOwner").closest(".row").hidden = true;  /* 库里还没补「归属」字段(管理员跑一次建表命令就有) */
     countries = await P.records("country", { props: ["name_zh", "key"] });
     countries.sort((a, b) => P.zhCmp(P.get("country", a, "name_zh"), P.get("country", b, "name_zh")));
     countries.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || c.id; });
     for (const id of ["fCountry", "cCountryPick"]) P.fillCountrySelect($(id), countries.map((c) => [c.id, cname[c.id]]));
     P.chips($("fKind"), [["", "全部"]].concat(P.values("company_kind").map((v) => [v, v])), flt, "k", render);
+    P.chips($("fOwner"), [["", "全部"]].concat(P.values("company_owner").map((v) => [v, v])), flt, "o", render);
     P.chips($("fSector"), [["", "全部"]].concat(P.values("lead_sectors").map((v) => [v, v])), flt, "s", render);
     $("fCountry").onchange = () => { flt.c = $("fCountry").value; render(); };
     $("fText").oninput = () => { flt.q = $("fText").value; render(); };

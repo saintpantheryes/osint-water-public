@@ -16,7 +16,7 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.27
+version: 2.28
 date: 2026-10-15
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
@@ -155,6 +155,8 @@ changes_v2_16:   # 已中标项目补数据源(2026-10-13):使用方看到摩洛
   - 世行数据把几家韩国公司(也有刚果本地单位)的国别录成了朝鲜:世行不与朝鲜往来,导入时改回韩国(刚果的按借款国)
   - 要跑一次建表命令(新字段)
 
+changes_v2_28:   # 公司资料归属(2026-10-15):使用方(中海外)把兄弟单位(中铁一局、上海局)的水务业绩也记进了公司资料,但不能当本单位业绩
+  - 「公司资料」加属性「归属」(本单位 / 兄弟单位 / 合作方,空 = 本单位,分类体系 company_owner);A14 附「我方资质与相关业绩」时只取本单位的行;页面按归属筛选并标出
 changes_v2_27:   # 答错了当场改正、助手会查城市(2026-10-15):使用方问「吉尔吉斯斯坦有多少个规模以上城市」,助手答成了营商环境;
                  # 反馈答错之后问「如何让 AI 立即学习,而不是等它每日复盘」
   - 答错了写了哪里不对的:助手按这句说明请模型重新理解,当场在下面重答(A45);对重答点「答对了」→ 原来那一问记下「学到的解析」(ask_log.learned,新字段)、
@@ -584,10 +586,11 @@ objects:
     name: 公司资料
     core: false
     band: business
-    definition: 我方的资质证书、历史业绩与其他公司资料,一行一项。人维护;生成国别报告、项目报告的内部版时按适用国别与领域挑出勾了「写进报告」的行,附在正文后。公开版不附,游客看不到。
+    definition: 我方的资质证书、历史业绩与其他公司资料,一行一项。人维护;生成国别报告、项目报告的内部版时按适用国别与领域挑出勾了「写进报告」且归属为本单位的行,附在正文后。公开版不附,游客看不到。兄弟单位、合作方的业绩可以记在同一张表里,靠「归属」区分,只做记录。
     key: 名称
     properties:
       - {id: kind, name: 类别, type: enum, enum: [资质, 业绩, 其他], by: human, required: true, taxonomy: company_kind}
+      - {id: owner, name: 归属, type: enum, enum: [本单位, 兄弟单位, 合作方], by: human, taxonomy: company_owner, note: "空 = 本单位。兄弟单位(集团内其他单位)、合作方的业绩只做记录、供参考,不作本单位业绩:报告不附,页面另标出来"}
       - {id: name, name: 名称, type: text, by: human, required: true, example: "市政公用工程施工总承包特级"}
       - {id: content, name: 内容, type: longtext, by: human, note: 资质的发证机关、等级、有效期;业绩的项目概况、合同额、工期、业主、我方角色}
       - {id: sectors, name: 适用领域, type: enums, enum: [供水, 污水, 水利, 海水淡化, 雨水排涝, 水环境, 其他], by: human, taxonomy: lead_sectors, note: 空 = 各领域都适用}
@@ -2239,6 +2242,16 @@ taxonomies:
           - {v: 水价调整, code: tariff, def: 水价、污水费、水资源费的调整, boundary: "", example: "水价上调约 87%"}
           - {v: 工程投运, code: works, def: 有名字的水厂、坝、调水、管线、淡化厂开工或投运, boundary: "", example: "某海水淡化厂投运"}
           - {v: 其他, code: other, def: 旱灾、水危机等其他有日期的大事, boundary: "", example: ""}
+  company_owner:
+    name: 公司资料归属
+    used_by: [company.owner]
+    note: 空 = 本单位。只有本单位的行才会附进报告。
+    groups:
+      - name: 全部
+        values:
+          - {v: 本单位, code: own, def: 我们公司自己的资质或业绩, boundary: 合同主体是本单位, example: "中海外承建的供水项目"}
+          - {v: 兄弟单位, code: sibling, def: "集团内其他单位的业绩,只做记录、供参考", boundary: 不能当作本单位业绩投标或写进报告, example: "中铁一局承建的污水厂"}
+          - {v: 合作方, code: partner, def: 合作伙伴、联合体成员的资质或业绩, boundary: "同上,只做记录", example: "联合体伙伴的运营业绩"}
   company_kind:
     name: 公司资料类别
     used_by: [company.kind]
