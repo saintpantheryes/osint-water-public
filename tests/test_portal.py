@@ -892,8 +892,8 @@ def test_guest_viewer_sees_everything_but_cannot_write():
             page.goto(base + f"/opp.html?id={o['id']}")
             page.wait_for_selector("#timeline .tl", timeout=15000)
             assert "游客演示帐号" in page.inner_text(".guest-note") and "与业主通话" in page.inner_text("#timeline")
-            page.wait_for_function("document.querySelector('#acct .who') && document.querySelector('#acct .who').textContent.includes('游客')", timeout=15000)
-            assert "只读" in page.inner_text("#acct .who") and "所有者" not in page.inner_text("#acct")
+            page.wait_for_function("document.querySelector('#acct .who b')", timeout=15000)  # 名字先出来,角色标签读完角色才补上
+            assert "游客" in page.inner_text("#acct .who") and "只读" in page.inner_text("#acct .who") and "所有者" not in page.inner_text("#acct")
             for sel in ("#fuSave", "#rpSave", "#mine", "#quickSave", "#fuContent"):
                 assert page.locator(sel).is_disabled(), sel
             page.evaluate("document.getElementById('fuSave').click()")
@@ -983,8 +983,8 @@ def test_outsider_guest_sees_only_public_content_through_the_worker():
             assert "游客" in page.inner_text("#who") and page.locator("#acct a[href='me.html']").count() == 0
             # 菜单里没有「打开表格」,帐号区标「游客 · 只读」
             page.goto(base + "/index.html")
-            page.wait_for_function("document.querySelector('#acct .who') && document.querySelector('#acct .who').textContent.includes('游客')", timeout=15000)
-            assert page.locator("#menu a.table:visible").count() == 0 and "只读" in page.inner_text("#acct .who")
+            page.wait_for_function("document.querySelector('#acct .who b')", timeout=15000)  # 名字先出来,角色标签读完角色才补上
+            assert page.locator("#menu a.table:visible").count() == 0 and "游客 · 只读" in page.inner_text("#acct .who")
             assert not errors, errors
             browser.close()
     finally:
@@ -1278,7 +1278,7 @@ def test_home_first_screen_does_not_wait_for_data():
             page.click("#nav .menu-btn")  # 读完配置前点「菜单」:马上打开
             assert page.locator("#menu").is_visible() and page.locator("#menu .mgrp h3").all_inner_texts() == [g for g, _ in MENU_SPEC]
             release()
-            page.wait_for_function("document.getElementById('llmNote').textContent.includes('按词表解析') && document.querySelector('#menu #acct .who')", timeout=15000)
+            page.wait_for_function("document.getElementById('llmNote').textContent.includes('按词表解析') && document.querySelector('#menu #acct .who b')", timeout=15000)  # 名字先到,角色读完才补标签与「后台数据表格」
             assert page.locator("#menu").is_visible() and page.locator("#menu a.table").is_visible()  # 读完补上帐号区与「后台数据表格」,卡片一直开着
             page.click("#menuClose")
             page.wait_for_timeout(300)
@@ -1310,6 +1310,47 @@ def test_pages_draw_the_header_right_after_its_slot():
             continue
         assert re.search(r'<div id="nav"></div>\n<script>document\.getElementById\("nav"\)\.innerHTML = P\.nav\("[a-z]+\.html"(, true)?\);', s), f.name
         assert s.count("P.nav(") == 1, f.name
+
+
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_account_name_shows_before_config_and_role():
+    """帐号区不等配置、本体、角色(使用方 2026-10-15:进系统十几秒才刷出用户名):顶栏一画好就问「这是谁」,名字回来马上写进帐号区;
+    这时配置、本体(几百 KB)、角色、表格都还没回来。角色回来再补上角色标签与「我的」。「这是谁」整页只问一次。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    _seed(admin, fake)
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    slow = re.compile(r".*/(config\.json|ontology\.json|api/(base/|table/|assistant/).*)$")  # 配置、本体、角色、读表都扣住,只放「这是谁」
+    who = fake.users[fake.user]["name"]
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            errors: list[str] = []
+            for path, acct in [("overview.html", "#nav header #acct"), ("index.html", "#menu #acct")]:
+                page = browser.new_page(viewport={"width": 1366, "height": 760})
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                asked: list[str] = []
+                page.on("request", lambda r: asked.append(r.url) if r.url.endswith("/api/auth/user") else None)
+                release = _held(page, slow)
+                page.goto(base + "/" + path)
+                page.wait_for_function(f"document.querySelector('{acct} .who')", timeout=5000)  # 配置还没回来,名字已经在了
+                assert page.inner_text(acct + " .who") == who and "退出登录" in page.inner_text(acct), path
+                assert page.locator(acct + " .who b").count() == 0 and page.locator(acct + " a[href='me.html']").count() == 0, path  # 角色还不知道:先不标
+                release()
+                page.wait_for_function(f"document.querySelector('{acct} .who b')", timeout=15000)
+                assert page.inner_text(acct + " .who") == who + " 所有者" and page.locator(acct + " a[href='me.html']").count() == 1, path
+                page.wait_for_timeout(500)
+                assert asked == [base + "/api/auth/user"], (path, asked)  # 整页只问一次「这是谁」
+                page.close()
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
 
 
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
