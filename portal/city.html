@@ -23,6 +23,7 @@
       <div class="frow"><b>关联</b><span id="fHas" class="frow"></span></div>
       <div class="frow"><b>搜索</b><input id="fText" placeholder="搜城市中文名、英文名或行政区" size="30" aria-label="搜城市"><span class="muted push" id="fNote"></span></div>
     </div>
+    <p class="muted small ig-note" id="igNote"></p>
     <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
     <h2>分布(拖左下角滑块按<span id="byName">人口</span>筛城市,清单跟着变;颜色越深数越大,红圈是有线索或商机;点圆点看这座城市;滚轮缩放,<a href="#" id="mapReset">复位</a>)</h2>
     <div class="panel"><div id="map" class="chart tall"></div></div>
@@ -47,7 +48,7 @@
 (async function () {
   const $ = (id) => document.getElementById(id);
   const q0 = new URLSearchParams(location.search);
-  const state = { c: q0.get("c") || "", by: q0.get("by") === "gdp" ? "gdp" : "", lo: q0.get("lo") || "", hi: q0.get("hi") || "", h: q0.get("h") || "", q: (q0.get("q") || "").trim() };
+  const state = { c: q0.get("c") || "", by: q0.get("by") === "gdp" ? "gdp" : "", lo: q0.get("lo") || "", hi: q0.get("hi") || "", h: q0.get("h") || "", q: (q0.get("q") || "").trim(), ig: q0.get("ig") === "1" ? "1" : "" };
   /* 地图左下角的滑块(和国别地图一样):按人口或地区生产总值筛城市。数跨好几个数量级,滑块走对数刻度;lo / hi 是选中的上下限(原值),记在网址里 */
   const BY = [["", "人口"], ["gdp", "生产总值"]];
   const metric = (ct) => { const v = Number(P.get("city", ct, state.by === "gdp" ? "gdp" : "population")); return v > 0 ? v : 0; };
@@ -101,13 +102,23 @@
       props: ["name_zh", "name_en", "country", "admin", "coords", "population", "area_km2", "density", "gdp", "gdp_year", "lead_count", "opp_count", "supply_count", "sewage_count"] });
     const plantCols = P.has("city", "supply_count");  // 水厂表建了才有这两列
     all.sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0));  // 人口从多到少(四千多行分页读,页与页之间也按这个)
-    const used = new Set(all.map((ct) => P.linkId(P.get("city", ct, "country"))));
-    P.fillCountrySelect($("fCountry"), countries.filter((c) => used.has(c.id)).map((c) => [P.get("country", c, "key"), P.get("country", c, "name_zh") || P.get("country", c, "key")]));
-    $("fCountry").value = state.c;
-    let map = null;
+    /* 忽略的国别(地图上灰色,不再采集):它们的城市默认不进卡片、地图和清单;筛选行末尾的「显示」能临时露出来(网址 ig=1)。
+       直接选了一个忽略的国别(比如从它的国别概况点过来)就照常列它的城市 */
+    bl = await P.ignored();
+    const isoOf = (ct) => { const c = countryOf(ct); return c ? P.get("country", c, "key") : ""; };
+    const ign = (ct) => bl.has(isoOf(ct));
+    const nIgn = all.filter(ign).length;
+    const showIg = () => !!state.ig || bl.has(state.c);
+    const fillSel = () => {
+      const used = new Set(all.filter((ct) => showIg() || !ign(ct)).map((ct) => P.linkId(P.get("city", ct, "country"))));
+      P.fillCountrySelect($("fCountry"), countries.filter((c) => used.has(c.id)).map((c) => [P.get("country", c, "key"), P.get("country", c, "name_zh") || P.get("country", c, "key")]));
+      $("fCountry").value = state.c;
+    };
+    fillSel();
+    let map = null, hiddenN = 0;
     const draw = () => {
       const iso = state.c, words = state.q.toLowerCase();
-      const base = all.filter((ct) => {
+      const pass = all.filter((ct) => {
         const c = countryOf(ct);
         if (iso && (!c || P.get("country", c, "key") !== iso)) return false;
         if (state.h === "lead" && !(Number(P.get("city", ct, "lead_count")) > 0)) return false;
@@ -115,6 +126,8 @@
         if (words && ![cname(ct), P.get("city", ct, "name_en"), P.get("city", ct, "admin")].some((x) => String(x || "").toLowerCase().includes(words))) return false;
         return true;
       });
+      const base = showIg() ? pass : pass.filter((ct) => !ign(ct));
+      hiddenN = pass.length - base.length;
       /* 滑块的两端:这批城市里有数的最小、最大值(对数);生产总值大多还没填,没填的不在范围里 */
       const logs = base.map(metric).filter((v) => v > 0).map((v) => Math.log10(v));
       const range = logs.length ? { min: Math.floor(Math.min(...logs) * 10) / 10, max: Math.ceil(Math.max(...logs) * 10) / 10 } : null;
@@ -150,9 +163,15 @@
       $("cards").innerHTML = P.kpiHtml([[rows.length.toLocaleString("zh-CN"), "城市"], [people(pop), "合计人口"], [n((ct) => Number(P.get("city", ct, "population")) >= 1e6), "百万人口以上"],
         [n((ct) => Number(P.get("city", ct, "lead_count")) > 0), "有线索的城市"], [n((ct) => Number(P.get("city", ct, "opp_count")) > 0), "有商机的城市"]]
         .map(([v, l]) => ({ label: l, value: String(v) })));
-      $("fNote").textContent = all.length ? "共 " + all.length.toLocaleString("zh-CN") + " 座" : "";
+      const zh = (n) => n.toLocaleString("zh-CN");
+      const cOne = state.c && bl.has(state.c) && countries.find((c) => P.get("country", c, "key") === state.c);
+      $("fNote").textContent = all.length ? "共 " + zh(showIg() ? all.length : all.length - nIgn) + " 座" : "";
+      /* 筛选框下面一行(手机上筛选收起时也看得见):忽略国别的城市没算进来几座、点「显示」露出来 */
+      $("igNote").innerHTML = !nIgn ? "" : cOne ? P.esc(P.get("country", cOne, "name_zh") || state.c) + "是你忽略的国别(地图上灰色,不再采集),这里照常列出它的城市。" :
+        state.ig ? "已显示忽略国别(地图上灰色,不再采集)的 " + zh(nIgn) + ' 座城市。<button type="button" class="btn quiet" id="igT">不显示</button>' :
+          "忽略国别(地图上灰色,不再采集)的 " + zh(nIgn) + ' 座城市没算进卡片、地图和清单。<button type="button" class="btn quiet" id="igT">显示</button>';
       $("listTitle").textContent = "城市清单(" + ($("rangeNote").dataset.sel && (state.lo || state.hi) ? ($("byName").textContent + " " + $("rangeNote").dataset.sel + ",") : "") + "按人口从多到少" + (rows.length > SHOW ? ",列出前 " + SHOW + " 座,筛选或搜索看其余的" : "") + ")";
-      $("rows").innerHTML = !rows.length ? '<p class="empty">没有符合条件的城市。</p>' :
+      $("rows").innerHTML = !rows.length ? '<p class="empty">没有符合条件的城市' + (hiddenN ? "(忽略的国别里有 " + zh(hiddenN) + " 座符合,没列出;要看点筛选框下面的「显示」)" : "") + "。</p>" :
         P.tableHtml(["城市", "国别", "行政区", "人口", "面积(km²)", "密度", "生产总值(亿美元)", "线索", "商机"].concat(plantCols ? ["自来水厂", "污水厂"] : []), rows.slice(0, SHOW).map((ct) => { const g = (p) => P.get("city", ct, p);
           return [nameCell(ct), countryCell(ct), g("admin") || "", num(g("population")), num(g("area_km2")), num(g("density")),
             P.raw(P.esc(num(g("gdp"))) + (g("gdp") && g("gdp_year") ? ' <span class="muted small">' + P.esc(String(g("gdp_year"))) + "</span>" : "")), String(g("lead_count") || 0), String(g("opp_count") || 0)]
@@ -160,7 +179,8 @@
     };
     P.chips($("fBy"), BY, state, "by", () => { state.lo = state.hi = ""; draw(); });
     P.chips($("fHas"), HAS, state, "h", draw);
-    $("fCountry").onchange = () => { state.c = $("fCountry").value; draw(); };
+    $("fCountry").onchange = () => { state.c = $("fCountry").value; fillSel(); draw(); };
+    $("igNote").onclick = (e) => { if (e.target.id !== "igT") return; state.ig = state.ig ? "" : "1"; fillSel(); draw(); };
     $("fText").value = state.q;
     let tt = 0; $("fText").oninput = () => { clearTimeout(tt); tt = setTimeout(() => { state.q = $("fText").value.trim(); draw(); }, 250); };
     $("mapReset").onclick = (e) => { e.preventDefault(); if (map) { map.mc.clear(); map.mc.setOption(map.option); } };
