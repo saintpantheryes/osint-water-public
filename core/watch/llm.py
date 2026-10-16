@@ -146,10 +146,11 @@ class LLMConfig:
         return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
 
     @classmethod
-    def for_assistant(cls, watch_llm: dict | None, assistant_llm: dict | None) -> LLMConfig:
-        """助手的接入:沿用 watch.llm 的 provider / model / base_url,关思考、浅思考深度、短输出、不限次数;profile 的 assistant.llm 可覆盖任一项。"""
+    def for_assistant(cls, watch_llm: dict | None, assistant_llm: dict | None, max_tokens: int = 2_000) -> LLMConfig:
+        """助手的接入:沿用 watch.llm 的 provider / model / base_url,关思考、浅思考深度、短输出、不限次数;profile 的 assistant.llm 可覆盖任一项。
+        max_tokens 是缺省输出上限:解析一句提问 2000 够;看一份文件(逐条列项目、资格要求)要大得多(assistant_server.FILE_MAX_TOKENS)。"""
         base = {k: v for k, v in (watch_llm or {}).items() if k in ("provider", "model", "base_url", "fallbacks")}
-        cfg = {**base, "effort": "low", "max_tokens": 2_000, "max_calls": 10 ** 9, "workers": 4, "thinking": False, **(assistant_llm or {})}
+        cfg = {**base, "effort": "low", "max_tokens": max_tokens, "max_calls": 10 ** 9, "workers": 4, "thinking": False, **(assistant_llm or {})}
         if cfg.get("provider") == "anthropic" and cfg.get("effort") not in ("low", "medium", "high", "xhigh", "max"):
             cfg["effort"] = "low"
         return cls.from_profile(cfg)

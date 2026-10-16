@@ -595,6 +595,15 @@ def test_anthropic_config_for_assistant_keeps_effort_valid():
     assert cfg.provider == "anthropic" and cfg.model == "claude-haiku-5-5"
 
 
+def test_file_reading_gets_a_much_bigger_output_cap():
+    """看一份文件的回答是逐条的 JSON(十几条项目 + 资格要求),2000 token 不够、会被截断成「没有给出分析」;看文件用放大了上限的同一接入,profile 仍可覆盖。"""
+    from core import assistant_server as S
+    watch = {"provider": "deepseek", "model": "deepseek-v4-pro", "effort": "high"}
+    q, f = LLMConfig.for_assistant(watch, None), LLMConfig.for_assistant(watch, None, max_tokens=S.FILE_MAX_TOKENS)
+    assert q.max_tokens == 2000 and f.max_tokens >= 12_000 and (f.provider, f.model, f.thinking, f.effort) == (q.provider, q.model, q.thinking, q.effort)
+    assert LLMConfig.for_assistant(watch, {"max_tokens": 4000}, max_tokens=S.FILE_MAX_TOKENS).max_tokens == 4000
+
+
 def test_server_endpoints(monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
