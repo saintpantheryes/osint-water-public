@@ -420,12 +420,17 @@ def test_country_report_follows_the_azerbaijan_outline(env, monkeypatch):  # noq
     abase.update("country", c["id"], {"bready_total": 66, "bready_water": 79.3, "bready_procure": 45.7, "water_tariff": 2, "water_tariff_cur": "AZN", "water_tariff_usd": 1.18,
                                       "foreign_bid": "部分招标有限制", "award_days": 365, "gov_pay_days": 7, "bready_edition": "B-READY 2025(数据版本 December 10, 2025)"})
     md, *_ = reports.build_country(ctx, iso)
-    sec = md[md.index("营商环境(世界银行 B-READY)"):]
+    sec = md[md.index("外资与营商环境"):]
     assert "总分 66.0 分;需要留意的是公共采购得分、外企参标限制、大型工程授标天数" in sec and "约 1.18 美元/m³(2 AZN/m³)" in sec
     assert "45.7 分(超警戒线:低于 50 分,偏弱)" in sec and "365 天(超警戒线:超过 180 天,授标慢)" in sec and "7 天 |" in sec
     ctx.clf = _FakeWriter()
     md, *_ = reports.build_country(ctx, iso)
-    assert "〔summary〕" in md and "〔risks〕" in md and "〔conclusion〕" in md and "## 2.3 宏观经济" in md
+    # 配了模型:照成稿 72 节逐节写(字段 s章_节),程序填的几节不请模型;首都、我国换成实际说法;空节不出、编号连续
+    assert "〔summary〕" in md and "〔s15_5〕" in md and "〔s11_2〕" in md and "## 2.3 宏观经济" in md and "〔s1_3〕" not in md
+    assert "# 第 8 章 巴库及大巴库水务专题" in md and "## 2.6 中国与该国经贸关系与中国企业现状" in md and "## 12.5 中国企业在该国业绩与经验教训" in md
+    n_secs = sum(len(secs) for _, secs in country_report.OUTLINE)
+    assert len(re.findall(r"^## \d+\.\d+ ", md, re.MULTILINE)) == n_secs - 2  # 只少「首都在建与规划项目清单」(没挂首都的商机)与「国别备注」(没填)
+    assert "## 附录 B 项目管道清单" in md and "## 附录 E 术语与缩略语" in md and "机构与企业名录" not in md  # 没机构、没中标单位的国家不出这一附录
     assert scope == iso and cl == {l1["id"]} and co == {o["id"]}  # 只记商机的出处线索
     assert "已立项跟踪的商机" in md and "AZE-001" in md and "example.org/b" not in md and "巴库供水招标" not in md
 
@@ -617,8 +622,9 @@ def test_country_report_carries_the_other_country_page_tabs(env, monkeypatch):  
     assert "| 人均 GDP(PPP) | 11,879 美元(2021 年国际美元) | 2024 | [Kummu 等(2025)](<https://doi.org/10.1038/s41597-025-04487-x>) |" in md
     assert "| 用水压力(当前) | 3.6 分(高) 超警戒线(≥ 3 分) |" in md
     assert re.search(r"^## 2\.\d 国别备注与近期动态$", md, re.MULTILINE) and "- 2026-10 [情报] 水务公司改制中" in md
-    assert "## 附录 C 参考研究资料" in md and "水务行业评估^[4](<https://documents.worldbank.org/s/1>)^ | 行业研究 | 世界银行 | 2024-05-01 |" in md
-    assert "## 附录 D 原文链接" in md and "2. projects.worldbank.org:[塔什干污水厂改造](<https://projects.worldbank.org/a/1>)(原文:Tashkent WWTP rehabilitation)" in md
+    assert re.search(r"^## \d+\.\d 中国企业在该国业绩与经验教训$", md, re.MULTILINE) and "库里登记中国企业在该国的已中标项目 1 份" in md
+    assert "## 附录 F 参考研究资料" in md and "水务行业评估^[4](<https://documents.worldbank.org/s/1>)^ | 行业研究 | 世界银行 | 2024-05-01 |" in md
+    assert "## 附录 G 原文链接" in md and "2. projects.worldbank.org:[塔什干污水厂改造](<https://projects.worldbank.org/a/1>)(原文:Tashkent WWTP rehabilitation)" in md
     heads = re.findall(r"^# 第 \d+ 章 (.+)$", md, re.MULTILINE)
     assert heads == [t for t, _ in country_report.OUTLINE if t in heads]
     pub, *_ = reports.build_country(ctx, iso, internal=False)
