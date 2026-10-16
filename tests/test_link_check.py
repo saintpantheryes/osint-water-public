@@ -299,3 +299,70 @@ def test_link_jobs_expire_and_are_capped():
     bot.jobs[ids[0]]["at"] -= 10_000  # 半小时前的:下次起任务时清掉
     bot.start_link_job(URL)
     assert "重新提问" in bot.job_state(ids[0])["error"] and bot.job_state(ids[1])["done"]
+
+
+ITEMS = [
+    {"ref": "NRWWP-7", "title": "NRWWP-7 Construction and Rehabilitation of Wastewater Networks", "title_zh": "纳曼干污水管网建设与修复", "country": "UZB",
+     "funder": "World Bank", "amount": "12.3 million USD", "stage": "招标", "deadline": "2026-11-20", "url": None, "query": "NRWWP-7 Namangan wastewater", "names": ["Namangan", "NRWWP"]},
+    {"ref": "CAWRMP-ICW-08", "title": "Modernization of Kegeyli main canal — structures", "title_zh": "克盖利干渠现代化改造", "country": "UZB", "funder": "World Bank loan 4207-UZB",
+     "amount": "9.6 million USD (est.)", "stage": "招标", "deadline": "2026-10-19", "url": None, "query": "CAWRMP-ICW-08 Kegeyli canal", "names": ["Kegeyli", "CAWRMP"]},
+    {"ref": "SDP/RFB/05", "title": "Kitab wastewater network construction", "title_zh": "基塔布市污水管网建设", "country": "UZB", "funder": "AFD", "amount": "12.85 million USD (est.)",
+     "stage": "招标", "deadline": "2026-12-01", "url": None, "query": "SDP/RFB/05 Kitab sewerage", "names": ["Kitab", "Kashkadarya"]},
+    {"ref": None, "title": "Something with a link", "title_zh": "材料里自带网址的一条", "country": None, "funder": None, "amount": None, "stage": None, "deadline": None,
+     "url": "https://www.adb.org/node/1181131", "query": None, "names": ["Anouvong"]},
+    {"ref": "", "title": "", "title_zh": "", "country": None, "funder": None, "amount": None, "stage": None, "deadline": None, "url": None, "query": None, "names": []},  # 空的丢掉
+]
+WB_HITS = {
+    "CAWRMP-ICW-08 Kegeyli canal": [{"kind": "世行采购公告", "title": "Request for Bids:CAWRMP-ICW-08 Modernization of Kegeyli Main Canal", "url": "https://projects.worldbank.org/notice/1",
+                                     "date": "2026-10-01", "deadline": "2026-10-19", "text": "Loan 4207-UZB … CAWRMP-ICW-08"}],
+    "SDP/RFB/05 Kitab sewerage": [{"kind": "世行项目(Active)", "title": "P123 Kashkadarya Water Supply", "url": "https://projects.worldbank.org/p/P123", "date": "2024-01-01",
+                                   "deadline": None, "text": "Kashkadarya region water supply"}],  # 名字沾边、编号对不上:只算候选
+}
+
+
+def test_list_file_is_checked_item_by_item(db, monkeypatch):
+    """2026-10-16 使用方:同事发来的、像是 AI 整理的商机清单——助手逐条找原公告、比对库里有没有:有的说已在库,没有的给入库建议、由人决定。
+    编号对得上才算同一条(同项目别的标段只列作相关);找到原公告的按原公告入库(网址、日期取原公告);只有名字沾边的算先核实;
+    材料自带网址的那条按那个网址;空条目丢掉;清单型不做整篇的旁证检索。"""
+    from core import file_text as F
+    uz = next(r for r in db.rows("country") if db.get("country", r, "key") == "UZB")
+    db.create("lead", [{"title": "Namangan Regional Water and Wastewater: NRWWP-7 Construction and Rehabilitation of Wastewater Networks",
+                        "url": "https://projects.worldbank.org/notice/7", "country": uz["id"]},
+                       {"title": "Namangan Regional Water and Wastewater: NRWWP-8 Water Intakes", "url": "https://projects.worldbank.org/notice/8", "country": uz["id"]}])
+    monkeypatch.setattr(F, "pdf_text", lambda data: ("招标项目监测 07.10.2026\n1 NRWWP-7 …\n2 CAWRMP-ICW-08 …\n3 SDP/RFB/05 …", 1))
+    seen: list = []
+    clf = _clf({**MODEL, "items": ITEMS}, seen)
+    stages: list[str] = []
+    asked: list = []
+
+    def wb(query, iso):
+        asked.append((query, iso))
+        return WB_HITS.get(query, [])
+    out = L.check("", "同事发来的清单", TODAY, clf, db, fetch=lambda u: (_ for _ in ()).throw(AssertionError()),
+                  outside=lambda q, iso: (_ for _ in ()).throw(AssertionError("清单型不做整篇旁证")), upload=b"%PDF-1.4", find_original=wb,
+                  progress=stages.append)
+    assert out["ok"] and out["advice"]["action"] == "逐条看" and out["draft"] is None and "清单型材料" in out["notes"][-1]
+    lst = out["list"]
+    assert lst["n"] == 4 and lst["counts"] == {"已在库": 1, "建议入库": 2, "先核实": 1}
+    by = {it["ref"] or it["title"]: it for it in lst["items"]}
+    a = by["NRWWP-7"]
+    assert a["status"] == "已在库" and a["in_library"][0]["url"].endswith("/notice/7") and [r["title"][-6:] for r in a["related"]] == ["ntakes"]
+    assert ("NRWWP-7 Namangan wastewater", "UZB") not in asked  # 已在库的不去找原公告
+    b = by["CAWRMP-ICW-08"]
+    assert b["status"] == "建议入库" and b["sure"] and b["original"]["url"].endswith("/notice/1") and b["country"]["name"] == "乌兹别克斯坦"
+    assert b["draft"]["url"].endswith("/notice/1") and b["draft"]["title"].startswith("Request for Bids") and b["draft"]["published"] == "2026-10-01"
+    assert b["draft"]["country_iso3"] == "UZB" and b["draft"]["origin"] == "用户上传" and "CAWRMP-ICW-08" in b["draft"]["note"] and "截止 2026-10-19" in b["draft"]["note"]
+    c = by["SDP/RFB/05"]
+    assert c["status"] == "先核实" and not c["sure"] and c["original"]["url"].endswith("/P123") and c["candidates"] and "编号对不上" in c["why"]
+    assert "url" not in c["draft"] and c["draft"]["title"] == "Kitab wastewater network construction" and c["draft"]["funder"] == "AFD"
+    d = by["Something with a link"]
+    assert d["status"] == "建议入库" and d["original"]["url"] == "https://www.adb.org/node/1181131" and d["original"]["kind"] == "亚洲开发银行" and d["country"]["iso3"] == "UZB"  # 没写国别的用整篇的
+    assert stages[0] == "读文件" and "找原公告 0/4" in stages and stages[-1] == "找原公告 4/4" and "模型分析" in stages
+    assert '"items"' in "".join(m["content"] for m in seen[0]["messages"])  # 提示词里要了 items
+    assert "清单" in L.GUIDE and "items" in L.SCHEMA["properties"]
+
+
+def test_single_notice_is_not_a_list(db):
+    """只讲一个项目的材料(items 为空)照旧整篇分析,有「收进线索库」的草稿。"""
+    out = L.check(URL, "", TODAY, _clf({**MODEL, "items": [ITEMS[0]]}, []), db, fetch=lambda u: _page(), outside=lambda q, iso: ([], []))
+    assert "list" not in out and out["draft"] and out["advice"]["action"] == "入库" and len(out["analysis"]["items"]) == 1

@@ -495,6 +495,9 @@ details.sec.panel summary { margin: -4px 0; }
 .lk-lv { display: inline-block; font-weight: 700; padding: 0 8px; border-radius: 6px; margin-right: 6px; }
 .lk-lv.hi { background: var(--ok-soft); color: #166534; } .lk-lv.mid { background: #e0f2fe; color: #075985; } .lk-lv.lo { background: #fee2e2; color: #991b1b; }
 .lk-act { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
+.lk-items .lk-item { display: flex; gap: 10px; align-items: flex-start; }  /* 清单型材料:每条一个勾 + 内容 */
+.lk-items .lk-box { flex: 0 0 16px; width: 16px; height: 16px; margin: 4px 0 0; }
+.lk-items .tag { margin-right: 6px; }
 /* 地图下方的「灰色 = 忽略国别」说明 */
 .hatch-note { margin: 4px 0 0; }
 .hatch-swatch { display: inline-block; width: 16px; height: 11px; margin-right: 6px; vertical-align: -1px; border: 1px solid #c4bfba;
@@ -623,7 +626,7 @@ sup.sref a:hover { background: var(--brand); color: #fff; }
 h4.sub { margin: 8px 0 2px; }
 .h-sub { font-size: var(--fs-sm); font-weight: 400; }          /* 标题后面的小字路径 */
 .title-xl { font-size: var(--fs-xl); font-weight: 700; }
-.ok-text { color: var(--ok); }
+.ok-text { color: var(--ok); } .bad-text { color: var(--bad); }
 .more.inline { display: inline; margin-left: 10px; font-weight: 400; }
 .form label.check { flex: 1; color: inherit; }
 .it-act.fit { min-width: 0; } .it-act.inline { min-width: 0; flex-direction: row; gap: 6px; }

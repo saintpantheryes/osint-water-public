@@ -39,6 +39,9 @@ URL_RE = re.compile(r"(?i:https?)://[^\s<>\"'\u0080-\U0010ffff]+")  # 网址只�
 MAX_BYTES = 8_000_000
 TIMEOUT = 25.0
 DOC_CHARS = 6_000  # 给模型看的正文长度
+UPLOAD_CHARS = 12_000  # 用户上传的文件多给模型看一些(清单型的材料一页就是七八条)
+ITEM_MAX = 15  # 清单型材料最多逐条看几条
+ITEM_WORKERS = 4  # 逐条找原公告、查库时并行几条
 PASTED_MIN = 200  # 链接后面跟着这么多字,算是用户贴来的正文(网站不让程序读时用它)
 
 # 网站类型:按域名后缀认。官方与开发银行的公告可信度高;新闻媒体看是不是转述;其余(企业、展会、博客、聚合站)先核实
@@ -82,6 +85,11 @@ GUIDE = """
 - "news_query":用来检索后续新闻的英文检索式(2~4 个英文词,项目专名放引号里,如 "Surum" Tashkent wastewater)
 - "advice":{"action": "入库" | "先核实" | "不入库", "reason": 一句话}。和水务(供水、污水、水利、海水淡化、排涝、水环境)无关的写不入库
 - "verify":要核实的要点,数组,最多 3 条,每条一句
+- "items":这份材料如果是几条互不相同的招标或项目的清单(同事整理的商机清单、招标监测、月报里的项目表),逐条列出,最多 15 条;
+  只讲一个项目的材料写 []。每条:{"ref": 公告或标段编号(原文写法,如 NRWWP-4;没有写 null), "title": 原文名称, "title_zh": 中文名,
+  "country": ISO3, "funder": 出资方, "amount": 金额或规模(原文写法), "stage": 进展(取值同上), "deadline": 投标截止日 YYYY-MM-DD(没有写 null),
+  "url": 材料里给出的这一条的网址(没有写 null), "query": 到世界银行等采购网站找这条原公告用的英文检索词(编号加 2~3 个项目词),
+  "names": 在库里搜同一项目用的原文词(2~4 个)}
 """
 
 _S = {"type": "string"}
@@ -98,6 +106,13 @@ SCHEMA = {
         "advice": {"type": "object", "properties": {"action": {"type": "string", "enum": list(ACTIONS)}, "reason": _S},
                    "required": ["action", "reason"], "additionalProperties": False},
         "verify": {"type": "array", "items": _S},
+        "items": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"ref": _N, "title": _S, "title_zh": _S, "country": _N, "funder": _N, "amount": _N, "stage": _N, "deadline": _N,
+                           "url": _N, "query": _N, "names": {"type": "array", "items": _S}},
+            "required": ["ref", "title", "title_zh", "country", "funder", "amount", "stage", "deadline", "url", "query", "names"],
+            "additionalProperties": False,
+        }},
     },
     "additionalProperties": False,
 }
@@ -218,7 +233,24 @@ def _clean(out: dict | None) -> dict | None:
         "freshness": s("freshness"), "mismatch": s("mismatch"), "news_query": s("news_query", 120),
         "advice": {"action": adv.get("action") if adv.get("action") in ACTIONS else None, "reason": str(adv.get("reason") or "")[:300]},
         "verify": lst("verify")[:3], "model": out.get("_model"),
+        "items": [it for it in (_clean_item(x) for x in (out.get("items") or []) if isinstance(x, dict)) if it][:ITEM_MAX] if isinstance(out.get("items"), list) else [],
     }
+
+
+def _clean_item(x: dict) -> dict | None:
+    """清单里的一条(模型给的)→ 归一;没有名称的丢掉。"""
+    s = lambda k, n=200: (str(x.get(k) or "").strip()[:n] or None)  # noqa: E731
+    if not s("title") and not s("title_zh"):
+        return None
+    dl = x.get("deadline")
+    url = s("url", 500)
+    names = [str(n).strip() for n in (x.get("names") or []) if str(n).strip()] if isinstance(x.get("names"), list) else []
+    return {"ref": s("ref", 40), "title": s("title", 300) or s("title_zh"), "title_zh": s("title_zh") or s("title", 300),
+            "country": geo.iso3(x.get("country")) if x.get("country") else None, "funder": s("funder"), "amount": s("amount", 120),
+            "stage": x.get("stage") if x.get("stage") in STAGES else None,
+            "deadline": dl if isinstance(dl, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", dl) else None,
+            "url": url if url and URL_RE.fullmatch(url) else None, "query": s("query", 120),
+            "names": [n for n in names if len(re.sub(r"\W", "", n)) >= 4][:4]}
 
 
 # ---------- 库里找 ----------
@@ -311,6 +343,115 @@ def search_outside(query: str | None, iso: str | None, get=None) -> tuple[list[d
     return found, notes
 
 
+
+# ---------- 清单型材料:逐条找原公告、查库 ----------
+
+ITEM_STATUS = ("已在库", "建议入库", "先核实")
+
+
+def _norm(text: str | None) -> str:
+    return re.sub(r"[^a-z0-9\u4e00-\u9fff]", "", (text or "").lower())
+
+
+def search_notice(query: str | None, iso: str | None) -> list[dict]:
+    """到世界银行采购公告与项目里找一条原公告(缺省的找法;别的渠道以后加在这里)→ [{kind, title, url, date, deadline, text}]。"""
+    if not query:
+        return []
+    from core.watch.manual import search_worldbank
+    return [{"kind": x["kind"], "title": x["title"], "url": x["url"], "date": str(x["date"] or "")[:10],
+             "deadline": str(x.get("deadline") or "")[:10] or None, "text": x.get("text") or ""} for x in search_worldbank(query.replace('"', ""), iso, rows=8)]
+
+
+def _ref_in(ref: str | None, *texts: str | None) -> bool:
+    r = _norm(ref)
+    return bool(r) and len(r) >= 4 and any(r in _norm(t) for t in texts)
+
+
+def _name_in(names: list[str], *texts: str | None) -> bool:
+    blob = " ".join(_norm(t) for t in texts)
+    return any(_norm(n) and _norm(n) in blob for n in names)
+
+
+def check_item(item: dict, db, today: date, find_original=search_notice) -> dict:
+    """清单里的一条:库里有没有(编号对得上就算同一条;同项目别的标段只列作相关)、原公告找到没有、给入库建议和要写的值。"""
+    ref, names, iso = item.get("ref"), item.get("names") or [], item.get("country")
+    words = [w for w in [ref, *names] if w]
+    lib = {"same_url": [], "related_leads": [], "related_opps": []}
+    notes: list[str] = []
+    if db is not None:
+        try:
+            lib = search_library(db, [item["url"]] if item.get("url") else [], words, iso)
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"查库出错({type(e).__name__})")
+    have = lib["same_url"] + [r for r in lib["related_leads"] if _ref_in(ref, r.get("title"), r.get("url"), r.get("project_name"), r.get("summary_zh"))]
+    related = [r for r in lib["related_leads"] if r not in have][:3]
+    original, candidates, sure = None, [], False
+    if item.get("url"):
+        original, sure = {"kind": source_kind(item["url"])["label"], "title": item["title"], "url": item["url"], "date": None, "deadline": None}, True
+    elif not have:
+        try:
+            hits = find_original(item.get("query") or " ".join(words[:4]), iso)
+        except Exception as e:  # noqa: BLE001
+            hits, notes = [], notes + [f"找原公告出错({type(e).__name__})"]
+        exact = [h for h in hits if _ref_in(ref, h.get("title"), h.get("text"))]
+        close = [h for h in hits if h not in exact and _name_in(names, h.get("title"), h.get("text"))]
+        if exact:
+            original, sure = exact[0], True
+        elif close:
+            original, candidates = close[0], close[:2]
+    if have:
+        status, why = "已在库", "库里已有这一条(编号对得上)" + (f",已归入商机「{have[0]['opportunity']}」" if have[0].get("opportunity") else "") + "。"
+    elif original and sure:
+        status, why = "建议入库", f"找到原公告({original['kind']}),按原公告入库,信源可信。"
+    elif original:
+        status, why = "先核实", "找到一条像是同一项目的公告,但编号对不上,请人看一眼;对得上就按它入库。"
+    else:
+        status, why = "先核实", "在世界银行采购网站没找到原公告(法开署、亚行等渠道的要到出资方网站找);也可以先按清单入库,信源记为待核实。"
+    if related and status != "已在库":
+        why += f" 库里有 {len(related)} 条同项目别的标段。"
+    draft = {"title": (original["title"] if original and sure else item["title"])[:300], "origin": "用户上传", "summary_zh": item.get("title_zh"),
+             "project_name": item.get("title_zh")}
+    if original and sure:
+        draft["url"] = original["url"]
+    if iso:
+        draft["country_iso3"] = iso
+    if original and sure and original.get("date"):
+        draft["published"] = original["date"]
+    if item.get("funder"):
+        draft["funder"] = item["funder"]
+    if item.get("amount"):
+        draft["amount"] = item["amount"]
+    draft["note"] = (f"助手预判({today.isoformat()}):{status}。{why} 来自上传的清单"
+                     + (f",编号 {ref}" if ref else "") + (f",截止 {item['deadline']}" if item.get("deadline") else "") + "。")[:2000]
+    return {**{k: item.get(k) for k in ("ref", "title", "title_zh", "funder", "amount", "stage", "deadline")},
+            "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "status": status, "why": why,
+            "original": original, "sure": sure, "candidates": candidates, "in_library": have[:3], "related": related, "draft": draft, "notes": notes}
+
+
+def check_list(items: list[dict], db, today: date, find_original=search_notice, step=lambda stage: None) -> dict:
+    """清单的每一条并行找原公告、查库;进度写「找原公告 3/7」。"""
+    import threading
+    done, lock, n = 0, threading.Lock(), len(items)
+    step(f"找原公告 0/{n}")
+
+    def one(it: dict) -> dict:
+        nonlocal done
+        try:
+            out = check_item(it, db, today, find_original)
+        except Exception as e:  # noqa: BLE001
+            out = {**check_item({**it, "url": None, "query": None, "names": []}, None, today, lambda q, i: []), "status": "先核实",
+                   "why": f"这一条查找出错({type(e).__name__}),请人看。", "notes": [f"{type(e).__name__}: {e}"[:200]]}
+        with lock:
+            done += 1
+            step(f"找原公告 {done}/{n}")
+        return out
+
+    with ThreadPoolExecutor(ITEM_WORKERS) as ex:
+        rows = list(ex.map(one, items))
+    counts = {k: sum(1 for r in rows if r["status"] == k) for k in ITEM_STATUS}
+    return {"items": rows, "n": n, "counts": counts}
+
+
 # ---------- 合起来 ----------
 
 def _advice(src: dict, a: dict | None, lib: dict) -> dict:
@@ -332,9 +473,10 @@ UPLOAD_SOURCE = {"kind": "其他网站", "label": "上传的文件(没给网址,
 
 
 def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_page, outside=search_outside,
-          upload: bytes | None = None, progress=None) -> dict:
+          upload: bytes | None = None, progress=None, find_original=search_notice) -> dict:
     """看一条链接;upload 是用户传来的文件(PDF、Word、截图):有文件就按文件看,不去抓网页,网址(可不给)只用来认信源、查库。
-    progress(阶段名) 每进一步叫一次(助手接口用它告诉页面走到哪了);不给就不叫。"""
+    progress(阶段名) 每进一步叫一次(助手接口用它告诉页面走到哪了);不给就不叫。
+    材料是几条项目的清单(同事整理的商机清单、招标监测)时,逐条找原公告、查库里有没有,给每条的入库建议,由人决定(check_list)。"""
     step = progress or (lambda stage: None)
     url = (url or "").strip()
     notes: list[str] = []
@@ -386,7 +528,7 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
     a = None
     if clf is not None and getattr(clf, "enabled", False):
         step("模型分析")
-        user = (f"用户附言:{note.strip() or '(无)'}\n网址:{page.url}\n网站:{src['domain']}({src['label']})\n网页标题:{title}\n\n正文:\n{body[:DOC_CHARS]}")
+        user = (f"用户附言:{note.strip() or '(无)'}\n网址:{page.url}\n网站:{src['domain']}({src['label']})\n网页标题:{title}\n\n正文:\n{body[:UPLOAD_CHARS if upload is not None else DOC_CHARS]}")
         out = clf.ask(system_prompt(today), user, SCHEMA, GUIDE)
         a = _clean(out)
         if a is None:
@@ -394,6 +536,17 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
     else:
         notes.append("没有配置模型,只做了网站类型判断和库里比对")
     iso = (a or {}).get("country") or next(iter(geo.detect(f"{title}\n{body[:4000]}")), None)
+    if a and len(a.get("items") or []) >= 2:  # 清单型材料:逐条看,不做整篇的查库、旁证
+        for it in a["items"]:
+            it["country"] = it["country"] or iso
+        lst = check_list(a["items"], db, today, find_original, step)
+        c = lst["counts"]
+        adv = {"action": "逐条看", "reason": f"这是 {lst['n']} 条项目的清单:{c['已在库']} 条已在库,{c['建议入库']} 条找到了原公告、建议入库,{c['先核实']} 条要先核实。"
+                                            "找到原公告的按原公告入库(信源可信);没找到的可以先按清单入库,信源记为待核实。由你勾选决定。"}
+        notes.append("清单型材料:逐条找了原公告、查了库")
+        return {"ok": True, "url": url, "final_url": page.url, "domain": src["domain"], "title": title, "published": (a or {}).get("info_date") or _published(page),
+                "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "source": src, "analysis": a, "same_url": [], "related_leads": [],
+                "related_opps": [], "outside": [], "advice": adv, "list": lst, "draft": None, "notes": notes}
     words = (a or {}).get("names") or []
     lib = {"same_url": [], "related_leads": [], "related_opps": []}
     step("查库里相关")

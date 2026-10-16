@@ -2138,6 +2138,72 @@ def test_home_link_gets_analysis_and_can_be_saved_as_a_lead():
 
 
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_home_list_file_is_shown_item_by_item_and_saved_by_choice(monkeypatch):
+    """2026-10-16 使用方:同事发来的 AI 整理的商机清单——每条标 已在库 / 建议入库 / 先核实,给原公告和库里的链接;
+    建议入库的默认勾上,已在库的没有勾;点「收进选中的 N 条」只收勾上的,按原公告入库的网址就是原公告。手机宽度看。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    from core import file_text as F
+    from tests.test_link_check import ITEMS, MODEL, WB_HITS, _clf
+    monkeypatch.setattr(F, "pdf_text", lambda data: ("招标项目监测 07.10.2026 清单:NRWWP-7 纳曼干污水管网;CAWRMP-ICW-08 克盖利干渠;SDP/RFB/05 基塔布污水管网;材料里自带网址的一条", 1))
+    fake, admin = _fake_with_schema()
+    _seed(admin, fake)
+    b = tstore.Base(admin)
+    uz = b.create("country", [{"name_zh": "乌兹别克斯坦", "ISO3": "UZB"}])[0]
+    b.create("lead", [{"title": "Namangan Regional Water and Wastewater: NRWWP-7 Construction and Rehabilitation of Wastewater Networks",
+                       "url": "https://projects.worldbank.org/notice/7", "country": uz["id"]}])
+    before = len(b.rows("lead"))
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    srv.bot.terms_base = lambda: tstore.Base(tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None))
+    srv.bot.clf = _clf({**MODEL, "items": ITEMS}, [])
+    srv.bot.link_kw = {"fetch": lambda u: (_ for _ in ()).throw(AssertionError("有文件时不该抓网页")), "find_original": lambda q, iso: WB_HITS.get(q, [])}
+    base = f"http://127.0.0.1:{srv.server_port}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            errors: list[str] = []
+            page = browser.new_page(viewport={"width": 390, "height": 800})
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/index.html")
+            page.set_input_files("#file", {"name": "Tender_Monitoring.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.4 fake"})
+            page.fill("#q", "同事发来的清单")
+            page.press("#q", "Enter")
+            page.wait_for_selector(".lk-items", timeout=20000)
+            assert page.inner_text(".lk-advice") == "这是 4 条项目的清单" and "已在库 1 条" in page.inner_text(".lk-why") and "建议入库 2 条" in page.inner_text(".lk-why")
+            rows = page.locator(".lk-item")
+            assert rows.count() == 4
+            tags = [rows.nth(i).locator(".tag").first.inner_text() for i in range(4)]
+            assert tags == ["已在库", "建议入库", "先核实", "建议入库"]
+            assert "纳曼干污水管网建设与修复" in rows.nth(0).inner_text() and rows.nth(0).locator("input").count() == 0 and "库里:" in rows.nth(0).inner_text()
+            assert "原公告:" in rows.nth(1).inner_text() and rows.nth(1).locator("a[href='https://projects.worldbank.org/notice/1']").count() == 1
+            assert "编号对不上" in rows.nth(2).inner_text() and "截止 2026-12-01" in rows.nth(2).inner_text()
+            boxes = page.locator("input.lk-box")
+            assert [boxes.nth(i).is_checked() for i in range(3)] == [True, False, True]
+            assert page.inner_text(".lk-act button") == "收进选中的 2 条"
+            boxes.nth(1).check()  # 人决定:先核实的那条也收
+            assert page.inner_text(".lk-act button") == "收进选中的 3 条"
+            boxes.nth(2).uncheck()
+            assert page.inner_text(".lk-act button") == "收进选中的 2 条"
+            if os.environ.get("PORTAL_SHOTS"):
+                page.screenshot(path=os.environ["PORTAL_SHOTS"] + "/助手看清单_逐条_手机.png", full_page=True)
+            page.click(".lk-act button")
+            page.wait_for_function("document.querySelectorAll('.lk-done b').length === 2", timeout=15000)
+            titles = {b.get("lead", r, "url") or "": b.get("lead", r, "title") for r in b.rows("lead")}
+            assert titles["https://projects.worldbank.org/notice/1"].startswith("Request for Bids") and "https://www.adb.org/node/1181131" not in titles
+            kitab = next(r for r in b.rows("lead") if b.get("lead", r, "title") == "Kitab wastewater network construction")
+            assert b.get("lead", kitab, "origin") == "用户上传" and b.get("lead", kitab, "country")["title"] == "乌兹别克斯坦" and "先核实" in b.get("lead", kitab, "note")
+            assert len(b.rows("lead")) == before + 2  # 只收了勾上的两条
+            assert "已收进线索库" in rows.nth(1).inner_text() and "已收进线索库" in rows.nth(2).inner_text()
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+
+
 def test_home_file_upload_survives_a_slow_analysis_and_dropped_connections(monkeypatch):
     """2026-10-16 使用方在 iPhone 上传招标监测 PDF,助手报「读不到数据:Load failed」:分析(模型 + 检索)要近一分钟,手机浏览器一条请求
     60 秒就断。现在页面先拿任务编号,隔两三秒取一次进度(「模型分析中(已 N 秒)」),取的时候网络断了就再取,结果照样出来;
