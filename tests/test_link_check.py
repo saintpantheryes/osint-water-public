@@ -235,3 +235,67 @@ def test_link_endpoint_takes_a_file(db, monkeypatch):
         assert httpx.post(base + "/link", json={"file": "不是base64"}, headers=h).json()["error"].startswith("文件没传完整")
     finally:
         srv.shutdown()
+
+
+def test_link_runs_as_a_job_the_page_polls(db, monkeypatch):
+    """2026-10-16 使用方在 iPhone 上传 PDF 报「读不到数据:Load failed」:模型加检索要近一分钟,手机浏览器一条请求 60 秒就断。
+    页面带 job: true 先拿编号,后台线程算;GET /link/{编号} 给阶段和已过秒数,算完给结果;编号不认识说明原因;没登录 403。"""
+    import base64
+    import time
+
+    from core import file_text as F
+    monkeypatch.setattr(F, "pdf_text", lambda data: ("\n".join(ADB_LINES), 1))
+    gate = threading.Event()
+
+    def slow_outside(q, iso):
+        gate.wait(5)
+        return [], ["新闻检索没做成(假)"]
+    bot = Assistant(None)
+    bot.terms_base = lambda: db
+    bot.link_kw = {"fetch": lambda u: (_ for _ in ()).throw(AssertionError()), "outside": slow_outside}
+    srv = serve(bot, 0, host="127.0.0.1")
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        base, h = f"http://127.0.0.1:{srv.server_port}", {"X-Portal-Auth": "1"}
+        r = httpx.post(base + "/link", json={"url": "https://www.adb.org/node/1181131", "job": True,
+                                           "file": base64.b64encode(b"%PDF-1.4").decode()}, headers=h).json()
+        assert r["ok"] and r["job"] and r["stage"] in ("读文件", "读原文", "模型分析", "查库里相关", "查公开渠道")
+        assert httpx.get(base + "/link/" + r["job"]).status_code == 403  # 没经过登录检查
+        time.sleep(0.3)
+        st = httpx.get(base + "/link/" + r["job"], headers=h).json()
+        assert st == {"ok": True, "done": False, "stage": "查公开渠道", "elapsed": st["elapsed"]} and st["elapsed"] >= 0
+        gate.set()
+        for _ in range(50):
+            st = httpx.get(base + "/link/" + r["job"], headers=h).json()
+            if st["done"]:
+                break
+            time.sleep(0.1)
+        assert st["done"] and st["ok"] and st["country"]["iso3"] == "LAO" and "上传的文件" in st["notes"][0] and "新闻检索没做成(假)" in st["notes"]
+        bad = httpx.get(base + "/link/nope", headers=h).json()
+        assert bad["ok"] is False and bad["done"] and "重新提问" in bad["error"]
+        # 文件读不了(不是 PDF、Word、图片)也走任务:结果里是原因,不是 500
+        r = httpx.post(base + "/link", json={"job": True, "file": base64.b64encode(b"hello world").decode()}, headers=h).json()
+        for _ in range(50):
+            st = httpx.get(base + "/link/" + r["job"], headers=h).json()
+            if st["done"]:
+                break
+            time.sleep(0.05)
+        assert st["ok"] is False and "只能看 PDF" in st["error"]
+    finally:
+        gate.set()
+        srv.shutdown()
+
+
+def test_link_jobs_expire_and_are_capped():
+    bot = Assistant(None)
+    bot.link_kw = {"fetch": lambda u: _page(), "outside": lambda q, iso: ([], [])}
+    ids = [bot.start_link_job(URL) for _ in range(3)]
+    for j in ids:
+        for _ in range(100):
+            if bot.job_state(j)["done"]:
+                break
+            __import__("time").sleep(0.02)
+    assert all(bot.job_state(j)["ok"] for j in ids)
+    bot.jobs[ids[0]]["at"] -= 10_000  # 半小时前的:下次起任务时清掉
+    bot.start_link_job(URL)
+    assert "重新提问" in bot.job_state(ids[0])["error"] and bot.job_state(ids[1])["done"]

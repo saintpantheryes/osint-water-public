@@ -752,8 +752,14 @@
   async function linkAnswer(url, note, el, file) {
     el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="frow understood"><b>理解为</b><span class="chip-btn on static">' +
       (file ? "看一份文件:读文件里的字、判断信源、查库里相关,给入库建议" : "看一条链接:读原文、判断信源、查库里相关,给入库建议") + "</span></div>");
-    el.querySelector(".a-body").innerHTML = '<p class="muted">' + (file ? "读文件(截图和扫描件要识别文字)" : "读原文") + "、查库里和公开渠道…(要十几秒到半分钟)</p>";
-    const r = await P.checkLink(url, note, file ? await fileData(file) : undefined);
+    const body0 = el.querySelector(".a-body");
+    body0.innerHTML = '<p class="muted lk-wait">' + (file ? "读文件(截图和扫描件要识别文字)" : "读原文") + "、模型分析、查库里和公开渠道…(一般半分钟到一分钟;手机可以先切走,回来接着取结果)</p>";
+    const r = await P.checkLink(url, note, file ? await fileData(file) : undefined, (stage, secs, dropped) => {
+      const w = body0.querySelector(".lk-wait");
+      if (!w) return;
+      w.textContent = dropped ? "网络断了一下,正在重新取结果(已 " + secs + " 秒)…后台还在算,不用重发" :
+        (stage ? stage + "中" : "分析中") + "(已 " + secs + " 秒)…一般半分钟到一分钟;手机可以先切走,回来接着取结果";
+    });
     if (!r) return;
     const body = el.querySelector(".a-body");
     if (!r.ok) { body.innerHTML = '<div class="note n-warn">' + P.esc(r.error || "没看成") + "</div>"; return; }
