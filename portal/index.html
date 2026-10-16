@@ -753,6 +753,7 @@
   async function linkAnswer(url, note, el, file) {
     el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="frow understood"><b>理解为</b><span class="chip-btn on static">' +
       (file ? "看一份文件:读文件里的字、判断信源、查库里相关,给入库建议" : "看一条链接:读原文、判断信源、查库里相关,给入库建议") + "</span></div>");
+    const understood = el.querySelector(".understood .chip-btn");
     const body0 = el.querySelector(".a-body");
     body0.innerHTML = '<p class="muted lk-wait">' + (file ? "读文件(截图和扫描件要识别文字)" : "读原文") + "、模型分析、查库里和公开渠道…(一般半分钟到一分钟;手机可以先切走,回来接着取结果)</p>";
     const r = await P.checkLink(url, note, file ? await fileData(file) : undefined, (stage, secs, dropped) => {
@@ -765,8 +766,10 @@
     const body = el.querySelector(".a-body");
     if (!r.ok) { body.innerHTML = '<div class="note n-warn">' + P.esc(r.error || "没看成") + "</div>"; return; }
     const a = r.analysis || {}, s = r.source || {}, adv = r.advice || {};
+    if (r.question) understood.textContent = (file ? "看一份文件" : "看一条链接") + "并回答你的问题:" + (r.question.text || "能不能满足资格") + (r.question.kind === "资格对照" ? "(拿公告的门槛对照我方资料里的本单位业绩)" : "");
     if (r.list) { await listAnswer(r, body); return; }
     const h = [];
+    if (r.question && r.question.qualify) h.push(qualifyHtml(r.question.qualify, r.question.summary));
     h.push('<div class="lk-advice ' + (ADV_CLS[adv.action] || "") + '">建议:' + P.esc(adv.action || "先核实") + "</div>");
     h.push('<p class="lk-why">' + P.esc(adv.reason || "") + "</p>");
     if (a.mismatch) h.push('<div class="note n-warn small"><b>和你说的对不上:</b>' + P.esc(a.mismatch) + "</div>");
@@ -810,15 +813,26 @@
 
   /* 清单型材料(2026-10-16 使用方:同事发来的、像是 AI 整理的商机清单):每一条写明 已在库 / 建议入库(找到原公告) / 先核实(没找到),
      原公告、库里同编号的线索都给链接;没在库的每条一个勾,建议入库的默认勾上,人点「收进选中的」才入库;按原公告入库的网址就是原公告 */
+  /* 附言问「我们的业绩能满足吗」:后台拿公告的门槛对照公司资料里本单位的业绩(只比单个类似合同金额;营业额、财务要财务部出数) */
+  const QUAL_TAG = { "满足": "t-ok", "不满足": "t-bad", "不确定": "t-warn" };
+  function qualifyHtml(q, summary) {
+    const recs = (q.records || []).map((x) => P.esc(x.name) + (x.year ? "(" + x.year + ")" : "") + (x.usd ? " " + Math.round(x.usd / 1e4).toLocaleString() + " 万美元" : "")).join("、");
+    return '<div class="lk-qual"><span class="tag ' + (QUAL_TAG[q.verdict] || "") + '">业绩' + P.esc(q.verdict) + "</span> " + P.esc(q.why) +
+      (recs ? '<div class="muted small">对照用的本单位业绩:' + recs + "</div>" : "") +
+      ((q.gaps || []).length ? '<div class="muted small">' + q.gaps.map(P.esc).join(";") + "</div>" : "") +
+      (summary ? '<div class="small">' + P.esc(summary) + "</div>" : "") + "</div>";
+  }
   async function listAnswer(r, body) {
     const l = r.list, c = l.counts || {}, adv = r.advice || {};
     const h = [];
+    if (r.question) h.push('<div class="lk-advice check">回答:' + P.esc(r.question.text || "我们的业绩能满足吗") + '</div><p class="lk-why">' + P.esc(r.question.summary || "") + "</p>");
     h.push('<div class="lk-advice check">这是 ' + l.n + " 条项目的清单</div>");
-    h.push('<p class="lk-why"><b>已在库 ' + (c["已在库"] || 0) + " 条</b>、<b>建议入库 " + (c["建议入库"] || 0) + " 条</b>、<b>先核实 " + (c["先核实"] || 0) + " 条</b>、<b>非水务 " + (c["非水务"] || 0) + " 条</b>。" + P.esc(adv.reason || "").replace(/^这是.*?。/, "") + "</p>");
+    h.push('<p class="lk-why"><b>已在库 ' + (c["已在库"] || 0) + " 条</b>、<b>建议入库 " + (c["建议入库"] || 0) + " 条</b>、<b>先核实 " + (c["先核实"] || 0) + " 条</b>、<b>非水务 " + (c["非水务"] || 0) + " 条</b>。" + P.esc(adv.reason || "").replace(/^(按我方资料.*?招标文件。 )?这是.*?。/, "") + "</p>");
     h.push('<ul class="list lk-items">');
     l.items.forEach((it, i) => {
       const o = it.original, zh = it.title_zh || it.title, meta = [it.country && it.country.name, it.stage, it.amount, it.deadline ? "截止 " + it.deadline : "", it.funder].filter(Boolean);
       const lines = [];
+      if (it.qualify) lines.push(qualifyHtml(it.qualify));
       if (o) lines.push((it.sure ? "原公告:" : "像是同一项目的公告(编号对不上):") + '<a href="' + P.esc(o.url) + '" target="_blank" rel="noopener">' + P.esc(o.title) + "</a>" + ' <span class="muted small">' + P.esc([o.kind, o.date].filter(Boolean).join(" · ")) + "</span>");
       else if (it.status === "先核实") lines.push('<span class="muted">原公告没找到</span>');
       const ck = it.checked || {};

@@ -2158,7 +2158,8 @@ def test_home_list_file_is_shown_item_by_item_and_saved_by_choice(monkeypatch):
     cfg = schema.read_config(admin, NEW, ONTO)
     srv = _serve(fake, cfg)
     srv.bot.terms_base = lambda: tstore.Base(tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None))
-    srv.bot.clf = _clf({**MODEL, "items": ITEMS}, [])
+    b.create("company", [{"kind": "业绩", "owner": "本单位", "name": "尼泊尔Bheri Babai引水隧道项目", "year": 2025, "amount": "折 10733万美元", "sectors": ["水利"]}])
+    srv.bot.clf = _clf({**MODEL, "items": ITEMS, "question": {"kind": "资格对照", "text": "我们的业绩能满足吗?"}}, [])
     srv.bot.link_kw = {"fetch": lambda u: (_ for _ in ()).throw(AssertionError("有文件时不该抓网页")), "find_original": lambda q, iso: WB_HITS.get(q, []),
                        "verify": lambda it, iso: CHECKED}
     base = f"http://127.0.0.1:{srv.server_port}"
@@ -2173,11 +2174,20 @@ def test_home_list_file_is_shown_item_by_item_and_saved_by_choice(monkeypatch):
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(base + "/index.html")
             page.set_input_files("#file", {"name": "Tender_Monitoring.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.4 fake"})
-            page.fill("#q", "同事发来的清单")
+            page.fill("#q", "我们的业绩能满足吗?")
             page.press("#q", "Enter")
             page.wait_for_selector(".lk-items", timeout=20000)
-            assert page.inner_text(".lk-advice") == "这是 5 条项目的清单" and "已在库 1 条" in page.inner_text(".lk-why") and "建议入库 2 条" in page.inner_text(".lk-why")
-            assert "非水务 1 条" in page.inner_text(".lk-why") and "由你勾选决定" not in page.inner_text(".lk-why")
+            # 附言问了问题:「理解为」改写,先答问题(本单位业绩对照),再给清单
+            assert "并回答你的问题:我们的业绩能满足吗?" in page.inner_text(".understood")
+            advs = page.locator(".lk-advice").all_inner_texts()
+            assert advs == ["回答:我们的业绩能满足吗?", "这是 5 条项目的清单"]
+            whys = page.locator(".lk-why").all_inner_texts()
+            assert whys[0].startswith("按我方资料里 1 条本单位业绩对照(只比单个类似合同金额):4 条水务项目里,业绩够门槛的 1 条、不够的 1 条、材料没写门槛的 2 条。")
+            assert "已在库 1 条" in whys[1] and "建议入库 2 条" in whys[1] and "按我方资料" not in whys[1]
+            quals = page.locator(".lk-qual .tag").all_inner_texts()
+            assert quals == ["业绩不确定", "业绩满足", "业绩不满足", "业绩不确定"]  # 非水务的那条不评
+            assert "10,733 万美元(2025),够" in page.locator(".lk-item").nth(1).inner_text() and "要财务部出数" in page.locator(".lk-item").nth(1).inner_text()
+            assert "非水务 1 条" in whys[1] and "由你勾选决定" not in whys[1]
             rows = page.locator(".lk-item")
             assert rows.count() == 5
             tags = [rows.nth(i).locator(".tag").first.inner_text() for i in range(5)]

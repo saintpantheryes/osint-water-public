@@ -641,3 +641,5 @@ code.url { font-size: var(--fs-xs); word-break: break-all; }
 .lk-items .lk-off b { color: var(--muted); font-weight: 500; }
 .lk-items .lk-links { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .lk-items .lk-keep { margin-top: 4px; }
+.lk-qual { margin: 4px 0; }
+.lk-qual .tag { margin-right: 4px; }

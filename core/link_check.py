@@ -85,15 +85,25 @@ GUIDE = """
 - "news_query":用来检索后续新闻的英文检索式(2~4 个英文词,项目专名放引号里,如 "Surum" Tashkent wastewater)
 - "advice":{"action": "入库" | "先核实" | "不入库", "reason": 一句话}。和水务(供水、污水、水利、海水淡化、排涝、水环境)无关的写不入库
 - "verify":要核实的要点,数组,最多 3 条,每条一句
+- "question":用户附言里问了什么:{"kind": "资格对照" | "其他" | null, "text": 问题原话}。问「我们的业绩 / 资质能不能满足」「有没有资格投」这类写 资格对照;
+  附言只是说明来源、没有问问题写 null
+- "requirements":这篇公告写的投标人资格门槛(没写的字段填 null):{"similar_usd": 单个类似合同最低金额(美元,数字), "turnover_usd": 年均营业额最低(美元,数字),
+  "financial_usd": 财务资源 / 流动资金最低(美元,数字), "years": 类似业绩要在近几年内(数字), "specific": 特定资格(工程量、人员、设备)一句话}。
+  欧元等其他币种按原文给的汇率或大致汇率折成美元
 - "items":这份材料如果是几条互不相同的招标或项目的清单(同事整理的商机清单、招标监测、月报里的项目表),逐条列出,最多 15 条;
   只讲一个项目的材料写 []。每条:{"ref": 公告或标段编号(原文写法,如 NRWWP-4;没有写 null), "title": 原文名称, "title_zh": 中文名,
   "country": ISO3, "funder": 出资方, "amount": 金额或规模(原文写法), "stage": 进展(取值同上), "deadline": 投标截止日 YYYY-MM-DD(没有写 null),
   "url": 材料里给出的这一条的网址(没有写 null), "query": 到世界银行等采购网站找这条原公告用的英文检索词(编号加 2~3 个项目词),
-  "names": 在库里搜同一项目用的原文词(2~4 个)}
+  "names": 在库里搜同一项目用的原文词(2~4 个), "sectors": 这一条的领域数组(取值同上;兽医站、学校、道路这类跟水务无关的写 ["其他"]),
+  "requirements": 这一条的资格门槛,结构同上面的 requirements(材料里没写的填 null)}
 """
 
 _S = {"type": "string"}
 _N = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+_NUM = {"anyOf": [{"type": "number"}, {"type": "null"}]}
+_REQ = {"anyOf": [{"type": "object", "properties": {"similar_usd": _NUM, "turnover_usd": _NUM, "financial_usd": _NUM, "years": _NUM, "specific": _N},
+                   "required": ["similar_usd", "turnover_usd", "financial_usd", "years", "specific"], "additionalProperties": False}, {"type": "null"}]}
+QUESTION_KINDS = ("资格对照", "其他")
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -106,11 +116,13 @@ SCHEMA = {
         "advice": {"type": "object", "properties": {"action": {"type": "string", "enum": list(ACTIONS)}, "reason": _S},
                    "required": ["action", "reason"], "additionalProperties": False},
         "verify": {"type": "array", "items": _S},
+        "question": {"anyOf": [{"type": "object", "properties": {"kind": _N, "text": _N}, "required": ["kind", "text"], "additionalProperties": False}, {"type": "null"}]},
+        "requirements": _REQ,
         "items": {"type": "array", "items": {
             "type": "object",
             "properties": {"ref": _N, "title": _S, "title_zh": _S, "country": _N, "funder": _N, "amount": _N, "stage": _N, "deadline": _N,
-                           "url": _N, "query": _N, "names": {"type": "array", "items": _S}, "sectors": {"type": "array", "items": _S}},
-            "required": ["ref", "title", "title_zh", "country", "funder", "amount", "stage", "deadline", "url", "query", "names", "sectors"],
+                           "url": _N, "query": _N, "names": {"type": "array", "items": _S}, "sectors": {"type": "array", "items": _S}, "requirements": _REQ},
+            "required": ["ref", "title", "title_zh", "country", "funder", "amount", "stage", "deadline", "url", "query", "names", "sectors", "requirements"],
             "additionalProperties": False,
         }},
     },
@@ -233,8 +245,30 @@ def _clean(out: dict | None) -> dict | None:
         "freshness": s("freshness"), "mismatch": s("mismatch"), "news_query": s("news_query", 120),
         "advice": {"action": adv.get("action") if adv.get("action") in ACTIONS else None, "reason": str(adv.get("reason") or "")[:300]},
         "verify": lst("verify")[:3], "model": out.get("_model"),
+        "question": _clean_question(out.get("question")), "requirements": _clean_req(out.get("requirements")),
         "items": [it for it in (_clean_item(x) for x in (out.get("items") or []) if isinstance(x, dict)) if it][:ITEM_MAX] if isinstance(out.get("items"), list) else [],
     }
+
+
+def _clean_question(q: object) -> dict | None:
+    if not isinstance(q, dict) or q.get("kind") not in QUESTION_KINDS:
+        return None
+    return {"kind": q["kind"], "text": str(q.get("text") or "").strip()[:200]}
+
+
+def _clean_req(r: object) -> dict | None:
+    """资格门槛:四个数字(美元 / 年)+ 一句特定资格;全空 → None。"""
+    if not isinstance(r, dict):
+        return None
+    out = {}
+    for k in ("similar_usd", "turnover_usd", "financial_usd", "years"):
+        v = r.get(k)
+        try:
+            out[k] = float(v) if v is not None and float(v) > 0 else None
+        except (TypeError, ValueError):
+            out[k] = None
+    out["specific"] = str(r.get("specific") or "").strip()[:300] or None
+    return out if any(out.values()) else None
 
 
 def _clean_item(x: dict) -> dict | None:
@@ -251,7 +285,7 @@ def _clean_item(x: dict) -> dict | None:
             "deadline": dl if isinstance(dl, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", dl) else None,
             "url": url if url and URL_RE.fullmatch(url) else None, "query": s("query", 120),
             "names": [n for n in names if len(re.sub(r"\W", "", n)) >= 4][:4],
-            "sectors": [v for v in (x.get("sectors") if isinstance(x.get("sectors"), list) else []) if v in SECTORS]}
+            "sectors": [v for v in (x.get("sectors") if isinstance(x.get("sectors"), list) else []) if v in SECTORS], "requirements": _clean_req(x.get("requirements"))}
 
 
 # ---------- 库里找 ----------
@@ -455,7 +489,7 @@ def check_item(item: dict, db, today: date, find_original=search_notice, verify=
     没找到的再核一遍(verify:整国世行公告、新闻、出资方链接),给入库建议和要写的值。"""
     ref, names, iso = item.get("ref"), item.get("names") or [], item.get("country")
     words = [w for w in [ref, *names] if w]
-    base = {**{k: item.get(k) for k in ("ref", "title", "title_zh", "funder", "amount", "stage", "deadline", "sectors")},
+    base = {**{k: item.get(k) for k in ("ref", "title", "title_zh", "funder", "amount", "stage", "deadline", "sectors", "requirements")},
             "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "original": None, "sure": False, "candidates": [], "in_library": [],
             "related": [], "checked": None, "draft": None, "notes": []}
     if item.get("sectors") and not (set(item["sectors"]) & WATER):
@@ -563,6 +597,105 @@ def check_list(items: list[dict], db, today: date, find_original=search_notice, 
     return {"items": rows, "n": n, "counts": counts}
 
 
+# ---------- 资格对照:清单的门槛 vs 我方业绩(2026-10-16 使用方:附言问「我们的业绩能满足吗」,要按问题答,不能只给线索) ----------
+
+_USD = re.compile(r"(折\s*)?([\d][\d,]*(?:\.\d+)?)\s*(亿|万)?\s*美元")
+VERDICTS = ("满足", "不满足", "不确定")
+
+
+def usd_of(text: object) -> float | None:
+    """公司资料「金额」文字 → 美元数:「折 1511.5万美元」「1.2亿美元」「52万美元」;多段取「折」后面那个,没有「折」取第一个。"""
+    ms = list(_USD.finditer(str(text or "")))
+    if not ms:
+        return None
+    m = next((m for m in ms if m.group(1)), ms[0])
+    return float(m.group(2).replace(",", "")) * {"亿": 1e8, "万": 1e4}.get(m.group(3) or "", 1)
+
+
+def our_records(db) -> dict[str, list[dict]]:
+    """公司资料里的业绩 → {"本单位": [...], "兄弟单位": [...]}(合作方不算);每条 {name, year, usd, amount, sectors}。
+    兄弟单位的只能另列作参考,不能当本单位业绩(使用方 2026-10-15)。"""
+    out: dict[str, list[dict]] = {"本单位": [], "兄弟单位": []}
+    if db is None or "company" not in db.t:
+        return out
+    props = [p for p in ("name", "kind", "owner", "year", "amount", "sectors") if db.has("company", p)]
+    for r in db.rows("company", props=props):
+        g = lambda p: db.get("company", r, p) if p in props else None  # noqa: E731
+        if str(g("kind") or "") != "业绩":
+            continue
+        owner = str(g("owner") or "本单位")
+        if owner not in out:
+            continue
+        try:
+            year = int(g("year")) if g("year") else None
+        except (TypeError, ValueError):
+            year = None
+        out[owner].append({"id": r["id"], "name": str(g("name") or ""), "year": year, "usd": usd_of(g("amount")), "amount": str(g("amount") or ""),
+                           "sectors": list(g("sectors") or [])})
+    return out
+
+
+def _wan(x: float) -> str:
+    return f"{x / 1e4:,.0f} 万美元"
+
+
+def qualify(req: dict | None, sectors: list[str], records: dict[str, list[dict]], today: date) -> dict:
+    """一条公告的门槛 vs 我方业绩 → {verdict, why, records(本单位同领域前几条), siblings(兄弟单位够门槛的), gaps(系统答不了的)}。
+    只比「单个类似合同金额」(有年限的只看年限内的;年份不详的算在内但注明);营业额、财务资源系统里没有,写明要财务部出数。"""
+    want = {x for x in sectors if x in WATER}
+    fit = lambda r: not want or not r["sectors"] or bool(set(r["sectors"]) & want)  # noqa: E731
+    years = req.get("years") if req else None
+    since = today.year - int(years) if years else None
+    in_win = lambda r: since is None or r["year"] is None or r["year"] >= since  # noqa: E731
+    ours = sorted((r for r in records.get("本单位") or [] if fit(r) and in_win(r) and r["usd"]), key=lambda r: -r["usd"])
+    need = req.get("similar_usd") if req else None
+    sibs = sorted((r for r in records.get("兄弟单位") or [] if fit(r) and in_win(r) and r["usd"] and (not need or r["usd"] >= need)), key=lambda r: -r["usd"])[:2]
+    top = ours[:3]
+    win = f"(近 {int(years)} 年内)" if years else ""
+    yr = lambda r: f"({r['year']})" if r["year"] else "(年份不详,请核)"  # noqa: E731
+    if not need:
+        verdict = "不确定"
+        why = "材料没写单个类似合同的金额门槛" + (f";我方同领域业绩最大的是「{top[0]['name']}」{_wan(top[0]['usd'])}{yr(top[0])}" if top else ";我方资料里没有同领域业绩") + "。"
+    elif top and top[0]["usd"] >= need:
+        verdict = "满足"
+        why = f"类似合同要 {_wan(need)}以上{win},我方「{top[0]['name']}」{_wan(top[0]['usd'])}{yr(top[0])},够。"
+    else:
+        verdict = "不满足"
+        why = (f"类似合同要 {_wan(need)}以上{win}" + (f",我方同领域最大的「{top[0]['name']}」只有 {_wan(top[0]['usd'])}{yr(top[0])}" if top else ",我方资料里没有同领域(或年限内)的业绩") + "。"
+               + (f"兄弟单位有够门槛的(仅供参考,不能当本单位业绩):{'、'.join(r['name'] for r in sibs)}。" if sibs else ""))
+    gaps = []
+    if req and req.get("turnover_usd"):
+        gaps.append(f"年均营业额要 {_wan(req['turnover_usd'])}:系统里没有营业额数据,要财务部出数")
+    if req and req.get("financial_usd"):
+        gaps.append(f"财务资源要 {_wan(req['financial_usd'])}:系统里没有,要财务部出数")
+    if req and req.get("specific"):
+        gaps.append(f"特定资格要对照招标文件:{req['specific']}")
+    return {"verdict": verdict, "why": why, "records": top, "siblings": sibs, "gaps": gaps}
+
+
+def answer_question(q: dict | None, a: dict | None, items: list[dict] | None, db, today: date) -> dict | None:
+    """附言问「能不能满足」:清单逐条对照(非水务的不评),单篇按整篇的门槛对照 → {kind, text, summary, per_item, qualify?}。
+    清单的对照结果写进每条的 qualify。"""
+    if not q or q.get("kind") != "资格对照" or not a:
+        return None
+    records = our_records(db)
+    n_ours = len(records["本单位"])
+    if items:
+        counts = {v: 0 for v in VERDICTS}
+        for it in items:
+            if it.get("status") == "非水务":
+                it["qualify"] = None
+                continue
+            it["qualify"] = qualify(it.get("requirements"), it.get("sectors") or [], records, today)
+            counts[it["qualify"]["verdict"]] += 1
+        judged = sum(counts.values())
+        summary = (f"按我方资料里 {n_ours} 条本单位业绩对照(只比单个类似合同金额):{judged} 条水务项目里,业绩够门槛的 {counts['满足']} 条、不够的 {counts['不满足']} 条、"
+                   f"材料没写门槛的 {counts['不确定']} 条。营业额、财务资源系统里没有,要财务部出数;特定资格要对照招标文件。")
+        return {"kind": q["kind"], "text": q.get("text") or "", "summary": summary, "per_item": True}
+    qa = qualify(a.get("requirements"), a.get("sectors") or [], records, today)
+    return {"kind": q["kind"], "text": q.get("text") or "", "summary": f"按我方资料里 {n_ours} 条本单位业绩对照:{qa['verdict']}。{qa['why']}", "per_item": False, "qualify": qa}
+
+
 # ---------- 合起来 ----------
 
 def _advice(src: dict, a: dict | None, lib: dict) -> dict:
@@ -656,9 +789,14 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
                                             f"{c['先核实']} 条没找到原公告(助手已核过世行采购网与新闻,结论在每条下面),{c['非水务']} 条不是水务项目。"
                                             "建议入库的已勾上,点一下就收;没找到的暂不入库。"}
         notes.append("清单型材料:逐条找了原公告、查了库")
+        if (a.get("question") or {}).get("kind") == "资格对照":
+            step("对照我方业绩")
+        q = answer_question(a.get("question"), a, lst["items"], db, today)  # 附言问了「能不能满足」:先答问题,再给清单
+        if q:
+            adv["reason"] = q["summary"] + " " + adv["reason"]
         return {"ok": True, "url": url, "final_url": page.url, "domain": src["domain"], "title": title, "published": (a or {}).get("info_date") or _published(page),
                 "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "source": src, "analysis": a, "same_url": [], "related_leads": [],
-                "related_opps": [], "outside": [], "advice": adv, "list": lst, "draft": None, "notes": notes}
+                "related_opps": [], "outside": [], "advice": adv, "list": lst, "question": q, "draft": None, "notes": notes}
     words = (a or {}).get("names") or []
     lib = {"same_url": [], "related_leads": [], "related_opps": []}
     step("查库里相关")
@@ -687,4 +825,4 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
                      + (f" 用户附言:{note.strip()}" if note.strip() else ""))[:2000]
     return {"ok": True, "url": url, "final_url": page.url, "domain": src["domain"], "title": title, "published": pub,
             "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "source": src, "analysis": a, **lib,
-            "outside": found, "advice": adv, "draft": draft, "notes": notes}
+            "outside": found, "advice": adv, "question": answer_question((a or {}).get("question"), a, None, db, today), "draft": draft, "notes": notes}
