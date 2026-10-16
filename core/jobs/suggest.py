@@ -84,6 +84,9 @@ def run_round(ctx: Ctx, judged: list[tuple[dict, dict]]) -> dict:
     return dict(stats)
 
 
+QUIET_FACTS = ("verified", "name_local")  # 只填空、现值不同时也不写进待核更新的标量
+
+
 def facts_from(sig: dict, no: str) -> tuple[dict, dict[str, list[str]]]:
     """线索判定出的内容 → 商机的标量事实(只填空)与列表项(只追加;每项末尾带出处线索号)。"""
     x = _llm(sig) or {}
@@ -124,8 +127,13 @@ def update_facts(ctx: Ctx, opp_rid: str, sig: dict, lead_rec: dict) -> int:
     no = lead_no(sig["id"])
     scalars, lists = facts_from(sig, no)
     scalars.update(size_facts(ctx, sig))
-    changes, diffs = b.fill("opportunity", rec, scalars)
+    # 核实状态与原文名称只填空、不提异议:人改成「已核实」后机器再提「未核实」没有意义;所属线索各自的项目名本来就常与商机不同,进别名就够了
+    # (使用方 2026-10-16:待核更新里大半是这两种,看不出要核什么)
+    quiet = {p: scalars.pop(p) for p in QUIET_FACTS if p in scalars}
+    changes, _ = b.fill("opportunity", rec, quiet)
     n = len(changes)
+    changes, diffs = b.fill("opportunity", rec, scalars)
+    n += len(changes)
     upd: dict = {}
     for prop, items in lists.items():
         new = tstore.append_lines(b.get("opportunity", rec, prop), items)

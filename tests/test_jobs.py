@@ -152,6 +152,7 @@ def test_collect_judges_once_and_builds_suggested_opportunity(env):
     ITEMS["fake_src"].append(Item(key="c", url="https://example.org/c", title="Contract award P123456 Ganja WWTP", published="2026-10-04",
                                   text="awarded wastewater contract P123456", fields={"project": "P123456"}))
     LLM["https://example.org/c"] = _llm(category="award", funder="亚行", deadlines=("2026-10-20",))
+    abase.update("opportunity", o["id"], {"verified": "已核实", "name_local": "Ganja WWTP (phase 1)"})  # 人核实过、人写的原文名称:机器不再提「未核实」、不拿线索的项目名来争(2026-10-16)
     ctx2 = common.connect(ctx.profile, TODAY, use_llm=False, api=ctx.api, base=ctx.base, cache_dir=ctx.cache.root.parent, log=lambda *a: None)
     ctx2.clf = StubClassifier()
     res3 = collect.run(ctx2)
@@ -161,7 +162,8 @@ def test_collect_judges_once_and_builds_suggested_opportunity(env):
     o2 = abase.record("opportunity", o["id"])
     no_c = _val(abase, "lead", c, "key")
     assert _val(abase, "opportunity", o2, "public_stage") == "采购进行中"  # 已有值不改
-    assert _val(abase, "opportunity", o2, "review_updates") == f"[{no_c}] 公开进度:已定标(现值:采购进行中)"
+    assert _val(abase, "opportunity", o2, "review_updates") == f"[{no_c}] 公开进度:已定标(现值:采购进行中)"  # 只有真要人核的;核实状态、原文名称不进来
+    assert _val(abase, "opportunity", o2, "verified") == "已核实" and _val(abase, "opportunity", o2, "name_local") == "Ganja WWTP (phase 1)"
     assert _val(abase, "opportunity", o2, "financing").splitlines() == [f"虚构银行 · 5,000,000 USD [{no}]", f"亚行 · 金额待核实 [{no_c}]"]
     assert sorted(x["id"] for x in _val(abase, "opportunity", o2, "sources")) == sorted([a["id"], c["id"]])
     ms = _rows(abase, "milestone")
