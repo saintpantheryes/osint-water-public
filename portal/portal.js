@@ -1261,6 +1261,9 @@
     /* 跟踪中的商机 = 我方阶段 ∈ 跟踪中、准备投标、已投标、中标(本体 glossary.tracked):线索总览的卡片与漏斗、日历、商机总览都用这一个口径 */
     get TRACKED() { return this.glossary("tracked").stages; },
     tracked(opps) { const t = this.TRACKED; return opps.filter((o) => t.includes(this.get("opportunity", o, "stage"))); },
+    /* 已立项的商机(glossary.decided):人定过跟不跟的;AI 推荐、不跟进的留在「线索处理」那一步 */
+    get DECIDED() { return this.glossary("decided").stages; },
+    decided(opps) { const t = this.DECIDED; return opps.filter((o) => t.includes(this.get("opportunity", o, "stage"))); },
     /* 线索 → 商机(线索处理、线索总览共用一套):归入已有商机,线索记为「已处理」;或用这条线索新建商机(编号 国别ISO-序号,阶段取「跟踪中的商机」口径的第一档即跟踪中、负责人是登录人、出处挂这条线索)再归入 */
     nextOppCode(opps, iso) { let m = 0; opps.forEach((o) => { const x = String(this.get("opportunity", o, "code") || "").match(new RegExp("^" + iso + "-(\\d+)$")); if (x) m = Math.max(m, Number(x[1])); }); return iso + "-" + String(m + 1).padStart(3, "0"); },
     leadToOpp(leadId, oppId) { return this.patch("lead", leadId, { opportunity: oppId, status: "已处理" }); },
