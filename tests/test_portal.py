@@ -1549,6 +1549,64 @@ def test_menu_groups_and_moved_todo_tabs():
 
 
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_opps_list_flags_todays_lead_updates():
+    """商机列表主动提醒商机有进展(使用方 2026-10-16):近 7 天挂到商机上的线索按商机一数——今天有的,顶上一个蓝框「今天有 N 个商机有新线索」、名称后面带蓝色「今日新线索 +N」,
+    一点「只看这些」就只剩这些(地址栏 u=today);近 7 天有的带灰色「近 7 天 +几」;「更新」筛选行带数字。「今天」按当前日期现算(R12)。
+    待核更新页不数人驳回(行首 ✗)的行(glossary.review)。"""
+    from datetime import timedelta
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)  # AZE-001 今天有一条线索(aaaaaaaa)
+    b = tstore.Base(admin)
+    today = _today()
+    old = b.create("opportunity", [{"code": "AZE-009", "name_zh": "甲城供水改造", "country": c["id"], "stage": "跟踪中", "review_updates": "✗ [dddddddd] 公开进度:已定标(现值:采购进行中)"}])[0]
+    quiet = b.create("opportunity", [{"code": "AZE-010", "name_zh": "乙城管网", "country": c["id"], "stage": "跟踪中"}])[0]
+    b.create("lead", [{"key": "dddddddd", "title": "Old notice", "url": "https://example.org/d", "relevant": True, "category": "招标", "country": c["id"],
+                       "found_at": (today - timedelta(days=3)).isoformat() + "T02:00:00.000Z", "opportunity": old["id"], "status": "待处理", "origin": "机器采集"},
+                      {"key": "eeeeeeee", "title": "Too old", "url": "https://example.org/e", "relevant": True, "category": "招标", "country": c["id"],
+                       "found_at": (today - timedelta(days=20)).isoformat() + "T02:00:00.000Z", "opportunity": quiet["id"], "status": "待处理", "origin": "机器采集"}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            errors: list[str] = []
+            page = browser.new_page(viewport={"width": 1366, "height": 760})
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/opps.html")
+            page.wait_for_selector("#list table", timeout=15000)
+            assert page.locator("#upd .note.n-info").inner_text().startswith("今天有 1 个商机有新线索")
+            row = lambda code: page.locator(f"#list tr:has-text('{code}')")  # noqa: E731
+            assert row("AZE-001").locator(".tag.t-info:has-text('新线索')").inner_text() == "今日新线索 +1"  # 蓝色
+            assert row("AZE-009").locator(".tag:has-text('近 7 天')").inner_text() == "近 7 天 +1" and row("AZE-009").locator(".tag.t-info:has-text('新线索')").count() == 0  # 灰色
+            assert "新线索" not in row("AZE-010").inner_text()  # 20 天前的不算
+            assert page.locator("#fUpd .chip-btn").all_inner_texts() == ["全部", "今天有新线索 1", "近 7 天有新线索 2"]
+            page.click("#upd #seeToday")
+            page.wait_for_function("location.search.includes('u=today')", timeout=5000)
+            assert page.inner_text("#count").startswith("1 ") and "AZE-001" in page.inner_text("#list") and "AZE-009" not in page.inner_text("#list") and page.locator("#seeToday").count() == 0
+            page.click("#fUpd .chip-btn:has-text('近 7 天')")
+            assert page.inner_text("#count").startswith("2 ") and "AZE-010" not in page.inner_text("#list")
+            page.reload()  # 地址栏记得住
+            page.wait_for_selector("#list table", timeout=15000)
+            assert page.locator("#fUpd .chip-btn.on").inner_text() == "近 7 天有新线索 2" and page.inner_text("#count").startswith("2 ")
+            assert page.inner_text("#nReview") == "0"  # 驳回的那一行不算待核
+            # 手机:提醒框与标签都在一屏宽里
+            phone = browser.new_page(viewport={"width": 390, "height": 760})
+            phone.on("pageerror", lambda e: errors.append(str(e)))
+            phone.goto(base + "/opps.html")
+            phone.wait_for_selector("#list table", timeout=15000)
+            assert phone.evaluate("document.documentElement.scrollWidth") <= 390 and phone.locator("#upd .note.n-info").is_visible()
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+
+
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
 def test_filters_line_up_and_overview_search():
     """筛选区(使用方 2026-10-09):① 多选的「领域」一个没选时「全部」亮着,选了别的「全部」就灭,再点「全部」清空;
     ② 电脑上每一行的标题都在左边同一栏、与这一行第一个选项对齐,选项排不下就在右栏里接着排(不再整块掉到标题下面);

@@ -19,6 +19,7 @@
     <button type="button" data-t="review">待核更新<b id="nReview">…</b></button>
   </div>
   <section class="tab on" id="tab-list">
+  <div id="upd"></div>
   <div class="filters">
     <div class="frow"><b>阶段</b><span id="fStage" class="frow"></span></div>
     <div class="frow"><b>区域</b><span id="fRegion" class="frow"></span></div>
@@ -27,6 +28,7 @@
     <div class="frow"><b>领域</b><span id="fSector" class="frow"></span></div>
     <div class="frow"><b>资金来源</b><span id="fFunder" class="frow"></span></div>
     <div class="frow"><b>负责人</b><span id="fOwner" class="frow"></span></div>
+    <div class="frow"><b>更新</b><span id="fUpd" class="frow"></span></div>
     <div class="frow"><b>搜索</b><input id="fText" placeholder="搜编号或名称" size="18"><span class="muted push" id="count"></span></div>
   </div>
   <p class="muted">点一行进「商机工作台」:看全貌、记跟进、要报告、改阶段。要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开商机表 ↗</a></p>
@@ -47,9 +49,14 @@
   let opps = [], cname = {}, creg = {};
   const q = new URLSearchParams(location.search);
   /* 筛选状态(与线索总览同一套平铺按钮;写进地址栏,刷新、转发都保得住):阶段 ""=跟踪中的、"*"=全部;领域可多选 */
-  const state = { stage: q.get("stage") || "", r: q.get("r") || "", c: q.get("c") || "", s: (q.get("s") || "").split(",").filter(Boolean), f: q.get("f") || "", w: q.get("w") || "" };
+  const state = { stage: q.get("stage") || "", r: q.get("r") || "", c: q.get("c") || "", s: (q.get("s") || "").split(",").filter(Boolean), f: q.get("f") || "", w: q.get("w") || "", u: q.get("u") || "" };
   let tab = q.get("t") || "list";
-  const here = () => { const u = new URLSearchParams({ stage: state.stage, r: state.r, c: state.c, s: state.s.join(","), f: state.f, w: state.w }); if (tab !== "list") u.set("t", tab); return location.pathname + "?" + u; };
+  const here = () => { const u = new URLSearchParams({ stage: state.stage, r: state.r, c: state.c, s: state.s.join(","), f: state.f, w: state.w }); if (state.u) u.set("u", state.u); if (tab !== "list") u.set("t", tab); return location.pathname + "?" + u; };
+  /* 线索更新(使用方 2026-10-16:要主动提醒商机有进展):近 7 天挂到商机上的线索,按商机数一数——今天的、近 7 天的各几条、最近一天是哪天。
+     「今天」按当前日期现算(R12),不靠表里的 TODAY();机器 08:30 采集挂接,同事上传的也算 */
+  const upd = {};  // 商机 id → { today: 今天几条, week: 近 7 天几条, last: 最近一天 }
+  const updOf = (o) => upd[o.id] || { today: 0, week: 0, last: "" };
+  const updTag = (o) => { const u = updOf(o); return u.today ? P.tagHtml("今日新线索 +" + u.today, "info", "今天有 " + u.today + " 条新线索挂到这个商机") : u.week ? P.tagHtml("近 7 天 +" + u.week, "", "近 7 天有 " + u.week + " 条新线索挂到这个商机,最近一次 " + u.last) : ""; };
   /* 页签:商机列表(带筛选)/ 下一步已逾期 / 待核更新(后两页原在「待我处理」页);地址栏 t= 记住开的是哪页 */
   function showTab(x) {
     if (![...$("tabs").querySelectorAll("button")].some((b) => b.dataset.t === x)) x = "list";  // 不认识的(或游客没有的)页签回到列表
@@ -72,6 +79,8 @@
       if (state.s.length && !(g(o, "sectors") || []).some((x) => state.s.includes(x))) return false;
       if (state.f && !P.funderGroups(g(o, "financing")).includes(state.f)) return false;
       if (w && P.text(g(o, "owner")) !== w) return false;
+      if (state.u === "today" && !updOf(o).today) return false;
+      if (state.u === "week" && !updOf(o).week) return false;
       if (t && !((g(o, "code") || "") + " " + (g(o, "name_zh") || "")).toLowerCase().includes(t)) return false;
       return true;
     });
@@ -80,7 +89,7 @@
     const today = P.today();
     $("list").innerHTML = P.tableHtml(["编号", "名称", "国别", "我方阶段", "投资规模", "优先级", "负责人", "下一节点", "下一步", "到期", "最近跟进", "线索"], rows.map((o) => {
       const due = P.day(g(o, "next_due")), over = due && due < today;
-      return [P.raw(P.star("opportunity", o) + '<a href="' + P.oppUrl(o.id) + '"><b>' + P.esc(g(o, "code")) + "</b></a>"), P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(g(o, "name_zh") || "") + "</a>"),
+      return [P.raw(P.star("opportunity", o) + '<a href="' + P.oppUrl(o.id) + '"><b>' + P.esc(g(o, "code")) + "</b></a>"), P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(g(o, "name_zh") || "") + "</a>" + (updTag(o) ? " " + updTag(o) : "")),
         cname[P.linkId(g(o, "country"))] || P.text(g(o, "country")), P.raw(P.stageTag(g(o, "stage"))),
         P.sizeText("opportunity", o), g(o, "priority"), P.text(g(o, "owner")), g(o, "next_milestone"), g(o, "next_step"), P.raw(due ? '<span class="' + (over ? "over" : "") + '">' + due + (over ? " 逾期" : "") + "</span>" : ""),
         P.day(g(o, "last_followup")), g(o, "lead_count")];
@@ -92,8 +101,16 @@
     if (P.isGuest) document.querySelectorAll('#tabs [data-t="over"], #tabs [data-t="review"], #tab-over, #tab-review').forEach((el) => el.remove());  // 游客没有跟进可做
     showTab(tab);
     $("tbl").href = P.tableUrl("opportunity");
-    const [os, cs] = await Promise.all([P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "next_milestone", "public_stage", "priority", "next_step", "next_due", "last_followup", "lead_count", "sectors", "financing", "size_value", "currency", "size_cny", "review_updates"] }), P.countries(), P.followed()]);
+    const since = P.addDays(P.today(), -6);
+    const [os, cs, , ls] = await Promise.all([P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "next_milestone", "public_stage", "priority", "next_step", "next_due", "last_followup", "lead_count", "sectors", "financing", "size_value", "currency", "size_cny", "review_updates"] }), P.countries(), P.followed(),
+      P.records("lead", { filter: P.and(P.cond("lead", "found_at", "isOnOrAfter", P.onDay(since)), P.cond("lead", "opportunity", "isNotEmpty")), props: ["opportunity", "found_at"] }).catch(() => null)]);  // 线索读不到不拖累商机列表
     opps = os;
+    ls && ls.forEach((l) => {
+      const oid = P.linkId(P.get("lead", l, "opportunity")), d = P.day(P.get("lead", l, "found_at"));
+      if (!oid || !d || d < since) return;
+      const u = upd[oid] || (upd[oid] = { today: 0, week: 0, last: "" });
+      u.week += 1; if (d === P.today()) u.today += 1; if (d > u.last) u.last = d;
+    });
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); creg[c.id] = P.regionOf(c); });
     const g = (o, p) => P.get("opportunity", o, p);
     /* 阶段:跟踪中的(缺省)、全部、再逐个阶段 */
@@ -119,6 +136,14 @@
     P.chips($("fSector"), [["", "全部"]].concat(P.choices("opportunity", "sectors").map((s) => [s, s])), state, "s", render, true);
     const owners = [...new Set(opps.map((o) => P.text(g(o, "owner"))).filter(Boolean))].sort();
     P.chips($("fOwner"), [["", "全部"]].concat(owners.map((w) => [w, w])), state, "w", render);
+    /* 更新:按近 7 天有没有新线索筛;顶上一句提醒,今天有的加蓝框,一点就只看这些 */
+    const nToday = opps.filter((o) => updOf(o).today).length, nWeek = opps.filter((o) => updOf(o).week).length, lastDay = Object.values(upd).reduce((m, u) => (u.last > m ? u.last : m), "");
+    const drawU = () => P.chips($("fUpd"), [["", "全部"], ["today", "今天有新线索 " + nToday], ["week", "近 7 天有新线索 " + nWeek]], state, "u", render);
+    drawU();
+    $("upd").innerHTML = ls === null ? '<div class="note n-bad">读不到线索表,「今天有新线索」的提醒先不显示;商机列表照常。</div>' :
+      nToday ? '<div class="note n-info"><b>今天有 ' + nToday + ' 个商机有新线索</b>(机器每天早上采集后挂到商机上;名称后面带「今日新线索」的就是)。' + (state.u === "today" ? "" : '<button type="button" class="btn quiet" id="seeToday">只看这些</button>') + "</div>" :
+      nWeek ? '<p class="muted">今天没有新线索挂到商机上;最近一次是 ' + lastDay + ",近 7 天有 " + nWeek + ' 个商机有新线索(名称后面带「近 7 天 +几」)。</p>' : '<p class="muted">近 7 天没有新线索挂到商机上。</p>';
+    const seeToday = $("seeToday"); if (seeToday) seeToday.onclick = () => { state.u = "today"; drawU(); render(); seeToday.remove(); };
     $("fText").addEventListener("input", render);
     render();
     /* 下一步已逾期(本体 glossary.overdue)与待核更新(glossary.review) */
@@ -127,8 +152,9 @@
       const over = P.tracked(opps).filter((o) => P.day(g(o, "next_due")) && P.day(g(o, "next_due")) < today).sort((a, b) => P.day(g(a, "next_due")).localeCompare(P.day(g(b, "next_due"))));
       $("over").innerHTML = over.map((o) => '<div class="item"><div class="it-main"><div class="it-title">' + P.oppLink(o) + ' <span class="muted">' + P.esc(P.text(g(o, "owner")) || "无负责人") + "</span></div><div>" + P.esc(g(o, "next_step") || "(下一步没写)") + ' · <span class="over">到期 ' + P.day(g(o, "next_due")) + "</span></div></div>" +
         '<div class="it-act"><a class="btn" href="' + P.oppUrl(o.id) + '">去记跟进</a></div></div>').join("") || none;
-      const rv = opps.filter((o) => g(o, "review_updates"));
-      $("review").innerHTML = rv.map((o) => '<div class="item"><div class="it-main"><div class="it-title">' + P.oppLink(o) + '</div><div class="muted">' + P.esc(trunc(g(o, "review_updates"), 200)) + "</div></div>" +
+      const live = (o) => String(g(o, "review_updates") || "").split("\n").filter((ln) => ln.trim() && !/^\s*[✗x×]\s*\[/.test(ln)).join("\n");  // 人驳回(行首 ✗)的不算(glossary.review)
+      const rv = opps.filter((o) => live(o));
+      $("review").innerHTML = rv.map((o) => '<div class="item"><div class="it-main"><div class="it-title">' + P.oppLink(o) + '</div><div class="muted">' + P.esc(trunc(live(o), 200)) + "</div></div>" +
         '<div class="it-act"><a class="btn" href="' + P.oppUrl(o.id) + '">去看</a>' + P.open("opportunity", o.id) + "</div></div>").join("") || none;
       $("nOver").textContent = over.length; $("nOver").classList.toggle("bad", over.length > 0); $("nReview").textContent = rv.length;
     }
