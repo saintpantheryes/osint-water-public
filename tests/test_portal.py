@@ -386,6 +386,7 @@ def test_fact_rows_and_cards_keep_their_shape_at_common_widths():
                 assert tones == ["tag t-warn", "tag t-info", "tag t-info", "tag t-ok", "tag", "tag"]  # 标签只一种胶囊,颜色按含义(界面规范第三步)
                 ready = "[...document.querySelectorAll('#cards .kpi .kn')].every((e) => e.textContent !== '…') && document.querySelector('#cards .kpi')"
                 for pth, wait in (("overview.html", ready), ("analysis.html", ready), ("ontology.html", ready),  # 顶上一排数(界面规范第二步:都是指标卡)
+                                  ("reports.html", "document.querySelector('#list table')"),  # 报告清单:标签与筛选计数(2026-10-16)
                                   (f"opp.html?id={o['id']}", "document.querySelector('#head .facts > .fact')")):  # 商机页的名称-数值行(第四步)
                     page.goto(f"http://127.0.0.1:{srv.server_port}/{pth}")
                     page.wait_for_function(wait, timeout=15000)
@@ -738,6 +739,15 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.select_option("#rpCountry", label="阿塞拜疆")
             page.click("#rpSave")
             page.wait_for_function("document.querySelector('#list').innerText.includes('国别报告')", timeout=15000)
+            # 2026-10-16 使用方:清单按发起时间倒排(刚要的在最上面,不只按日期);类型、版本、状态都是带颜色的标签;筛选计数跟着变;0 条时说为什么
+            first = page.locator("#list tbody tr").first
+            assert first.locator(".tag.t-info").inner_text() == "国别报告" and first.locator("td").nth(3).locator(".tag").get_attribute("class") == "tag" and first.locator("td").nth(3).inner_text() == "内部版" and "待生成" in first.locator("td").nth(4).inner_text()
+            assert first.locator(".tag").count() == 3 and page.locator("#list tbody tr:has-text('2026-W40') .tag").first.get_attribute("class") == "tag"  # 日报、周报是灰标签
+            assert "全部 4" in page.inner_text("#fKind") and "国别报告 1" in page.inner_text("#fKind") and "待生成 2" in page.inner_text("#fSt")
+            page.click("#fEd .chip-btn:has-text('公开版')")
+            assert page.locator("#list .empty").count() == 1 and "版本 公开版" in page.inner_text("#list .empty") and "全部 0" in page.inner_text("#fKind")
+            page.click("#list #fClear")
+            assert page.locator("#list tbody tr").count() == 4 and "4 份" in page.inner_text("#count")
             rc = [r for r in b.rows("report", props=["kind", "gen_status", "country", "requested_by"]) if b.get("report", r, "kind") == "国别报告"]
             assert len(rc) == 1 and b.get("report", rc[0], "gen_status") == "待生成" and tstore.link_id(b.get("report", rc[0], "country")) == c["id"] and tstore.link_id(b.get("report", rc[0], "requested_by")) == "usrADM"
             # 报告模板:页面上传一个(新行 + 文件)、设为缺省;再要一份项目报告时能选它,报告行记下模板

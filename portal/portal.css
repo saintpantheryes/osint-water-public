@@ -643,3 +643,6 @@ code.url { font-size: var(--fs-xs); word-break: break-all; }
 .lk-items .lk-keep { margin-top: 4px; }
 .lk-qual { margin: 4px 0; }
 .lk-qual .tag { margin-right: 4px; }
+#list td .tag { white-space: nowrap; margin-right: 0; }  /* 报告清单:类型、版本、状态都是标签,不在格子里折行 */
+#list td:first-child { white-space: nowrap; }
+.rp-legend .tag { margin: 0 2px; }
