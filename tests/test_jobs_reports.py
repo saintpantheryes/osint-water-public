@@ -420,12 +420,17 @@ def test_country_report_follows_the_azerbaijan_outline(env, monkeypatch):  # noq
     abase.update("country", c["id"], {"bready_total": 66, "bready_water": 79.3, "bready_procure": 45.7, "water_tariff": 2, "water_tariff_cur": "AZN", "water_tariff_usd": 1.18,
                                       "foreign_bid": "部分招标有限制", "award_days": 365, "gov_pay_days": 7, "bready_edition": "B-READY 2025(数据版本 December 10, 2025)"})
     md, *_ = reports.build_country(ctx, iso)
-    sec = md[md.index("营商环境(世界银行 B-READY)"):]
+    sec = md[md.index("外资与营商环境"):]
     assert "总分 66.0 分;需要留意的是公共采购得分、外企参标限制、大型工程授标天数" in sec and "约 1.18 美元/m³(2 AZN/m³)" in sec
     assert "45.7 分(超警戒线:低于 50 分,偏弱)" in sec and "365 天(超警戒线:超过 180 天,授标慢)" in sec and "7 天 |" in sec
     ctx.clf = _FakeWriter()
     md, *_ = reports.build_country(ctx, iso)
-    assert "〔summary〕" in md and "〔risks〕" in md and "〔conclusion〕" in md and "## 2.3 宏观经济" in md
+    # 配了模型:照成稿 72 节逐节写(字段 s章_节),程序填的几节不请模型;首都、我国换成实际说法;空节不出、编号连续
+    assert "〔summary〕" in md and "〔s15_5〕" in md and "〔s11_2〕" in md and "## 2.3 宏观经济" in md and "〔s1_3〕" not in md
+    assert "# 第 8 章 巴库及大巴库水务专题" in md and "## 2.6 中国与该国经贸关系与中国企业现状" in md and "## 12.5 中国企业在该国业绩与经验教训" in md
+    n_secs = sum(len(secs) for _, secs in country_report.OUTLINE)
+    assert len(re.findall(r"^## \d+\.\d+ ", md, re.MULTILINE)) == n_secs - 2  # 只少「首都在建与规划项目清单」(没挂首都的商机)与「国别备注」(没填)
+    assert "## 附录 B 项目管道清单" in md and "## 附录 E 术语与缩略语" in md and "机构与企业名录" not in md  # 没机构、没中标单位的国家不出这一附录
     assert scope == iso and cl == {l1["id"]} and co == {o["id"]}  # 只记商机的出处线索
     assert "已立项跟踪的商机" in md and "AZE-001" in md and "example.org/b" not in md and "巴库供水招标" not in md
 
@@ -578,3 +583,49 @@ def test_tender_monitor_window_defaults_to_last_30_days():
     assert tm.window("UZB 2026-03-11~2026-04-10", date(2026, 10, 16)) == (date(2026, 3, 11), date(2026, 4, 10))
     assert tm.window("2026-04-10~2026-03-11", date(2026, 10, 16)) == (date(2026, 9, 17), date(2026, 10, 16))  # 起晚于止:当没填
     assert tm.period_text("UZB", date(2026, 3, 11), date(2026, 4, 10)) == "UZB 2026-03-11~2026-04-10"
+
+
+def test_country_report_carries_the_other_country_page_tabs(env, monkeypatch):  # noqa: F811
+    """2026-10-16 使用方:国别概况页有的(已中标项目、营商细项、法规原文与排放标准、本国定义、大事记、片区、人均 GDP、研究资料)报告模板也要有。"""
+    from core.jobs import country_report
+    fake, admin, abase, ctx = env
+    c, o, l1, l2 = _seed(abase)
+    abase.update("country", c["id"], {"gdp_pc": 11879, "water_stress": 3.63, "note": "2026-10 [情报] 水务公司改制中", "bready_total": 68.8, "bready_procure": 45.7,
+                                      "bready_edition": "B-READY 2025", "bready_items": "[采购] 外企参标或授标受限:是\n[采购] 有电子采购平台:是\n[供水] 现行水价在网上公布:否"})
+    law = abase.create("law", [{"name": "水法典", "kind": "水法与水资源", "number": "O'RQ-1076", "issued": "2025-07-30", "status": "现行有效", "country": c["id"], "url": "https://lex.uz/docs/7655343"}])[0]
+    abase.create("discharge_limit", [{"param": "BOD5", "value": 120, "unit": "mg/L", "basis": "出水浓度上限", "receiving": "地表水", "country": c["id"], "law": law["id"], "verified": "待核实"}])
+    abase.create("local_term", [{"concept": "生活污水", "term_zh": "家庭污水", "relation": "更窄", "difference": "不含商业排水", "country": c["id"], "law": law["id"]}])
+    abase.create("water_event", [{"day": "2025-10-31", "title": "新水法典施行", "kind": "规划与政策", "country": c["id"], "source": "lex.uz", "url": "https://lex.uz/docs/7655343"}])
+    abase.create("award", [
+        {"name": "Tashkent WWTP rehabilitation", "name_zh": "塔什干污水厂改造", "sector": "污水", "price": 50000000, "currency": "USD", "price_cny": 35500, "awarded": "2026-03-01",
+         "winner": "China Railway X", "winner_country": "中国", "country": c["id"], "url": "https://projects.worldbank.org/a/1", "buyer": "Uzsuvtaminot"},
+        {"name": "Nukus water network", "sector": "供水", "price": 8000000, "currency": "USD", "price_cny": 5680, "awarded": "2025-06-01",
+         "winner": "Local Build LLC", "winner_country": "乌兹别克斯坦", "country": c["id"], "url": "https://projects.worldbank.org/a/2"},
+        {"name": "Old pipes 2015", "sector": "供水", "price_cny": 100, "awarded": "2015-01-01", "winner": "Old Co", "winner_country": "土耳其", "country": c["id"]},
+    ])
+    abase.create("study", [{"name": "Water Sector Review", "name_zh": "水务行业评估", "kind": "行业研究", "publisher": "世界银行", "published": "2024-05-01", "country": c["id"],
+                            "url": "https://documents.worldbank.org/s/1"}])
+    iso = abase.get("country", abase.record("country", c["id"]), "key")
+    md, *_ = reports.build_country(ctx, iso)
+    # 竞争格局:近三年的中标项目按金额列,角标回原公告;中国企业份额;主要中标单位与国别分布;2015 年的旧记录只计入总数
+    assert "已中标项目 3 份(2015–2026 年),其中近 3 年(2023 年起)2 份,写明中标价的合计约 4.12 亿元;中国企业中标 1 份,占 50%" in md
+    assert "| 塔什干污水厂改造^[2](<https://projects.worldbank.org/a/1>)^ | 污水 | China Railway X(中国) | 3.55 亿元 | 2026-03-01 | Uzsuvtaminot |" in md
+    assert "Old pipes 2015" not in md and "| 中国 | 1 | 50% |" in md and "| China Railway X | 中国 | 1 | 3.55 亿元 |" in md
+    # 营商环境细项:对外企不利的标超警戒线
+    assert "| 外企参标或授标受限 | 是(超警戒线:对外企投标不利) |" in md and "| 有电子采购平台 | 是 |" in md and "| 现行水价在网上公布 | 否 |" in md
+    # 法规原文、排放标准、本国定义、大事记各成一节,角标按出现顺序编号,同一网址一个号(法规在第 5 章先出现,所以是 1)
+    assert "| 水法典^[1](<https://lex.uz/docs/7655343>)^ | 水法与水资源 | O'RQ-1076 | 2025-07-30 | 现行有效 |" in md
+    assert "| BOD5 | 120.00 mg/L | 出水浓度上限 | 地表水 |  | 水法典^[1](<https://lex.uz/docs/7655343>)^ | 待核实 |" in md and "1 条还没人工核实" in md
+    assert "| 生活污水 | 家庭污水 | 更窄 | 不含商业排水 | 水法典^[1]" in md
+    assert "| 2025-10-31 | 规划与政策 | 新水法典施行^[1](<https://lex.uz/docs/7655343>)^ |  | lex.uz |" in md
+    # 人均 GDP(PPP)进宏观经济表;总体水风险表;国别备注进内部版、不进公开版;研究资料与原文链接进附录
+    assert "| 人均 GDP(PPP) | 11,879 美元(2021 年国际美元) | 2024 | [Kummu 等(2025)](<https://doi.org/10.1038/s41597-025-04487-x>) |" in md
+    assert "| 用水压力(当前) | 3.6 分(高) 超警戒线(≥ 3 分) |" in md
+    assert re.search(r"^## 2\.\d 国别备注与近期动态$", md, re.MULTILINE) and "- 2026-10 [情报] 水务公司改制中" in md
+    assert re.search(r"^## \d+\.\d 中国企业在该国业绩与经验教训$", md, re.MULTILINE) and "库里登记中国企业在该国的已中标项目 1 份" in md
+    assert "## 附录 F 参考研究资料" in md and "水务行业评估^[4](<https://documents.worldbank.org/s/1>)^ | 行业研究 | 世界银行 | 2024-05-01 |" in md
+    assert "## 附录 G 原文链接" in md and "2. projects.worldbank.org:[塔什干污水厂改造](<https://projects.worldbank.org/a/1>)(原文:Tashkent WWTP rehabilitation)" in md
+    heads = re.findall(r"^# 第 \d+ 章 (.+)$", md, re.MULTILINE)
+    assert heads == [t for t, _ in country_report.OUTLINE if t in heads]
+    pub, *_ = reports.build_country(ctx, iso, internal=False)
+    assert "国别备注与近期动态" not in pub and "塔什干污水厂改造" in pub
