@@ -358,7 +358,7 @@ def test_list_file_is_checked_item_by_item(db, monkeypatch):
     d = by["Something with a link"]
     assert d["status"] == "建议入库" and d["original"]["url"] == "https://www.adb.org/node/1181131" and d["original"]["kind"] == "亚洲开发银行" and d["country"]["iso3"] == "UZB"  # 没写国别的用整篇的
     assert stages[0] == "读文件" and "找原公告 0/4" in stages and stages[-1] == "找原公告 4/4" and "模型分析" in stages
-    assert '"items"' in json.dumps(seen[0], ensure_ascii=False)  # 提示词里要了 items
+    assert '"items"' in "".join(m["content"] for m in seen[0]["messages"])  # 提示词里要了 items
     assert "清单" in L.GUIDE and "items" in L.SCHEMA["properties"]
 
 
