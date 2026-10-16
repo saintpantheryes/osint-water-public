@@ -303,13 +303,16 @@ def test_link_jobs_expire_and_are_capped():
 
 ITEMS = [
     {"ref": "NRWWP-7", "title": "NRWWP-7 Construction and Rehabilitation of Wastewater Networks", "title_zh": "纳曼干污水管网建设与修复", "country": "UZB",
-     "funder": "World Bank", "amount": "12.3 million USD", "stage": "招标", "deadline": "2026-11-20", "url": None, "query": "NRWWP-7 Namangan wastewater", "names": ["Namangan", "NRWWP"]},
+     "funder": "World Bank", "amount": "12.3 million USD", "stage": "招标", "deadline": "2026-11-20", "url": None, "query": "NRWWP-7 Namangan wastewater", "names": ["Namangan", "NRWWP"],
+     "sectors": ["污水"]},
     {"ref": "CAWRMP-ICW-08", "title": "Modernization of Kegeyli main canal — structures", "title_zh": "克盖利干渠现代化改造", "country": "UZB", "funder": "World Bank loan 4207-UZB",
-     "amount": "9.6 million USD (est.)", "stage": "招标", "deadline": "2026-10-19", "url": None, "query": "CAWRMP-ICW-08 Kegeyli canal", "names": ["Kegeyli", "CAWRMP"]},
+     "amount": "9.6 million USD (est.)", "stage": "招标", "deadline": "2026-10-19", "url": None, "query": "CAWRMP-ICW-08 Kegeyli canal", "names": ["Kegeyli", "CAWRMP"], "sectors": ["水利"]},
     {"ref": "SDP/RFB/05", "title": "Kitab wastewater network construction", "title_zh": "基塔布市污水管网建设", "country": "UZB", "funder": "AFD", "amount": "12.85 million USD (est.)",
-     "stage": "招标", "deadline": "2026-12-01", "url": None, "query": "SDP/RFB/05 Kitab sewerage", "names": ["Kitab", "Kashkadarya"]},
+     "stage": "招标", "deadline": "2026-12-01", "url": None, "query": "SDP/RFB/05 Kitab sewerage", "names": ["Kitab", "Kashkadarya"], "sectors": ["污水"]},
     {"ref": None, "title": "Something with a link", "title_zh": "材料里自带网址的一条", "country": None, "funder": None, "amount": None, "stage": None, "deadline": None,
-     "url": "https://www.adb.org/node/1181131", "query": None, "names": ["Anouvong"]},
+     "url": "https://www.adb.org/node/1181131", "query": None, "names": ["Anouvong"], "sectors": []},
+    {"ref": "SLSDP/RFB/16", "title": "Veterinary clinic and animal house, Nukus branch", "title_zh": "努库斯分校兽医诊所及动物饲养楼建设", "country": "UZB", "funder": "IDA",
+     "amount": "0.6 million USD", "stage": "招标", "deadline": "2026-10-14", "url": None, "query": "SLSDP/RFB/16 veterinary clinic", "names": ["SLSDP", "Veterinary"], "sectors": ["其他"]},
     {"ref": "", "title": "", "title_zh": "", "country": None, "funder": None, "amount": None, "stage": None, "deadline": None, "url": None, "query": None, "names": []},  # 空的丢掉
 ]
 WB_HITS = {
@@ -318,6 +321,15 @@ WB_HITS = {
     "SDP/RFB/05 Kitab sewerage": [{"kind": "世行项目(Active)", "title": "P123 Kashkadarya Water Supply", "url": "https://projects.worldbank.org/p/P123", "date": "2024-01-01",
                                    "deadline": None, "text": "Kashkadarya region water supply"}],  # 名字沾边、编号对不上:只算候选
 }
+CHECKED = {"original": None, "sure": False, "candidates": [], "wb_scanned": 480, "wb_since": "2026-02-11", "funder": "法开署", "notes": [],
+           "news": [{"kind": "新闻(近三个月)", "title": "Kitab sewerage works to start", "url": "https://news.example/kitab", "date": "2026-10-01"}],
+           "links": [{"name": "到法开署招标页找", "url": "https://afd.dgmarket.com/tenders/list.do?keywords=SDP%2FRFB%2F05"},
+                     {"name": "到世行采购网找", "url": "https://projects.worldbank.org/en/projects-operations/procurement?srce=both&qterm=SDP%2FRFB%2F05"}]}
+
+
+def _verify(item, iso):
+    assert item["ref"] == "SDP/RFB/05" and iso == "UZB"  # 只有没找到原公告的那条才再核
+    return CHECKED
 
 
 def test_list_file_is_checked_item_by_item(db, monkeypatch):
@@ -340,10 +352,11 @@ def test_list_file_is_checked_item_by_item(db, monkeypatch):
         return WB_HITS.get(query, [])
     out = L.check("", "同事发来的清单", TODAY, clf, db, fetch=lambda u: (_ for _ in ()).throw(AssertionError()),
                   outside=lambda q, iso: (_ for _ in ()).throw(AssertionError("清单型不做整篇旁证")), upload=b"%PDF-1.4", find_original=wb,
-                  progress=stages.append)
+                  progress=stages.append, verify=_verify)
     assert out["ok"] and out["advice"]["action"] == "逐条看" and out["draft"] is None and "清单型材料" in out["notes"][-1]
     lst = out["list"]
-    assert lst["n"] == 4 and lst["counts"] == {"已在库": 1, "建议入库": 2, "先核实": 1}
+    assert lst["n"] == 5 and lst["counts"] == {"已在库": 1, "建议入库": 2, "先核实": 1, "非水务": 1}
+    assert "1 条不是水务项目" in out["advice"]["reason"] and "由你勾选决定" not in out["advice"]["reason"]
     by = {it["ref"] or it["title"]: it for it in lst["items"]}
     a = by["NRWWP-7"]
     assert a["status"] == "已在库" and a["in_library"][0]["url"].endswith("/notice/7") and [r["title"][-6:] for r in a["related"]] == ["ntakes"]
@@ -355,11 +368,36 @@ def test_list_file_is_checked_item_by_item(db, monkeypatch):
     c = by["SDP/RFB/05"]
     assert c["status"] == "先核实" and not c["sure"] and c["original"]["url"].endswith("/P123") and c["candidates"] and "编号对不上" in c["why"]
     assert "url" not in c["draft"] and c["draft"]["title"] == "Kitab wastewater network construction" and c["draft"]["funder"] == "AFD"
+    # 2026-10-16 使用方:先核实的要助手自己核,不能只让人选——整国世行公告、新闻、出资方链接,结论写明
+    assert c["checked"] == CHECKED and "最近 480 条公告(自 2026-02-11)里没有这个编号" in c["why"] and "新闻里有 1 条相关报道" in c["why"]
+    assert "像是法开署的项目" in c["why"] and "到法开署招标页找" in c["why"] and "暂不入库" in c["why"]
+    v = by["SLSDP/RFB/16"]  # 兽医诊所:跟水务无关,直接判,不查库不找公告
+    assert v["status"] == "非水务" and v["why"] == "不是水务项目(领域:其他),不入库。" and v["draft"] is None and ("SLSDP/RFB/16 veterinary clinic", "UZB") not in asked
     d = by["Something with a link"]
     assert d["status"] == "建议入库" and d["original"]["url"] == "https://www.adb.org/node/1181131" and d["original"]["kind"] == "亚洲开发银行" and d["country"]["iso3"] == "UZB"  # 没写国别的用整篇的
-    assert stages[0] == "读文件" and "找原公告 0/4" in stages and stages[-1] == "找原公告 4/4" and "模型分析" in stages
+    assert stages[0] == "读文件" and "找原公告 0/5" in stages and stages[-1] == "找原公告 5/5" and "模型分析" in stages
     assert '"items"' in "".join(m["content"] for m in seen[0]["messages"])  # 提示词里要了 items
-    assert "清单" in L.GUIDE and "items" in L.SCHEMA["properties"]
+    assert "清单" in L.GUIDE and "items" in L.SCHEMA["properties"] and "sectors" in L.SCHEMA["properties"]["items"]["items"]["properties"]
+
+
+def test_verify_outside_scans_the_country_and_guesses_the_funder():
+    """没找到原公告的一条:整国世行公告按正文比对(编号对上 = 原公告;只名字沾边 = 候选);没对上就查新闻、猜出资方、给检索链接。"""
+    item = {"ref": "CAWRMP-ICW-07", "title": "R-8 canal structures", "funder": "World Bank loan 4207-UZB (COL)", "names": ["Kegeyli", "CAWRMP"], "query": "CAWRMP-ICW-07 canal"}
+    scan_rows = [{"kind": "世行采购公告", "title": "Request for Bids:ICW-07 R-8 Main Canal", "url": "https://projects.worldbank.org/notice/77", "date": "2026-09-01", "deadline": "2026-10-19",
+                  "text": "Contract CAWRMP-ICW-07 Modernization of R-8 canal"},
+                 {"kind": "世行采购公告", "title": "Kegeyli canal supervision", "url": "https://projects.worldbank.org/notice/78", "date": "2026-02-11", "deadline": None, "text": "Kegeyli"}]
+    out = L.verify_outside(item, "UZB", scan=lambda iso: scan_rows, outside=lambda q, iso: (_ for _ in ()).throw(AssertionError("对上了不用查新闻")))
+    assert out["sure"] and out["original"]["url"].endswith("/notice/77") and out["wb_scanned"] == 2 and out["wb_since"] == "2026-02-11" and out["links"] == []
+    # 对不上:名字沾边的作候选;出资方按「4207-UZB」猜是亚行;链接:亚行招标页、世行采购网、搜索引擎
+    out = L.verify_outside(item, "UZB", scan=lambda iso: scan_rows[1:], outside=lambda q, iso: ([{"kind": "新闻(近三个月)", "title": "n", "url": "https://n/1", "date": "2026-10-02"},
+                                                                                             {"kind": "世行采购公告", "title": "x", "url": "https://w/1", "date": None}], ["新闻检索没做成(X)"]))
+    assert not out["sure"] and out["original"]["url"].endswith("/notice/78") and len(out["candidates"]) == 1 and out["funder"] == "亚行"
+    assert [n["url"] for n in out["news"]] == ["https://n/1"] and out["notes"] == ["新闻检索没做成(X)"]
+    assert [x["name"] for x in out["links"]] == ["到亚行招标页找", "到世行采购网找", "搜索引擎查这个编号"] and "keywords=CAWRMP-ICW-07" in out["links"][0]["url"]
+    # 整国核对出错不影响其余
+    out = L.verify_outside({"ref": "X-1", "funder": "AFD", "names": []}, "UZB", scan=lambda iso: (_ for _ in ()).throw(OSError("down")), outside=lambda q, iso: ([], []))
+    assert out["wb_scanned"] == 0 and out["notes"][0].startswith("整国核对世行公告没做成") and out["funder"] == "法开署" and out["links"][0]["name"] == "到法开署招标页找"
+    assert L.funder_guess({"funder": "世界银行(IDA)"}) == "世行" and L.funder_guess({"funder": None, "title": "x"}) is None
 
 
 def test_single_notice_is_not_a_list(db):

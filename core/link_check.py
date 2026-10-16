@@ -109,8 +109,8 @@ SCHEMA = {
         "items": {"type": "array", "items": {
             "type": "object",
             "properties": {"ref": _N, "title": _S, "title_zh": _S, "country": _N, "funder": _N, "amount": _N, "stage": _N, "deadline": _N,
-                           "url": _N, "query": _N, "names": {"type": "array", "items": _S}},
-            "required": ["ref", "title", "title_zh", "country", "funder", "amount", "stage", "deadline", "url", "query", "names"],
+                           "url": _N, "query": _N, "names": {"type": "array", "items": _S}, "sectors": {"type": "array", "items": _S}},
+            "required": ["ref", "title", "title_zh", "country", "funder", "amount", "stage", "deadline", "url", "query", "names", "sectors"],
             "additionalProperties": False,
         }},
     },
@@ -250,7 +250,8 @@ def _clean_item(x: dict) -> dict | None:
             "stage": x.get("stage") if x.get("stage") in STAGES else None,
             "deadline": dl if isinstance(dl, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", dl) else None,
             "url": url if url and URL_RE.fullmatch(url) else None, "query": s("query", 120),
-            "names": [n for n in names if len(re.sub(r"\W", "", n)) >= 4][:4]}
+            "names": [n for n in names if len(re.sub(r"\W", "", n)) >= 4][:4],
+            "sectors": [v for v in (x.get("sectors") if isinstance(x.get("sectors"), list) else []) if v in SECTORS]}
 
 
 # ---------- 库里找 ----------
@@ -346,7 +347,19 @@ def search_outside(query: str | None, iso: str | None, get=None) -> tuple[list[d
 
 # ---------- 清单型材料:逐条找原公告、查库 ----------
 
-ITEM_STATUS = ("已在库", "建议入库", "先核实")
+ITEM_STATUS = ("已在库", "建议入库", "先核实", "非水务")
+WATER = frozenset(SECTORS) - {"其他"}
+SCAN_ROWS = 500  # 核「在不在世行采购网」:整国最近这么多条公告按正文比对(2026-10-16 使用方:先核实的要助手自己核,不能只让人选)
+SCAN_KEEP = 3600  # 整国公告列表的进程内缓存(秒)
+_scan_cache: dict[str, tuple[float, list[dict]]] = {}
+# 出资方的招标页检索链接(服务器抓不到这些脚本页,给人一个点开就是检索结果的链接)
+FUNDER_LINKS = {
+    "亚行": "https://www.adb.org/projects/tenders?keywords={q}",
+    "法开署": "https://afd.dgmarket.com/tenders/list.do?keywords={q}",
+    "欧洲复兴开发银行": "https://www.ebrd.com/work-with-us/procurement/project-procurement.html?keywords={q}",
+    "世行": "https://projects.worldbank.org/en/projects-operations/procurement?srce=both&qterm={q}",
+}
+SEARCH_LINK = "https://www.bing.com/search?q=%22{q}%22"
 
 
 def _norm(text: str | None) -> str:
@@ -372,10 +385,81 @@ def _name_in(names: list[str], *texts: str | None) -> bool:
     return any(_norm(n) and _norm(n) in blob for n in names)
 
 
-def check_item(item: dict, db, today: date, find_original=search_notice) -> dict:
-    """清单里的一条:库里有没有(编号对得上就算同一条;同项目别的标段只列作相关)、原公告找到没有、给入库建议和要写的值。"""
+def funder_guess(item: dict) -> str | None:
+    """清单写的出资方 + 编号、名称里的线索 → 亚行 / 法开署 / 欧洲复兴开发银行 / 世行。「贷款 4207-UZB」这种四位数-国别码是亚行的贷款号(清单常误写成世行)。"""
+    blob = " ".join(str(item.get(k) or "") for k in ("funder", "title", "title_zh", "ref"))
+    if re.search(r"\b\d{4}-[A-Z]{3}\b", blob) or re.search(r"\bADB\b|Asian Development|亚行|亚洲开发银行", blob):
+        return "亚行"
+    if re.search(r"\bAFD\b|法开署|法国开发署|Agence Fran", blob):
+        return "法开署"
+    if re.search(r"\bEBRD\b|欧洲复兴", blob):
+        return "欧洲复兴开发银行"
+    if re.search(r"\bIDA\b|\bIBRD\b|World Bank|世行|世界银行", blob):
+        return "世行"
+    return None
+
+
+def wb_scan(iso: str | None) -> list[dict]:
+    """一国最近 SCAN_ROWS 条世行采购公告(进程内缓存一小时)。"""
+    import time
+    if not iso:
+        return []
+    hit = _scan_cache.get(iso)
+    if hit and time.time() - hit[0] < SCAN_KEEP:
+        return hit[1]
+    from core.watch.manual import wb_country_notices
+    rows = wb_country_notices(iso, rows=SCAN_ROWS)
+    _scan_cache[iso] = (time.time(), rows)
+    return rows
+
+
+def verify_outside(item: dict, iso: str | None, scan=wb_scan, outside=search_outside) -> dict:
+    """没找到原公告的那条,助手再核一遍:整国世行公告按正文比对编号与名字;新闻里找旁证;猜出资方,给可点开的检索链接。
+    → {original, sure, candidates, wb_scanned, wb_since, news, funder, links, notes}"""
+    ref, names = item.get("ref"), item.get("names") or []
+    out: dict = {"original": None, "sure": False, "candidates": [], "wb_scanned": 0, "wb_since": None, "news": [], "funder": funder_guess(item),
+                 "links": [], "notes": []}
+    try:
+        rows = scan(iso)
+        out["wb_scanned"] = len(rows)
+        out["wb_since"] = min((str(r.get("date") or "")[:10] for r in rows if r.get("date")), default=None)
+        exact = [r for r in rows if _ref_in(ref, r.get("title"), r.get("text"))]
+        close = [r for r in rows if r not in exact and _name_in(names, r.get("title"), r.get("text"))]
+        if exact:
+            out["original"], out["sure"] = {k: exact[0].get(k) for k in ("kind", "title", "url", "date", "deadline")}, True
+        elif close:
+            out["original"], out["candidates"] = {k: close[0].get(k) for k in ("kind", "title", "url", "date", "deadline")}, [{k: c.get(k) for k in ("kind", "title", "url", "date", "deadline")} for c in close[:2]]
+    except Exception as e:  # noqa: BLE001
+        out["notes"].append(f"整国核对世行公告没做成({type(e).__name__})")
+    if not out["sure"]:
+        try:
+            found, more = outside(item.get("query") or " ".join([w for w in [ref, *names] if w][:4]), iso)
+            out["news"] = [f for f in found if str(f.get("kind") or "").startswith("新闻")][:4]
+            out["notes"] += more
+        except Exception as e:  # noqa: BLE001
+            out["notes"].append(f"新闻检索没做成({type(e).__name__})")
+        q = ref or (names[0] if names else "") or str(item.get("title") or "")[:60]
+        from urllib.parse import quote
+        links = []
+        if out["funder"] and out["funder"] in FUNDER_LINKS:
+            links.append({"name": f"到{out['funder']}招标页找", "url": FUNDER_LINKS[out["funder"]].format(q=quote(q))})
+        if out["funder"] != "世行":
+            links.append({"name": "到世行采购网找", "url": FUNDER_LINKS["世行"].format(q=quote(q))})
+        links.append({"name": "搜索引擎查这个编号", "url": SEARCH_LINK.format(q=quote(q))})
+        out["links"] = links
+    return out
+
+
+def check_item(item: dict, db, today: date, find_original=search_notice, verify=verify_outside) -> dict:
+    """清单里的一条:跟水务无关的直接判「非水务」;库里有没有(编号对得上就算同一条;同项目别的标段只列作相关)、原公告找到没有;
+    没找到的再核一遍(verify:整国世行公告、新闻、出资方链接),给入库建议和要写的值。"""
     ref, names, iso = item.get("ref"), item.get("names") or [], item.get("country")
     words = [w for w in [ref, *names] if w]
+    base = {**{k: item.get(k) for k in ("ref", "title", "title_zh", "funder", "amount", "stage", "deadline", "sectors")},
+            "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "original": None, "sure": False, "candidates": [], "in_library": [],
+            "related": [], "checked": None, "draft": None, "notes": []}
+    if item.get("sectors") and not (set(item["sectors"]) & WATER):
+        return {**base, "status": "非水务", "why": f"不是水务项目(领域:{'、'.join(item['sectors'])}),不入库。"}
     lib = {"same_url": [], "related_leads": [], "related_opps": []}
     notes: list[str] = []
     if db is not None:
@@ -399,14 +483,22 @@ def check_item(item: dict, db, today: date, find_original=search_notice) -> dict
             original, sure = exact[0], True
         elif close:
             original, candidates = close[0], close[:2]
+    checked = None
+    if not have and not sure and verify is not None:  # 没找到:助手自己再核一遍,不把判断推给人
+        try:
+            checked = verify(item, iso)
+        except Exception as e:  # noqa: BLE001
+            checked, notes = None, notes + [f"再核一遍出错({type(e).__name__})"]
+        if checked and checked.get("sure"):
+            original, sure, candidates = checked["original"], True, []
+        elif checked and checked.get("original") and not original:
+            original, candidates = checked["original"], checked.get("candidates") or []
     if have:
         status, why = "已在库", "库里已有这一条(编号对得上)" + (f",已归入商机「{have[0]['opportunity']}」" if have[0].get("opportunity") else "") + "。"
     elif original and sure:
         status, why = "建议入库", f"找到原公告({original['kind']}),按原公告入库,信源可信。"
-    elif original:
-        status, why = "先核实", "找到一条像是同一项目的公告,但编号对不上,请人看一眼;对得上就按它入库。"
     else:
-        status, why = "先核实", "在世界银行采购网站没找到原公告(法开署、亚行等渠道的要到出资方网站找);也可以先按清单入库,信源记为待核实。"
+        status, why = "先核实", _checked_why(checked, original, iso)
     if related and status != "已在库":
         why += f" 库里有 {len(related)} 条同项目别的标段。"
     draft = {"title": (original["title"] if original and sure else item["title"])[:300], "origin": "用户上传", "summary_zh": item.get("title_zh"),
@@ -423,13 +515,32 @@ def check_item(item: dict, db, today: date, find_original=search_notice) -> dict
         draft["amount"] = item["amount"]
     draft["note"] = (f"助手预判({today.isoformat()}):{status}。{why} 来自上传的清单"
                      + (f",编号 {ref}" if ref else "") + (f",截止 {item['deadline']}" if item.get("deadline") else "") + "。")[:2000]
-    return {**{k: item.get(k) for k in ("ref", "title", "title_zh", "funder", "amount", "stage", "deadline")},
-            "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "status": status, "why": why,
-            "original": original, "sure": sure, "candidates": candidates, "in_library": have[:3], "related": related, "draft": draft, "notes": notes}
+    return {**base, "status": status, "why": why, "original": original, "sure": sure, "candidates": candidates, "in_library": have[:3], "related": related,
+            "checked": checked, "draft": draft, "notes": notes}
 
 
-def check_list(items: list[dict], db, today: date, find_original=search_notice, step=lambda stage: None) -> dict:
-    """清单的每一条并行找原公告、查库;进度写「找原公告 3/7」。"""
+def _checked_why(checked: dict | None, original: dict | None, iso: str | None) -> str:
+    """先核实那条的结论:助手核了什么、结果如何、下一步点哪里。"""
+    if not checked:
+        return "在世界银行采购网站没找到原公告,再核一遍也没做成;可点下面的链接到出资方网站找。" if original is None else "找到一条像是同一项目的公告,但编号对不上;对得上就按它入库。"
+    parts = []
+    if checked.get("wb_scanned"):
+        parts.append(f"助手核过:世行采购网{geo.name_zh(iso) or ''}最近 {checked['wb_scanned']} 条公告(自 {checked.get('wb_since') or '?'})里没有这个编号")
+    else:
+        parts.append("助手核过:世行采购网关键词检索没找到" + ("(整国核对没做成)" if checked.get("notes") else ""))
+    if original:
+        parts.append("有一条像是同一项目的公告但编号对不上(下面列出)")
+    parts.append(f"新闻里有 {len(checked['news'])} 条相关报道" if checked.get("news") else "近三个月新闻里没有相关报道")
+    f = checked.get("funder")
+    if f and f != "世行":
+        parts.append(f"按编号、出资方看像是{f}的项目,服务器打不开{f}的网页,请点「到{f}招标页找」看原公告")
+    elif f == "世行":
+        parts.append("清单写的是世行项目但世行网上没有,可能是国内采购网的公告或清单有误")
+    return ";".join(parts) + "。暂不入库;要收也可以点「仍收进」(信源记为待核实)。"
+
+
+def check_list(items: list[dict], db, today: date, find_original=search_notice, step=lambda stage: None, verify=verify_outside) -> dict:
+    """清单的每一条并行找原公告、查库、再核;进度写「找原公告 3/7」。"""
     import threading
     done, lock, n = 0, threading.Lock(), len(items)
     step(f"找原公告 0/{n}")
@@ -437,9 +548,9 @@ def check_list(items: list[dict], db, today: date, find_original=search_notice, 
     def one(it: dict) -> dict:
         nonlocal done
         try:
-            out = check_item(it, db, today, find_original)
+            out = check_item(it, db, today, find_original, verify)
         except Exception as e:  # noqa: BLE001
-            out = {**check_item({**it, "url": None, "query": None, "names": []}, None, today, lambda q, i: []), "status": "先核实",
+            out = {**check_item({**it, "url": None, "query": None, "names": [], "sectors": []}, None, today, lambda q, i: [], None), "status": "先核实",
                    "why": f"这一条查找出错({type(e).__name__}),请人看。", "notes": [f"{type(e).__name__}: {e}"[:200]]}
         with lock:
             done += 1
@@ -473,7 +584,7 @@ UPLOAD_SOURCE = {"kind": "其他网站", "label": "上传的文件(没给网址,
 
 
 def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_page, outside=search_outside,
-          upload: bytes | None = None, progress=None, find_original=search_notice) -> dict:
+          upload: bytes | None = None, progress=None, find_original=search_notice, verify=verify_outside) -> dict:
     """看一条链接;upload 是用户传来的文件(PDF、Word、截图):有文件就按文件看,不去抓网页,网址(可不给)只用来认信源、查库。
     progress(阶段名) 每进一步叫一次(助手接口用它告诉页面走到哪了);不给就不叫。
     材料是几条项目的清单(同事整理的商机清单、招标监测)时,逐条找原公告、查库里有没有,给每条的入库建议,由人决定(check_list)。"""
@@ -539,10 +650,11 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
     if a and len(a.get("items") or []) >= 2:  # 清单型材料:逐条看,不做整篇的查库、旁证
         for it in a["items"]:
             it["country"] = it["country"] or iso
-        lst = check_list(a["items"], db, today, find_original, step)
+        lst = check_list(a["items"], db, today, find_original, step, verify)
         c = lst["counts"]
-        adv = {"action": "逐条看", "reason": f"这是 {lst['n']} 条项目的清单:{c['已在库']} 条已在库,{c['建议入库']} 条找到了原公告、建议入库,{c['先核实']} 条要先核实。"
-                                            "找到原公告的按原公告入库(信源可信);没找到的可以先按清单入库,信源记为待核实。由你勾选决定。"}
+        adv = {"action": "逐条看", "reason": f"这是 {lst['n']} 条项目的清单:{c['已在库']} 条已在库,{c['建议入库']} 条找到了原公告、建议入库,"
+                                            f"{c['先核实']} 条没找到原公告(助手已核过世行采购网与新闻,结论在每条下面),{c['非水务']} 条不是水务项目。"
+                                            "建议入库的已勾上,点一下就收;没找到的暂不入库。"}
         notes.append("清单型材料:逐条找了原公告、查了库")
         return {"ok": True, "url": url, "final_url": page.url, "domain": src["domain"], "title": title, "published": (a or {}).get("info_date") or _published(page),
                 "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "source": src, "analysis": a, "same_url": [], "related_leads": [],

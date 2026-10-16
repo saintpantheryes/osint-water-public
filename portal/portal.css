@@ -637,3 +637,7 @@ code.url { font-size: var(--fs-xs); word-break: break-all; }
 .sw-c4 { background: var(--c4); } .sw-c5 { background: var(--c5); } .sw-c6 { background: var(--c6); }
 .sw-loan { background: var(--loan); } .sw-bad { background: var(--bad); }
 .legend i.sw-core { background: var(--card); border: 2px solid var(--ink-strong); width: 10px; height: 10px; }  /* 核心对象:白底黑框 */
+
+.lk-items .lk-off b { color: var(--muted, #6b7280); font-weight: 500; }
+.lk-items .lk-links { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lk-items .lk-keep { margin-top: 4px; }

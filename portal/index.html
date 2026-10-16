@@ -742,7 +742,7 @@
   /* 提问里有网址:看这条链接(读原文、信源、库里相关、公开渠道、入库建议);网址以外的字是附言,一并交给模型核对 */
   const URL_RE = /[Hh][Tt][Tt][Pp][Ss]?:\/\/[^\s<>"'\u0080-\uffff]+/;  // 与 core/link_check.py 同:网址只认 ASCII,后面紧跟的中文不算;不加 i 标志(加了 s 会被当成 ſ 排除)
   const ADV_CLS = { "入库": "go", "先核实": "check", "不入库": "no", "已在库": "have", "逐条看": "check" };
-  const ITEM_TAG = { "已在库": "t-ok", "建议入库": "t-info", "先核实": "t-warn" };
+  const ITEM_TAG = { "已在库": "t-ok", "建议入库": "t-info", "先核实": "t-warn", "非水务": "" };
   const LV_CLS = { "高": "hi", "中": "mid", "低": "lo", "待核实": "lo" };
   function leadLine(l) {
     const zh = l.project_name || (l.summary_zh || "").slice(0, 60);
@@ -814,16 +814,20 @@
     const l = r.list, c = l.counts || {}, adv = r.advice || {};
     const h = [];
     h.push('<div class="lk-advice check">这是 ' + l.n + " 条项目的清单</div>");
-    h.push('<p class="lk-why"><b>已在库 ' + (c["已在库"] || 0) + " 条</b>、<b>建议入库 " + (c["建议入库"] || 0) + " 条</b>、<b>先核实 " + (c["先核实"] || 0) + " 条</b>。" + P.esc(adv.reason || "").replace(/^这是.*?。/, "") + "</p>");
+    h.push('<p class="lk-why"><b>已在库 ' + (c["已在库"] || 0) + " 条</b>、<b>建议入库 " + (c["建议入库"] || 0) + " 条</b>、<b>先核实 " + (c["先核实"] || 0) + " 条</b>、<b>非水务 " + (c["非水务"] || 0) + " 条</b>。" + P.esc(adv.reason || "").replace(/^这是.*?。/, "") + "</p>");
     h.push('<ul class="list lk-items">');
     l.items.forEach((it, i) => {
       const o = it.original, zh = it.title_zh || it.title, meta = [it.country && it.country.name, it.stage, it.amount, it.deadline ? "截止 " + it.deadline : "", it.funder].filter(Boolean);
       const lines = [];
       if (o) lines.push((it.sure ? "原公告:" : "像是同一项目的公告(编号对不上):") + '<a href="' + P.esc(o.url) + '" target="_blank" rel="noopener">' + P.esc(o.title) + "</a>" + ' <span class="muted small">' + P.esc([o.kind, o.date].filter(Boolean).join(" · ")) + "</span>");
-      else if (it.status !== "已在库") lines.push('<span class="muted">原公告没找到</span>');
+      else if (it.status === "先核实") lines.push('<span class="muted">原公告没找到</span>');
+      const ck = it.checked || {};
+      if ((ck.news || []).length) lines.push("新闻旁证:" + ck.news.map((x) => '<a href="' + P.esc(x.url) + '" target="_blank" rel="noopener">' + P.esc((x.title || x.url).slice(0, 70)) + "</a>" + (x.date ? ' <span class="muted small">' + P.esc(x.date) + "</span>" : "")).join("、"));
+      if ((ck.links || []).length) lines.push('<span class="lk-links">接着查:' + ck.links.map((x) => '<a class="btn quiet" href="' + P.esc(x.url) + '" target="_blank" rel="noopener">' + P.esc(x.name) + "</a>").join("") + "</span>");
+      if (it.status === "先核实") lines.push('<button type="button" class="btn quiet lk-keep">仍收进(信源待核实)</button>');
       if ((it.in_library || []).length) lines.push("库里:" + it.in_library.map((x) => '<a href="' + P.esc(x.url || "#") + '" target="_blank" rel="noopener">' + P.esc(x.title || x.key || "线索") + "</a> " + P.open("lead", x.id)).join("、"));
       if ((it.related || []).length) lines.push('<span class="muted small">同项目别的标段:' + it.related.map((x) => P.esc((x.title || "").slice(0, 60)) + " " + P.open("lead", x.id)).join("、") + "</span>");
-      h.push('<li class="lk-item" data-i="' + i + '">' + (it.status === "已在库" ? '<span class="lk-box"></span>' : '<input type="checkbox" class="lk-box" aria-label="收进这一条"' + (it.status === "建议入库" ? " checked" : "") + ">") +
+      h.push('<li class="lk-item' + (it.status === "非水务" ? " lk-off" : "") + '" data-i="' + i + '">' + (it.status === "建议入库" ? '<input type="checkbox" class="lk-box" aria-label="收进这一条" checked>' : '<span class="lk-box"></span>') +
         '<div class="grow"><div><span class="tag ' + (ITEM_TAG[it.status] || "") + '">' + P.esc(it.status) + "</span>" + (it.ref ? '<span class="tag">' + P.esc(it.ref) + "</span>" : "") + "<b>" + P.esc(zh) + "</b>" +
         (it.title && it.title !== zh ? ' <span class="muted small">' + P.esc(it.title.slice(0, 120)) + "</span>" : "") + "</div>" +
         (meta.length ? '<div class="muted small">' + P.esc(meta.join(" · ")) + "</div>" : "") + '<div class="small">' + P.esc(it.why || "") + "</div>" +
@@ -832,30 +836,36 @@
     h.push("</ul>");
     h.push('<div class="lk-act"></div>');
     if ((r.notes || []).length) h.push('<p class="muted small">' + r.notes.map(P.esc).join(";") + "</p>");
-    if (r.analysis && r.analysis.model) h.push('<p class="muted small">清单由模型(' + P.esc(r.analysis.model) + ")从材料里拆出,原公告在世界银行采购网站找的;只是建议,入库后照常由人确认归属。</p>");
+    if (r.analysis && r.analysis.model) h.push('<p class="muted small">清单由模型(' + P.esc(r.analysis.model) + ")从材料里拆出;原公告先在世界银行采购网站找,没找到的再整国核对、查新闻;只是建议,入库后照常由人确认归属。</p>");
     body.innerHTML = h.join("");
     const act = body.querySelector(".lk-act");
     const boxes = () => [...body.querySelectorAll("input.lk-box")];
-    if (!boxes().length) { act.innerHTML = '<span class="muted small">都已在库,不用再收。</span>'; return; }
-    if (!(await P.canWrite())) { act.innerHTML = '<span class="muted small">你的帐号只能看,不能入库。</span>'; return; }
-    act.innerHTML = '<button type="button" class="btn primary"></button><span class="muted small">只收勾上的;按原公告入库的网址就是原公告,没找到原公告的信源记为待核实;后台几分钟内补全摘录、线索号和商机建议。</span>';
+    const keeps = () => [...body.querySelectorAll("button.lk-keep")];
+    const canWrite = await P.canWrite();
+    if (!canWrite) { keeps().forEach((b) => b.remove()); }
+    const save = async (li) => {  // 一条收进线索库:按原公告入库的网址就是原公告;没找到原公告的信源记为待核实
+      const it = l.items[Number(li.dataset.i)], done = li.querySelector(".lk-done");
+      try {
+        const d = Object.assign({}, it.draft);
+        if (!d.url) delete d.url;
+        const iso = d.country_iso3; delete d.country_iso3;
+        if (iso && byIso[iso]) d.country = byIso[iso].id;
+        const rec = await P.create("lead", d);
+        done.innerHTML = '<b class="ok-text">已收进线索库。</b>' + (rec ? P.open("lead", rec.id) : "");
+        return true;
+      } catch (e) { done.innerHTML = '<span class="bad-text">没收进:' + P.esc(e.message || String(e)) + "</span>"; return false; }
+    };
+    keeps().forEach((b) => { b.onclick = async () => { b.disabled = true; b.textContent = "入库中…"; const ok = await save(b.closest(".lk-item")); b.textContent = ok ? "已收进" : "仍收进(信源待核实)"; b.disabled = ok; }; });
+    if (!boxes().length) { act.innerHTML = '<span class="muted small">' + (keeps().length ? "没有找到原公告的一条,所以没有自动勾上的。" : "没有要收的。") + "</span>"; return; }
+    if (!canWrite) { act.innerHTML = '<span class="muted small">你的帐号只能看,不能入库。</span>'; return; }
+    act.innerHTML = '<button type="button" class="btn primary"></button><span class="muted small">只收勾上的(找到了原公告的);后台几分钟内补全摘录、线索号和商机建议。</span>';
     const btn = act.querySelector("button");
     const label = () => { const n = boxes().filter((b) => b.checked && !b.disabled).length; btn.textContent = "收进选中的 " + n + " 条"; btn.disabled = !n; };
     label();
     boxes().forEach((b) => { b.onchange = label; });
     btn.onclick = async () => {
       btn.disabled = true; btn.textContent = "入库中…";
-      for (const b of boxes().filter((x) => x.checked && !x.disabled)) {
-        const li = b.closest(".lk-item"), it = l.items[Number(li.dataset.i)], done = li.querySelector(".lk-done");
-        try {
-          const d = Object.assign({}, it.draft);
-          if (!d.url) delete d.url;
-          const iso = d.country_iso3; delete d.country_iso3;
-          if (iso && byIso[iso]) d.country = byIso[iso].id;
-          const rec = await P.create("lead", d);
-          b.disabled = true; done.innerHTML = '<b class="ok-text">已收进线索库。</b>' + (rec ? P.open("lead", rec.id) : "");
-        } catch (e) { done.innerHTML = '<span class="bad-text">没收进:' + P.esc(e.message || String(e)) + "</span>"; }
-      }
+      for (const b of boxes().filter((x) => x.checked && !x.disabled)) { if (await save(b.closest(".lk-item"))) b.disabled = true; }
       label();
     };
   }
