@@ -16,8 +16,8 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.28
-date: 2026-10-15
+version: 2.29
+date: 2026-10-16
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
   - 商机的公开事实(原台账 YAML)搬进 Teable
@@ -155,6 +155,10 @@ changes_v2_16:   # 已中标项目补数据源(2026-10-13):使用方看到摩洛
   - 世行数据把几家韩国公司(也有刚果本地单位)的国别录成了朝鲜:世行不与朝鲜往来,导入时改回韩国(刚果的按借款国)
   - 要跑一次建表命令(新字段)
 
+changes_v2_29:   # 招标监测报告(2026-10-16):使用方只关心水务、要 Word、每条信息带可点的角标回到原公告;同事手工做的监测 PDF 不合要求
+  - 报告类型加「招标监测」(taxonomies.report_kind 定期组):一国在招的水务标段总表(截止日、剩几天、出资方、金额、原公告角标)、本期新发布、本期已截止、本期授标(授标线索 + 已中标项目)、
+    各标段资格要求(配了模型时从原文抽;没配时按关键句规则抽,写明抽法)、覆盖说明(看了哪些信源、没覆盖什么);期间「YYYY-MM-DD~YYYY-MM-DD」,留空 = 到当天的近 30 天
+  - A14:只在人到报告页点「生成」时出(要选范围国别),不自动建;使用方 10-16 定的
 changes_v2_28:   # 公司资料归属(2026-10-15):使用方(中海外)把兄弟单位(中铁一局、上海局)的水务业绩也记进了公司资料,但不能当本单位业绩
   - 「公司资料」加属性「归属」(本单位 / 兄弟单位 / 合作方,空 = 本单位,分类体系 company_owner);A14 附「我方资质与相关业绩」时只取本单位的行;页面按归属筛选并标出
 changes_v2_27:   # 答错了当场改正、助手会查城市(2026-10-15):使用方问「吉尔吉斯斯坦有多少个规模以上城市」,助手答成了营商环境;
@@ -512,9 +516,9 @@ objects:
     definition: 机器生成的 Word 报告:国别报告、项目报告(一次性，人发起)与周报、月报、日报(定期)。生成后不改，再生成即新版本。
     key: 报告号(类型 + 范围 + 日期 + 版本);文件名唯一——迁移与再生成按它增量(机器写的标识字段，同线索号)
     properties:
-      - {id: kind, name: 类型, type: enum, enum: [国别报告, 项目报告, 周报, 月报, 日报], by: ai, required: true, taxonomy: report_kind}
+      - {id: kind, name: 类型, type: enum, enum: [国别报告, 项目报告, 周报, 月报, 日报, 招标监测], by: ai, required: true, taxonomy: report_kind}
       - {id: day, name: 日期, type: date, by: ai, required: true}
-      - {id: period, name: 期间, type: text, by: ai, note: 周报、月报、日报用, format: "周报 YYYY-Www(ISO 周)，月报 YYYY-MM，日报 YYYY-MM-DD;国别周报前面带 ISO3", example: 2026-W40}
+      - {id: period, name: 期间, type: text, by: ai, note: 周报、月报、日报用, format: "周报 YYYY-Www(ISO 周)，月报 YYYY-MM，日报 YYYY-MM-DD，招标监测 YYYY-MM-DD~YYYY-MM-DD(留空 = 近 30 天);国别周报、招标监测前面带 ISO3", example: 2026-W40}
       - {id: country, name: 范围国别, type: "link:country", by: ai}
       - {id: opportunity, name: 范围商机, type: "link:opportunity", by: ai}
       - {id: edition, name: 版本, type: enum, enum: [公开版, 内部版], by: ai, taxonomy: edition}
@@ -535,7 +539,7 @@ objects:
     key: 名称
     properties:
       - {id: name, name: 名称, type: text, by: human, required: true}
-      - {id: kinds, name: 适用类型, type: enums, enum: [国别报告, 项目报告, 周报, 月报, 日报], by: human, required: true, taxonomy: report_kind}
+      - {id: kinds, name: 适用类型, type: enums, enum: [国别报告, 项目报告, 周报, 月报, 日报, 招标监测], by: human, required: true, taxonomy: report_kind}
       - {id: file, name: 模板文件, type: file, by: human, note: Word(.docx);传了多个取最后传的那个}
       - {id: is_default, name: 缺省, type: bool, by: human, note: 报告没指定模板时用适用类型含它且勾了缺省的;勾了多个取最近改的}
       - {id: note, name: 说明, type: longtext, by: human}
@@ -1102,7 +1106,7 @@ actions:
     reads: [country, opportunity, lead, followup, milestone, source, template]
     creates: report
     writes: [report.kind, report.day, report.period, report.edition, report.file, report.cites_leads, report.cites_opps, report.gen_status, report.template, report.summary]
-    note: "公开版不读人写的属性与跟进记录(R9)。章节按类型固定:周报 / 月报 = 本期概览、本期线索、商机进展、未来 N 天的时间节点、本期跟进;国别报告 = 国别概况、商机(按阶段)、线索、时间节点;项目报告 = 项目事实、资金、标段、参与方、时间节点、所属线索、跟进(内部版);日报 = 今日概览(新增、相关、采购类、待处理、待确认归属)、分布(国别、类别、领域、资金来源)、值得看的新线索、商机动态、近 7 天时间节点、信源运行，正文另存进「简报正文」。模板只管版式:报告选的模板 → 该类型的缺省模板 → 该类型任一模板 → 自带模板，用的那个写回「模板」。配了模型时加摘要、研判、建议、风险段，每条结论标线索号或商机编号。"
+    note: "公开版不读人写的属性与跟进记录(R9)。章节按类型固定:周报 / 月报 = 本期概览、本期线索、商机进展、未来 N 天的时间节点、本期跟进;国别报告 = 国别概况、商机(按阶段)、线索、时间节点;项目报告 = 项目事实、资金、标段、参与方、时间节点、所属线索、跟进(内部版);日报 = 今日概览(新增、相关、采购类、待处理、待确认归属)、分布(国别、类别、领域、资金来源)、值得看的新线索、商机动态、近 7 天时间节点、信源运行，正文另存进「简报正文」。招标监测 = 在招标段(截止未到，带剩余天数)、本期新发布、本期已截止、本期授标、各标段资格要求、覆盖说明，每条信息带回原公告的角标链接。模板只管版式:报告选的模板 → 该类型的缺省模板 → 该类型任一模板 → 自带模板，用的那个写回「模板」。配了模型时加摘要、研判、建议、风险段，每条结论标线索号或商机编号。"
     rules: [R9]
   - id: A16
     name: 管理信源
@@ -1848,7 +1852,7 @@ taxonomies:
   report_kind:
     name: 报告类型
     used_by: [report.kind, template.kinds]
-    note: 两类一次性(人发起)、三类定期(机器自建;人也可在报告表或报告页补要一份)。
+    note: 两类一次性(人发起)、四类定期(机器自建;人也可在报告表或报告页补要一份)。
     groups:
       - name: 一次性
         values:
@@ -1859,6 +1863,7 @@ taxonomies:
           - {v: 周报, code: weekly, def: 每周一 09:00，上一周, boundary: 期间 YYYY-Www, example: 2026-W40}
           - {v: 月报, code: monthly, def: 每月 1 日 09:30，上一月, boundary: 期间 YYYY-MM, example: 2026-09}
           - {v: 日报, code: daily, def: 每天采集完成后，当天的线索分析简报(短，几百字;正文也存在「简报正文」里), boundary: 期间 YYYY-MM-DD;统计与规则写，配了模型时多一段研判, example: 2026-10-07}
+          - {v: 招标监测, code: tender_monitor, def: 一国在招的水务标段:截止日、金额、出资方、资格要求，每条带回原公告的角标;本期新发布、已截止与授标, boundary: 要选范围国别;只在人点「生成」时出，不自动建;期间 YYYY-MM-DD~YYYY-MM-DD，留空 = 近 30 天, example: "UZB 2026-10-05~2026-10-11"}
   edition:
     name: 报告版本
     used_by: [report.edition]
@@ -2655,7 +2660,7 @@ guest:
     law_clause: {}
     local_term: {}
     discharge_limit: {}
-    report: {deny: [requested_by], rows: "版本 = 公开版 且 类型 ∈ 定期(周报、月报、日报)", kinds_group: 定期, edition: 公开版}
+    report: {deny: [requested_by], rows: "版本 = 公开版 且 类型 ∈ 定期(周报、月报、日报、招标监测)", kinds_group: 定期, edition: 公开版}
   note: 游客登录后在表格里什么也看不到(不在库里);页面上看到的线索、商机、国别、时间节点、报告都是编出来的示例数据,不是真实内容;「打开表格」「在表格里打开」不显示;不能登记跟进、申请报告、订阅日历或改任何字段。
 
 groupings:

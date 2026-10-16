@@ -303,13 +303,19 @@ def test_link_jobs_expire_and_are_capped():
 
 ITEMS = [
     {"ref": "NRWWP-7", "title": "NRWWP-7 Construction and Rehabilitation of Wastewater Networks", "title_zh": "纳曼干污水管网建设与修复", "country": "UZB",
-     "funder": "World Bank", "amount": "12.3 million USD", "stage": "招标", "deadline": "2026-11-20", "url": None, "query": "NRWWP-7 Namangan wastewater", "names": ["Namangan", "NRWWP"]},
+     "funder": "World Bank", "amount": "12.3 million USD", "stage": "招标", "deadline": "2026-11-20", "url": None, "query": "NRWWP-7 Namangan wastewater", "names": ["Namangan", "NRWWP"],
+     "sectors": ["污水"]},
     {"ref": "CAWRMP-ICW-08", "title": "Modernization of Kegeyli main canal — structures", "title_zh": "克盖利干渠现代化改造", "country": "UZB", "funder": "World Bank loan 4207-UZB",
-     "amount": "9.6 million USD (est.)", "stage": "招标", "deadline": "2026-10-19", "url": None, "query": "CAWRMP-ICW-08 Kegeyli canal", "names": ["Kegeyli", "CAWRMP"]},
+     "amount": "9.6 million USD (est.)", "stage": "招标", "deadline": "2026-10-19", "url": None, "query": "CAWRMP-ICW-08 Kegeyli canal", "names": ["Kegeyli", "CAWRMP"], "sectors": ["水利"],
+     "requirements": {"similar_usd": 8000000, "turnover_usd": 10000000, "financial_usd": 1250000, "years": 3, "specific": "灌溉渠网土方不少于 150 000 m³"}},
     {"ref": "SDP/RFB/05", "title": "Kitab wastewater network construction", "title_zh": "基塔布市污水管网建设", "country": "UZB", "funder": "AFD", "amount": "12.85 million USD (est.)",
-     "stage": "招标", "deadline": "2026-12-01", "url": None, "query": "SDP/RFB/05 Kitab sewerage", "names": ["Kitab", "Kashkadarya"]},
+     "stage": "招标", "deadline": "2026-12-01", "url": None, "query": "SDP/RFB/05 Kitab sewerage", "names": ["Kitab", "Kashkadarya"], "sectors": ["污水"],
+     "requirements": {"similar_usd": 12000000, "turnover_usd": None, "financial_usd": None, "years": 5, "specific": None}},
     {"ref": None, "title": "Something with a link", "title_zh": "材料里自带网址的一条", "country": None, "funder": None, "amount": None, "stage": None, "deadline": None,
-     "url": "https://www.adb.org/node/1181131", "query": None, "names": ["Anouvong"]},
+     "url": "https://www.adb.org/node/1181131", "query": None, "names": ["Anouvong"], "sectors": []},
+    {"ref": "SLSDP/RFB/16", "title": "Veterinary clinic and animal house, Nukus branch", "title_zh": "努库斯分校兽医诊所及动物饲养楼建设", "country": "UZB", "funder": "IDA",
+     "amount": "0.6 million USD", "stage": "招标", "deadline": "2026-10-14", "url": None, "query": "SLSDP/RFB/16 veterinary clinic", "names": ["SLSDP", "Veterinary"], "sectors": ["其他"],
+     "requirements": {"similar_usd": 500000, "turnover_usd": 500000, "financial_usd": 84000, "years": 5, "specific": None}},
     {"ref": "", "title": "", "title_zh": "", "country": None, "funder": None, "amount": None, "stage": None, "deadline": None, "url": None, "query": None, "names": []},  # 空的丢掉
 ]
 WB_HITS = {
@@ -318,6 +324,15 @@ WB_HITS = {
     "SDP/RFB/05 Kitab sewerage": [{"kind": "世行项目(Active)", "title": "P123 Kashkadarya Water Supply", "url": "https://projects.worldbank.org/p/P123", "date": "2024-01-01",
                                    "deadline": None, "text": "Kashkadarya region water supply"}],  # 名字沾边、编号对不上:只算候选
 }
+CHECKED = {"original": None, "sure": False, "candidates": [], "wb_scanned": 480, "wb_since": "2026-02-11", "funder": "法开署", "notes": [],
+           "news": [{"kind": "新闻(近三个月)", "title": "Kitab sewerage works to start", "url": "https://news.example/kitab", "date": "2026-10-01"}],
+           "links": [{"name": "到法开署招标页找", "url": "https://afd.dgmarket.com/tenders/list.do?keywords=SDP%2FRFB%2F05"},
+                     {"name": "到世行采购网找", "url": "https://projects.worldbank.org/en/projects-operations/procurement?srce=both&qterm=SDP%2FRFB%2F05"}]}
+
+
+def _verify(item, iso):
+    assert item["ref"] == "SDP/RFB/05" and iso == "UZB"  # 只有没找到原公告的那条才再核
+    return CHECKED
 
 
 def test_list_file_is_checked_item_by_item(db, monkeypatch):
@@ -340,10 +355,11 @@ def test_list_file_is_checked_item_by_item(db, monkeypatch):
         return WB_HITS.get(query, [])
     out = L.check("", "同事发来的清单", TODAY, clf, db, fetch=lambda u: (_ for _ in ()).throw(AssertionError()),
                   outside=lambda q, iso: (_ for _ in ()).throw(AssertionError("清单型不做整篇旁证")), upload=b"%PDF-1.4", find_original=wb,
-                  progress=stages.append)
+                  progress=stages.append, verify=_verify)
     assert out["ok"] and out["advice"]["action"] == "逐条看" and out["draft"] is None and "清单型材料" in out["notes"][-1]
     lst = out["list"]
-    assert lst["n"] == 4 and lst["counts"] == {"已在库": 1, "建议入库": 2, "先核实": 1}
+    assert lst["n"] == 5 and lst["counts"] == {"已在库": 1, "建议入库": 2, "先核实": 1, "非水务": 1}
+    assert "1 条不是水务项目" in out["advice"]["reason"] and "由你勾选决定" not in out["advice"]["reason"]
     by = {it["ref"] or it["title"]: it for it in lst["items"]}
     a = by["NRWWP-7"]
     assert a["status"] == "已在库" and a["in_library"][0]["url"].endswith("/notice/7") and [r["title"][-6:] for r in a["related"]] == ["ntakes"]
@@ -355,14 +371,93 @@ def test_list_file_is_checked_item_by_item(db, monkeypatch):
     c = by["SDP/RFB/05"]
     assert c["status"] == "先核实" and not c["sure"] and c["original"]["url"].endswith("/P123") and c["candidates"] and "编号对不上" in c["why"]
     assert "url" not in c["draft"] and c["draft"]["title"] == "Kitab wastewater network construction" and c["draft"]["funder"] == "AFD"
+    # 2026-10-16 使用方:先核实的要助手自己核,不能只让人选——整国世行公告、新闻、出资方链接,结论写明
+    assert c["checked"] == CHECKED and "最近 480 条公告(自 2026-02-11)里没有这个编号" in c["why"] and "新闻里有 1 条相关报道" in c["why"]
+    assert "像是法开署的项目" in c["why"] and "到法开署招标页找" in c["why"] and "暂不入库" in c["why"]
+    v = by["SLSDP/RFB/16"]  # 兽医诊所:跟水务无关,直接判,不查库不找公告
+    assert v["status"] == "非水务" and v["why"] == "不是水务项目(领域:其他),不入库。" and v["draft"] is None and ("SLSDP/RFB/16 veterinary clinic", "UZB") not in asked
     d = by["Something with a link"]
     assert d["status"] == "建议入库" and d["original"]["url"] == "https://www.adb.org/node/1181131" and d["original"]["kind"] == "亚洲开发银行" and d["country"]["iso3"] == "UZB"  # 没写国别的用整篇的
-    assert stages[0] == "读文件" and "找原公告 0/4" in stages and stages[-1] == "找原公告 4/4" and "模型分析" in stages
+    assert stages[0] == "读文件" and "找原公告 0/5" in stages and stages[-1] == "找原公告 5/5" and "模型分析" in stages
     assert '"items"' in "".join(m["content"] for m in seen[0]["messages"])  # 提示词里要了 items
-    assert "清单" in L.GUIDE and "items" in L.SCHEMA["properties"]
+    assert "清单" in L.GUIDE and "items" in L.SCHEMA["properties"] and "sectors" in L.SCHEMA["properties"]["items"]["items"]["properties"]
+
+
+def test_verify_outside_scans_the_country_and_guesses_the_funder():
+    """没找到原公告的一条:整国世行公告按正文比对(编号对上 = 原公告;只名字沾边 = 候选);没对上就查新闻、猜出资方、给检索链接。"""
+    item = {"ref": "CAWRMP-ICW-07", "title": "R-8 canal structures", "funder": "World Bank loan 4207-UZB (COL)", "names": ["Kegeyli", "CAWRMP"], "query": "CAWRMP-ICW-07 canal"}
+    scan_rows = [{"kind": "世行采购公告", "title": "Request for Bids:ICW-07 R-8 Main Canal", "url": "https://projects.worldbank.org/notice/77", "date": "2026-09-01", "deadline": "2026-10-19",
+                  "text": "Contract CAWRMP-ICW-07 Modernization of R-8 canal"},
+                 {"kind": "世行采购公告", "title": "Kegeyli canal supervision", "url": "https://projects.worldbank.org/notice/78", "date": "2026-02-11", "deadline": None, "text": "Kegeyli"}]
+    out = L.verify_outside(item, "UZB", scan=lambda iso: scan_rows, outside=lambda q, iso: (_ for _ in ()).throw(AssertionError("对上了不用查新闻")))
+    assert out["sure"] and out["original"]["url"].endswith("/notice/77") and out["wb_scanned"] == 2 and out["wb_since"] == "2026-02-11" and out["links"] == []
+    # 对不上:名字沾边的作候选;出资方按「4207-UZB」猜是亚行;链接:亚行招标页、世行采购网、搜索引擎
+    out = L.verify_outside(item, "UZB", scan=lambda iso: scan_rows[1:], outside=lambda q, iso: ([{"kind": "新闻(近三个月)", "title": "n", "url": "https://n/1", "date": "2026-10-02"},
+                                                                                             {"kind": "世行采购公告", "title": "x", "url": "https://w/1", "date": None}], ["新闻检索没做成(X)"]))
+    assert not out["sure"] and out["original"]["url"].endswith("/notice/78") and len(out["candidates"]) == 1 and out["funder"] == "亚行"
+    assert [n["url"] for n in out["news"]] == ["https://n/1"] and out["notes"] == ["新闻检索没做成(X)"]
+    assert [x["name"] for x in out["links"]] == ["到亚行招标页找", "到世行采购网找", "搜索引擎查这个编号"] and "keywords=CAWRMP-ICW-07" in out["links"][0]["url"]
+    # 整国核对出错不影响其余
+    out = L.verify_outside({"ref": "X-1", "funder": "AFD", "names": []}, "UZB", scan=lambda iso: (_ for _ in ()).throw(OSError("down")), outside=lambda q, iso: ([], []))
+    assert out["wb_scanned"] == 0 and out["notes"][0].startswith("整国核对世行公告没做成") and out["funder"] == "法开署" and out["links"][0]["name"] == "到法开署招标页找"
+    assert L.funder_guess({"funder": "世界银行(IDA)"}) == "世行" and L.funder_guess({"funder": None, "title": "x"}) is None
 
 
 def test_single_notice_is_not_a_list(db):
     """只讲一个项目的材料(items 为空)照旧整篇分析,有「收进线索库」的草稿。"""
     out = L.check(URL, "", TODAY, _clf({**MODEL, "items": [ITEMS[0]]}, []), db, fetch=lambda u: _page(), outside=lambda q, iso: ([], []))
     assert "list" not in out and out["draft"] and out["advice"]["action"] == "入库" and len(out["analysis"]["items"]) == 1
+
+
+def _company(db):
+    """公司资料:本单位两条(水利 2020 大、污水 2023 小)、兄弟单位一条(污水 2023 大)、一条资质。"""
+    db.create("company", [
+        {"kind": "业绩", "owner": "本单位", "name": "尼泊尔Bheri Babai引水隧道项目", "year": 2020, "amount": "10,569,832,141.52尼泊尔卢比,折 10733万美元(≈7.62亿元人民币)", "sectors": ["水利"]},
+        {"kind": "业绩", "owner": "本单位", "name": "摩洛哥西迪斯里玛尼省排水整治项目", "year": 2023, "amount": "6257965.44迪拉姆,折 65万美元(≈462万元人民币)", "sectors": ["污水"]},
+        {"kind": "业绩", "owner": "兄弟单位", "name": "中铁一局某市污水厂", "year": 2023, "amount": "9000万美元", "sectors": ["污水"]},
+        {"kind": "资质", "owner": "本单位", "name": "市政公用工程施工总承包特级", "amount": ""},
+    ])
+
+
+def test_qualify_compares_tender_thresholds_with_our_own_records(db):
+    """2026-10-16 使用方:上传清单问「我们的业绩能满足吗」,回答的却是线索——要按问题答:拿公告的门槛对照公司资料里本单位的业绩。
+    只比单个类似合同金额(有年限的只看年限内);兄弟单位的只能另列参考;营业额、财务资源系统里没有,写明要财务部出数。"""
+    _company(db)
+    rec = L.our_records(db)
+    assert [r["name"][:5] for r in rec["本单位"]] == ["尼泊尔Bh", "摩洛哥西迪"] and rec["本单位"][0]["usd"] == 107330000 and [r["usd"] for r in rec["兄弟单位"]] == [90000000]
+    canal = L.qualify({"similar_usd": 8000000, "turnover_usd": 10000000, "financial_usd": 1250000, "years": 10, "specific": "土方 150 000 m³"}, ["水利"], rec, TODAY)
+    assert canal["verdict"] == "满足" and "「尼泊尔Bheri Babai引水隧道项目」10,733 万美元(2020),够" in canal["why"] and canal["records"][0]["year"] == 2020
+    assert canal["gaps"] == ["年均营业额要 1,000 万美元:系统里没有营业额数据,要财务部出数", "财务资源要 125 万美元:系统里没有,要财务部出数", "特定资格要对照招标文件:土方 150 000 m³"]
+    recent = L.qualify({"similar_usd": 8000000, "turnover_usd": None, "financial_usd": None, "years": 3, "specific": None}, ["水利"], rec, TODAY)
+    assert recent["verdict"] == "不满足" and "近 3 年内" in recent["why"] and "没有同领域(或年限内)的业绩" in recent["why"] and recent["gaps"] == []  # 2020 的不在近三年
+    sewer = L.qualify({"similar_usd": 12000000, "turnover_usd": None, "financial_usd": None, "years": 5, "specific": None}, ["污水"], rec, TODAY)
+    assert sewer["verdict"] == "不满足" and "只有 65 万美元(2023)" in sewer["why"] and "兄弟单位有够门槛的(仅供参考,不能当本单位业绩):中铁一局某市污水厂" in sewer["why"]
+    assert L.qualify(None, ["污水"], rec, TODAY)["verdict"] == "不确定" and "没写单个类似合同的金额门槛" in L.qualify(None, ["污水"], rec, TODAY)["why"]
+    assert L.usd_of("1.2亿美元") == 120000000 and L.usd_of("5,000万元") is None and L.our_records(None) == {"本单位": [], "兄弟单位": []}
+
+
+def test_list_file_with_a_question_answers_the_question_first(db, monkeypatch):
+    """附言「我们的业绩能满足吗」+ 清单:先答问题(逐条 业绩满足 / 不满足 / 不确定,非水务不评),再给清单;单篇也答。"""
+    from core import file_text as F
+    _company(db)
+    monkeypatch.setattr(F, "pdf_text", lambda data: ("招标项目监测 07.10.2026 清单与资格要求……" * 3, 1))
+    q = {"kind": "资格对照", "text": "我们的业绩能满足吗?"}
+    stages: list[str] = []
+    out = L.check("", "我们的业绩能满足吗?", TODAY, _clf({**MODEL, "items": ITEMS, "question": q}, []), db, fetch=lambda u: (_ for _ in ()).throw(AssertionError()),
+                  outside=lambda q, iso: ([], []), upload=b"%PDF-1.4", find_original=lambda q, iso: WB_HITS.get(q, []), verify=lambda it, iso: CHECKED, progress=stages.append)
+    assert out["question"]["kind"] == "资格对照" and out["question"]["per_item"] and "对照我方业绩" in stages
+    assert out["question"]["summary"].startswith("按我方资料里 2 条本单位业绩对照(只比单个类似合同金额):4 条水务项目里,业绩够门槛的 0 条、不够的 2 条、材料没写门槛的 2 条。")
+    assert out["advice"]["reason"].startswith("按我方资料里 2 条本单位业绩对照")
+    by = {it["ref"] or it["title"]: it for it in out["list"]["items"]}
+    assert by["CAWRMP-ICW-08"]["qualify"]["verdict"] == "不满足" and "近 3 年内" in by["CAWRMP-ICW-08"]["qualify"]["why"]  # 门槛 800 万、近 3 年:2020 的不算
+    assert by["SDP/RFB/05"]["qualify"]["verdict"] == "不满足" and "中铁一局某市污水厂" in by["SDP/RFB/05"]["qualify"]["why"]
+    assert by["NRWWP-7"]["qualify"]["verdict"] == "不确定" and by["SLSDP/RFB/16"]["qualify"] is None and by["Something with a link"]["qualify"]["verdict"] == "不确定"
+    # 附言没问问题:question 为 None,清单照旧
+    out = L.check("", "同事发来的清单", TODAY, _clf({**MODEL, "items": ITEMS, "question": None}, []), db, fetch=lambda u: (_ for _ in ()).throw(AssertionError()),
+                  outside=lambda q, iso: ([], []), upload=b"%PDF-1.4", find_original=lambda q, iso: [], verify=lambda it, iso: CHECKED)
+    assert out["question"] is None and "qualify" not in out["list"]["items"][0]
+    # 单篇公告 + 问题:按整篇的门槛对照
+    single = {**MODEL, "items": [], "question": q, "sectors": ["水利"], "requirements": {"similar_usd": 5000000, "turnover_usd": None, "financial_usd": None, "years": 10, "specific": None}}
+    out = L.check(URL, "我们的业绩能满足吗?", TODAY, _clf(single, []), db, fetch=lambda u: _page(), outside=lambda q, iso: ([], []))
+    assert out["question"]["qualify"]["verdict"] == "满足" and out["question"]["summary"].startswith("按我方资料里 2 条本单位业绩对照:满足。")
+    assert "question" in L.SCHEMA["properties"] and "requirements" in L.SCHEMA["properties"]["items"]["items"]["properties"] and "资格对照" in L.GUIDE

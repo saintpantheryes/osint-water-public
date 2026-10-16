@@ -151,13 +151,13 @@ def test_rerun_adds_new_enum_choices_to_existing_select_fields():
     b = tstore.Base(admin)
     f = b.field("report", "kind")
     choices = [c["name"] for c in f["options"]["choices"]]
-    assert "日报" in choices
-    # 退回只有四个选项的旧表,再按本体重跑:补上「日报」,顺序接在后面
-    admin.convert_field(b.t["report"], f["id"], {"type": "singleSelect", "options": {**f["options"], "choices": [c for c in f["options"]["choices"] if c["name"] != "日报"]}})
+    assert "招标监测" in choices
+    # 退回少一个选项的旧表(最后一个,2.29 加的「招标监测」),再按本体重跑:补上它,顺序接在后面
+    admin.convert_field(b.t["report"], f["id"], {"type": "singleSelect", "options": {**f["options"], "choices": [c for c in f["options"]["choices"] if c["name"] != "招标监测"]}})
     bot = tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None)
     with pytest.raises(tstore.TStoreError):
-        tstore.Base(bot).create("report", [{"kind": "日报", "day": "2026-10-07", "gen_status": "待生成"}])  # 锁了自动加选项
+        tstore.Base(bot).create("report", [{"kind": "招标监测", "day": "2026-10-07", "gen_status": "待生成"}])  # 锁了自动加选项
     res = schema.apply(admin, schema.build_plan(onto, tmap, None), NEW, log=lambda *a: None)
-    assert any("报告.类型 选项 日报" in x for x in res.created)
+    assert any("报告.类型 选项 招标监测" in x for x in res.created)
     assert [c["name"] for c in tstore.Base(admin).field("report", "kind")["options"]["choices"]] == choices
     tstore.Base(bot).create("report", [{"kind": "日报", "day": "2026-10-07", "gen_status": "待生成"}])

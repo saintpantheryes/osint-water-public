@@ -157,6 +157,24 @@ def _wb_code(iso3: str) -> str:
     return rev.get(iso3) or geo.countries()[iso3]["iso2"]
 
 
+def wb_country_notices(iso3: str, rows: int = 500) -> list[dict]:
+    """一国最近的世行采购公告(按发布日倒序,最多 rows 条,带正文)→ 与 search_worldbank 同样的字典。
+    用来核「某个编号在不在世行采购网」:关键词检索对编号不灵(斜杠、连字符),整国拉下来按正文比对才可靠。"""
+    import json
+
+    from core.watch.collectors import WB_NOTICE_URL, WB_NOTICES
+    from core.watch.text import parse_date
+
+    params = {"format": "json", "rows": rows, "srt": "noticedate", "order": "desc", "project_ctry_code_exact": _wb_code(iso3),
+              "fl": "id,notice_type,noticedate,project_ctry_code,project_name,bid_description,noticetitle,submission_deadline_date,notice_text"}
+    out = []
+    for n in json.loads(fetch.get(WB_NOTICES, params=params).content).get("procnotices") or []:
+        title = f"{n.get('notice_type') or '采购公告'}:{n.get('bid_description') or n.get('noticetitle') or n.get('project_name')}"
+        out.append({"kind": "世行采购公告", "title": title, "country": iso3, "date": parse_date(n.get("noticedate")), "url": WB_NOTICE_URL.format(id=n.get("id")),
+                    "text": html_text(n.get("notice_text") or "", drop_chrome=False) or title, "deadline": parse_date(n.get("submission_deadline_date"))})
+    return out
+
+
 def search_worldbank(query: str, iso3: str | None = None, rows: int = 20) -> list[dict]:
     """按关键词查世界银行采购公告与项目(官方公开接口,qterm 支持 AND/OR)→ [{kind, title, country, date, url, text}]。
     公告正文随结果一起取回,入库时不必再打开网页(世行公告详情页是脚本页,抓不到正文)。"""

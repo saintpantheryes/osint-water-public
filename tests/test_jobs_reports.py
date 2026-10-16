@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -48,10 +48,12 @@ def test_weekly_report_is_generated_uploaded_and_cited(env, monkeypatch):  # noq
     c, o, l1, l2 = _seed(abase)
     # 周一 09:00 自建上周周报;再跑一次不重复建
     now = datetime(2026, 10, 5, 9, 1, tzinfo=TZ)  # 2026-10-05 是周一
-    assert reports.ensure_periodic(ctx, now) == {"自建报告": 1}
+    assert reports.ensure_periodic(ctx, now) == {"自建报告": 1}  # 只有周报;招标监测不自动出,人点「生成」才有(10-16 定)
     assert reports.ensure_periodic(ctx, now) == {}
-    r = _rows(abase, "report")[0]
-    assert _val(abase, "report", r, "kind") == "周报" and _val(abase, "report", r, "period") == "2026-W40" and _val(abase, "report", r, "gen_status") == "待生成"
+    by_kind = {_val(abase, "report", r, "kind"): r for r in _rows(abase, "report")}
+    assert "招标监测" not in by_kind
+    r = by_kind["周报"]
+    assert _val(abase, "report", r, "period") == "2026-W40" and _val(abase, "report", r, "gen_status") == "待生成"
     assert reports.run(ctx) == {"报告完成": 1, "报告失败": 0}
     r = abase.record("report", r["id"])
     assert _val(abase, "report", r, "gen_status") == "完成"
@@ -501,3 +503,78 @@ def test_project_report_internal_chinese_and_public_english(env):  # noqa: F811
             out = opp_report.PR.to_docx(content, ctx.cache.root.parent / f"{content['lang']}.out.docx", t)
             text = "\n".join(p.text for p in docx.Document(str(out)).paragraphs)
             assert want in text and "【" not in text.split(want)[1]
+
+
+def _seed_tenders(base, c):
+    """乌兹别克斯坦式的招标监测数据:两个在招标段(一个有原文摘录、一个挂了商机)、一个本期已截止、一个授标线索、一条已中标项目、一条过期旧标。"""
+    o = base.create("opportunity", [{"code": "AZE-002", "name_zh": "努库斯污水厂", "country": c["id"], "stage": "跟踪中", "eligibility": "可直接投标",
+                                     "eligibility_basis": "世行采购规则,各国企业均可"}])[0]
+    ls = base.create("lead", [
+        {"key": "t1t1t1t1", "title": "Construction of the WWTP in the city of Nukus", "url": "https://projects.worldbank.org/n/1", "relevant": True,
+         "category": "招标", "country": c["id"], "published": "2026-04-06", "found_at": "2026-04-06T02:00:00.000Z", "funder": "世界银行",
+         "amount": "USD 45,000,000", "amount_cny": 32000, "project_name": "努库斯污水处理厂建设", "opportunity": o["id"], "origin": "机器采集",
+         "excerpt": "Bidders shall have an average annual turnover of USD 30 million. Participation in a joint venture is allowed. "
+                    "A bid security of USD 400,000 is required. Bidding documents may be purchased for a non-refundable fee of USD 100. Bids will be opened on 18 May 2026."},
+        {"key": "t2t2t2t2", "title": "Package 4: Water Supply Networks in Syrdarya", "url": "https://projects.worldbank.org/n/2", "relevant": True,
+         "category": "招标", "country": c["id"], "published": "2026-03-20", "found_at": "2026-03-20T02:00:00.000Z", "funder": "世界银行", "origin": "机器采集",
+         "summary_zh": "锡尔河州供水管网 4 标段"},
+        {"key": "t3t3t3t3", "title": "Sewage pumping station in Nukus Central", "url": "https://projects.worldbank.org/n/3", "relevant": True,
+         "category": "招标", "country": c["id"], "published": "2026-03-05", "found_at": "2026-03-05T02:00:00.000Z", "origin": "机器采集"},
+        {"key": "t4t4t4t4", "title": "Contract award: Kuwanish Jarma Canal", "url": "https://projects.worldbank.org/n/4", "relevant": True,
+         "category": "授标或短名单", "country": c["id"], "published": "2026-04-01", "found_at": "2026-04-01T02:00:00.000Z", "origin": "机器采集",
+         "summary_zh": "库瓦尼什贾尔马运河改造授标"},
+        {"key": "t5t5t5t5", "title": "Old tender 2025", "url": "https://projects.worldbank.org/n/5", "relevant": True, "category": "招标", "country": c["id"],
+         "published": "2025-11-01", "found_at": "2025-11-01T02:00:00.000Z", "origin": "机器采集"},
+    ])
+    base.create("milestone", [
+        {"lead": ls[0]["id"], "opportunity": o["id"], "kind": "投标截止", "day": "2026-05-18", "日期原文": "2026-05-18", "status": "官方计划"},
+        {"lead": ls[1]["id"], "kind": "投标截止", "day": "2026-06-10", "日期原文": "2026-06-10", "status": "官方计划"},
+        {"lead": ls[2]["id"], "kind": "投标截止", "day": "2026-04-07", "日期原文": "2026-04-07", "status": "官方计划"},
+        {"lead": ls[4]["id"], "kind": "投标截止", "day": "2025-12-23", "日期原文": "2025-12-23", "status": "已发生"},
+    ])
+    base.create("award", [{"name": "Modernization of the Kuwanish Jarma Canal", "name_zh": "库瓦尼什贾尔马运河现代化改造", "sector": "水利", "price": 25720221,
+                           "currency": "USD", "price_cny": 18500, "awarded": "2026-04-02", "winner": "China Gezhouba Group", "winner_country": "中国",
+                           "funder": "世界银行", "project": "P504600 节水与保护项目", "country": c["id"], "url": "https://projects.worldbank.org/p/P504600"}])
+    return o, ls
+
+
+def test_tender_monitor_report_lists_open_lots_with_superscript_links(env, monkeypatch):  # noqa: F811
+    fake, admin, abase, ctx = env
+    monkeypatch.setattr(reports, "_to_docx", _fake_docx)
+    c = abase.rows("country")[0]
+    o, ls = _seed_tenders(abase, c)
+    ctx.today = date(2026, 4, 10)
+    abase.create("report", [{"kind": "招标监测", "country": c["id"], "day": "2026-04-10", "period": "2026-03-11~2026-04-10", "gen_status": "待生成"},
+                            {"kind": "招标监测", "day": "2026-04-10", "gen_status": "待生成"}])  # 没选国别:失败
+    assert reports.run(ctx) == {"报告完成": 1, "报告失败": 1}
+    r = next(x for x in _rows(abase, "report") if _val(abase, "report", x, "gen_status") == "完成")
+    assert _val(abase, "report", r, "period") == "AZE 2026-03-11~2026-04-10"
+    name = _val(abase, "report", r, "key")
+    assert name == "招标监测_AZE_20260311-0410_2026-04-10.docx"
+    md = (ctx.cache.root.parent / "reports" / name.replace(".docx", ".md")).read_text(encoding="utf-8")
+    # 概览数字:在招 2(5-18、6-10)、本期新发布 2(4-06、3-20)、已截止等结果 1(4-07)、授标 2(线索 + 已中标项目);旧标(2025)不出现
+    assert "在招的水务标段 2 个,最近的 2026-05-18 截止(剩 38 天)" in md and "新发布 2 个、已截止等结果 1 个、授标 2 项" in md
+    assert "t5t5t5t5" not in md
+    # 角标 = 上标超链接,回到原公告;同一网址一个编号;文末列全
+    assert "^[1](<https://projects.worldbank.org/n/1>)^" in md and md.count("^[1](<https://projects.worldbank.org/n/1>)^") >= 2
+    assert "## 7. 原公告链接" in md and "1. projects.worldbank.org:" in md
+    # 中文名在前、原文在后;金额带折算;已中标项目带中标单位与国别
+    assert "努库斯污水处理厂建设" in md and "(原文:Construction of the WWTP in the city of Nukus)" in md and "USD 45,000,000(约 32,000 万元)" in md and "2026-05-18(剩 38 天)" in md
+    assert "库瓦尼什贾尔马运河现代化改造" in md and "China Gezhouba Group(中国)" in md and "25,720,221 USD(约 18,500 万元)" in md
+    # 资格要求:没配模型 → 按关键句规则抽英文原句,表里写明;商机表里的资格判断一并列出
+    assert "按关键句规则" in md and "average annual turnover of USD 30 million" in md and "joint venture is allowed" in md
+    assert "bid security of USD 400,000" in md and "可直接投标 世行采购规则,各国企业均可" in md
+    # 引用:列出的线索(不含旧标),写进的商机
+    assert {x["id"] for x in _val(abase, "report", r, "cites_leads")} == {x["id"] for x in ls[:4]}
+    assert [x["id"] for x in _val(abase, "report", r, "cites_opps")] == [o["id"]]
+    # 第二次生成同一国别:资格要求走缓存,不再抽
+    cache = ctx.cache.root.parent / "tender_elig.json"
+    assert cache.exists() and "t1t1t1t1" in cache.read_text(encoding="utf-8")
+
+
+def test_tender_monitor_window_defaults_to_last_30_days():
+    from core.jobs import tender_monitor as tm
+    assert tm.window("", date(2026, 10, 16)) == (date(2026, 9, 17), date(2026, 10, 16))
+    assert tm.window("UZB 2026-03-11~2026-04-10", date(2026, 10, 16)) == (date(2026, 3, 11), date(2026, 4, 10))
+    assert tm.window("2026-04-10~2026-03-11", date(2026, 10, 16)) == (date(2026, 9, 17), date(2026, 10, 16))  # 起晚于止:当没填
+    assert tm.period_text("UZB", date(2026, 3, 11), date(2026, 4, 10)) == "UZB 2026-03-11~2026-04-10"
