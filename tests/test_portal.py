@@ -2137,6 +2137,84 @@ def test_home_link_gets_analysis_and_can_be_saved_as_a_lead():
         srv.shutdown()
 
 
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_home_file_upload_survives_a_slow_analysis_and_dropped_connections(monkeypatch):
+    """2026-10-16 使用方在 iPhone 上传招标监测 PDF,助手报「读不到数据:Load failed」:分析(模型 + 检索)要近一分钟,手机浏览器一条请求
+    60 秒就断。现在页面先拿任务编号,隔两三秒取一次进度(「模型分析中(已 N 秒)」),取的时候网络断了就再取,结果照样出来;
+    传文件那一步断了自动再传一次,两次都断才用中文说明(不再是英文 Load failed)。手机宽度看。"""
+    import threading
+
+    from playwright.sync_api import Error as PWError, sync_playwright
+    from core import file_text as F
+    from tests.test_link_check import ADB_LINES
+    monkeypatch.setattr(F, "pdf_text", lambda data: ("\n".join(ADB_LINES), 1))
+    fake, admin = _fake_with_schema()
+    _seed(admin, fake)
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    srv.bot.terms_base = lambda: tstore.Base(tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None))
+    gate = threading.Event()
+
+    def slow_outside(q, iso):  # 公开渠道检索「很慢」:页面得等,期间显示走到哪了
+        gate.wait(20)
+        return [], []
+    srv.bot.link_kw = {"fetch": lambda u: (_ for _ in ()).throw(AssertionError("有文件时不该抓网页")), "outside": slow_outside}
+    base = f"http://127.0.0.1:{srv.server_port}"
+    pdf = {"name": "Tender_Monitoring.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.4 fake"}
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            errors: list[str] = []
+            page = browser.new_page(viewport={"width": 390, "height": 800})
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            polls = {"n": 0, "dropped": 0}
+
+            def route(r):  # 第 2 次取进度时「断网」一次(手机锁屏、切走时就是这样)
+                polls["n"] += 1
+                if polls["n"] == 2:
+                    polls["dropped"] += 1
+                    r.abort("internetdisconnected")
+                else:
+                    r.continue_()
+            page.route("**/api/assistant/link/*", route)
+            page.goto(base + "/index.html")
+            page.set_input_files("#file", pdf)
+            page.fill("#q", "这个项目能跟吗")
+            page.press("#q", "Enter")
+            assert "看一份文件" in page.inner_text(".understood")
+            page.wait_for_function("/中\\(已 \\d+ 秒\\)/.test(document.querySelector('.lk-wait').textContent)", timeout=15000)
+            page.wait_for_function("/网络断了一下,正在重新取结果/.test(document.querySelector('.lk-wait').textContent)", timeout=15000)
+            wait_text = page.inner_text(".lk-wait")
+            assert "后台还在算,不用重发" in wait_text and polls["dropped"] == 1
+            page.wait_for_function("/查公开渠道中\\(已 \\d+ 秒\\)/.test(document.querySelector('.lk-wait').textContent)", timeout=15000)
+            if os.environ.get("PORTAL_SHOTS"):
+                page.screenshot(path=os.environ["PORTAL_SHOTS"] + "/助手上传文件_手机_等待.png", full_page=True)
+            gate.set()
+            page.wait_for_selector(".lk-advice", timeout=15000)
+            ans = page.inner_text("#answers")
+            assert "老挝" in ans and "Invitation for Bids" in ans and "按你上传的文件分析" in ans and "Load failed" not in ans
+            if os.environ.get("PORTAL_SHOTS"):
+                page.screenshot(path=os.environ["PORTAL_SHOTS"] + "/助手上传文件_手机_结果.png", full_page=True)
+            # 传文件那一步两次都断:中文说明,不是英文 Load failed
+            page.unroute("**/api/assistant/link/*")
+            page.route("**/api/assistant/link", lambda r: r.abort("internetdisconnected"))
+            page.set_input_files("#file", pdf)
+            page.press("#q", "Enter")
+            page.wait_for_function("document.querySelectorAll('.n-bad').length === 1", timeout=15000)
+            bad = page.inner_text(".n-bad")
+            assert "文件没传上去(网络断了一下),请再发一次" in bad and "Load failed" not in bad and "Failed to fetch" not in bad
+            # 浏览器自己的网络报错(别的页面、别的请求)也说中文
+            assert page.evaluate("P.netError(new TypeError('Load failed')) && P.netError(new TypeError('Failed to fetch')) && !P.netError(new Error('助手接口 → 500'))")
+            assert not errors, errors
+            browser.close()
+    finally:
+        gate.set()
+        srv.shutdown()
+
+
 def test_sources_page_flags_problems_and_toggles_enabled():
     """信源页(使用方 2026-10-12 找不到管信源的地方):全部信源的状态、最近采集、线索数;出错、被拒、启用着却多日没采集的整行标红排最前,
     卡片数出有问题的几个;筛选项上的数跟着其他筛选走;编辑者点「启用」停用、再点重新启用,只改这一个字段(停用写空)。"""

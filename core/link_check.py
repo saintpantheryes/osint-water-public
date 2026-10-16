@@ -332,11 +332,14 @@ UPLOAD_SOURCE = {"kind": "其他网站", "label": "上传的文件(没给网址,
 
 
 def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_page, outside=search_outside,
-          upload: bytes | None = None) -> dict:
-    """看一条链接;upload 是用户传来的文件(PDF、Word、截图):有文件就按文件看,不去抓网页,网址(可不给)只用来认信源、查库。"""
+          upload: bytes | None = None, progress=None) -> dict:
+    """看一条链接;upload 是用户传来的文件(PDF、Word、截图):有文件就按文件看,不去抓网页,网址(可不给)只用来认信源、查库。
+    progress(阶段名) 每进一步叫一次(助手接口用它告诉页面走到哪了);不给就不叫。"""
+    step = progress or (lambda stage: None)
     url = (url or "").strip()
     notes: list[str] = []
     if upload is not None:
+        step("读文件")
         try:
             body, how = file_text(upload)
         except FileError as e:
@@ -354,6 +357,7 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
         body_ok = False
     pasted = (note or "").strip()
     if not body_ok:
+        step("读原文")
         try:
             page = fetch(url)
             body, _ = doc_text(page)
@@ -381,6 +385,7 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
         src["redirected_from"] = _domain(url)
     a = None
     if clf is not None and getattr(clf, "enabled", False):
+        step("模型分析")
         user = (f"用户附言:{note.strip() or '(无)'}\n网址:{page.url}\n网站:{src['domain']}({src['label']})\n网页标题:{title}\n\n正文:\n{body[:DOC_CHARS]}")
         out = clf.ask(system_prompt(today), user, SCHEMA, GUIDE)
         a = _clean(out)
@@ -391,11 +396,13 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
     iso = (a or {}).get("country") or next(iter(geo.detect(f"{title}\n{body[:4000]}")), None)
     words = (a or {}).get("names") or []
     lib = {"same_url": [], "related_leads": [], "related_opps": []}
+    step("查库里相关")
     if db is not None:
         try:
             lib = search_library(db, [u for u in (url, page.url) if u], words, iso)
         except Exception as e:  # noqa: BLE001
             notes.append(f"查库出错({type(e).__name__})")
+    step("查公开渠道")
     found, more = outside((a or {}).get("news_query"), iso)
     notes += more
     adv = _advice(src, a, lib)

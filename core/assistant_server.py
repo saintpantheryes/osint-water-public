@@ -3,7 +3,11 @@
 
     POST /ask   {"q": "最近 7 天埃及有哪些新线索"}  →  core.assistant.plan 的计划(JSON)
     POST /link  {"url": "https://…", "note": "用户附言"} →  core.link_check.check 的分析(读原文、信源、库里相关、旁证、入库建议);
-                                                       游客不能用(要查真实的库)
+                                                       游客不能用(要查真实的库)。带 "file": base64 时按上传的文件看。
+                带 "job": true 时不等结果,马上回 {"ok": true, "job": 编号}:分析在后台线程里跑(模型、检索加起来常要一分钟,
+                手机浏览器一条请求等不了这么久——iPhone 上 60 秒就断,报「Load failed」),页面隔两三秒来取一次
+    GET  /link/{编号}                              →  没完:{"ok": true, "done": false, "stage": "模型分析", "elapsed": 秒};
+                                                       完了:分析结果 + "done": true;编号不在了(后台重启、超过半小时):ok false 并说原因
     POST /feedback {"key": "Q…", "verdict": "答对了" | "答错了", "note": "哪里不对", "result": "答出了什么", "q", "prev_q", "understood"}
                                                     →  core.ask_log.feedback:记在「助手提问记录」这一行(/ask 返回的 log_key);游客不能用
     POST /law   {"q": "…", "law": 计划里的 law, "countries": ["MAR"]}  →  core.law.answer:按国别与关键词查法规条文,配了模型的按条文作答(带出处序号);
@@ -23,6 +27,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import secrets
 import sys
 import threading
 import time
@@ -41,6 +46,8 @@ from core.watch.llm import Classifier, LLMConfig
 
 DEFAULT_PORT = 8765
 UPLOAD_JSON = 17_000_000  # 「看链接」带文件时的请求体上限:12 MB 文件转 base64 后约 16 MB
+JOB_KEEP = 1800  # 秒:看链接的结果在内存里留这么久等页面来取(手机切走再回来也取得到)
+JOB_MAX = 200  # 同时留着的看链接任务上限(超了先丢最旧的)
 FORGIVE_AFTER = 600  # 秒:模型连续出错停用后,过这么久再试
 TERMS_EVERY = 60  # 秒:隔这么久重读一次 Teable「行业术语」表(人在表里加的词下一个提问就用上)
 RECHECK_AT = (8, 40)  # 本地时间:每天这之后复查一遍错题本(系统 08:00 自动更新之后)
@@ -78,6 +85,8 @@ class Assistant:
         self.who = ask_log.who  # 登录 cookie → 提问人(测试可换)
         self.raws: OrderedDict[str, dict] = OrderedDict()  # 提问编号 → 那次模型给的解析(JSON);用户对当场重答点了「答对了」时记进错题本(只留最近 1000 问)
         self._raws_lock = threading.Lock()
+        self.jobs: OrderedDict[str, dict] = OrderedDict()  # 看链接任务编号 → {"at", "stage", "done", "result"}(见 start_link_job)
+        self._jobs_lock = threading.Lock()
 
     @property
     def today(self) -> date:
@@ -115,7 +124,7 @@ class Assistant:
             self._terms_db, self._terms_db_at = self.terms_base(), now
         return self._terms_db
 
-    def check_link(self, url: str, note: str = "", upload: bytes | None = None) -> dict:
+    def check_link(self, url: str, note: str = "", upload: bytes | None = None, progress=None) -> dict:
         """看一条用户贴来的链接(core/link_check.py);抓不到、不让抓时给原因。查库出错照样给其余部分。"""
         self._maybe_forgive()
         db = None
@@ -126,9 +135,47 @@ class Assistant:
                 self._terms_db = None
                 self.log(f"看链接时连不上表格:{type(e).__name__}: {e}")
         try:
-            return link_check.check(url, note, self.today, self.clf, db, upload=upload, **self.link_kw)
+            return link_check.check(url, note, self.today, self.clf, db, upload=upload, progress=progress, **self.link_kw)
         except link_check.LinkError as e:
             return {"ok": False, "error": str(e)}
+
+    def start_link_job(self, url: str, note: str = "", upload: bytes | None = None) -> str:
+        """把 check_link 放到后台线程里跑,马上回一个任务编号;页面拿编号来 job_state 取进度和结果。
+        编号是随机的(猜不到),结果留 JOB_KEEP 秒;任务数超 JOB_MAX 先丢最旧的。"""
+        jid = secrets.token_urlsafe(16)
+        job = {"at": time.monotonic(), "stage": "读文件" if upload is not None else "读原文", "done": False, "result": None}
+        with self._jobs_lock:
+            cutoff = time.monotonic() - JOB_KEEP
+            for k in [k for k, j in self.jobs.items() if j["at"] < cutoff]:
+                del self.jobs[k]
+            while len(self.jobs) >= JOB_MAX:
+                self.jobs.popitem(last=False)
+            self.jobs[jid] = job
+
+        def progress(stage: str) -> None:
+            job["stage"] = stage
+
+        def run() -> None:
+            try:
+                out = self.check_link(url, note, upload, progress=progress)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"看链接出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+                out = {"ok": False, "error": f"分析出错({type(e).__name__})"}
+            job["result"] = out
+            job["done"] = True
+
+        threading.Thread(target=run, name=f"link-{jid[:6]}", daemon=True).start()
+        return jid
+
+    def job_state(self, jid: str) -> dict:
+        """一个看链接任务走到哪了;完了就是结果本身(多一个 done: true)。"""
+        with self._jobs_lock:
+            job = self.jobs.get(jid)
+        if job is None:
+            return {"ok": False, "done": True, "error": "这一问的结果已经不在了(后台重启过,或超过了半小时),请重新提问"}
+        if not job["done"]:
+            return {"ok": True, "done": False, "stage": job["stage"], "elapsed": int(time.monotonic() - job["at"])}
+        return {**job["result"], "done": True}
 
     def refresh_terms(self) -> None:
         """隔 TERMS_EVERY 秒重读一次「行业术语」「语义层说法」两张表;表没建、读不到时用本体的初始词,不影响提问。"""
@@ -338,6 +385,13 @@ def make_handler(bot: Assistant):
             qs = parse_qs(query)
             if path.startswith("/guest/"):
                 self._guest(path, qs)
+            elif path.startswith("/link/"):
+                if self.headers.get("X-Portal-Auth") != "1" and not bot.allow_link_without_auth:
+                    self._send(403, {"ok": False, "error": "请先登录"})
+                elif self._outsider():
+                    self._send(200, {"ok": False, "done": True, "error": "游客帐号不能用这个功能(要查真实的线索库);可以用正式帐号登录后再试"})
+                else:
+                    self._send(200, bot.job_state(path[len("/link/"):]))
             elif path in ("/health", "/"):
                 self._send(200, {"ok": True, "llm": bot.llm_label(), "note": bot.note(), "examples": assistant.EXAMPLES})
             elif path == "/calendar.ics":
@@ -389,8 +443,13 @@ def make_handler(bot: Assistant):
                 except ValueError:
                     self._send(400, {"ok": False, "error": "文件没传完整,请重新选一次"})
                     return
+                url_, note_ = str(data.get("url") or ""), str(data.get("note") or "")[:link_check.DOC_CHARS]  # 网站不让读时附言就是正文
+                if data.get("job"):  # 页面不等:起后台任务,给编号,之后 GET /link/{编号} 来取
+                    jid = bot.start_link_job(url_, note_, upload)
+                    self._send(200, {"ok": True, "job": jid, "stage": bot.job_state(jid).get("stage") or ""})
+                    return
                 try:
-                    out = bot.check_link(str(data.get("url") or ""), str(data.get("note") or "")[:link_check.DOC_CHARS], upload)  # 网站不让读时附言就是正文
+                    out = bot.check_link(url_, note_, upload)
                 except Exception as e:  # noqa: BLE001
                     bot.log(f"看链接出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
                     out = {"ok": False, "error": f"分析出错({type(e).__name__})"}

@@ -482,13 +482,47 @@
       if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
       return r.json();
     },
-    /* 看一条链接(或一份上传的文件):把用户贴来的网址交给后台(core/link_check.py)读原文、看信源、查库里相关、找旁证、给入库建议;只读不写 */
-    async checkLink(url, note, file) {  // file:用户上传的 PDF、Word 或截图(base64),网站不让程序读时用
-      const r = await fetch("api/assistant/link", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(file ? { url, note, file } : { url, note }) });
-      if (r.status === 401 || r.status === 403) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }
-      if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪(后台任务没起来或还没更新到这一版);其余页面照常可用");
-      if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
-      return r.json();
+    /* 浏览器说的「网络断了」(iPhone 上是 Load failed,Chrome 是 Failed to fetch,Firefox 是 NetworkError…):认出来好用中文解释 */
+    netError(e) { return !!(e && /Load failed|Failed to fetch|NetworkError|network connection was lost|request timed out|cancelled|abort/i.test(e.message || String(e))); },
+    /* 看一条链接(或一份上传的文件):把用户贴来的网址交给后台(core/link_check.py)读原文、看信源、查库里相关、找旁证、给入库建议;只读不写。
+       2026-10-16:模型加检索常要一分钟,手机浏览器一条请求等不了这么久(iPhone 60 秒就断,报「读不到数据:Load failed」),
+       所以先让后台起任务、马上拿编号,再隔两三秒取一次进度;取的时候断了就再取(手机锁屏、切到微信回来接着取),结果在后台留半小时。
+       onWait(阶段, 已过秒数, 刚断过) 每次取到进度叫一次,给页面写「模型分析中(已 25 秒)」 */
+    async checkLink(url, note, file, onWait) {  // file:用户上传的 PDF、Word 或截图(base64),网站不让程序读时用
+      const started = Date.now(), body = JSON.stringify(file ? { url, note, file, job: true } : { url, note, job: true });
+      const check = async (r) => {
+        if (r.status === 401 || r.status === 403) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }
+        if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪(后台任务没起来或还没更新到这一版);其余页面照常可用");
+        if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
+        return r.json();
+      };
+      let first;
+      for (let i = 0; ; i++) {  // 传文件这一步断了(手机网络不稳)自动再传一次,再不行才报
+        try { first = await check(await fetch("api/assistant/link", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body })); break; }
+        catch (e) { if (i >= 1 || !this.netError(e)) throw new Error(this.netError(e) ? (file ? "文件没传上去(网络断了一下),请再发一次" : "网络断了一下,请再问一次") : e.message); await new Promise((ok) => setTimeout(ok, 1500)); }
+      }
+      if (!first || !first.job) return first;  // 旧版后台不认 job,直接给结果
+      const wait = (ms) => new Promise((ok) => {  // 等 ms 毫秒;页面从后台回到前台(手机解锁、切回来)就不等了,马上去取
+        const t = setTimeout(done, ms);
+        function done() { clearTimeout(t); document.removeEventListener("visibilitychange", vis); ok(); }
+        function vis() { if (document.visibilityState === "visible") done(); }
+        document.addEventListener("visibilitychange", vis);
+      });
+      let fails = 0;
+      for (;;) {
+        const secs = Math.round((Date.now() - started) / 1000);
+        await wait(secs < 30 ? 2000 : 3000);
+        try {
+          const j = await check(await fetch("api/assistant/link/" + encodeURIComponent(first.job), { credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store" }));
+          if (!j || j.done || !j.ok) return j;
+          fails = 0;
+          if (onWait) onWait(j.stage || "", Math.round((Date.now() - started) / 1000), false);
+        } catch (e) {
+          if (!this.netError(e)) throw e;
+          if (++fails > 40) throw new Error("网络一直连不上(断了 " + fails + " 次),请换个网络再试;结果后台会留半小时,再发一次同样的内容就能看到");
+          if (onWait) onWait("", Math.round((Date.now() - started) / 1000), true);
+        }
+      }
     },
     /* 法规问题(助手认作「法规」、要按条文作答的):后台(core/law.py)按国别与关键词查条文,配了模型的按查到的条文作答;只读 */
     async lawAsk(q, plan) {
@@ -500,7 +534,11 @@
       if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
       return r.json();
     },
-    fail(el, e) { console.error(e); el.innerHTML = '<div class="note n-bad">读不到数据:' + this.esc(e && e.message ? e.message : e) + "</div>"; },
+    fail(el, e) {  // 出错提示要说人话:浏览器自己的「Load failed」「Failed to fetch」换成中文说明,原话留在控制台
+      console.error(e);
+      const msg = this.netError(e) ? "网络连接断了一下(手机锁屏、切到别的应用或网络不稳都会这样);请再试一次" : (e && e.message ? e.message : e);
+      el.innerHTML = '<div class="note n-bad">读不到数据:' + this.esc(msg) + "</div>";
+    },
     tableHtml(head, rows) {
       if (!rows.length) return '<p class="muted">(无)</p>';
       return "<table><thead><tr>" + head.map((h) => "<th>" + this.esc(h) + "</th>").join("") + "</tr></thead><tbody>" +
