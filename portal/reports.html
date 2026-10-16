@@ -13,7 +13,7 @@
 <script>document.getElementById("nav").innerHTML = P.nav("reports.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
   <h1>报告</h1>
-  <p class="muted">所有生成过的报告都在这里:按类型、国别、版本、状态找,点文件名下载。日报每天采集完成后自动出(正文显示在<a href="analysis.html">线索分析</a>页顶部)、周报每周一、月报每月 1 日自动出;国别报告、项目报告、招标监测(一国在招的水务标段,每条带可点回原公告的角标,不自动出)和补要一份日报在左边随时要,2 分钟内生成。</p>
+  <p class="muted">所有生成过的报告都在这里,新要的排最上面:按类型、版本、状态、国别筛,数字跟着变;点文件名下载。日报每天采集完成后自动出(正文显示在<a href="analysis.html">线索分析</a>页顶部)、周报每周一、月报每月 1 日自动出;国别报告、项目报告、招标监测(一国在招的水务标段,每条带可点回原公告的角标,不自动出)和补要一份日报在左边随时要,2 分钟内生成。</p>
   <div class="two">
     <div class="col">
       <div class="form"><h3>要一份新报告</h3>
@@ -42,6 +42,7 @@
         <div class="frow"><b>国别</b><select id="fCountry" class="inline"><option value="">全部国别</option></select></div>
         <div class="frow"><b>搜索</b><input id="fText" placeholder="搜国别、商机、期间" size="18"><span class="muted push" id="count"></span></div>
       </div>
+      <p class="muted small rp-legend">标签颜色:<span class="tag t-info">国别报告</span><span class="tag t-ok">项目报告</span><span class="tag t-warn">招标监测</span><span class="tag">日报 / 周报 / 月报</span>;版本 <span class="tag t-ok">公开版</span>可对外,<span class="tag">内部版</span>只在内部用。清单按发起时间排,刚要的在最上面。</p>
       <div class="panel" id="list">读取中…</div>
       <p class="muted">要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开报告表 ↗</a></p>
       <h2>报告模板 <span class="muted" id="tplCount"></span></h2>
@@ -57,6 +58,7 @@
   const g = (r, p) => P.get("report", r, p);
   const tg = (r, p) => P.get("template", r, p);
   const flt = { k: "", e: "", s: "" };
+  let KINDS = [], EDS = [], STS = [];
   const tpState = { kinds: [] };
   const hasTpl = () => !!(P.cfg.tables || {}).template && P.t("report").props.template;
   const lastFile = (r) => { const fs = tg(r, "file") || []; return fs.length ? fs[fs.length - 1] : null; };
@@ -70,20 +72,64 @@
     if (g(r, "period")) parts.push(P.esc(P.text(g(r, "period"))));
     return parts.join(" · ") || "—";
   }
-  function render() {
+  /* 类型标签的颜色按本体 report_kind 的编码定(界面规范:一种胶囊,颜色按含义):国别 进行中色、项目 正面色、招标监测 提醒色(有截止日)、定期的日/周/月报 灰 */
+  const KIND_TONE = { country: "info", project: "ok", tender_monitor: "warn" };
+  let kindTone = null;
+  const kindTag = (k) => { if (!kindTone) { kindTone = {}; P.valueDefs("report_kind").forEach((v) => { kindTone[v.v] = KIND_TONE[v.code] || ""; }); } return P.tagHtml(k || "—", kindTone[k] || ""); };
+  const edTag = (e) => e ? P.tagHtml(e, e === "公开版" ? "ok" : "") : '<span class="muted">—</span>';
+  const stTag = (st) => P.tagHtml(st || "—", st === "失败" ? "bad" : st === "完成" ? "ok" : st === "生成中" ? "info" : "");
+  /* 发起时间 = 这一行建行的时刻(人点「排队生成」或机器自建);清单按它倒排,同一天里后要的在前 */
+  const when = (r) => String(r.createdTime || "");
+  const hm = (r) => { const d = new Date(when(r)); return isNaN(d) ? "" : new Intl.DateTimeFormat("zh-CN", { timeZone: P.tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d); };
+  const country = (r) => P.linkId(g(r, "country"));
+  const hit = (r, t) => !t || ((cname[country(r)] || "") + " " + P.text(g(r, "opportunity")) + " " + P.text(g(r, "period")) + " " + (g(r, "kind") || "")).toLowerCase().includes(t);
+  /* 每个筛选的计数都在「其他筛选」的范围里算,点哪个都跟着变 */
+  function pass(r, skip) {
     const c = $("fCountry").value, t = $("fText").value.trim().toLowerCase();
-    const rows = reports.filter((r) => {
-      if (flt.k && g(r, "kind") !== flt.k) return false;
-      if (flt.e && g(r, "edition") !== flt.e) return false;
-      if (flt.s && (g(r, "gen_status") || "") !== flt.s) return false;
-      if (c && P.linkId(g(r, "country")) !== c) return false;
-      if (t && !((cname[P.linkId(g(r, "country"))] || "") + " " + P.text(g(r, "opportunity")) + " " + P.text(g(r, "period"))).toLowerCase().includes(t)) return false;
-      return true;
+    if (skip !== "k" && flt.k && g(r, "kind") !== flt.k) return false;
+    if (skip !== "e" && flt.e && (g(r, "edition") || "") !== flt.e) return false;
+    if (skip !== "s" && flt.s && (g(r, "gen_status") || "") !== flt.s) return false;
+    if (skip !== "c" && c && country(r) !== c) return false;
+    return hit(r, t);
+  }
+  function chipOpts(vals, key, pick) {
+    const base = reports.filter((r) => pass(r, key));
+    return [["", "全部 " + base.length]].concat(vals.map((v) => [v, v + " " + base.filter((r) => (pick(r) || "") === v).length]));
+  }
+  function drawChips() {
+    P.chips($("fKind"), chipOpts(KINDS, "k", (r) => g(r, "kind")), flt, "k", render);
+    P.chips($("fEd"), chipOpts(EDS, "e", (r) => g(r, "edition")), flt, "e", render);
+    P.chips($("fSt"), chipOpts(STS, "s", (r) => g(r, "gen_status")), flt, "s", render);
+    const base = reports.filter((r) => pass(r, "c")), sel = $("fCountry");
+    [...sel.options].forEach((op) => {
+      if (!op.value) { op.textContent = "全部国别 " + base.length; return; }
+      if (!op.dataset.n) op.dataset.n = op.textContent;
+      const n = base.filter((r) => country(r) === op.value).length;
+      op.textContent = op.dataset.n + (n ? " " + n : "");
+      op.hidden = !n && sel.value !== op.value;  /* 没报告的国别不列,免得选了是 0 */
     });
-    $("count").textContent = rows.length + " 份";
-    $("list").innerHTML = P.tableHtml(["日期", "类型", "范围", "版本", "状态", "发起人", "文件", ""], rows.map((r) => {
-      const st = g(r, "gen_status") || "";
-      return [P.day(g(r, "day")), g(r, "kind"), P.raw(scope(r)), g(r, "edition"), P.raw(st === "失败" ? '<span class="over">失败</span>' : st === "完成" ? "完成" : '<span class="muted">' + P.esc(st || "—") + "</span>"), P.text(g(r, "requested_by")) || "自动",
+  }
+  function why() {
+    const c = $("fCountry").value, t = $("fText").value.trim(), parts = [];
+    if (flt.k) parts.push("类型 " + flt.k); if (flt.e) parts.push("版本 " + flt.e); if (flt.s) parts.push("状态 " + flt.s);
+    if (c) parts.push("国别 " + (cname[c] || "")); if (t) parts.push("搜「" + t + "」");
+    return parts;
+  }
+  function clearAll() { flt.k = flt.e = flt.s = ""; $("fCountry").value = ""; $("fText").value = ""; render(); }
+  function render() {
+    const rows = reports.filter((r) => pass(r));
+    rows.sort((a, b) => when(b).localeCompare(when(a)) || String(g(b, "day") || "").localeCompare(String(g(a, "day") || "")));
+    drawChips();
+    $("count").textContent = rows.length + " 份" + (rows.length < reports.length ? "(共 " + reports.length + " 份)" : "");
+    if (!rows.length) {
+      const w = why();
+      $("list").innerHTML = '<div class="empty">' + (reports.length ? "没有同时满足 " + P.esc(w.join("、")) + " 的报告;去掉一个条件再看。<button type=\"button\" class=\"btn quiet\" id=\"fClear\">清除筛选</button>" : "还没有生成过报告;在左边要一份,2 分钟内出来。") + "</div>";
+      const b = $("fClear"); if (b) b.onclick = clearAll;
+      return;
+    }
+    $("list").innerHTML = P.tableHtml(["发起时间", "类型", "范围", "版本", "状态", "发起人", "文件", ""], rows.map((r) => {
+      const st = g(r, "gen_status") || "", t = hm(r);
+      return [P.raw(P.esc(P.day(g(r, "day"))) + (t ? ' <span class="muted small">' + P.esc(t) + "</span>" : "")), P.raw(kindTag(g(r, "kind"))), P.raw(scope(r)), P.raw(edTag(g(r, "edition"))), P.raw(stTag(st)), P.text(g(r, "requested_by")) || "自动",
         P.raw((g(r, "file") || []).map((a) => '<a href="' + P.esc(P.fileUrl(a)) + '" target="_blank" rel="noopener">' + P.esc(a.name) + "</a>").join("<br>") || '<span class="muted">—</span>'), P.raw(P.open("report", r.id))];
     }));
   }
@@ -178,17 +224,17 @@
     me = u; opps = P.tracked(os).concat(os.filter((o) => !P.tracked([o]).length));
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); ciso[c.id] = P.get("country", c, "key"); });
     ["fCountry", "rpCountry"].forEach((id) => P.fillCountrySelect($(id), cs.map((c) => [c.id, cname[c.id]])));
-    const kinds = P.choices("report", "kind"), eds = P.choices("report", "edition"), sts = P.choices("report", "gen_status");
-    P.chips($("fKind"), [["", "全部"]].concat(kinds.map((k) => [k, k])), flt, "k", render);
-    P.chips($("fEd"), [["", "全部"]].concat(eds.map((k) => [k, k])), flt, "e", render);
-    P.chips($("fSt"), [["", "全部"]].concat(sts.map((k) => [k, k])), flt, "s", render);
+    KINDS = P.choices("report", "kind"); EDS = P.choices("report", "edition"); STS = P.choices("report", "gen_status");
+    const kinds = KINDS;
+    drawChips();
     $("fCountry").onchange = render; $("fText").oninput = render;
     $("rpKind").onchange = () => { $("rowOpp").style.display = $("rpKind").value === "项目报告" ? "" : "none"; $("rowCountry").style.display = $("rpKind").value === "日报" ? "none" : ""; fillTplPick(); };
     if (hasTpl()) { renderKindChips(); $("tpSave").onclick = saveTpl; } else { $("tpSave").disabled = true; $("tpMsg").textContent = "库里还没有「报告模板」表"; }
     $("rpCountry").onchange = fillOpps; fillOpps();
     $("rpSave").onclick = requestReport;
     const q = new URLSearchParams(location.search);
-    if (q.get("kind")) { if (kinds.includes(q.get("kind"))) { flt.k = q.get("kind"); P.chips($("fKind"), [["", "全部"]].concat(kinds.map((k) => [k, k])), flt, "k", render); render(); } if ([...$("rpKind").options].some((o) => o.value === q.get("kind"))) { $("rpKind").value = q.get("kind"); $("rpKind").onchange(); } }
+    if (q.get("country") && [...$("fCountry").options].some((o) => o.value === q.get("country"))) { $("fCountry").value = q.get("country"); $("rpCountry").value = q.get("country"); fillOpps(); }
+    if (q.get("kind")) { if (kinds.includes(q.get("kind"))) { flt.k = q.get("kind"); render(); } if ([...$("rpKind").options].some((o) => o.value === q.get("kind"))) { $("rpKind").value = q.get("kind"); $("rpKind").onchange(); } }
     await Promise.all([load(), loadTpls()]);
   } catch (e) { P.fail($("list"), e); }
 })();
