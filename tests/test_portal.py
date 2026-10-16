@@ -645,7 +645,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.wait_for_selector("#list table", timeout=15000)
             assert "AZE-001" in page.inner_text("#list") and "甘贾污水厂" in page.inner_text("#list")
             # 筛选与首页同一套平铺按钮:阶段、国别、领域(商机的 12 类,可多选)、负责人;没有下拉
-            assert page.locator("select").count() == 0 and page.locator("#fStage .chip-btn").count() >= 8 and page.locator("#fSector .chip-btn").count() == 13 and page.locator("#fCountry .chip-btn").count() == 2
+            assert page.locator("select").count() == 0 and page.locator("#fStage .chip-btn").count() == 2 + len(ONTO.raw["glossary"]["decided"]["stages"]) and page.locator("#fSector .chip-btn").count() == 13 and page.locator("#fCountry .chip-btn").count() == 2
             assert "示例甲区域" in page.inner_text("#fRegion") and page.locator("#fFunder .chip-btn").count() == len(FUNDERS) + 3
             page.click("#fFunder .chip-btn:has-text('亚洲开发银行')")
             assert "AZE-001" not in page.inner_text("#list")
@@ -1503,9 +1503,9 @@ def test_menu_groups_and_moved_todo_tabs():
             assert "已定标" in page.inner_text("#review") and "t=review" in page.url
             page.click("#tabs button[data-t='list']")
             assert page.locator("#list table").is_visible() and "t=" not in page.url and page.inner_text("#nList") == page.inner_text("#count").split(" ")[0]
-            page.click("#fStage .chip-btn:has-text('全部阶段')")  # 列表的筛选照旧写进地址栏
+            page.click("#fStage .chip-btn:has-text('全部已立项')")  # 列表的筛选照旧写进地址栏
             page.wait_for_function("location.search.includes('stage=*')", timeout=5000)
-            assert "AZE-002" in page.inner_text("#list")
+            assert "AZE-009" in page.inner_text("#list") and "AZE-002" not in page.inner_text("#list")  # AI 推荐的(建议)不在商机总览里(使用方 2026-10-16)
             # 首页的菜单卡片:第一行「首页」,四组分四栏,底下帐号区;一屏放得下
             page.goto(base + "/index.html")
             page.click("#menuBtn")

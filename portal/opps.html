@@ -31,7 +31,7 @@
     <div class="frow"><b>更新</b><span id="fUpd" class="frow"></span></div>
     <div class="frow"><b>搜索</b><input id="fText" placeholder="搜编号或名称" size="18"><span class="muted push" id="count"></span></div>
   </div>
-  <p class="muted">点一行进「商机工作台」:看全貌、记跟进、要报告、改阶段。要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开商机表 ↗</a></p>
+  <p class="muted">这里只有人确认跟踪过的商机;AI 推荐的在「线索处理 · AI 推荐的商机」里点「跟踪」才会进来。点一行进「商机工作台」:看全貌、记跟进、要报告、改阶段。要看表格原样 <a id="tbl" href="#" target="_blank" rel="noopener">打开商机表 ↗</a></p>
   <div class="panel" id="list">读取中…</div>
   </section>
   <section class="tab" id="tab-over">
@@ -72,7 +72,7 @@
     history.replaceState(null, "", here());
     const g = (o, p) => P.get("opportunity", o, p);
     let rows = opps.filter((o) => {
-      const stage = g(o, "stage") || "建议";
+      const stage = g(o, "stage");
       if (st === "") { if (!P.tracked([o]).length) return false; } else if (st !== "*" && stage !== st) return false;
       if (c && P.linkId(g(o, "country")) !== c) return false;
       if (!c && state.r && (creg[P.linkId(g(o, "country"))] || P.REGION_EMPTY) !== state.r) return false;
@@ -84,7 +84,7 @@
       if (t && !((g(o, "code") || "") + " " + (g(o, "name_zh") || "")).toLowerCase().includes(t)) return false;
       return true;
     });
-    rows.sort((a, b) => (P.isFollowed("opportunity", b) - P.isFollowed("opportunity", a)) || (P.STAGES.indexOf(g(a, "stage") || "建议") - P.STAGES.indexOf(g(b, "stage") || "建议")) || String(g(a, "code")).localeCompare(String(g(b, "code"))));  // 关注国家的排前面
+    rows.sort((a, b) => (P.isFollowed("opportunity", b) - P.isFollowed("opportunity", a)) || (P.STAGES.indexOf(g(a, "stage")) - P.STAGES.indexOf(g(b, "stage"))) || String(g(a, "code")).localeCompare(String(g(b, "code"))));  // 关注国家的排前面
     $("count").textContent = rows.length + " 个"; $("nList").textContent = rows.length;
     const today = P.today();
     $("list").innerHTML = P.tableHtml(["编号", "名称", "国别", "我方阶段", "投资规模", "优先级", "负责人", "下一节点", "下一步", "到期", "最近跟进", "线索"], rows.map((o) => {
@@ -104,7 +104,7 @@
     const since = P.addDays(P.today(), -6);
     const [os, cs, , ls] = await Promise.all([P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "next_milestone", "public_stage", "priority", "next_step", "next_due", "last_followup", "lead_count", "sectors", "financing", "size_value", "currency", "size_cny", "review_updates"] }), P.countries(), P.followed(),
       P.records("lead", { filter: P.and(P.cond("lead", "found_at", "isOnOrAfter", P.onDay(since)), P.cond("lead", "opportunity", "isNotEmpty")), props: ["opportunity", "found_at"] }).catch(() => null)]);  // 线索读不到不拖累商机列表
-    opps = os;
+    opps = P.decided(os);  // 只算人立项过的(glossary.decided):提醒、筛选数字、三个页签都在这些里算,AI 推荐的不进这一步(使用方 2026-10-16)
     ls && ls.forEach((l) => {
       const oid = P.linkId(P.get("lead", l, "opportunity")), d = P.day(P.get("lead", l, "found_at"));
       if (!oid || !d || d < since) return;
@@ -113,8 +113,9 @@
     });
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); creg[c.id] = P.regionOf(c); });
     const g = (o, p) => P.get("opportunity", o, p);
-    /* 阶段:跟踪中的(缺省)、全部、再逐个阶段 */
-    P.chips($("fStage"), [["", "跟踪中的"], ["*", "全部阶段"]].concat(P.STAGES.map((s) => [s, s])), state, "stage", render);
+    /* 阶段:跟踪中的(缺省)、全部已立项的、再逐个阶段(只有已立项的那几个) */
+    const nStage = {}; opps.forEach((o) => { nStage[g(o, "stage")] = (nStage[g(o, "stage")] || 0) + 1; });
+    P.chips($("fStage"), [["", "跟踪中的 " + P.tracked(opps).length], ["*", "全部已立项 " + opps.length]].concat(P.DECIDED.map((s) => [s, s + " " + (nStage[s] || 0)])), state, "stage", render);
     /* 国别:有商机的国家按商机数排,前 10 个直接列,其余收在「更多国家」里 */
     const nOpp = {}; opps.forEach((o) => { const cid = P.linkId(g(o, "country")); if (cid) nOpp[cid] = (nOpp[cid] || 0) + 1; });
     const ordered = Object.entries(nOpp).sort((a, b) => b[1] - a[1]).map(([cid, n]) => [cid, (cname[cid] || cid) + " " + n]);
