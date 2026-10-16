@@ -44,6 +44,8 @@ from core.jobs import common
 from core.profile import Profile, load_profile
 from core.watch.llm import Classifier, LLMConfig
 
+FILE_MAX_TOKENS = 12_000  # 看文件时模型要逐条列项目(编号、标题、金额、资格要求……),十几条就过 2000 token;2026-10-16 用户传监测 PDF 被截断过
+
 DEFAULT_PORT = 8765
 UPLOAD_JSON = 17_000_000  # 「看链接」带文件时的请求体上限:12 MB 文件转 base64 后约 16 MB
 JOB_KEEP = 1800  # 秒:看链接的结果在内存里留这么久等页面来取(手机切走再回来也取得到)
@@ -68,9 +70,11 @@ class Assistant:
         if profile is not None:  # 问金额时按后台当天的汇率折人民币
             assistant.RATES_FILE = common.cache_root(profile) / "fx" / "fx.json"
         self.clf: Classifier | None = None
+        self.file_clf: Classifier | None = None  # 看文件时用(输出上限 FILE_MAX_TOKENS);没有就用 clf(测试注入的桩)
         if profile is not None and use_llm:
-            cfg = LLMConfig.for_assistant((profile.watch or {}).get("llm"), (getattr(profile, "assistant", None) or {}).get("llm"))
-            self.clf = Classifier(cfg)
+            watch_llm, assistant_llm = (profile.watch or {}).get("llm"), (getattr(profile, "assistant", None) or {}).get("llm")
+            self.clf = Classifier(LLMConfig.for_assistant(watch_llm, assistant_llm))
+            self.file_clf = Classifier(LLMConfig.for_assistant(watch_llm, assistant_llm, max_tokens=FILE_MAX_TOKENS))  # 看文件/链接:同一接入,输出上限放大
         self._disabled_at: float | None = None
         self.allow_link_without_auth = False  # 测试用:本机小服务没有 Caddy 加的登录标头
         self.feed_token: str | None = None  # 测试用:指定订阅令牌;None 则按环境变量 / 机器令牌派生(calendar_feed.feed_token)
@@ -115,6 +119,8 @@ class Assistant:
             self._disabled_at = now
         elif now - self._disabled_at >= FORGIVE_AFTER:
             self.clf.forgive()
+            if self.file_clf is not None:
+                self.file_clf.forgive()
             self._disabled_at = None
 
     def db(self) -> tstore.Base:
@@ -135,7 +141,7 @@ class Assistant:
                 self._terms_db = None
                 self.log(f"看链接时连不上表格:{type(e).__name__}: {e}")
         try:
-            return link_check.check(url, note, self.today, self.clf, db, upload=upload, progress=progress, **self.link_kw)
+            return link_check.check(url, note, self.today, self.file_clf or self.clf, db, upload=upload, progress=progress, **self.link_kw)
         except link_check.LinkError as e:
             return {"ok": False, "error": str(e)}
 
