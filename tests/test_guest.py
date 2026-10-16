@@ -35,7 +35,7 @@ def test_policy_follows_the_ontology_guest_section():
     assert e["id"] == b.t["opportunity"] and b.fid("opportunity", "internal_note") in e["deny"] and b.fid("opportunity", "owner") in e["deny"]
     assert b.fid("opportunity", "code") in e["allowed"] and b.fid("opportunity", "internal_note") not in e["allowed"]
     r = p.by_oid["report"]
-    assert r["rows"]["filterSet"] == [b.cond("report", "edition", "is", "公开版"), b.cond("report", "kind", "isAnyOf", ["周报", "月报", "日报"])]
+    assert r["rows"]["filterSet"] == [b.cond("report", "edition", "is", "公开版"), b.cond("report", "kind", "isAnyOf", ["周报", "月报", "日报", "招标监测"])]
     assert b.fid("report", "requested_by") in r["deny"]
     pub = p.public()
     assert pub["objects"]["report"]["rows"].startswith("版本 = 公开版") and "游客" in pub["note"] and "allowed" not in json.dumps(pub)

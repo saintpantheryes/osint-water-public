@@ -731,7 +731,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.wait_for_load_state("networkidle")
             page.goto(base + "/reports.html")
             page.wait_for_selector("#list table", timeout=15000)
-            assert "周报_2026-W40.docx" in page.inner_text("#list") and page.locator("#fKind .chip-btn").count() == 6  # 全部 + 本体的五种类型(含日报)
+            assert "周报_2026-W40.docx" in page.inner_text("#list") and page.locator("#fKind .chip-btn").count() == 7  # 全部 + 本体的六种类型(含日报、招标监测)
             page.click("#fKind .chip-btn:has-text('国别报告')")
             assert "周报" not in page.inner_text("#list")
             page.click("#fKind .chip-btn:has-text('全部')")

@@ -13,11 +13,11 @@
 <script>document.getElementById("nav").innerHTML = P.nav("reports.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
   <h1>报告</h1>
-  <p class="muted">所有生成过的报告都在这里:按类型、国别、版本、状态找,点文件名下载。日报每天采集完成后自动出(正文显示在<a href="analysis.html">线索分析</a>页顶部)、周报每周一、月报每月 1 日自动出;国别报告、项目报告和补要一份日报在左边随时要,2 分钟内生成。</p>
+  <p class="muted">所有生成过的报告都在这里:按类型、国别、版本、状态找,点文件名下载。日报每天采集完成后自动出(正文显示在<a href="analysis.html">线索分析</a>页顶部)、周报每周一、月报每月 1 日自动出;招标监测(一国在招的水务标段,每条带可点回原公告的角标)每周一给重点国别自动出;国别报告、项目报告、招标监测和补要一份日报在左边随时要,2 分钟内生成。</p>
   <div class="two">
     <div class="col">
       <div class="form"><h3>要一份新报告</h3>
-        <div class="row"><label>类型</label><select id="rpKind"><option value="国别报告">国别报告</option><option value="项目报告">项目报告</option><option value="日报">日报(今天)</option></select></div>
+        <div class="row"><label>类型</label><select id="rpKind"><option value="国别报告">国别报告</option><option value="项目报告">项目报告</option><option value="日报">日报(今天)</option><option value="招标监测">招标监测(近 30 天)</option></select></div>
         <div class="row" id="rowCountry"><label>国别</label><select id="rpCountry"><option value="">(选国别)</option></select></div>
         <div class="row" id="rowOpp" style="display:none"><label>商机</label><select id="rpOpp"><option value="">(选商机)</option></select></div>
         <div class="row"><label>版本</label><select id="rpEd"><option value="内部版">内部版</option><option value="公开版">公开版</option></select></div>
@@ -159,7 +159,7 @@
   async function requestReport() {
     const kind = $("rpKind").value, cid = $("rpCountry").value, oid = $("rpOpp").value;
     if (kind === "项目报告" && !oid) { P.toast("项目报告要选商机", true); return; }
-    if (kind === "国别报告" && !cid) { P.toast("国别报告要选国别", true); return; }
+    if ((kind === "国别报告" || kind === "招标监测") && !cid) { P.toast(kind + "要选国别", true); return; }
     const btn = $("rpSave"); btn.disabled = true; $("rpMsg").textContent = "排队中…";
     try {
       const o = oid ? opps.find((x) => x.id === oid) : null;
