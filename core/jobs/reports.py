@@ -55,10 +55,6 @@ def ensure_periodic(ctx: Ctx, now: datetime) -> dict:
     want: list[tuple[str, str]] = []
     if now.weekday() == 0 and now.time() >= WEEKLY_AT:
         want.append(("周报", week_period(now.date() - timedelta(days=7)), None))
-        from . import tender_monitor
-        a = now.date() - timedelta(days=7)
-        for iso, rid in focus_countries(ctx):  # 重点国别各一份招标监测,期间 = 上周(本体 v2.29)
-            want.append(("招标监测", tender_monitor.period_text(iso, a, a + timedelta(days=6)), rid))
     if now.day == 1 and now.time() >= MONTHLY_AT:
         prev = now.date().replace(day=1) - timedelta(days=1)
         want.append(("月报", prev.strftime("%Y-%m"), None))
@@ -72,13 +68,6 @@ def ensure_periodic(ctx: Ctx, now: datetime) -> dict:
         for r in rows:
             ctx.log(f"  ▸ 自建{r['kind']} {r['period']}(待生成)")
     return {"自建报告": len(rows)} if rows else {}
-
-
-def focus_countries(ctx: Ctx) -> list[tuple[str, str]]:
-    """市场分级为「重点」的国别 → [(ISO3, rid)],按 ISO3 排。"""
-    b = ctx.base
-    out = [(str(b.get("country", r, "ISO3") or ""), r["id"]) for r in b.rows("country", filter=b.filter(b.cond("country", "tier", "is", "重点")), props=["ISO3", "tier"])]
-    return sorted((iso, rid) for iso, rid in out if iso)
 
 
 def ensure_daily(ctx: Ctx, today: date) -> dict:
@@ -813,4 +802,4 @@ def build_country(ctx: Ctx, iso: str, internal: bool = True) -> tuple[str, set[s
     return country_report.build_country(ctx, iso, internal)
 
 
-__all__ = ["run", "generate", "ensure_periodic", "ensure_daily", "focus_countries", "reset_stale", "pending", "Path"]
+__all__ = ["run", "generate", "ensure_periodic", "ensure_daily", "reset_stale", "pending", "Path"]

@@ -48,14 +48,13 @@ def test_weekly_report_is_generated_uploaded_and_cited(env, monkeypatch):  # noq
     c, o, l1, l2 = _seed(abase)
     # 周一 09:00 自建上周周报;再跑一次不重复建
     now = datetime(2026, 10, 5, 9, 1, tzinfo=TZ)  # 2026-10-05 是周一
-    assert reports.ensure_periodic(ctx, now) == {"自建报告": 2}  # 周报 + 重点国别(阿塞拜疆)的招标监测
+    assert reports.ensure_periodic(ctx, now) == {"自建报告": 1}  # 只有周报;招标监测不自动出,人点「生成」才有(10-16 定)
     assert reports.ensure_periodic(ctx, now) == {}
     by_kind = {_val(abase, "report", r, "kind"): r for r in _rows(abase, "report")}
-    tm = by_kind["招标监测"]
-    assert _val(abase, "report", tm, "period") == "AZE 2026-09-28~2026-10-04" and tstore.link_id(_val(abase, "report", tm, "country")) == c["id"]
+    assert "招标监测" not in by_kind
     r = by_kind["周报"]
     assert _val(abase, "report", r, "period") == "2026-W40" and _val(abase, "report", r, "gen_status") == "待生成"
-    assert reports.run(ctx) == {"报告完成": 2, "报告失败": 0}
+    assert reports.run(ctx) == {"报告完成": 1, "报告失败": 0}
     r = abase.record("report", r["id"])
     assert _val(abase, "report", r, "gen_status") == "完成"
     name = _val(abase, "report", r, "key")
