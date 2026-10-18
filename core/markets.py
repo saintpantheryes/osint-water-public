@@ -29,6 +29,7 @@ class MarketCountry:
     projects: bool | None = None
     staff: bool | None = None
     note: str = ""
+    lead: bool | None = None  # 本单位是不是该国的主责单位(集团的国别参与单位清单);None = 清单里没写
 
     def presence(self) -> str:
         """→ "已设当地机构、有在建项目、有常驻人员" 这样的一句话(附原表备注)。"""
@@ -90,7 +91,7 @@ def load_markets(path: str | Path | None) -> Markets | None:
                 continue
             countries.append(MarketCountry(iso3=iso3, name=str(c.get("name") or geo.name_zh(iso3)), region=name,
                                            local_entity=c.get("local_entity"), projects=c.get("projects"), staff=c.get("staff"),
-                                           note=str(c.get("note") or "").strip()))
+                                           note=str(c.get("note") or "").strip(), lead=c.get("lead")))
     dup = sorted({c.iso3 for c in countries if sum(x.iso3 == c.iso3 for x in countries) > 1})
     if dup:
         errs.append(f"国别重复:{', '.join(dup)}")

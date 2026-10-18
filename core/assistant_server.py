@@ -6,6 +6,7 @@
                                                        游客不能用(要查真实的库)。带 "file": base64 时按上传的文件看。
                 带 "job": true 时不等结果,马上回 {"ok": true, "job": 编号}:分析在后台线程里跑(模型、检索加起来常要一分钟,
                 手机浏览器一条请求等不了这么久——iPhone 上 60 秒就断,报「Load failed」),页面隔两三秒来取一次
+    GET  /link/{编号}/report.docx                  →  这一问的投标评估报告(Word;结果还在时才有,见 core/bid_check.py);
     GET  /link/{编号}                              →  没完:{"ok": true, "done": false, "stage": "模型分析", "elapsed": 秒};
                                                        完了:分析结果 + "done": true;编号不在了(后台重启、超过半小时):ok false 并说原因
     POST /feedback {"key": "Q…", "verdict": "答对了" | "答错了", "note": "哪里不对", "result": "答出了什么", "q", "prev_q", "understood"}
@@ -39,7 +40,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote
 from zoneinfo import ZoneInfo
 
-from core import ask_log, assistant, calendar_feed, guest as guest_mod, law, link_check, tstore
+from core import ask_log, assistant, bid_check, calendar_feed, guest as guest_mod, law, link_check, tstore
 from core.jobs import common
 from core.profile import Profile, load_profile
 from core.watch.llm import Classifier, LLMConfig
@@ -69,6 +70,16 @@ class Assistant:
         self.guest_feed = calendar_feed.Feed(base_factory=lambda: self.guest.base(), tz=tz, log=log) if self.guest is not None else None
         if profile is not None:  # 问金额时按后台当天的汇率折人民币
             assistant.RATES_FILE = common.cache_root(profile) / "fx" / "fx.json"
+        # 投标评估的国别范围:市场分布表(私有配置,带主责与当地机构);没配的在看链接时按国别表的市场分级(check_link)
+        self.scope: bid_check.Scope | None = None
+        if profile is not None:
+            try:
+                from core.markets import load_markets
+                self.scope = bid_check.Scope.from_markets(load_markets(getattr(profile, "markets", None)))
+            except Exception as e:  # noqa: BLE001
+                log(f"读市场分布表出错,投标评估不查国别范围:{type(e).__name__}: {e}")
+        self.report_dir = (common.cache_root(profile) / "bid") if profile is not None else None  # 评估报告(Word)存这里,页面按任务编号下载
+        self.to_docx = bid_check.to_docx  # 测试里换掉
         self.clf: Classifier | None = None
         self.file_clf: Classifier | None = None  # 看文件时用(输出上限 FILE_MAX_TOKENS);没有就用 clf(测试注入的桩)
         if profile is not None and use_llm:
@@ -140,10 +151,37 @@ class Assistant:
             except Exception as e:  # noqa: BLE001
                 self._terms_db = None
                 self.log(f"看链接时连不上表格:{type(e).__name__}: {e}")
+        scope = self.scope
+        if (scope is None or not scope.known()) and db is not None:
+            try:
+                scope = bid_check.Scope.from_db(db)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"读国别表的市场分级出错,投标评估不查国别范围:{type(e).__name__}: {e}")
         try:
-            return link_check.check(url, note, self.today, self.file_clf or self.clf, db, upload=upload, progress=progress, **self.link_kw)
+            return link_check.check(url, note, self.today, self.file_clf or self.clf, db, upload=upload, progress=progress, scope=scope, **self.link_kw)
         except link_check.LinkError as e:
             return {"ok": False, "error": str(e)}
+
+    def make_report(self, jid: str, out: dict) -> dict | None:
+        """看完一条链接或清单后出投标评估报告(Word),文件按任务编号存 report_dir;→ {"name", "path"} 或 None(出不了就只给页面结果)。"""
+        if not out.get("ok") or not (out.get("bid") or (out.get("list") and any(it.get("bid") for it in out["list"]["items"]))):
+            return None
+        import tempfile
+        from pathlib import Path
+
+        from core.watch.reporting import slug
+        try:
+            md = bid_check.list_report_markdown(out, self.today) if out.get("list") else bid_check.report_markdown(out, self.today)
+            a = out.get("analysis") or {}
+            base = slug(("投标评估_" + str(a.get("title_zh") or out.get("title") or "项目")[:30] + "_" + self.today.isoformat()))[:60] or "投标评估"
+            d = self.report_dir or Path(tempfile.gettempdir()) / "osint-water-bid"
+            d.mkdir(parents=True, exist_ok=True)
+            path = d / f"{jid}.docx"
+            self.to_docx(md, path)
+            return {"name": base + ".docx", "path": str(path)}
+        except Exception as e:  # noqa: BLE001
+            self.log(f"出评估报告出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+            return None
 
     def start_link_job(self, url: str, note: str = "", upload: bytes | None = None) -> str:
         """把 check_link 放到后台线程里跑,马上回一个任务编号;页面拿编号来 job_state 取进度和结果。
@@ -167,11 +205,30 @@ class Assistant:
             except Exception as e:  # noqa: BLE001
                 self.log(f"看链接出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
                 out = {"ok": False, "error": f"分析出错({type(e).__name__})"}
+            if out.get("ok"):
+                progress("出评估报告")
+                rep = self.make_report(jid, out)
+                if rep:
+                    out = {**out, "report": {"name": rep["name"], "url": f"link/{jid}/report.docx"}}
+                    job["report"] = rep
             job["result"] = out
             job["done"] = True
 
         threading.Thread(target=run, name=f"link-{jid[:6]}", daemon=True).start()
         return jid
+
+    def report_file(self, jid: str) -> tuple[str, bytes] | None:
+        """任务的评估报告(文件名, 内容);没有或已过期 → None。"""
+        from pathlib import Path
+        with self._jobs_lock:
+            job = self.jobs.get(jid)
+        rep = (job or {}).get("report")
+        if not rep:
+            return None
+        try:
+            return rep["name"], Path(rep["path"]).read_bytes()
+        except OSError:
+            return None
 
     def job_state(self, jid: str) -> dict:
         """一个看链接任务走到哪了;完了就是结果本身(多一个 done: true)。"""
@@ -396,6 +453,19 @@ def make_handler(bot: Assistant):
                     self._send(403, {"ok": False, "error": "请先登录"})
                 elif self._outsider():
                     self._send(200, {"ok": False, "done": True, "error": "游客帐号不能用这个功能(要查真实的线索库);可以用正式帐号登录后再试"})
+                elif path.endswith("/report.docx"):
+                    rep = bot.report_file(path[len("/link/"):-len("/report.docx")])
+                    if rep is None:
+                        self._send(404, {"ok": False, "error": "这份评估报告已经不在了(后台重启过,或超过了半小时),请重新发一次链接"})
+                    else:
+                        name, body = rep
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(name)}")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.send_header("Cache-Control", "private, max-age=600")
+                        self.end_headers()
+                        self.wfile.write(body)
                 else:
                     self._send(200, bot.job_state(path[len("/link/"):]))
             elif path in ("/health", "/"):

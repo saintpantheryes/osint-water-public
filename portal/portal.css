@@ -642,6 +642,13 @@ code.url { font-size: var(--fs-xs); word-break: break-all; }
 .lk-items .lk-links { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .lk-items .lk-keep { margin-top: 4px; }
 .lk-qual { margin: 4px 0; }
+.lk-bid { margin: 4px 0 10px; }  /* 投标评估:结论 + 八项检查 + 下载报告 */
+.lk-bid .lk-checks { display: grid; gap: 4px; margin: 6px 0; }
+.lk-bid .lk-check { font-size: 14px; line-height: 1.5; } .lk-bid .lk-check .tag { margin-right: 6px; } .lk-bid .lk-check b { margin-right: 4px; }
+.lk-bid details.lk-checks summary { cursor: pointer; color: var(--muted); }
+.lk-report { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0; }
+.lk-advice.lk-sub { font-size: 16px; margin-top: 10px; }
+.lk-items .lk-bid { margin: 2px 0 4px; } .lk-items .lk-bid .lk-advice { font-size: 16px; }
 .lk-qual .tag { margin-right: 4px; }
 #list td .tag { white-space: nowrap; margin-right: 0; }  /* 报告清单:类型、版本、状态都是标签,不在格子里折行 */
 #list td:first-child { white-space: nowrap; }
