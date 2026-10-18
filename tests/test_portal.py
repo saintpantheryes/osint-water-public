@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+import pathlib
+import tempfile
+from datetime import date
 import json
 import re
 from pathlib import Path
@@ -212,6 +215,8 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
                 r = httpx.get(f"http://127.0.0.1:{self.assistant_port}" + self.path[len("/api/assistant"):], headers={"X-Portal-Auth": "1", "Host": "water.example", "Cookie": "auth_session=" + token})
                 self.send_response(r.status_code)
                 self.send_header("Content-Type", r.headers.get("content-type", "application/json"))
+                if r.headers.get("content-disposition"):  # 评估报告下载:像 Caddy 那样把文件名透传
+                    self.send_header("Content-Disposition", r.headers["content-disposition"])
                 self.end_headers()
                 self.wfile.write(r.content)
                 return
@@ -2091,12 +2096,16 @@ def test_trend_page_marks_self_funded_and_loan_driven_cities():
 
 
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
-def test_home_link_gets_analysis_and_can_be_saved_as_a_lead():
+def test_home_link_gets_analysis_and_can_be_saved_as_a_lead(monkeypatch):
     """提问框贴网址(使用方 2026-10-09):不去匹配查询条件,而是看这条链接——建议放最前(加粗加大),原文、信源、时效、库里相关、
-    要核实;「收进线索库」以登录人身份建一行(来源方式「用户上传」、国别、附言写进处理备注),之后后台补全;同一网址再贴就是「已在库」。"""
+    要核实;「收进线索库」以登录人身份建一行(来源方式「用户上传」、国别、附言写进处理备注),之后后台补全;同一网址再贴就是「已在库」。
+    2026-10-18 使用方:发链接要直接给能不能投标的结论并附报告——结论(三档)放最前,八项检查每条带依据链接,「下载评估报告(Word)」按钮;入库建议退到后面。"""
     import os
     from playwright.sync_api import Error as PWError, sync_playwright
+    from core import bid_check
+    from core.markets import load_markets
     from core.watch.fetch import Page
+    from tests.test_bid_check import MARKETS
     from tests.test_link_check import HTML, MODEL, URL, _clf
     fake, admin = _fake_with_schema()
     _seed(admin, fake)
@@ -2106,8 +2115,13 @@ def test_home_link_gets_analysis_and_can_be_saved_as_a_lead():
     cfg = schema.read_config(admin, NEW, ONTO)
     srv = _serve(fake, cfg)
     srv.bot.terms_base = lambda: tstore.Base(tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None))
-    srv.bot.clf = _clf(MODEL, [])
+    srv.bot.clf = _clf({**MODEL, "deadline": "2026-11-20", "jv": "允许", "pros": ["资金方明确"], "cons": ["2023 年的信息,进展不明"]}, [])
     srv.bot.link_kw = {"fetch": lambda u: Page(u, 200, HTML, "text/html"), "outside": lambda q, iso: ([], [])}
+    mfile = pathlib.Path(tempfile.mkdtemp()) / "markets.yaml"
+    mfile.write_text(MARKETS, encoding="utf-8")
+    srv.bot.scope = bid_check.Scope.from_markets(load_markets(mfile))
+    srv.bot.report_dir = mfile.parent / "bid"
+    monkeypatch.setattr(type(srv.bot), "today", property(lambda self: date(2026, 10, 18)))
     base = f"http://127.0.0.1:{srv.server_port}"
     try:
         with sync_playwright() as pw:
@@ -2123,11 +2137,28 @@ def test_home_link_gets_analysis_and_can_be_saved_as_a_lead():
             page.press("#q", "Enter")
             page.wait_for_selector(".lk-advice", timeout=15000)
             ans = page.inner_text("#answers")
-            assert page.inner_text(".lk-advice") == "建议:入库" and page.evaluate("getComputedStyle(document.querySelector('.lk-advice')).fontWeight") == "700"
-            assert "看一条链接" in page.inner_text(".understood") and "和你说的对不上" in ans and "塔什干苏鲁姆污水处理厂" in ans
+            # 投标结论在最前(加粗加大),入库建议退到后面
+            assert page.locator(".lk-advice").all_inner_texts() == ["有条件可投", "入库建议:入库"] and page.evaluate("getComputedStyle(document.querySelector('.lk-advice')).fontWeight") == "700"
+            assert "能不能投标的结论和评估报告" in page.inner_text(".understood") and "和你说的对不上" in ans and "塔什干苏鲁姆污水处理厂" in ans
+            assert page.inner_text(".lk-bid .lk-why").startswith("有条件可投,还缺:信源是否真实:")
+            checks = page.locator(".lk-bid .lk-check")
+            assert checks.count() == 8 and [checks.nth(i).locator(".tag").inner_text() for i in range(8)] == ["通过", "有条件", "通过", "有条件", "通过", "不明", "不明", "通过"]
+            assert "乌兹别克斯坦在市场国别内(中亚片区),测试公司是主责单位" in checks.nth(2).inner_text() and "2026-11-20 截止,还有 33 天" in checks.nth(4).inner_text()
+            assert "公司资料里没有本单位业绩" in checks.nth(5).inner_text() and page.locator(".lk-bid .lk-check a").count() == 0  # 依据就是原文本身时不重复放链接
+            dl = page.locator(".lk-report a.btn")
+            assert dl.inner_text() == "下载评估报告(Word)" and dl.get_attribute("href").startswith("api/assistant/link/") and dl.get_attribute("href").endswith("/report.docx")
+            with page.expect_download() as dinfo:
+                dl.click()
+            got = dinfo.value
+            assert got.suggested_filename.startswith("投标评估_") and got.suggested_filename.endswith(".docx")
+            from docx import Document
+            doc = Document(got.path())
+            texts = [p.text for p in doc.paragraphs]
+            assert any(t.startswith("投标评估:塔什干") for t in texts) and any("有条件可投。" in t for t in texts) and URL in [r.target_ref for r in doc.part.rels.values() if "hyperlink" in r.reltype]
             assert "Surum WWTP feasibility" in ans and "可信度 中" in ans and "出资方" in ans
             if os.environ.get("PORTAL_SHOTS"):
                 page.screenshot(path=os.environ["PORTAL_SHOTS"] + "/link_check.png", full_page=True)
+                page.locator(".answer").nth(0).screenshot(path=os.environ["PORTAL_SHOTS"] + "/助手判投标_单条链接.png")
             page.click(".lk-act button")
             page.wait_for_selector(".lk-act b", timeout=10000)
             row = next(r for r in b.rows("lead") if b.get("lead", r, "url") == URL)
@@ -2136,11 +2167,13 @@ def test_home_link_gets_analysis_and_can_be_saved_as_a_lead():
             assert "沙特资本投资" in g("note") and not g("judged_by")  # 留给后台补全
             page.fill("#q", URL)
             page.press("#q", "Enter")
-            page.wait_for_function("document.querySelectorAll('.lk-advice').length === 2", timeout=15000)
-            assert page.locator(".lk-advice").nth(1).inner_text() == "建议:已在库" and page.locator(".lk-act").nth(1).inner_text() == ""
+            page.wait_for_function("document.querySelectorAll('.lk-advice').length === 4", timeout=15000)
+            assert page.locator(".lk-advice").nth(3).inner_text() == "入库建议:已在库" and page.locator(".lk-act").nth(1).inner_text() == ""
+            assert "库里已有这一条" in page.locator(".lk-bid").nth(1).inner_text()
             if os.environ.get("PORTAL_SHOTS"):
                 page.set_viewport_size({"width": 390, "height": 800})
                 page.locator(".answer").nth(0).screenshot(path=os.environ["PORTAL_SHOTS"] + "/link_check_phone.png")
+                page.locator(".answer").nth(0).screenshot(path=os.environ["PORTAL_SHOTS"] + "/助手判投标_单条链接_手机.png")
             assert not errors, errors
             browser.close()
     finally:
@@ -2153,7 +2186,9 @@ def test_home_list_file_is_shown_item_by_item_and_saved_by_choice(monkeypatch):
     """2026-10-16 使用方:同事发来的 AI 整理的商机清单——每条标 已在库 / 建议入库 / 先核实,给原公告和库里的链接;
     建议入库的默认勾上,已在库的没有勾;点「收进选中的 N 条」只收勾上的,按原公告入库的网址就是原公告。手机宽度看。
     2026-10-16 第二轮:非水务的直接判、没有勾;先核实的助手自己核过(整国世行公告、新闻),列结论、新闻旁证、「接着查」链接,
-    默认不入库,留「仍收进(信源待核实)」小按钮。"""
+    默认不入库,留「仍收进(信源待核实)」小按钮。
+    2026-10-18:每条先给投标结论(建议投标 / 有条件可投 / 不建议投标)和折起来的八项检查,顶上汇总三档的条数,「下载总体评估报告(Word)」。"""
+    import os
     from playwright.sync_api import Error as PWError, sync_playwright
     from core import file_text as F
     from tests.test_link_check import CHECKED, ITEMS, MODEL, WB_HITS, _clf
@@ -2161,7 +2196,7 @@ def test_home_list_file_is_shown_item_by_item_and_saved_by_choice(monkeypatch):
     fake, admin = _fake_with_schema()
     _seed(admin, fake)
     b = tstore.Base(admin)
-    uz = b.create("country", [{"name_zh": "乌兹别克斯坦", "ISO3": "UZB"}])[0]
+    uz = b.create("country", [{"name_zh": "乌兹别克斯坦", "ISO3": "UZB", "tier": "市场", "presence": "已设当地机构、有在建项目、有常驻人员"}])[0]  # 没配市场分布表时按国别表的市场分级
     b.create("lead", [{"title": "Namangan Regional Water and Wastewater: NRWWP-7 Construction and Rehabilitation of Wastewater Networks",
                        "url": "https://projects.worldbank.org/notice/7", "country": uz["id"]}])
     before = len(b.rows("lead"))
@@ -2170,6 +2205,7 @@ def test_home_list_file_is_shown_item_by_item_and_saved_by_choice(monkeypatch):
     srv.bot.terms_base = lambda: tstore.Base(tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None))
     b.create("company", [{"kind": "业绩", "owner": "本单位", "name": "尼泊尔Bheri Babai引水隧道项目", "year": 2025, "amount": "折 10733万美元", "sectors": ["水利"]}])
     srv.bot.clf = _clf({**MODEL, "items": ITEMS, "question": {"kind": "资格对照", "text": "我们的业绩能满足吗?"}}, [])
+    monkeypatch.setattr(type(srv.bot), "today", property(lambda self: date(2026, 10, 18)))
     srv.bot.link_kw = {"fetch": lambda u: (_ for _ in ()).throw(AssertionError("有文件时不该抓网页")), "find_original": lambda q, iso: WB_HITS.get(q, []),
                        "verify": lambda it, iso: CHECKED}
     base = f"http://127.0.0.1:{srv.server_port}"
@@ -2189,18 +2225,27 @@ def test_home_list_file_is_shown_item_by_item_and_saved_by_choice(monkeypatch):
             page.wait_for_selector(".lk-items", timeout=20000)
             # 附言问了问题:「理解为」改写,先答问题(本单位业绩对照),再给清单
             assert "并回答你的问题:我们的业绩能满足吗?" in page.inner_text(".understood")
-            advs = page.locator(".lk-advice").all_inner_texts()
+            advs = page.locator(".a-body > .lk-advice").all_inner_texts()
             assert advs == ["回答:我们的业绩能满足吗?", "这是 5 条项目的清单"]
-            whys = page.locator(".lk-why").all_inner_texts()
+            whys = page.locator(".a-body > .lk-why").all_inner_texts()
             assert whys[0].startswith("按我方资料里 1 条本单位业绩对照(只比单个类似合同金额):4 条水务项目里,业绩够门槛的 1 条、不够的 1 条、材料没写门槛的 2 条。")
-            assert "已在库 1 条" in whys[1] and "建议入库 2 条" in whys[1] and "按我方资料" not in whys[1]
+            assert whys[1] == "投标评估:建议投标 0 条、有条件可投 3 条、不建议投标 2 条;每条的结论和八项检查在下面。"  # 已截止的克盖利干渠、非水务的兽医站不建议
+            assert "已在库 1 条" in whys[2] and "建议入库 2 条" in whys[2] and "按我方资料" not in whys[2] and "投标评估" not in whys[2]
+            dl = page.locator(".a-body > .lk-report a.btn")
+            assert dl.inner_text() == "下载总体评估报告(Word)" and dl.get_attribute("href").endswith("/report.docx")
+            verdicts = [page.locator(".lk-item").nth(i).locator(".tag").first.inner_text() for i in range(5)]
+            assert verdicts == ["有条件可投", "有条件可投", "不建议投标", "有条件可投", "不建议投标"]  # 基塔布业绩不够(本单位只有水利业绩)、兽医站非水务
+            assert "只剩 1 天" in page.locator(".lk-item").nth(1).inner_text() and "不满足" in page.locator(".lk-item").nth(2).inner_text()
+            assert page.locator(".lk-item").nth(1).locator("details.lk-checks").count() == 1 and "是不是水务项目:不是水务项目" in page.locator(".lk-item").nth(4).inner_text()
+            if os.environ.get("PORTAL_SHOTS"):
+                page.screenshot(path=os.environ["PORTAL_SHOTS"] + "/助手判投标_清单_手机.png", full_page=True)
             quals = page.locator(".lk-qual .tag").all_inner_texts()
             assert quals == ["业绩不确定", "业绩满足", "业绩不满足", "业绩不确定"]  # 非水务的那条不评
             assert "10,733 万美元(2025),够" in page.locator(".lk-item").nth(1).inner_text() and "要财务部出数" in page.locator(".lk-item").nth(1).inner_text()
-            assert "非水务 1 条" in whys[1] and "由你勾选决定" not in whys[1]
+            assert "非水务 1 条" in whys[2] and "由你勾选决定" not in whys[2]
             rows = page.locator(".lk-item")
             assert rows.count() == 5
-            tags = [rows.nth(i).locator(".tag").first.inner_text() for i in range(5)]
+            tags = [rows.nth(i).locator(".tag").nth(1).inner_text() for i in range(5)]  # 第一个标签是投标结论,第二个是入库状态
             assert tags == ["已在库", "建议入库", "先核实", "建议入库", "非水务"]
             assert "纳曼干污水管网建设与修复" in rows.nth(0).inner_text() and rows.nth(0).locator("input").count() == 0 and "库里:" in rows.nth(0).inner_text()
             assert "原公告:" in rows.nth(1).inner_text() and rows.nth(1).locator("a[href='https://projects.worldbank.org/notice/1']").count() == 1

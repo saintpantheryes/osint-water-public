@@ -744,6 +744,22 @@
   const ADV_CLS = { "入库": "go", "先核实": "check", "不入库": "no", "已在库": "have", "逐条看": "check" };
   const ITEM_TAG = { "已在库": "t-ok", "建议入库": "t-info", "先核实": "t-warn", "非水务": "" };
   const LV_CLS = { "高": "hi", "中": "mid", "低": "lo", "待核实": "lo" };
+  /* 投标评估(2026-10-18 使用方:发一个项目链接,直接给能不能投的结论并附报告):后台 core/bid_check.py 按八项检查给三档结论,每条理由带依据链接;
+     报告(Word)在后台出好了,这里只放下载按钮(结果留半小时) */
+  const BID_CLS = { "建议投标": "go", "有条件可投": "check", "不建议投标": "no" };
+  const CHECK_TAG = { "通过": "t-ok", "有条件": "t-warn", "不通过": "t-bad", "不明": "" };
+  function bidHtml(bid, report, compact, mainUrl) {  // mainUrl:原文(或原公告)本身,页面上已经有链接,检查项里不再重复「依据」;清单里每条(compact)的原公告、新闻、接着查已经列在下面,也不重复
+    if (!bid) return "";
+    const h = ['<div class="lk-bid">'];
+    if (!compact) h.push('<div class="lk-advice ' + (BID_CLS[bid.verdict] || "check") + '">' + P.esc(bid.verdict || "") + "</div>");  // 清单里每条的结论已是标题前的标签
+    h.push('<p class="lk-why">' + P.esc(bid.summary || "") + "</p>");
+    const rows = (bid.checks || []).map((c) => '<div class="lk-check"><span class="tag ' + (CHECK_TAG[c.status] || "") + '">' + P.esc(c.status) + "</span><b>" + P.esc(c.name) + "</b> " + P.esc(c.why) +
+      (compact ? [] : (c.evidence || [])).filter((e) => e.url && e.url !== mainUrl).map((e) => ' <a class="small" href="' + P.esc(e.url) + '" target="_blank" rel="noopener" title="' + P.esc(e.name || "") + '">依据 →</a>').join("") + "</div>");
+    h.push(compact ? '<details class="lk-checks"><summary class="small">八项检查</summary>' + rows.join("") + "</details>" : '<div class="lk-checks">' + rows.join("") + "</div>");
+    if (report && report.url) h.push('<div class="lk-report"><a class="btn primary" href="api/assistant/' + P.esc(report.url) + '" download="' + P.esc(report.name || "投标评估.docx") + '">下载评估报告(Word)</a><span class="muted small">结论在最前,每条事实带角标链接回原文;文件留半小时,过了再发一次链接就有。</span></div>');
+    h.push("</div>");
+    return h.join("");
+  }
   function leadLine(l) {
     const zh = l.project_name || (l.summary_zh || "").slice(0, 60);
     const name = zh ? P.esc(zh) + (l.title && l.title !== zh ? ' <span class="muted small">' + P.esc(l.title.slice(0, 90)) + "</span>" : "") : P.esc(l.title || "(无标题)");
@@ -752,7 +768,7 @@
   }
   async function linkAnswer(url, note, el, file) {
     el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="frow understood"><b>理解为</b><span class="chip-btn on static">' +
-      (file ? "看一份文件:读文件里的字、判断信源、查库里相关,给入库建议" : "看一条链接:读原文、判断信源、查库里相关,给入库建议") + "</span></div>");
+      (file ? "看一份文件:读文件里的字、判断信源、查库里相关,给能不能投标的结论和评估报告" : "看一条链接:读原文、判断信源、查库里相关,给能不能投标的结论和评估报告") + "</span></div>");
     const understood = el.querySelector(".understood .chip-btn");
     const body0 = el.querySelector(".a-body");
     body0.innerHTML = '<p class="muted lk-wait">' + (file ? "读文件(截图和扫描件要识别文字)" : "读原文") + "、模型分析、查库里和公开渠道…(一般半分钟到一分钟;手机可以先切走,回来接着取结果)</p>";
@@ -770,7 +786,8 @@
     if (r.list) { await listAnswer(r, body); return; }
     const h = [];
     if (r.question && r.question.qualify) h.push(qualifyHtml(r.question.qualify, r.question.summary));
-    h.push('<div class="lk-advice ' + (ADV_CLS[adv.action] || "") + '">建议:' + P.esc(adv.action || "先核实") + "</div>");
+    if (r.bid) h.push(bidHtml(r.bid, r.report, false, r.final_url || url));
+    h.push('<div class="lk-advice ' + (ADV_CLS[adv.action] || "") + (r.bid ? " lk-sub" : "") + '">' + (r.bid ? "入库建议:" : "建议:") + P.esc(adv.action || "先核实") + "</div>");
     h.push('<p class="lk-why">' + P.esc(adv.reason || "") + "</p>");
     if (a.mismatch) h.push('<div class="note n-warn small"><b>和你说的对不上:</b>' + P.esc(a.mismatch) + "</div>");
     const src = r.final_url || url;
@@ -826,12 +843,16 @@
     const l = r.list, c = l.counts || {}, adv = r.advice || {};
     const h = [];
     if (r.question) h.push('<div class="lk-advice check">回答:' + P.esc(r.question.text || "我们的业绩能满足吗") + '</div><p class="lk-why">' + P.esc(r.question.summary || "") + "</p>");
+    const v = l.verdicts || {};
     h.push('<div class="lk-advice check">这是 ' + l.n + " 条项目的清单</div>");
-    h.push('<p class="lk-why"><b>已在库 ' + (c["已在库"] || 0) + " 条</b>、<b>建议入库 " + (c["建议入库"] || 0) + " 条</b>、<b>先核实 " + (c["先核实"] || 0) + " 条</b>、<b>非水务 " + (c["非水务"] || 0) + " 条</b>。" + P.esc(adv.reason || "").replace(/^(按我方资料.*?招标文件。 )?这是.*?。/, "") + "</p>");
+    if (l.verdicts) h.push('<p class="lk-why">投标评估:<b class="ok-text">建议投标 ' + (v["建议投标"] || 0) + " 条</b>、<b>有条件可投 " + (v["有条件可投"] || 0) + " 条</b>、<b class=\"bad-text\">不建议投标 " + (v["不建议投标"] || 0) + " 条</b>;每条的结论和八项检查在下面。</p>");
+    if (r.report && r.report.url) h.push('<div class="lk-report"><a class="btn primary" href="api/assistant/' + P.esc(r.report.url) + '" download="' + P.esc(r.report.name || "投标评估.docx") + '">下载总体评估报告(Word)</a><span class="muted small">逐条结论一张表,再是每条的检查与依据;文件留半小时。</span></div>');
+    h.push('<p class="lk-why"><b>已在库 ' + (c["已在库"] || 0) + " 条</b>、<b>建议入库 " + (c["建议入库"] || 0) + " 条</b>、<b>先核实 " + (c["先核实"] || 0) + " 条</b>、<b>非水务 " + (c["非水务"] || 0) + " 条</b>。" + P.esc(adv.reason || "").replace(/^(按我方资料.*?招标文件。 )?(投标评估:.*?。)?这是.*?。/, "") + "</p>");
     h.push('<ul class="list lk-items">');
     l.items.forEach((it, i) => {
       const o = it.original, zh = it.title_zh || it.title, meta = [it.country && it.country.name, it.stage, it.amount, it.deadline ? "截止 " + it.deadline : "", it.funder].filter(Boolean);
       const lines = [];
+      if (it.bid) lines.push(bidHtml(it.bid, null, true, o && it.sure ? o.url : it.url));
       if (it.qualify) lines.push(qualifyHtml(it.qualify));
       if (o) lines.push((it.sure ? "原公告:" : "像是同一项目的公告(编号对不上):") + '<a href="' + P.esc(o.url) + '" target="_blank" rel="noopener">' + P.esc(o.title) + "</a>" + ' <span class="muted small">' + P.esc([o.kind, o.date].filter(Boolean).join(" · ")) + "</span>");
       else if (it.status === "先核实") lines.push('<span class="muted">原公告没找到</span>');
@@ -842,7 +863,7 @@
       if ((it.in_library || []).length) lines.push("库里:" + it.in_library.map((x) => '<a href="' + P.esc(x.url || "#") + '" target="_blank" rel="noopener">' + P.esc(x.title || x.key || "线索") + "</a> " + P.open("lead", x.id)).join("、"));
       if ((it.related || []).length) lines.push('<span class="muted small">同项目别的标段:' + it.related.map((x) => P.esc((x.title || "").slice(0, 60)) + " " + P.open("lead", x.id)).join("、") + "</span>");
       h.push('<li class="lk-item' + (it.status === "非水务" ? " lk-off" : "") + '" data-i="' + i + '">' + (it.status === "建议入库" ? '<input type="checkbox" class="lk-box" aria-label="收进这一条" checked>' : '<span class="lk-box"></span>') +
-        '<div class="grow"><div><span class="tag ' + (ITEM_TAG[it.status] || "") + '">' + P.esc(it.status) + "</span>" + (it.ref ? '<span class="tag">' + P.esc(it.ref) + "</span>" : "") + "<b>" + P.esc(zh) + "</b>" +
+        '<div class="grow"><div>' + (it.bid ? '<span class="tag ' + ({ "建议投标": "t-ok", "有条件可投": "t-warn", "不建议投标": "t-bad" }[it.bid.verdict] || "") + '">' + P.esc(it.bid.verdict) + "</span>" : "") + '<span class="tag ' + (ITEM_TAG[it.status] || "") + '">' + P.esc(it.status) + "</span>" + (it.ref ? '<span class="tag">' + P.esc(it.ref) + "</span>" : "") + "<b>" + P.esc(zh) + "</b>" +
         (it.title && it.title !== zh ? ' <span class="muted small">' + P.esc(it.title.slice(0, 120)) + "</span>" : "") + "</div>" +
         (meta.length ? '<div class="muted small">' + P.esc(meta.join(" · ")) + "</div>" : "") + '<div class="small">' + P.esc(it.why || "") + "</div>" +
         lines.map((x) => '<div class="small">' + x + "</div>").join("") + '<div class="lk-done"></div></div></li>');

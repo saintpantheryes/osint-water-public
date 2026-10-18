@@ -85,6 +85,8 @@ GUIDE = """
 - "news_query":用来检索后续新闻的英文检索式(2~4 个英文词,项目专名放引号里,如 "Surum" Tashkent wastewater)
 - "advice":{"action": "入库" | "先核实" | "不入库", "reason": 一句话}。和水务(供水、污水、水利、海水淡化、排涝、水环境)无关的写不入库
 - "verify":要核实的要点,数组,最多 3 条,每条一句
+- "deadline":这篇公告的投标(或意向书、资格预审)截止日 YYYY-MM-DD,没写的写 null;"jv":公告对联合体的说法,取 允许 / 不允许,没写的 null
+- "pros":对投标人有利的因素(资金已落实、采购方式开放、规模与我方匹配等),数组,最多 4 条;"cons":不利因素与风险(工期、本地化要求、付款、竞争等),数组,最多 4 条;都只写原文有依据的
 - "question":用户附言里问了什么:{"kind": "资格对照" | "其他" | null, "text": 问题原话}。问「我们的业绩 / 资质能不能满足」「有没有资格投」这类写 资格对照;
   附言只是说明来源、没有问问题写 null
 - "requirements":这篇公告写的投标人资格门槛(没写的字段填 null):{"similar_usd": 单个类似合同最低金额(美元,数字), "turnover_usd": 年均营业额最低(美元,数字),
@@ -116,6 +118,8 @@ SCHEMA = {
         "advice": {"type": "object", "properties": {"action": {"type": "string", "enum": list(ACTIONS)}, "reason": _S},
                    "required": ["action", "reason"], "additionalProperties": False},
         "verify": {"type": "array", "items": _S},
+        "deadline": _N, "jv": {"anyOf": [{"type": "string", "enum": ["允许", "不允许"]}, {"type": "null"}]},
+        "pros": {"type": "array", "items": _S}, "cons": {"type": "array", "items": _S},
         "question": {"anyOf": [{"type": "object", "properties": {"kind": _N, "text": _N}, "required": ["kind", "text"], "additionalProperties": False}, {"type": "null"}]},
         "requirements": _REQ,
         "items": {"type": "array", "items": {
@@ -245,6 +249,8 @@ def _clean(out: dict | None) -> dict | None:
         "freshness": s("freshness"), "mismatch": s("mismatch"), "news_query": s("news_query", 120),
         "advice": {"action": adv.get("action") if adv.get("action") in ACTIONS else None, "reason": str(adv.get("reason") or "")[:300]},
         "verify": lst("verify")[:3], "model": out.get("_model"),
+        "deadline": out.get("deadline") if isinstance(out.get("deadline"), str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", out.get("deadline")) else None,
+        "jv": out.get("jv") if out.get("jv") in ("允许", "不允许") else None, "pros": lst("pros")[:4], "cons": lst("cons")[:4],
         "question": _clean_question(out.get("question")), "requirements": _clean_req(out.get("requirements")),
         "items": [it for it in (_clean_item(x) for x in (out.get("items") or []) if isinstance(x, dict)) if it][:ITEM_MAX] if isinstance(out.get("items"), list) else [],
     }
@@ -484,7 +490,7 @@ def verify_outside(item: dict, iso: str | None, scan=wb_scan, outside=search_out
     return out
 
 
-def check_item(item: dict, db, today: date, find_original=search_notice, verify=verify_outside) -> dict:
+def check_item(item: dict, db, today: date, find_original=search_notice, verify=verify_outside, scope=None, records: dict | None = None) -> dict:
     """清单里的一条:跟水务无关的直接判「非水务」;库里有没有(编号对得上就算同一条;同项目别的标段只列作相关)、原公告找到没有;
     没找到的再核一遍(verify:整国世行公告、新闻、出资方链接),给入库建议和要写的值。"""
     ref, names, iso = item.get("ref"), item.get("names") or [], item.get("country")
@@ -493,7 +499,8 @@ def check_item(item: dict, db, today: date, find_original=search_notice, verify=
             "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "original": None, "sure": False, "candidates": [], "in_library": [],
             "related": [], "checked": None, "draft": None, "notes": []}
     if item.get("sectors") and not (set(item["sectors"]) & WATER):
-        return {**base, "status": "非水务", "why": f"不是水务项目(领域:{'、'.join(item['sectors'])}),不入库。"}
+        out = {**base, "status": "非水务", "why": f"不是水务项目(领域:{'、'.join(item['sectors'])}),不入库。"}
+        return {**out, "bid": item_bid(out, today, scope, records)}
     lib = {"same_url": [], "related_leads": [], "related_opps": []}
     notes: list[str] = []
     if db is not None:
@@ -549,8 +556,23 @@ def check_item(item: dict, db, today: date, find_original=search_notice, verify=
         draft["amount"] = item["amount"]
     draft["note"] = (f"助手预判({today.isoformat()}):{status}。{why} 来自上传的清单"
                      + (f",编号 {ref}" if ref else "") + (f",截止 {item['deadline']}" if item.get("deadline") else "") + "。")[:2000]
-    return {**base, "status": status, "why": why, "original": original, "sure": sure, "candidates": candidates, "in_library": have[:3], "related": related,
-            "checked": checked, "draft": draft, "notes": notes}
+    out = {**base, "status": status, "why": why, "original": original, "sure": sure, "candidates": candidates, "in_library": have[:3], "related": related,
+           "checked": checked, "draft": draft, "notes": notes}
+    return {**out, "bid": item_bid(out, today, scope, records)}
+
+
+def item_bid(it: dict, today: date, scope, records: dict | None) -> dict:
+    """清单里的一条 → 投标评估(core.bid_check.assess):信源按找到的原公告或清单自带的网址算,旁证取再核时找到的新闻。"""
+    from core import bid_check
+    url = (it["original"] or {}).get("url") if it.get("sure") and it.get("original") else None
+    src = source_kind(url) if url else {"kind": "其他网站", "label": "清单里的一条(没找到原公告)", "level": "待核实", "known": "", "domain": ""}
+    ck = it.get("checked") or {}
+    facts = {"title": it.get("title_zh") or it.get("title"), "url": url, "country": (it.get("country") or {}).get("iso3"), "sectors": it.get("sectors") or [],
+             "stage": it.get("stage"), "category": "招标" if it.get("deadline") else None, "deadline": it.get("deadline"), "requirements": it.get("requirements"),
+             "credibility": {}, "source": src, "original": it.get("original"), "sure": it.get("sure"), "outside": ck.get("news") or [],
+             "verify_links": ck.get("links") or [], "pros": [], "cons": []}
+    lib = {"in_library": it.get("in_library") or [], "related": it.get("related") or [], "related_opps": []}
+    return bid_check.assess(facts, today, records, scope, lib)
 
 
 def _checked_why(checked: dict | None, original: dict | None, iso: str | None) -> str:
@@ -573,7 +595,7 @@ def _checked_why(checked: dict | None, original: dict | None, iso: str | None) -
     return ";".join(parts) + "。暂不入库;要收也可以点「仍收进」(信源记为待核实)。"
 
 
-def check_list(items: list[dict], db, today: date, find_original=search_notice, step=lambda stage: None, verify=verify_outside) -> dict:
+def check_list(items: list[dict], db, today: date, find_original=search_notice, step=lambda stage: None, verify=verify_outside, scope=None, records: dict | None = None) -> dict:
     """清单的每一条并行找原公告、查库、再核;进度写「找原公告 3/7」。"""
     import threading
     done, lock, n = 0, threading.Lock(), len(items)
@@ -582,9 +604,9 @@ def check_list(items: list[dict], db, today: date, find_original=search_notice, 
     def one(it: dict) -> dict:
         nonlocal done
         try:
-            out = check_item(it, db, today, find_original, verify)
+            out = check_item(it, db, today, find_original, verify, scope, records)
         except Exception as e:  # noqa: BLE001
-            out = {**check_item({**it, "url": None, "query": None, "names": [], "sectors": []}, None, today, lambda q, i: [], None), "status": "先核实",
+            out = {**check_item({**it, "url": None, "query": None, "names": [], "sectors": []}, None, today, lambda q, i: [], None, scope, records), "status": "先核实",
                    "why": f"这一条查找出错({type(e).__name__}),请人看。", "notes": [f"{type(e).__name__}: {e}"[:200]]}
         with lock:
             done += 1
@@ -594,7 +616,9 @@ def check_list(items: list[dict], db, today: date, find_original=search_notice, 
     with ThreadPoolExecutor(ITEM_WORKERS) as ex:
         rows = list(ex.map(one, items))
     counts = {k: sum(1 for r in rows if r["status"] == k) for k in ITEM_STATUS}
-    return {"items": rows, "n": n, "counts": counts}
+    from core.bid_check import VERDICTS
+    verdicts = {v: sum(1 for r in rows if (r.get("bid") or {}).get("verdict") == v) for v in VERDICTS}
+    return {"items": rows, "n": n, "counts": counts, "verdicts": verdicts}
 
 
 # ---------- 资格对照:清单的门槛 vs 我方业绩(2026-10-16 使用方:附言问「我们的业绩能满足吗」,要按问题答,不能只给线索) ----------
@@ -717,10 +741,11 @@ UPLOAD_SOURCE = {"kind": "其他网站", "label": "上传的文件(没给网址,
 
 
 def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_page, outside=search_outside,
-          upload: bytes | None = None, progress=None, find_original=search_notice, verify=verify_outside) -> dict:
+          upload: bytes | None = None, progress=None, find_original=search_notice, verify=verify_outside, scope=None) -> dict:
     """看一条链接;upload 是用户传来的文件(PDF、Word、截图):有文件就按文件看,不去抓网页,网址(可不给)只用来认信源、查库。
     progress(阶段名) 每进一步叫一次(助手接口用它告诉页面走到哪了);不给就不叫。
-    材料是几条项目的清单(同事整理的商机清单、招标监测)时,逐条找原公告、查库里有没有,给每条的入库建议,由人决定(check_list)。"""
+    材料是几条项目的清单(同事整理的商机清单、招标监测)时,逐条找原公告、查库里有没有,给每条的入库建议,由人决定(check_list)。
+    scope 是市场国别范围(core.bid_check.Scope);单条和清单的每一条都附投标评估 bid(八项检查 → 建议投标 / 有条件可投 / 不建议投标)。"""
     step = progress or (lambda stage: None)
     url = (url or "").strip()
     notes: list[str] = []
@@ -780,15 +805,24 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
     else:
         notes.append("没有配置模型,只做了网站类型判断和库里比对")
     iso = (a or {}).get("country") or next(iter(geo.detect(f"{title}\n{body[:4000]}")), None)
+    records = None
+    if db is not None:
+        try:
+            records = our_records(db)
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"读公司资料出错({type(e).__name__})")
     if a and len(a.get("items") or []) >= 2:  # 清单型材料:逐条看,不做整篇的查库、旁证
         for it in a["items"]:
             it["country"] = it["country"] or iso
-        lst = check_list(a["items"], db, today, find_original, step, verify)
+        step("逐条评估")
+        lst = check_list(a["items"], db, today, find_original, step, verify, scope, records)
         c = lst["counts"]
         adv = {"action": "逐条看", "reason": f"这是 {lst['n']} 条项目的清单:{c['已在库']} 条已在库,{c['建议入库']} 条找到了原公告、建议入库,"
                                             f"{c['先核实']} 条没找到原公告(助手已核过世行采购网与新闻,结论在每条下面),{c['非水务']} 条不是水务项目。"
                                             "建议入库的已勾上,点一下就收;没找到的暂不入库。"}
-        notes.append("清单型材料:逐条找了原公告、查了库")
+        v = lst["verdicts"]
+        adv["reason"] = f"投标评估:建议投标 {v['建议投标']} 条、有条件可投 {v['有条件可投']} 条、不建议投标 {v['不建议投标']} 条。" + adv["reason"]
+        notes.append("清单型材料:逐条找了原公告、查了库、逐条评估了能不能投")
         if (a.get("question") or {}).get("kind") == "资格对照":
             step("对照我方业绩")
         q = answer_question(a.get("question"), a, lst["items"], db, today)  # 附言问了「能不能满足」:先答问题,再给清单
@@ -809,6 +843,8 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
     found, more = outside((a or {}).get("news_query"), iso)
     notes += more
     adv = _advice(src, a, lib)
+    step("投标评估")
+    bid = _bid(a, src, lib, found, iso, url, page.url, title, today, scope, records)
     pub = (a or {}).get("info_date") or _published(page)
     draft = {"title": title, "url": page.url if not src.get("redirected_from") else url, "origin": "用户上传"}
     if a:
@@ -825,4 +861,21 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
                      + (f" 用户附言:{note.strip()}" if note.strip() else ""))[:2000]
     return {"ok": True, "url": url, "final_url": page.url, "domain": src["domain"], "title": title, "published": pub,
             "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "source": src, "analysis": a, **lib,
-            "outside": found, "advice": adv, "question": answer_question((a or {}).get("question"), a, None, db, today), "draft": draft, "notes": notes}
+            "outside": found, "advice": adv, "bid": bid, "question": answer_question((a or {}).get("question"), a, None, db, today), "draft": draft, "notes": notes}
+
+
+def _bid(a: dict | None, src: dict, lib: dict, found: list[dict], iso: str | None, url: str, final_url: str, title: str, today: date, scope, records) -> dict:
+    """单条链接或文件 → 投标评估(core.bid_check.assess)。原公告:官方或开发银行网站自己就是;媒体转述的看世行渠道里有没有对得上的。"""
+    from core import bid_check
+    a = a or {}
+    names = a.get("names") or []
+    wb = [x for x in found if not str(x.get("kind") or "").startswith("新闻") and _name_in(names, x.get("title"))]
+    original, sure = None, False
+    if src.get("level") == "高" and final_url:
+        original, sure = {"kind": src.get("label"), "title": title, "url": final_url}, True
+    elif wb:
+        original, sure = {"kind": wb[0].get("kind"), "title": wb[0].get("title"), "url": wb[0].get("url")}, True
+    facts = {"title": a.get("title_zh") or title, "url": final_url or url, "country": iso, "sectors": a.get("sectors") or [], "stage": a.get("stage"),
+             "category": a.get("category"), "deadline": a.get("deadline"), "requirements": a.get("requirements"), "credibility": a.get("credibility") or {},
+             "source": src, "original": original, "sure": sure, "outside": found, "verify_links": [], "pros": a.get("pros") or [], "cons": a.get("cons") or []}
+    return bid_check.assess(facts, today, records, scope, lib)
