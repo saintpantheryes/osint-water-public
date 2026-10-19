@@ -52,6 +52,11 @@ def outline(src: str, dst: str) -> None:
         mp.write_text(md, encoding="utf-8")
         pypandoc.convert_file(str(mp), "docx", format="markdown", outputfile=dst,
                               extra_args=["--quiet", "-M", "lang=zh-CN", f"--reference-doc={src}"])
+    org = str(Document(src).core_properties.author or "")  # 「作者」属性 = 封面上的编制单位(core/watch/reporting._cover),重做时保留
+    if org:
+        d = Document(dst)
+        d.core_properties.author = org
+        d.save(dst)
     print(f"{src} → {dst}(正文为国别报告章节目录,{Path(dst).stat().st_size:,} 字节)")
 
 

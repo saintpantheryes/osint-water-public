@@ -318,12 +318,25 @@ STYLE_MAP = {  # 输出文档的样式 ← 模板里对应的样式
 }
 
 
+def _org_of(template: Path) -> str:
+    """模板文件的「作者」属性 = 编制单位(项目报告模板就是这么用的);文件不存在或没写时空。"""
+    if not Path(template).exists():
+        return ""
+    from docx import Document
+
+    try:
+        return str(Document(str(template)).core_properties.author or "").strip()
+    except Exception:  # noqa: BLE001 - 模板坏了不该让报告出不来
+        return ""
+
+
 def template_spec(template: Path = TEMPLATE) -> dict:
     """读模板(成稿)的版式:页面尺寸与页边距、各样式的字体、字号、加粗、段前段后、行距、首行缩进。"""
     from docx import Document
     from docx.oxml.ns import qn
 
-    spec: dict = {"styles": {}}
+    # 封面的编制单位 = 模板「作者」属性;没写(或没模板)就沿用项目报告模板的
+    spec: dict = {"styles": {}, "org": _org_of(template) or _org_of(template_file("项目分析报告模板.docx"))}
     if not Path(template).exists():
         return spec
     d = Document(str(template))
@@ -400,6 +413,79 @@ def _page_number_footer(section) -> None:
 
 
 TOC_TITLE = ("目　录", "目录")
+# 封面照阿塞拜疆成稿:空 5 行,标题(黑体 26 号加粗居中),空 18 行,底部编制单位(12 号加粗)、年月(11 号)、「内部资料　仅供参考」(9.5 号),都居中
+COVER = {"blank_above": 5, "blank_below": 20, "title_size": 26, "title_east": "SimHei", "org_size": 12, "date_size": 11, "edition_size": 9.5, "gap": 3}
+
+
+def _run_fonts(run, east: str | None = None, ascii_: str | None = None) -> None:
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    rpr = run._r.get_or_add_rPr()
+    fonts = rpr.find(qn("w:rFonts"))
+    if fonts is None:
+        fonts = OxmlElement("w:rFonts")
+        rpr.insert(0, fonts)
+    if east:
+        fonts.set(qn("w:eastAsia"), east)
+    if ascii_:
+        fonts.set(qn("w:ascii"), ascii_)
+        fonts.set(qn("w:hAnsi"), ascii_)
+
+
+def _cover(doc, spec: dict) -> bool:
+    """pandoc 出的封面是标题、副标题、日期三行挤在页首;改成成稿那样:标题在上部偏中,底部是编制单位、年月、版本。
+    编制单位取模板的「作者」属性;模板没写就不列这一行。"""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt, RGBColor
+
+    paras = doc.paragraphs
+    title = next((p for p in paras[:5] if p.style.name == "Title"), None)
+    if title is None:
+        return False
+    edition = next((p for p in paras[:5] if p.style.name == "Subtitle"), None)
+    when = next((p for p in paras[:5] if p.style.name == "Date"), None)
+    normal = spec.get("styles", {}).get("Normal", {})
+    east, ascii_ = normal.get("east"), normal.get("ascii")
+
+    def centred(p, size: float, bold: bool = False, east_: str | None = east) -> None:
+        pf = p.paragraph_format
+        pf.alignment, pf.first_line_indent, pf.space_before, pf.space_after = WD_ALIGN_PARAGRAPH.CENTER, 0, Pt(0), Pt(COVER["gap"])
+        for r in p.runs:
+            r.font.size, r.font.bold, r.font.color.rgb = Pt(size), bold, RGBColor(0, 0, 0)
+            _run_fonts(r, east_, ascii_)
+
+    def blank_before(p) -> None:
+        q = doc.add_paragraph(style=doc.styles["Normal"])
+        p._p.addprevious(q._p)
+
+    title.style = doc.styles["Normal"]
+    centred(title, COVER["title_size"], True, COVER["title_east"])
+    for _ in range(COVER["blank_above"]):
+        blank_before(title)
+    tail = []
+    org = spec.get("org") or ""
+    if org:
+        q = doc.add_paragraph(org, style=doc.styles["Normal"])
+        centred(q, COVER["org_size"], True)
+        tail.append(q)
+    if when is not None:
+        when.style = doc.styles["Normal"]
+        centred(when, COVER["date_size"])
+        tail.append(when)
+    if edition is not None:
+        edition.style = doc.styles["Normal"]
+        centred(edition, COVER["edition_size"])
+        tail.append(edition)
+    anchor = title
+    for _ in range(COVER["blank_below"]):
+        q = doc.add_paragraph(style=doc.styles["Normal"])
+        anchor._p.addnext(q._p)
+        anchor = q
+    for q in tail:  # 底部三行按编制单位、年月、版本的顺序接在空行后
+        anchor._p.addnext(q._p)
+        anchor = q
+    return True
 
 
 def _toc(doc, spec: dict) -> bool:
@@ -423,11 +509,11 @@ def _toc(doc, spec: dict) -> bool:
     names = {s.name for s in doc.styles}
     if "TOC Heading" in names:
         title.style = doc.styles["TOC Heading"]
-    h1 = spec.get("styles", {}).get(STYLE_MAP.get("Heading 1", "Heading 1"), {})
-    for r in title.runs:
-        r.font.bold, r.font.size, r.font.color.rgb = True, h1.get("size") or Pt(16), RGBColor(0, 0, 0)
+    for r in title.runs:  # 成稿:黑体 18 号加粗,靠左
+        r.font.bold, r.font.size, r.font.color.rgb = True, Pt(18), RGBColor(0, 0, 0)
+        _run_fonts(r, COVER["title_east"])
     pf = title.paragraph_format
-    pf.page_break_before, pf.alignment, pf.first_line_indent = True, WD_ALIGN_PARAGRAPH.CENTER, 0
+    pf.page_break_before, pf.alignment, pf.first_line_indent = True, WD_ALIGN_PARAGRAPH.LEFT, 0
     pf.space_after = Pt(12)
     sec = doc.sections[-1]
     right = sec.page_width - sec.left_margin - sec.right_margin
@@ -460,7 +546,7 @@ def _toc(doc, spec: dict) -> bool:
         prev._p.addnext(p._p)
         prev = p
         pf = p.paragraph_format
-        pf.first_line_indent, pf.space_before, pf.space_after, pf.line_spacing = 0, Pt(0), Pt(4), 1.5
+        pf.first_line_indent, pf.space_before, pf.space_after, pf.line_spacing = 0, Pt(0), Pt(6), 1.2
         pf.tab_stops.add_tab_stop(right, WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
         if i == 1:  # 整个目录是一个 TOC 域:Word「更新域」时整块重算
             r = p.add_run()
@@ -646,6 +732,7 @@ def _polish(path: Path, spec: dict) -> None:
     for p in doc.paragraphs:  # 成稿式的「摘要」「第 N 章」「附录」各起一页
         if p.style.name == "Heading 1" and re.match(r"^(摘要|第 \d+ 章|附录)", p.text.strip()):
             p.paragraph_format.page_break_before = True
+    _cover(doc, spec)
     has_toc = _toc(doc, spec)
     sec = doc.sections[-1]
     text_cm = (sec.page_width - sec.left_margin - sec.right_margin) / 360000
