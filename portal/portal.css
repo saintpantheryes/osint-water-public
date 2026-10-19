@@ -648,6 +648,13 @@ code.url { font-size: var(--fs-xs); word-break: break-all; }
 .lk-bid details.lk-checks summary { cursor: pointer; color: var(--muted); }
 .lk-report { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0; }
 .lk-advice.lk-sub { font-size: 16px; margin-top: 10px; }
+/* 复核按钮(要核实、库里线索每条后面):一行胶囊按钮,点过的只留标签 + 「改」;忽略的、不是同一项目的划掉 */
+.rv { display: block; margin-top: 4px; }
+.rv .rv-btns .chip-btn { margin: 2px 6px 2px 0; } .rv .rv-btns .chip-btn.rv-off { color: var(--muted); } .rv .rv-btns .chip-btn.rv-help { border-color: var(--brand); color: var(--brand); } .rv .rv-btns .chip-btn.rv-help.on { color: #fff; }
+.rv .rv-edit { font-size: 12px; padding: 1px 8px; margin-left: 6px; color: var(--muted); }
+.rv .rv-state .tag { margin-right: 4px; } .rv .rv-state .muted { margin-right: 4px; }
+.rv .rv-concl { margin: 4px 0 0; color: var(--ink); }
+li.rv-off > .rv-item { text-decoration: line-through; color: var(--muted); }
 .lk-items .lk-bid { margin: 2px 0 4px; } .lk-items .lk-bid .lk-advice { font-size: 16px; }
 .lk-qual .tag { margin-right: 4px; }
 #list td .tag { white-space: nowrap; margin-right: 0; }  /* 报告清单:类型、版本、状态都是标签,不在格子里折行 */

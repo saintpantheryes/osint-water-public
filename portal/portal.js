@@ -502,6 +502,16 @@
         catch (e) { if (i >= 1 || !this.netError(e)) throw new Error(this.netError(e) ? (file ? "文件没传上去(网络断了一下),请再发一次" : "网络断了一下,请再问一次") : e.message); await new Promise((ok) => setTimeout(ok, 1500)); }
       }
       if (!first || !first.job) return first;  // 旧版后台不认 job,直接给结果
+      return this.pollJob(first.job, started, onWait);
+    },
+    /* 后台任务(看链接、帮我复核)的进度与结果:隔两三秒取一次 GET /link/{编号};断了就再取(手机锁屏、切到微信回来接着取) */
+    async pollJob(jobId, started, onWait) {
+      const check = async (r) => {
+        if (r.status === 401 || r.status === 403) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }
+        if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪(后台任务没起来或还没更新到这一版);其余页面照常可用");
+        if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
+        return r.json();
+      };
       const wait = (ms) => new Promise((ok) => {  // 等 ms 毫秒;页面从后台回到前台(手机解锁、切回来)就不等了,马上去取
         const t = setTimeout(done, ms);
         function done() { clearTimeout(t); document.removeEventListener("visibilitychange", vis); ok(); }
@@ -513,7 +523,7 @@
         const secs = Math.round((Date.now() - started) / 1000);
         await wait(secs < 30 ? 2000 : 3000);
         try {
-          const j = await check(await fetch("api/assistant/link/" + encodeURIComponent(first.job), { credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store" }));
+          const j = await check(await fetch("api/assistant/link/" + encodeURIComponent(jobId), { credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store" }));
           if (!j || j.done || !j.ok) return j;
           fails = 0;
           if (onWait) onWait(j.stage || "", Math.round((Date.now() - started) / 1000), false);
@@ -523,6 +533,27 @@
           if (onWait) onWait("", Math.round((Date.now() - started) / 1000), true);
         }
       }
+    },
+    /* 复核按钮(本体 review,A47 / A48;2026-10-19 使用方要的):看链接结果里「要核实」每条的 已复核 / 忽略此项、「库里线索」每条的 是同一项目 / 不是同一项目,
+       经助手接口记进表格「助手复核记录」并按全部点选重算投标评估;「帮我复核」是后台任务(助手自己查、请模型给结论),编号同看链接的取法 */
+    async review(data) {
+      const r = await fetch("api/assistant/review", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(data) });
+      if (r.status === 401) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }
+      if (r.status === 403) throw new Error("游客帐号不能复核");
+      if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪(后台任务没起来或还没更新到这一版),没记上");
+      if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
+      return r.json();
+    },
+    async reviewHelp(data, onWait) {
+      const started = Date.now();
+      const r = await fetch("api/assistant/review/help", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(data) });
+      if (r.status === 401) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname + location.search); return null; }
+      if (r.status === 403) throw new Error("游客帐号不能复核");
+      if (r.status === 502 || r.status === 503 || r.status === 404) throw new Error("助手服务未就绪(后台任务没起来或还没更新到这一版)");
+      if (!r.ok) throw new Error("助手接口 → " + r.status + " " + (await r.text()).slice(0, 200));
+      const first = await r.json();
+      if (!first || !first.job) return first;
+      return this.pollJob(first.job, started, onWait);
     },
     /* 法规问题(助手认作「法规」、要按条文作答的):后台(core/law.py)按国别与关键词查条文,配了模型的按查到的条文作答;只读 */
     async lawAsk(q, plan) {

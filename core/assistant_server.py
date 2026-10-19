@@ -9,6 +9,10 @@
     GET  /link/{编号}/report.docx                  →  这一问的投标评估报告(Word;结果还在时才有,见 core/bid_check.py);
     GET  /link/{编号}                              →  没完:{"ok": true, "done": false, "stage": "模型分析", "elapsed": 秒};
                                                        完了:分析结果 + "done": true;编号不在了(后台重启、超过半小时):ok false 并说原因
+    POST /review  {"material", "project", "kind": "要核实" | "库里线索", "item", "lead_id", "status", "bid_facts", "lib", "reviews"}
+                                                    →  core.review.save:记一条复核按钮的点选(已复核 / 已忽略 / 是同一项目 / 不是同一项目),
+                                                       按全部点选重算投标评估 {"ok", "saved", "review", "bid"};表没建时 saved: false(只在这一页有效)
+    POST /review/help {同上 + "ctx": 项目要点, "lead": 线索行} → 「帮我复核」:后台任务(编号同 /link/{编号} 取),助手自己查公开渠道、库里,请模型给结论并记下
     POST /feedback {"key": "Q…", "verdict": "答对了" | "答错了", "note": "哪里不对", "result": "答出了什么", "q", "prev_q", "understood"}
                                                     →  core.ask_log.feedback:记在「助手提问记录」这一行(/ask 返回的 log_key);游客不能用
     POST /law   {"q": "…", "law": 计划里的 law, "countries": ["MAR"]}  →  core.law.answer:按国别与关键词查法规条文,配了模型的按条文作答(带出处序号);
@@ -40,7 +44,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote
 from zoneinfo import ZoneInfo
 
-from core import ask_log, assistant, bid_check, calendar_feed, guest as guest_mod, law, link_check, tstore
+from core import ask_log, assistant, bid_check, calendar_feed, guest as guest_mod, law, link_check, review, tstore
 from core.jobs import common
 from core.profile import Profile, load_profile
 from core.watch.llm import Classifier, LLMConfig
@@ -151,16 +155,135 @@ class Assistant:
             except Exception as e:  # noqa: BLE001
                 self._terms_db = None
                 self.log(f"看链接时连不上表格:{type(e).__name__}: {e}")
+        scope = self._scope(db)
+        try:
+            out = link_check.check(url, note, self.today, self.file_clf or self.clf, db, upload=upload, progress=progress, scope=scope, **self.link_kw)
+        except link_check.LinkError as e:
+            return {"ok": False, "error": str(e)}
+        return self._with_reviews(out, db, scope)
+
+    def _scope(self, db) -> object:
         scope = self.scope
         if (scope is None or not scope.known()) and db is not None:
             try:
                 scope = bid_check.Scope.from_db(db)
             except Exception as e:  # noqa: BLE001
                 self.log(f"读国别表的市场分级出错,投标评估不查国别范围:{type(e).__name__}: {e}")
+        return scope
+
+    def _with_reviews(self, out: dict, db, scope) -> dict:
+        """看完一条链接:把这份材料已记的复核(core.review)挂上去,按它重算投标评估;表没建时 review_saved: false,页面说明点选只在这一页有效。"""
+        if not out.get("ok") or out.get("list"):
+            return out
+        saved, reviews = False, {}
+        if db is not None:
+            try:
+                saved = review.available(db)
+                reviews = review.load(db, out.get("material") or "") if saved else {}
+            except Exception as e:  # noqa: BLE001
+                self.log(f"读复核记录出错:{type(e).__name__}: {e}")
+        records = None
+        if reviews and db is not None:
+            try:
+                records = link_check.our_records(db)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"读公司资料出错:{type(e).__name__}: {e}")
+        return review.apply(out, reviews, self.today, records, scope, saved)
+
+    def _review_db(self):
+        """复核记录要写的库;连不上 → None(点选只在这一页有效)。"""
+        if self.terms_base is None:
+            return None
         try:
-            return link_check.check(url, note, self.today, self.file_clf or self.clf, db, upload=upload, progress=progress, scope=scope, **self.link_kw)
-        except link_check.LinkError as e:
-            return {"ok": False, "error": str(e)}
+            return self.db()
+        except Exception as e:  # noqa: BLE001
+            self._terms_db = None
+            self.log(f"记复核时连不上表格:{type(e).__name__}: {e}")
+            return None
+
+    def _rebid(self, data: dict, reviews: dict, db) -> dict | None:
+        """页面带来的评估依据(bid_facts、库里相关)+ 全部点选 → 重算的投标评估;算不了给 None。"""
+        lib = data.get("lib") if isinstance(data.get("lib"), dict) else {}
+        shadow = {"bid_facts": data.get("bid_facts"), "same_url": lib.get("same_url") or [], "related_leads": lib.get("related_leads") or [],
+                  "related_opps": lib.get("related_opps") or []}
+        records = None
+        if db is not None:
+            try:
+                records = link_check.our_records(db)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"读公司资料出错:{type(e).__name__}: {e}")
+        try:
+            return review.rebid(shadow, reviews, self.today, records, self._scope(db))
+        except Exception as e:  # noqa: BLE001
+            self.log(f"按复核重算评估出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+            return None
+
+    @staticmethod
+    def _review_rec(data: dict, status: str) -> dict:
+        kind = str(data.get("kind") or "")
+        if kind not in review.KINDS:
+            raise ValueError("条目类型只能是「要核实」或「库里线索」")
+        if status not in review.STATUS:
+            raise ValueError("处理只能是 " + " / ".join(review.STATUS))
+        item = str(data.get("item") or "")[:2000]
+        lead_id = str(data.get("lead_id") or "")[:40]
+        material = str(data.get("material") or "")[:500]
+        return {"key": review.item_key(material, kind, lead_id if kind == "库里线索" else item), "material": material, "project": str(data.get("project") or "")[:200],
+                "kind": kind, "item": item, "lead_id": lead_id, "status": status}
+
+    def _merge_reviews(self, data: dict, rec: dict) -> dict:
+        reviews = {k: v for k, v in (data.get("reviews") or {}).items() if isinstance(v, dict) and v.get("status") in review.STATUS} if isinstance(data.get("reviews"), dict) else {}
+        reviews[rec["key"]] = rec
+        return reviews
+
+    def review_click(self, data: dict, cookie: str | None) -> dict:
+        """人点了「已复核」「忽略此项」「是同一项目」「不是同一项目」:记下(表没建时只算这一页的),按全部点选重算评估。"""
+        status = str(data.get("status") or "")
+        if status == "助手已核":
+            raise ValueError("「帮我复核」走 /review/help")
+        rec = self._review_rec(data, status)
+        if status not in review.HUMAN_STATUS.get(rec["kind"], ()):
+            raise ValueError(f"「{rec['kind']}」不能点「{status}」")
+        db = self._review_db()
+        saved = False
+        if db is not None and review.available(db):
+            try:
+                rec = review.save(db, rec, self.who(cookie), datetime.now(self.tz).replace(tzinfo=None))
+                saved = True
+            except Exception as e:  # noqa: BLE001
+                self.log(f"记复核出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+        return {"ok": True, "saved": saved, "review": review._public(rec), "bid": self._rebid(data, self._merge_reviews(data, rec), db)}
+
+    def review_help(self, data: dict, cookie: str | None, progress=None) -> dict:
+        """「帮我复核」:助手自己查(core.review.help_verify / help_lead),记成「助手已核」(或模型判出的是 / 不是同一项目),重算评估。"""
+        step = progress or (lambda stage: None)
+        rec = self._review_rec(data, "助手已核")
+        ctx = data.get("ctx") if isinstance(data.get("ctx"), dict) else {}
+        ctx = {k: ctx.get(k) for k in ("title", "country", "funder", "summary", "stage", "category", "deadline", "requirements", "url", "ref", "names", "news_query")}
+        if ctx.get("country") and assistant.geo.iso3(str(ctx["country"])) != ctx["country"]:
+            ctx["country"] = None
+        clf = self.file_clf or self.clf
+        self._maybe_forgive()
+        db = self._review_db()
+        if rec["kind"] == "库里线索":
+            step("对照线索")
+            lead = data.get("lead") if isinstance(data.get("lead"), dict) else {}
+            got = review.help_lead({k: lead.get(k) for k in ("id", "title", "project_name", "summary_zh", "country", "found_at", "opportunity", "url")}, ctx, self.today, clf)
+        else:
+            step("查公开渠道")
+            lib = data.get("lib") if isinstance(data.get("lib"), dict) else {}
+            got = review.help_verify(rec["item"], ctx, self.today, clf, verify=self.link_kw.get("verify"), lib_rows=list(lib.get("related_leads") or [])[:5])
+        rec.update({k: got.get(k) for k in ("status", "conclusion", "confidence", "facts", "evidence")})
+        saved = False
+        if db is not None and review.available(db):
+            try:
+                step("记下结论")
+                rec = review.save(db, rec, "助手", datetime.now(self.tz).replace(tzinfo=None))
+                saved = True
+            except Exception as e:  # noqa: BLE001
+                self.log(f"记复核出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+        return {"ok": True, "saved": saved, "review": review._public(rec), "bid": self._rebid(data, self._merge_reviews(data, rec), db),
+                "notes": got.get("notes") or [], "model": got.get("model")}
 
     def make_report(self, jid: str, out: dict) -> dict | None:
         """看完一条链接或清单后出投标评估报告(Word),文件按任务编号存 report_dir;→ {"name", "path"} 或 None(出不了就只给页面结果)。"""
@@ -186,8 +309,25 @@ class Assistant:
     def start_link_job(self, url: str, note: str = "", upload: bytes | None = None) -> str:
         """把 check_link 放到后台线程里跑,马上回一个任务编号;页面拿编号来 job_state 取进度和结果。
         编号是随机的(猜不到),结果留 JOB_KEEP 秒;任务数超 JOB_MAX 先丢最旧的。"""
+        def run(jid: str, job: dict, progress) -> dict:
+            out = self.check_link(url, note, upload, progress=progress)
+            if out.get("ok"):
+                progress("出评估报告")
+                rep = self.make_report(jid, out)
+                if rep:
+                    out = {**out, "report": {"name": rep["name"], "url": f"link/{jid}/report.docx"}}
+                    job["report"] = rep
+            return out
+
+        return self._start_job("读文件" if upload is not None else "读原文", run, "link")
+
+    def start_help_job(self, data: dict, cookie: str | None) -> str:
+        """「帮我复核」也放后台跑(检索加模型常要半分钟,手机一条请求等不了):编号同样从 GET /link/{编号} 取。"""
+        return self._start_job("查公开渠道", lambda jid, job, progress: self.review_help(data, cookie, progress=progress), "help")
+
+    def _start_job(self, stage: str, fn, kind: str) -> str:
         jid = secrets.token_urlsafe(16)
-        job = {"at": time.monotonic(), "stage": "读文件" if upload is not None else "读原文", "done": False, "result": None}
+        job = {"at": time.monotonic(), "stage": stage, "done": False, "result": None}
         with self._jobs_lock:
             cutoff = time.monotonic() - JOB_KEEP
             for k in [k for k, j in self.jobs.items() if j["at"] < cutoff]:
@@ -201,20 +341,16 @@ class Assistant:
 
         def run() -> None:
             try:
-                out = self.check_link(url, note, upload, progress=progress)
+                out = fn(jid, job, progress)
+            except ValueError as e:
+                out = {"ok": False, "error": str(e)}
             except Exception as e:  # noqa: BLE001
-                self.log(f"看链接出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+                self.log(f"{'看链接' if kind == 'link' else '帮我复核'}出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
                 out = {"ok": False, "error": f"分析出错({type(e).__name__})"}
-            if out.get("ok"):
-                progress("出评估报告")
-                rep = self.make_report(jid, out)
-                if rep:
-                    out = {**out, "report": {"name": rep["name"], "url": f"link/{jid}/report.docx"}}
-                    job["report"] = rep
             job["result"] = out
             job["done"] = True
 
-        threading.Thread(target=run, name=f"link-{jid[:6]}", daemon=True).start()
+        threading.Thread(target=run, name=f"{kind}-{jid[:6]}", daemon=True).start()
         return jid
 
     def report_file(self, jid: str) -> tuple[str, bytes] | None:
@@ -494,7 +630,7 @@ def make_handler(bot: Assistant):
 
         def do_POST(self):  # noqa: N802
             path = self.path.split("?")[0]
-            if path not in ("/ask", "/link", "/law", "/feedback"):
+            if path not in ("/ask", "/link", "/law", "/feedback", "/review", "/review/help"):
                 self._send(404, {"ok": False, "error": "not found"})
                 return
             n = int(self.headers.get("Content-Length") or 0)
@@ -529,6 +665,27 @@ def make_handler(bot: Assistant):
                 except Exception as e:  # noqa: BLE001
                     bot.log(f"看链接出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
                     out = {"ok": False, "error": f"分析出错({type(e).__name__})"}
+                self._send(200, out)
+                return
+            if path in ("/review", "/review/help"):
+                if self.headers.get("X-Portal-Auth") != "1" and not bot.allow_link_without_auth:
+                    self._send(403, {"ok": False, "error": "请先登录"})
+                    return
+                if self._outsider():
+                    self._send(403, {"ok": False, "error": "游客帐号不能复核"})
+                    return
+                cookie = self.headers.get("Cookie")
+                if path == "/review/help":
+                    jid = bot.start_help_job(data, cookie)
+                    self._send(200, {"ok": True, "job": jid, "stage": bot.job_state(jid).get("stage") or ""})
+                    return
+                try:
+                    out = bot.review_click(data, cookie)
+                except ValueError as e:
+                    out = {"ok": False, "error": str(e)}
+                except Exception as e:  # noqa: BLE001
+                    bot.log(f"记复核出错:{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}")
+                    out = {"ok": False, "error": f"没记上({type(e).__name__})"}
                 self._send(200, out)
                 return
             if path == "/feedback":

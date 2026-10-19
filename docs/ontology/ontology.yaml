@@ -16,8 +16,8 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.31
-date: 2026-10-16
+version: 2.32
+date: 2026-10-19
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
   - 商机的公开事实(原台账 YAML)搬进 Teable
@@ -155,6 +155,14 @@ changes_v2_16:   # 已中标项目补数据源(2026-10-13):使用方看到摩洛
   - 世行数据把几家韩国公司(也有刚果本地单位)的国别录成了朝鲜:世行不与朝鲜往来,导入时改回韩国(刚果的按借款国)
   - 要跑一次建表命令(新字段)
 
+changes_v2_32:   # 复核按钮(2026-10-19):使用方问「助手给出结论,需要人工复核的地方,能否增加"已复核""帮我复核""忽略此项"之类按钮?如果做到对话框里是不是 AI 助手不好理解?」
+  - 助手看一条链接或一份文件的结果里,「要核实」的每一条后面有 已复核 / 帮我复核 / 忽略此项,「库里可能是同一项目」的每条线索后面有 是同一项目 / 帮我复核 / 不是同一项目。
+    按钮是页面上的操作,不是说给模型听的话(模型只看原文和附言,看不到按钮),所以不会让助手糊涂
+  - 新增业务对象「助手复核记录」(review):一条点选一行(材料、项目、条目类型、条目、线索、处理、结论、依据、补充事实、操作人、时间;新分类体系 review_kind、review_status),
+    按材料(网址或文件指纹)+ 条目算编号;同一份材料再看时照旧显示点过的,投标评估按点选重算(A47):确认是同一项目的线索算「库里已有」,否定的从相关里去掉
+  - 「帮我复核」由助手自己做(A48):要核实的点 → 整国世行公告按编号、名字比对,新闻旁证,请模型据此给结论、把握(高 / 中 / 低)和核出的事实(截止日、阶段、金额、门槛),
+    核出的截止日等补进评估重算;库里线索 → 请模型把线索和材料对一对,判 同一项目 / 同项目别的标段 / 不同项目。没查到也给有依据的判断,不把「先核实」推回给人(10-16 规则)
+  - 表没建时点选只在这一页有效,页面写明;要跑一次建表命令(新表)
 changes_v2_31:   # 助手判投标(2026-10-18):使用方问「发一个项目链接,助手能否直接给出是否可以投标的结论,并附一份项目报告」,并定了四步:信源真实、国别范围、招标要求、时间
   - 助手看一条链接或一份文件(core/link_check.py)时附投标评估(core/bid_check.py):八项检查 → 三档结论(建议投标 / 有条件可投 / 不建议投标),每条理由带依据链接。
     使用方的四步之外补四项:是不是水务、阶段能不能投(已授标、在建的不是投标机会)、库里有没有同一项目或已跟踪的商机、我方在该国的基础(市场分布表的当地机构、在建项目、常驻人员)。
@@ -925,6 +933,26 @@ objects:
       - {id: recheck, name: 复查, type: text, by: ai, example: "不通过(10-16):对象 应为「已中标项目」,现在是「线索」", note: "机器自己的运行结果,每天覆盖(R2 的例外)"}
       - {id: learned, name: 学到的解析, type: longtext, by: ai, format: JSON(模型给的查询计划), note: "答错了后按说明当场重答、用户对重答点了「答对了」时写(A45);同一句以后直接按它答,说法差不多的给模型当参考。清空或状态改「不改」就不再用"}
 
+  - id: review
+    name: 助手复核记录
+    core: false
+    band: business
+    definition: 助手看一条链接或一份文件时列出的「要核实」要点和「库里可能是同一项目」的线索,人(或助手)处理一条记一行:已复核、忽略、是不是同一项目、助手核出的结论。同一份材料再看时照旧显示,投标评估按它重算。
+    key: 编号(材料 + 条目类型 + 条目算出的指纹;同一条再点就是改这一行)
+    properties:
+      - {id: key, name: 编号, type: text, by: ai, required: true, format: "R + 16 位指纹(材料 | 条目类型 | 条目)", example: R3f9a1c2d4e5b6a78}
+      - {id: material, name: 材料, type: text, by: ai, required: true, note: 看的那条网址(最终网址);只传了文件的是「file:」加文件内容指纹, example: "https://projects.worldbank.org/en/projects-operations/procurement-detail/OP00123456"}
+      - {id: project, name: 项目, type: text, by: ai, note: 材料里项目的中文名(方便在表里认), example: 苏姆盖特污水处理厂项目}
+      - {id: kind, name: 条目类型, type: enum, enum: [要核实, 库里线索], by: ai, taxonomy: review_kind}
+      - {id: item, name: 条目, type: longtext, by: ai, required: true, note: 要核实的那句话;库里线索的是线索标题, example: 意向书截止日期(公告中可能截断未显示)}
+      - {id: lead_id, name: 线索, type: text, by: ai, note: "条目类型是库里线索时,那条线索的记录编号"}
+      - {id: status, name: 处理, type: enum, enum: [已复核, 已忽略, 是同一项目, 不是同一项目, 助手已核], by: ai, taxonomy: review_status, note: "页面按钮经助手接口写(人点的和助手核的都在这一列,人的可以覆盖助手的);「帮我复核」记成助手已核(模型判出是 / 不是同一项目的直接记那两种)"}
+      - {id: conclusion, name: 结论, type: longtext, by: ai, note: 「帮我复核」的结论(查清了写结论与依据;没查清写有依据的判断并注明是推断)}
+      - {id: evidence, name: 依据, type: longtext, by: ai, format: "一行一条「名称 网址」", note: 结论用到的公告、新闻、线索链接}
+      - {id: facts, name: 补充事实, type: longtext, by: ai, format: "JSON:deadline / stage / category / amount / requirements", note: 助手核出来、能改投标评估的事实;重算时补进评估依据}
+      - {id: who, name: 操作人, type: text, by: ai, note: 点按钮的登录帐号;「帮我复核」写「助手」}
+      - {id: at, name: 时间, type: datetime, by: ai}
+
   - id: phrase
     name: 语义层说法
     core: false
@@ -1444,6 +1472,27 @@ actions:
     writes: [ask_log.recheck]
     note: 应理解为不空、处理状态不是「不改」的提问重问一遍(接着问的先问上一问);理解为逐项比,值里带具体日期的一项不比(天天变)。结果是机器自己的运行状态,每天覆盖(R2 的例外)。
     rules: [R2]
+  - id: A47
+    name: 复核助手的结论
+    actor: human
+    channel: [页面]
+    trigger: 助手看完一条链接或一份文件,「要核实」每条后面点「已复核」「忽略此项」,「库里可能是同一项目」每条线索后面点「是同一项目」「不是同一项目」
+    creates: review
+    writes: [review.key, review.material, review.project, review.kind, review.item, review.lead_id, review.status, review.who, review.at]
+    note: 经助手接口写(同编号已有就改这一行;人的点选可以覆盖助手的)。点了马上按全部点选重算投标评估:是同一项目的线索算「库里已有」,否定、忽略的从相关里去掉。
+      按钮是页面操作,不进模型的输入。表没建时点选只在这一页有效,页面写明。
+    rules: [R13]
+  - id: A48
+    name: 帮我复核
+    actor: ai
+    channel: [页面]
+    trigger: 「要核实」或「库里可能是同一项目」的一条后面点「帮我复核」
+    reads: [lead]
+    creates: review
+    writes: [review.key, review.material, review.project, review.kind, review.item, review.lead_id, review.status, review.conclusion, review.evidence, review.facts, review.who, review.at]
+    note: 后台任务:要核实的点 → 整国世行公告按编号、名字比对、新闻旁证,请模型给结论、把握和核出的事实(截止日、阶段、金额、门槛),记「助手已核」,核出的事实补进评估重算;
+      库里线索 → 请模型把线索和材料对一对,同一项目 / 不同项目直接记那两种,别的标段记「助手已核」仍列作相关。没查到也给有依据的判断并注明是推断(10-16 规则:不把「先核实」推回给人)。
+    rules: [R2]
 rules:
   - id: R1
     name: 一个对象只存一处
@@ -1551,7 +1600,7 @@ views:
   - {id: V11, name: 报告页, of: [report, template], channel: [页面], query: "历史报告按类型 / 版本 / 生成状态 / 国别筛选、搜索、下载;左栏发起国别或项目报告(可选模板);「报告模板」一节列模板、换文件、设缺省、上传新模板(A21)"}
   - {id: V12, name: 线索分析, of: [lead, country, opportunity, source, report], channel: [页面],
      query: "顶部是最近一份日报的正文(report.kind = 日报，取日期最新的);下面按发现时间窗口(今天 / 7 / 30 / 90 天 / 全部)、是否只看相关、经营区域筛选后现算:每日新增走势(相关 / 不相关)、国别前 15、国别 × 类别热力、类别、领域(lead_sectors 7 类)、资金来源(groupings.funders)、信源前 15、判定方式、处理状态、归属(所属 / 建议 / 可能新项目 / 无);点任一柱右栏列出该组线索。数字与线索总览同一口径:线索总数 = 线索总览「线索」卡，待处理 = glossary.pending_leads，待确认归属 = glossary.to_assign(R14)"}
-  - {id: V13, name: 本体, of: [lead, country, opportunity, followup, source, milestone, report, template, member, city, phrase, term, local_term, ask_log], channel: [页面],
+  - {id: V13, name: 本体, of: [lead, country, opportunity, followup, source, milestone, report, template, member, city, phrase, term, local_term, ask_log, review], channel: [页面],
      query: "只读:对象与关系图(公开 / 业务两种颜色，核心对象描边，箭头是关联)，点一个对象看定义、标识、状态流转、按写入方分组的属性(单选 / 多选的指向分类体系)、关系、涉及它的行为;下面页签:分类体系(每个值的英文键、定义、边界、示例)、语义层(指标:单位、算法、缺数时怎么说、说法;算法、主体工程、法规问法、排放指标的说法;行业术语;本国定义按国别数;有歧义的说法;错题本(「助手提问记录」里答对、答错、待看几句,待看与复查不通过的列出来)。说法读「语义层说法」表,读不到时显示本体初始说法,表里指向写错的标出;各块有「在表格里打开」)、口径与归组、规则、行为、视图与事件、版本记录。除语义层外读 portal/ontology.json(ontology.yaml 转的)，不读库"}
   - {id: V14, name: 我方资料页, of: [company, country], channel: [页面], query: "从「我的」页进(不在主菜单):全部公司资料按类别 / 领域 / 国别筛选,搜索;新增、改、传附件、勾「写进报告」(A23);游客看不到"}
   - {id: V15, name: 我的, of: [preference, country, member], channel: [页面], query: "登录人自己的一行:帐号与角色、关注的国别(加减,点进国别页;清单里这些国家排前、带 ★)、忽略的国别(地图上点选、按大洲一键;地图上涂成灰色,采集不再涉及)、保存的日历订阅(复制链接、删除)(A24);入口到帐号设置、退出登录、我方资料"}
@@ -1632,6 +1681,8 @@ as_is:
     - 本体 terms 节:建表时的初始词;表没建或读不到时助手用它兜底
   ask_log:
     - Teable「助手提问记录」表(唯一)
+  review:
+    - Teable「助手复核记录」表(唯一;看链接的结果页按材料读它)
   phrase:
     - Teable「语义层说法」表(唯一)
     - 本体 semantic 节:初始说法;后台按它给表里没有的指向补行(A43),表没建或读不到时助手用它兜底
@@ -2186,6 +2237,27 @@ taxonomies:
           - {v: 待看, code: open, def: 答错了、还没人看, boundary: "", example: ""}
           - {v: 已修好, code: fixed, def: "程序或说法改好了,应理解为写上了对的理解", boundary: "每天复查,不通过的看「复查」", example: ""}
           - {v: 不改, code: wontfix, def: "看过了,不打算改(说法太含糊、数据本来就没有)", boundary: 不再复查, example: ""}
+  review_kind:
+    name: 复核条目类型
+    used_by: [review.kind]
+    groups:
+      - name: 全部
+        values:
+          - {v: 要核实, code: verify, def: 助手分析时列出的要人核实的要点, boundary: "", example: 意向书截止日期(公告中可能截断未显示)}
+          - {v: 库里线索, code: lead, def: 按项目名、地名搜到的、可能是同一项目的库里线索, boundary: 同一网址的线索不在此列(已经是同一条), example: Sumgayit Wastewater Treatment Plant Project}
+  review_status:
+    name: 复核处理
+    used_by: [review.status]
+    groups:
+      - name: 人点的
+        values:
+          - {v: 已复核, code: reviewed, def: 人看过了、这一点没问题, boundary: 只用于要核实, example: ""}
+          - {v: 已忽略, code: ignored, def: 人看过了、这一点不用管, boundary: 只用于要核实;页面划掉, example: ""}
+          - {v: 是同一项目, code: same, def: 这条线索和材料讲的是同一个项目, boundary: 投标评估按「库里已有」算;助手判出的也记这种, example: ""}
+          - {v: 不是同一项目, code: different, def: 这条线索和材料无关, boundary: 从相关里去掉;助手判出的也记这种, example: ""}
+      - name: 助手做的
+        values:
+          - {v: 助手已核, code: checked, def: 「帮我复核」查过并给了结论, boundary: 人可以再点人的按钮覆盖;线索判为同项目别的标段也记这种, example: ""}
   phrase_kind:
     name: 语义层说法类别
     used_by: [phrase.kind]
