@@ -380,6 +380,37 @@ def test_word_links_are_real_hyperlinks(tmp_path):
     assert "https://" not in "\n".join(p.text for p in d.paragraphs)
 
 
+def test_country_report_cover_and_toc_are_separate_pages_with_links(tmp_path, monkeypatch):
+    """使用方 10-19:生成稿的目录和封面挤在一页、目录点不动,成稿不是这样。封面一页;「目　录」另起一页,每条是跳到该章的链接,
+    行末虚线接页码(本机有 LibreOffice 时算出来写进去,没有留给 Word 打开时更新);摘要再另起一页。"""
+    import pytest
+    pytest.importorskip("pypandoc")
+    docx = pytest.importorskip("docx")
+    from docx.oxml.ns import qn
+    from core.watch import reporting
+    md = tmp_path / "r.md"
+    md.write_text("---\ntitle: \"X 水务市场分析报告\"\nsubtitle: \"内部资料　仅供参考\"\ndate: \"2026 年 10 月\"\n---\n\n目　录\n\n# 摘要\n\n要点。\n\n"
+                  "# 第 1 章 研究背景\n\n## 1.1 目的\n\n正文。\n\n# 第 2 章 国家概况\n\n正文。\n\n# 附录\n\n## 附录 A 数据来源登记\n\n来源。\n", encoding="utf-8")
+    monkeypatch.setattr(reporting, "toc_pages", lambda path: {"_Toc001": 3, "_Toc002": 4, "_Toc003": 5, "_Toc004": 6})  # 像本机装了排版软件
+    out = reporting.to_docx_styled(md, tmp_path / "r.docx", template=tmp_path / "none.docx")
+    d = docx.Document(str(out))
+    paras = d.paragraphs
+    toc_title = next(p for p in paras if p.text.strip() == "目　录")
+    assert toc_title.paragraph_format.page_break_before and toc_title.style.name != "Heading 1"  # 目录自己不进目录
+    entries = [p for p in paras if p._p.find(qn("w:hyperlink")) is not None and p._p.find(qn("w:hyperlink")).get(qn("w:anchor"))]
+    assert [e.text for e in entries] == ["摘要\t3", "第 1 章 研究背景\t4", "第 2 章 国家概况\t5", "附录\t6"]  # 一级标题各一条(节不列),制表到行末接页码
+    anchors = [e._p.find(qn("w:hyperlink")).get(qn("w:anchor")) for e in entries]
+    marks = {b.get(qn("w:name")): b for b in d.element.body.iter(qn("w:bookmarkStart"))}
+    assert all(a in marks for a in anchors)
+    heads = [p for p in paras if p.style.name == "Heading 1"]
+    assert [h.text for h in heads] == ["摘要", "第 1 章 研究背景", "第 2 章 国家概况", "附录"] and all(h.paragraph_format.page_break_before for h in heads)
+    assert all(h._p.find(qn("w:bookmarkStart")) is not None for h in heads)  # 书签打在标题上,点目录就跳过去
+    instr = " ".join(t.text or "" for t in d.element.body.iter(qn("w:instrText")))
+    assert 'TOC \\o "1-1"' in instr and "PAGEREF _Toc001" in instr
+    assert d.settings.element.find(qn("w:updateFields")) is not None  # Word 打开时更新域,页码跟着重算
+    assert paras.index(toc_title) < paras.index(entries[0]) < paras.index(heads[0])
+
+
 def test_fact_rows_parse_value_year_source_and_tone():
     ind = ("GDP(现价):1,470 亿美元(2025)(世行 WDI https://data.worldbank.org/x)\nGDP 实际增速:-0.3%(2025)(世行 WDI https://data.worldbank.org/y)\n"
            "淡水压力(取水/可再生资源):123.0%(2022)(世行 WDI https://data.worldbank.org/w)")
@@ -414,7 +445,7 @@ def test_country_report_follows_the_azerbaijan_outline(env, monkeypatch):  # noq
     titles = [t for t, _ in country_report.OUTLINE]
     heads = re.findall(r"^# 第 \d+ 章 (.+)$", md, re.MULTILINE)
     assert heads and all(h in titles for h in heads) and heads == [t for t in titles if t in heads]  # 章的顺序与成稿一致
-    assert md.index("# 摘要") < md.index("# 第 1 章") and "# 附录" in md and "**目\u3000录**" in md
+    assert md.index("# 摘要") < md.index("# 第 1 章") and "# 附录" in md and "\n目\u3000录\n" in md  # 目录只留标题,转 Word 时做成可点的目录页
     assert '1,470' not in md and '759 [亿美元]{custom-style="KPI Unit"}' in md
     assert "B-READY 2025 这一期没有覆盖" in md  # 营商环境(v2.23):没覆盖的写明
     abase.update("country", c["id"], {"bready_total": 66, "bready_water": 79.3, "bready_procure": 45.7, "water_tariff": 2, "water_tariff_cur": "AZN", "water_tariff_usd": 1.18,

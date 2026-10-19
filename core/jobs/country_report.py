@@ -663,10 +663,9 @@ def build_country(ctx: Ctx, iso: str, internal: bool = True) -> tuple[str, set[s
             data = D.get((ch, sec), "") or D.get((ch, _title(sec, bidder_zh, cap_name)), "")
             sections[sec] = (prose + ("\n" if prose and data else "") + data).strip()
         book.chapter(ci, sections)
-    chapters = [p for p in book.parts if p.startswith("# 第 ")]
     month = f"{ctx.today.year} 年 {ctx.today.month} 月"
-    cover = (f"---\ntitle: \"{name}水务市场分析报告\"\nsubtitle: \"{'内部资料　仅供参考' if internal else '公开版'}\"\ndate: \"{month}\"\n---\n\n"
-             + "**目　录**\n\n" + "\\\n".join(["摘要"] + [p[2:].strip() for p in chapters] + ["附录"]) + "\n")
+    # 封面(标题、版本、年月)单独一页;下一段只写「目　录」,转 Word 时(core.watch.reporting._toc)做成单独一页、可点、带页码的目录
+    cover = f"---\ntitle: \"{name}水务市场分析报告\"\nsubtitle: \"{'内部资料　仅供参考' if internal else '公开版'}\"\ndate: \"{month}\"\n---\n\n目　录\n"
     summary = _para(ana.get("summary")) if ana.get("summary") else (
         f"{name}:已立项跟踪的商机 {len(own_opps)} 个,AI 建议的商机 {len(ai_opps)} 个;未来 {R.UPCOMING_DAYS} 天时间节点 {len(ms)} 个。\n\n"
         + "\n".join(f"- {R._md_text(x)}" for x in pts) + "\n")

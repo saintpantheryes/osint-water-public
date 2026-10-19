@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import logging
 import re
 from collections import Counter
 from dataclasses import dataclass, field, replace
@@ -23,6 +24,8 @@ from core.watch.llm import Classifier
 from core.watch.outputs import CAT_ZH, SECTOR_ZH, deadline_rows
 from core.watch.query import COUNTED, Filter, apply, load_rows
 from core.watch.store import Store
+
+log = logging.getLogger(__name__)
 
 TEMPLATE = template_file("报告模板_阿塞拜疆成稿.docx", "国别报告模板.docx")
 KINDS = {"country": "国别报告", "sector": "领域专题报告", "brief": "线索简报"}
@@ -396,6 +399,197 @@ def _page_number_footer(section) -> None:
         run._r.append(el)
 
 
+TOC_TITLE = ("目　录", "目录")
+
+
+def _toc(doc, spec: dict) -> bool:
+    """封面后一段只写「目　录」时,把它做成成稿那样单独一页的目录:每条是一级标题(摘要、第 N 章、附录)的书签链接,点了跳到该章;
+    行末虚线接 PAGEREF 页码域。整块套在 Word 的 TOC 域里并设「打开时更新域」,Word 打开会问一次是否更新,点「是」页码就齐了
+    (生成报告的服务器上没有排版软件,出不了页码;Word、WPS、LibreOffice 都会在打开时算)。"""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Pt, RGBColor
+    from docx.text.run import Run
+
+    paras = doc.paragraphs
+    at = next((i for i, p in enumerate(paras) if p.text.strip() in TOC_TITLE and not p.style.name.startswith("Heading")), None)
+    if at is None:
+        return False
+    heads = [p for p in paras[at + 1:] if p.style.name == "Heading 1" and re.match(r"^(摘要|第 \d+ 章|附录)", p.text.strip())]
+    if not heads:
+        return False
+    title = paras[at]
+    names = {s.name for s in doc.styles}
+    if "TOC Heading" in names:
+        title.style = doc.styles["TOC Heading"]
+    h1 = spec.get("styles", {}).get(STYLE_MAP.get("Heading 1", "Heading 1"), {})
+    for r in title.runs:
+        r.font.bold, r.font.size, r.font.color.rgb = True, h1.get("size") or Pt(16), RGBColor(0, 0, 0)
+    pf = title.paragraph_format
+    pf.page_break_before, pf.alignment, pf.first_line_indent = True, WD_ALIGN_PARAGRAPH.CENTER, 0
+    pf.space_after = Pt(12)
+    sec = doc.sections[-1]
+    right = sec.page_width - sec.left_margin - sec.right_margin
+    normal = spec.get("styles", {}).get("Normal", {})
+
+    def fld(run, kind: str | None, text: str | None = None) -> None:
+        if kind:
+            el = OxmlElement("w:fldChar")
+            el.set(qn("w:fldCharType"), kind)
+        else:
+            el = OxmlElement("w:instrText")
+            el.set(qn("xml:space"), "preserve")
+            el.text = text
+        run._r.append(el)
+
+    def bookmark(p, i: int, name: str) -> None:
+        start, end = OxmlElement("w:bookmarkStart"), OxmlElement("w:bookmarkEnd")
+        start.set(qn("w:id"), str(900 + i))
+        start.set(qn("w:name"), name)
+        end.set(qn("w:id"), str(900 + i))
+        ppr = p._p.pPr
+        (ppr.addnext if ppr is not None else lambda e: p._p.insert(0, e))(start)
+        p._p.append(end)
+
+    prev = title
+    for i, h in enumerate(heads, 1):
+        name = f"_Toc{i:03d}"
+        bookmark(h, i, name)
+        p = doc.add_paragraph()  # 先造再搬到目录标题后面,保持顺序
+        prev._p.addnext(p._p)
+        prev = p
+        pf = p.paragraph_format
+        pf.first_line_indent, pf.space_before, pf.space_after, pf.line_spacing = 0, Pt(0), Pt(4), 1.5
+        pf.tab_stops.add_tab_stop(right, WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
+        if i == 1:  # 整个目录是一个 TOC 域:Word「更新域」时整块重算
+            r = p.add_run()
+            fld(r, "begin")
+            fld(r, None, ' TOC \\o "1-1" \\h \\z \\u ')
+            fld(r, "separate")
+        link = OxmlElement("w:hyperlink")
+        link.set(qn("w:anchor"), name)
+        link.set(qn("w:history"), "1")
+        p._p.append(link)
+        rt = Run(OxmlElement("w:r"), p)
+        link.append(rt._r)
+        rt.text = h.text.strip()
+        rt.font.size = normal.get("size")
+        rtab = Run(OxmlElement("w:r"), p)
+        link.append(rtab._r)
+        rtab._r.append(OxmlElement("w:tab"))
+        rp = Run(OxmlElement("w:r"), p)
+        link.append(rp._r)
+        fld(rp, "begin")
+        fld(rp, None, f" PAGEREF {name} \\h ")
+        fld(rp, "separate")
+        rnum = Run(OxmlElement("w:r"), p)
+        link.append(rnum._r)
+        rnum.text = ""
+        rend = Run(OxmlElement("w:r"), p)
+        link.append(rend._r)
+        fld(rend, "end")
+        if i == len(heads):
+            fld(p.add_run(), "end")
+    _update_fields_on_open(doc)
+    return True
+
+
+def toc_pages(path: Path, timeout: int = 180) -> dict[str, int]:
+    """目录各条的页码:本机装了 LibreOffice(soffice)才算得出:转成 PDF,从目录页之后找每个一级标题单独成行的第一页。
+    没装或转不成就返回空(页码留给 Word 打开时更新)。"""
+    import shutil
+    import subprocess
+    import tempfile
+
+    if not shutil.which("soffice"):
+        return {}
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    doc = Document(str(path))
+    wanted: dict[str, str] = {}  # 书签名 → 标题(去空白)
+    for p in doc.paragraphs:
+        for bm in p._p.iter(qn("w:bookmarkStart")):
+            if bm.get(qn("w:name"), "").startswith("_Toc"):
+                wanted[bm.get(qn("w:name"))] = re.sub(r"\s+", "", p.text)
+    if not wanted:
+        return {}
+    try:
+        import pdfplumber
+
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", td, str(path)], capture_output=True, timeout=timeout, check=True)
+            pdf = Path(td) / (path.stem + ".pdf")
+            if not pdf.exists():
+                return {}
+            with pdfplumber.open(str(pdf)) as f:
+                pages = [[re.sub(r"\s+", "", ln) for ln in (pg.extract_text() or "").splitlines()] for pg in f.pages]
+    except Exception as e:  # noqa: BLE001 - 排版软件的问题不该让报告出不来
+        log.warning("目录页码没算出(%s),留给 Word 打开时更新", e)
+        return {}
+    start = next((i for i, lines in enumerate(pages) if any(ln in ("目录",) for ln in lines)), -1) + 1  # 目录页之后
+    found: dict[str, int] = {}
+    cur = start
+    for name, text in wanted.items():  # 标题按顺序出现,从上一处往后找
+        for i in range(cur, len(pages)):
+            if text in pages[i]:
+                found[name] = i + 1
+                cur = i
+                break
+    return found
+
+
+def fill_toc_pages(path: Path, pages: dict[str, int]) -> None:
+    """把算出的页码写进目录里各条 PAGEREF 域的结果(没装 Word 的看也有页码;Word 更新域会重算)。"""
+    if not pages:
+        return
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    doc = Document(str(path))
+    for p in doc.paragraphs:
+        runs = list(p._p.iter(qn("w:r")))
+        for k, r in enumerate(runs):
+            it = r.find(qn("w:instrText"))
+            if it is None or "PAGEREF" not in (it.text or ""):
+                continue
+            name = it.text.split()[1]
+            if name not in pages:
+                continue
+            for nxt in runs[k + 1:]:  # separate 之后的第一个文字段 = 域的结果
+                fc = nxt.find(qn("w:fldChar"))
+                if fc is not None and fc.get(qn("w:fldCharType")) == "separate":
+                    continue
+                if fc is not None:
+                    break
+                t = nxt.find(qn("w:t"))
+                if t is None:
+                    from docx.oxml import OxmlElement
+                    t = OxmlElement("w:t")
+                    nxt.append(t)
+                t.text = str(pages[name])
+                break
+    doc.save(str(path))
+
+
+def _update_fields_on_open(doc) -> None:
+    """settings.xml 里加 updateFields:Word 打开时问一次是否更新域(目录页码)。放在规定的位置,否则 Word 报文件有误。"""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    st = doc.settings.element
+    if st.find(qn("w:updateFields")) is not None:
+        return
+    el = OxmlElement("w:updateFields")
+    el.set(qn("w:val"), "true")
+    after = ("hdrShapeDefaults", "footnotePr", "endnotePr", "compat", "docVars", "rsids", "attachedSchema", "themeFontLang", "clrSchemeMapping",
+             "doNotIncludeSubdocsInStats", "doNotAutoCompressPictures", "forceUpgrade", "captions", "readModeInkLockDown", "smartTagType",
+             "schemaLibrary", "shapeDefaults", "doNotEmbedSmartTags", "decimalSymbol", "listSeparator")
+    nxt = next((c for c in st if c.tag in {qn(f"w:{t}") for t in after} or c.tag.endswith("}mathPr")), None)
+    (nxt.addprevious if nxt is not None else st.append)(el)
+
+
 def _polish(path: Path, spec: dict) -> None:
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -452,6 +646,7 @@ def _polish(path: Path, spec: dict) -> None:
     for p in doc.paragraphs:  # 成稿式的「摘要」「第 N 章」「附录」各起一页
         if p.style.name == "Heading 1" and re.match(r"^(摘要|第 \d+ 章|附录)", p.text.strip()):
             p.paragraph_format.page_break_before = True
+    has_toc = _toc(doc, spec)
     sec = doc.sections[-1]
     text_cm = (sec.page_width - sec.left_margin - sec.right_margin) / 360000
     after_borders = {qn(f"w:{t}") for t in ("shd", "tblLayout", "tblCellMar", "tblLook", "tblCaption", "tblDescription")}
@@ -487,6 +682,8 @@ def _polish(path: Path, spec: dict) -> None:
                         _nobreak_hyphens(r, OxmlElement, qn)
     _style_kpis(doc, OxmlElement, qn, Pt, RGBColor)
     doc.save(str(path))
+    if has_toc:
+        fill_toc_pages(path, toc_pages(path))
 
 
 def _style_kpis(doc, OxmlElement, qn, Pt, RGBColor) -> None:
