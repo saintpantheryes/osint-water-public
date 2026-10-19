@@ -760,11 +760,62 @@
     h.push("</div>");
     return h.join("");
   }
-  function leadLine(l) {
+  function leadLine(l, review) {  // review:{material, keys} 时这条线索后面带复核按钮(是同一项目 / 帮我复核 / 不是同一项目)
     const zh = l.project_name || (l.summary_zh || "").slice(0, 60);
     const name = zh ? P.esc(zh) + (l.title && l.title !== zh ? ' <span class="muted small">' + P.esc(l.title.slice(0, 90)) + "</span>" : "") : P.esc(l.title || "(无标题)");
     const meta = [l.country, l.found_at, l.status, l.opportunity ? "商机:" + l.opportunity : ""].filter(Boolean).map(P.esc).join(" · ");
-    return "<li>" + (l.url ? '<a href="' + P.esc(l.url) + '" target="_blank" rel="noopener">' + name + "</a>" : name) + ' <span class="muted small">' + meta + "</span> " + P.open("lead", l.id) + "</li>";
+    const rv = review && l.id ? reviewBox("库里线索", review.keys["库里线索|" + l.id], l.title || "", l.id) : "";
+    return '<li class="rv-li">' + (l.url ? '<a href="' + P.esc(l.url) + '" target="_blank" rel="noopener" class="rv-item">' + name + "</a>" : '<span class="rv-item">' + name + "</span>") + ' <span class="muted small">' + meta + "</span> " + P.open("lead", l.id) + rv + "</li>";
+  }
+  /* 复核按钮(本体 review,A47 / A48;2026-10-19 使用方:「需要人工复核的地方,能否增加"已复核""帮我复核""忽略此项"之类按钮?」):
+     「要核实」每条:已复核 / 帮我复核 / 忽略此项;「库里可能是同一项目」每条线索:是同一项目 / 帮我复核 / 不是同一项目。
+     按钮是页面操作、经助手接口记进表格「助手复核记录」,不是说给模型听的话(模型只看原文和附言),所以不会让助手糊涂;
+     点了马上按全部点选重算上面的投标评估;「帮我复核」是后台任务:助手自己查世行公告、新闻、库里,请模型给结论和把握 */
+  const RV_BTNS = { "要核实": [["已复核", "ok", "已复核"], ["帮我复核", "help", "帮我复核"], ["忽略此项", "off", "已忽略"]], "库里线索": [["是同一项目", "ok", "是同一项目"], ["帮我复核", "help", "帮我复核"], ["不是同一项目", "off", "不是同一项目"]] };  // [按钮字, 样式, 记的处理]
+  const RV_STATUS = { "已复核": ["t-ok", false], "已忽略": ["", true], "是同一项目": ["t-ok", false], "不是同一项目": ["", true], "助手已核": ["t-info", false] };
+  function reviewBox(kind, key, item, leadId) {
+    return '<span class="rv" data-kind="' + kind + '" data-key="' + P.esc(key || "") + '" data-item="' + P.esc(item || "") + '" data-lead="' + P.esc(leadId || "") + '"><span class="rv-state"></span><span class="rv-btns">' +
+      RV_BTNS[kind].map(([t, c, st]) => '<button type="button" class="chip-btn rv-' + c + '" data-st="' + st + '">' + t + "</button>").join("") + '</span><button type="button" class="chip-btn small rv-edit">改</button><div class="rv-out"></div></span>';
+  }
+  function reviewState(box, st) {  // 一条的处理结果:标签(+ 把握)、助手的结论与依据;划掉忽略的、不是同一项目的
+    const li = box.closest("li"), [cls, off] = RV_STATUS[st.status] || ["", false];
+    box.querySelector(".rv-state").innerHTML = '<span class="tag ' + cls + '">' + P.esc(st.status) + "</span>" + (st.status === "助手已核" && st.confidence ? '<span class="muted small">把握' + P.esc(st.confidence) + "</span>" : "") +
+      (st.who && st.who !== "助手" ? '<span class="muted small"> ' + P.esc(String(st.who).split(" <")[0]) + "</span>" : "");
+    box.querySelector(".rv-btns").hidden = true; box.querySelector(".rv-edit").hidden = false;
+    if (li) li.classList.toggle("rv-off", off);
+    box.querySelector(".rv-out").innerHTML = st.conclusion ? '<p class="small rv-concl">' + P.esc(st.conclusion) + (st.evidence || []).filter((e) => e.url).map((e) => ' <a class="small" href="' + P.esc(e.url) + '" target="_blank" rel="noopener" title="' + P.esc(e.name || "") + '">依据 →</a>').join("") + "</p>" : "";
+  }
+  function wireReviews(body, r, url) {
+    const a = r.analysis || {}, rv = Object.assign({}, r.reviews || {});
+    const ctx = { title: a.title_zh || r.title, country: r.country && r.country.iso3, funder: a.funder, summary: a.summary_zh, stage: a.stage, category: a.category, deadline: a.deadline,
+      requirements: a.requirements, url: r.final_url || r.url, names: a.names, news_query: a.news_query };
+    const lib = { same_url: r.same_url || [], related_leads: r.related_leads || [], related_opps: r.related_opps || [] };
+    const common = () => ({ material: r.material, project: a.project_name || a.title_zh || r.title, bid_facts: r.bid_facts, lib, reviews: rv });
+    const savedNote = body.querySelector(".rv-unsaved");
+    body.querySelectorAll(".rv").forEach((box) => {
+      const kind = box.dataset.kind, item = box.dataset.item, leadId = box.dataset.lead;
+      let key = box.dataset.key;  // 后台按材料 + 条目算的编号;结果里没有时先用页面的临时编号,记上后换成后台给的
+      box.querySelector(".rv-edit").hidden = true;
+      if (rv[key]) reviewState(box, rv[key]);
+      box.querySelector(".rv-edit").onclick = () => { box.querySelector(".rv-btns").hidden = false; box.querySelector(".rv-edit").hidden = true; };
+      box.querySelectorAll(".rv-btns .chip-btn").forEach((b) => { b.onclick = async () => {
+        const status = b.dataset.st, btns = box.querySelectorAll(".rv-btns .chip-btn"), out0 = box.querySelector(".rv-out");
+        btns.forEach((x) => { x.disabled = true; }); b.classList.add("on");
+        try {
+          const req = Object.assign(common(), { kind, item, lead_id: leadId });
+          const out = status === "帮我复核"
+            ? await P.reviewHelp(Object.assign(req, { ctx, lead: (r.related_leads || []).find((l) => l.id === leadId) || null }), (stage, secs) => { out0.innerHTML = '<p class="muted small">' + P.esc(stage ? stage + "中" : "助手在查") + "(已 " + secs + " 秒)…</p>"; })
+            : await P.review(Object.assign(req, { status }));
+          if (!out) return;
+          if (!out.ok) throw new Error(out.error || "没记上");
+          delete rv[key]; key = (out.review && out.review.key) || key; box.dataset.key = key; rv[key] = out.review; reviewState(box, out.review);
+          if (out.bid) { r.bid = out.bid; const el = body.querySelector(".lk-bid"); if (el) el.outerHTML = bidHtml(out.bid, r.report, false, r.final_url || url); }
+          if (out.saved === false && savedNote) savedNote.hidden = false;
+          if ((out.notes || []).length) P.toast(out.notes.join(";"));
+        } catch (e) { out0.innerHTML = ""; P.toast(e.message || String(e), true); }
+        finally { btns.forEach((x) => { x.disabled = false; }); b.classList.remove("on"); }
+      }; });
+    });
   }
   async function linkAnswer(url, note, el, file) {
     el.querySelector(".a-head").insertAdjacentHTML("beforeend", '<div class="frow understood"><b>理解为</b><span class="chip-btn on static">' +
@@ -802,15 +853,23 @@
     if (a.freshness) h.push("<h2>时效</h2><p>" + P.esc(a.freshness) + "</p>");
     h.push("<h2>库里</h2>");
     if ((r.same_url || []).length) h.push("<p><b>这个网址已经在库里:</b></p><ul class=\"list\">" + r.same_url.map(leadLine).join("") + "</ul>");
-    if ((r.related_leads || []).length) h.push("<p>可能相关的线索 " + r.related_leads.length + " 条(按项目名、地名搜的,请人看一眼是不是同一项目):</p><ul class=\"list\">" + r.related_leads.map(leadLine).join("") + "</ul>");
+    const review = r.material !== undefined ? { material: r.material, keys: {} } : null;  // 新版后台才有复核按钮(结果带材料标识)
+    if (review) {
+      (a.verify || []).forEach((v, i) => { review.keys["要核实|" + i] = r.reviews && Object.keys(r.reviews).find((k) => r.reviews[k].kind === "要核实" && r.reviews[k].item === v) || ("v" + i); });
+      (r.related_leads || []).forEach((l) => { review.keys["库里线索|" + l.id] = r.reviews && Object.keys(r.reviews).find((k) => r.reviews[k].kind === "库里线索" && r.reviews[k].lead_id === l.id) || ("l" + l.id); });
+    }
+    if ((r.related_leads || []).length) h.push("<p>可能相关的线索 " + r.related_leads.length + " 条(按项目名、地名搜的" + (review ? ",每条后面点一下是不是同一项目,拿不准点「帮我复核」" : ",请人看一眼是不是同一项目") + "):</p><ul class=\"list\">" + r.related_leads.map((l) => leadLine(l, review)).join("") + "</ul>");
     if ((r.related_opps || []).length) h.push("<p>可能相关的商机:" + r.related_opps.map((o) => '<a href="' + P.oppUrl(o.id) + '">' + P.esc(o.name_zh || o.code || "商机") + "</a>" + (o.stage ? '<span class="muted small">(' + P.esc(o.stage) + ")</span>" : "")).join("、") + "</p>");
     if (!(r.same_url || []).length && !(r.related_leads || []).length && !(r.related_opps || []).length) h.push('<p class="muted">没找到同一项目的线索或商机。</p>');
     if ((r.outside || []).length) h.push("<h2>公开渠道</h2><p class=\"muted small\">世界银行检索和近三个月的新闻,自动搜的,未必是同一项目:</p><ul class=\"list\">" + r.outside.map((x) => '<li><a href="' + P.esc(x.url) + '" target="_blank" rel="noopener">' + P.esc(x.title) + '</a> <span class="muted small">' + P.esc([x.kind, x.date].filter(Boolean).join(" · ")) + "</span></li>").join("") + "</ul>");
-    if ((a.verify || []).length) h.push("<h2>要核实</h2><ul class=\"list\">" + a.verify.map((v) => "<li>" + P.esc(v) + "</li>").join("") + "</ul>");
+    if ((a.verify || []).length) h.push("<h2>要核实</h2>" + (review ? '<p class="muted small">每条后面点一下:自己看过了点「已复核」,让助手去查点「帮我复核」,不用管的点「忽略此项」。按钮只记你的处理,不会变成一句话交给模型,模型看到的还是原文。</p>' : "") +
+      '<ul class="list">' + a.verify.map((v, i) => '<li class="rv-li"><span class="rv-item">' + P.esc(v) + "</span>" + (review ? reviewBox("要核实", review.keys["要核实|" + i], v, "") : "") + "</li>").join("") + "</ul>");
+    if (review) h.push('<div class="note n-info small rv-unsaved"' + (r.review_saved === false ? "" : " hidden") + '>复核的点选这次只在这一页有效:库里还没建「助手复核记录」表,管理员跑一次建表命令后就能保存,下次再看同一份材料还在。</div>');
     h.push('<div class="lk-act"></div>');
     if ((r.notes || []).length) h.push('<p class="muted small">' + r.notes.map(P.esc).join(";") + "</p>");
     if (a.model) h.push('<p class="muted small">分析由模型(' + P.esc(a.model) + ")读这一页原文写出,只是建议;入库后照常由人确认归属。</p>");
     body.innerHTML = h.join("");
+    if (review) wireReviews(body, r, url);
     const act = body.querySelector(".lk-act");
     if ((r.same_url || []).length) return;
     if (!(await P.canWrite())) { act.innerHTML = '<span class="muted small">你的帐号只能看,不能入库。</span>'; return; }

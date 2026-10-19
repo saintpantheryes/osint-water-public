@@ -6,7 +6,7 @@
 schema: osint-water/teable-map@1
 base: 水务项目机会 新版
 timezone: Asia/Shanghai
-order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award, study, water_event, water_area, law, law_clause, local_term, discharge_limit, phrase, ask_log]   # 建表顺序(关联字段在所有表建好后再加)
+order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award, study, water_event, water_area, law, law_clause, local_term, discharge_limit, phrase, ask_log, review]   # 建表顺序(关联字段在所有表建好后再加)
 
 tables:
   lead:
@@ -147,6 +147,10 @@ tables:
     table: 助手提问记录
     primary: question
     optional: true   # 2026-10-15 新加的表:库里还没建时助手不记提问、页面不给答对答错按钮
+  review:
+    table: 助手复核记录
+    primary: item
+    optional: true   # 2026-10-19 新加的表:库里还没建时复核按钮的点选只在这一页有效
   report:
     table: 报告
     key: {name: 文件名, note: 报告文件的文件名(含扩展名);生成报告时写,迁移与再生成按它增量——附件上传失败也认得出这一行}
@@ -265,6 +269,9 @@ views:
   ask_log:
     - {name: 错题本, filter: {and: [[反馈, is, 答错了]]}, group: [[处理状态, asc]], sort: [[提问时间, desc]]}
     - {name: 每天复查, filter: {and: [[应理解为, isNotEmpty]]}, sort: [[提问时间, desc]]}
+  review:
+    - {name: 按材料, group: [[材料, asc]], sort: [[时间, desc]]}
+    - {name: 助手核的, filter: {and: [[处理, is, 助手已核]]}, sort: [[时间, desc]]}
   local_term:
     - {name: 待核实, filter: {and: [[核实状态, is, 待核实]]}, group: [[所属国别, asc]]}
   study:

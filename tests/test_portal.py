@@ -147,9 +147,9 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
             self.wfile.write(resp.content)
 
         def do_POST(self):  # noqa: N802
-            if self.path.startswith("/api/assistant/link"):  # 看一条链接:像 Caddy 那样带上登录标记转给真的助手接口
+            if self.path.startswith("/api/assistant/link") or self.path.startswith("/api/assistant/review"):  # 看一条链接、复核按钮:像 Caddy 那样带上登录标记转给真的助手接口
                 n = int(self.headers.get("Content-Length") or 0)
-                r = httpx.post(f"http://127.0.0.1:{self.assistant_port}/link", content=self.rfile.read(n), timeout=30,
+                r = httpx.post(f"http://127.0.0.1:{self.assistant_port}" + self.path[len("/api/assistant"):], content=self.rfile.read(n), timeout=30,
                                headers={"X-Portal-Auth": "1", "Content-Type": "application/json", "Cookie": "auth_session=" + token})
                 self.send_response(r.status_code)
                 self.send_header("Content-Type", "application/json")
@@ -2099,7 +2099,9 @@ def test_trend_page_marks_self_funded_and_loan_driven_cities():
 def test_home_link_gets_analysis_and_can_be_saved_as_a_lead(monkeypatch):
     """提问框贴网址(使用方 2026-10-09):不去匹配查询条件,而是看这条链接——建议放最前(加粗加大),原文、信源、时效、库里相关、
     要核实;「收进线索库」以登录人身份建一行(来源方式「用户上传」、国别、附言写进处理备注),之后后台补全;同一网址再贴就是「已在库」。
-    2026-10-18 使用方:发链接要直接给能不能投标的结论并附报告——结论(三档)放最前,八项检查每条带依据链接,「下载评估报告(Word)」按钮;入库建议退到后面。"""
+    2026-10-18 使用方:发链接要直接给能不能投标的结论并附报告——结论(三档)放最前,八项检查每条带依据链接,「下载评估报告(Word)」按钮;入库建议退到后面。
+    2026-10-19 使用方:要核实的每条、库里可能是同一项目的每条线索后面有 已复核 / 帮我复核 / 忽略此项(线索:是同一项目 / 帮我复核 / 不是同一项目);
+    点了记进「助手复核记录」、八项检查当场重算;「帮我复核」助手自己查并给结论;同一网址再贴,点过的还在。"""
     import os
     from playwright.sync_api import Error as PWError, sync_playwright
     from core import bid_check
@@ -2159,6 +2161,40 @@ def test_home_link_gets_analysis_and_can_be_saved_as_a_lead(monkeypatch):
             if os.environ.get("PORTAL_SHOTS"):
                 page.screenshot(path=os.environ["PORTAL_SHOTS"] + "/link_check.png", full_page=True)
                 page.locator(".answer").nth(0).screenshot(path=os.environ["PORTAL_SHOTS"] + "/助手判投标_单条链接.png")
+            # 复核按钮:3 条要核实 + 1 条库里线索,各三个按钮;表建了,不提示「只在这一页有效」
+            assert page.locator(".rv").count() == 4 and page.locator(".rv-unsaved").is_hidden() and "不会变成一句话交给模型" in ans
+            lead_box = page.locator(".rv[data-kind=库里线索]")
+            assert lead_box.locator(".rv-btns .chip-btn").all_inner_texts() == ["是同一项目", "帮我复核", "不是同一项目"]
+            assert page.locator(".rv[data-kind=要核实]").first.locator(".rv-btns .chip-btn").all_inner_texts() == ["已复核", "帮我复核", "忽略此项"]
+            lead_box.locator("button[data-st=是同一项目]").click()
+            page.wait_for_selector(".rv[data-kind=库里线索] .rv-state .tag", timeout=10000)
+            assert lead_box.locator(".rv-state").inner_text().startswith("是同一项目") and lead_box.locator(".rv-btns").is_hidden() and lead_box.locator(".rv-edit").is_visible()
+            page.wait_for_function("document.querySelector('.lk-bid .lk-check:nth-child(7)').textContent.includes('库里已有这一条')", timeout=10000)  # 八项检查当场重算
+            # 帮我复核:助手查到了世行原公告和截止日 → 结论、把握、依据链接;信源、时间两项跟着变
+            srv.bot.clf = _clf({"found": True, "conclusion": "世行同一项目的公告写明 2026-12-15 截止。", "confidence": "高",
+                                "facts": {"deadline": "2026-12-15", "stage": None, "category": None, "amount": None, "requirements": None}, "evidence": [1]}, [])
+            srv.bot.link_kw["verify"] = lambda item, iso: {"original": {"kind": "世行采购公告", "title": "UZ Surum WWTP EOI", "url": "https://projects.worldbank.org/n/1", "deadline": "2026-12-15"},
+                                                            "sure": True, "candidates": [], "news": [], "links": [], "notes": []}
+            v0 = page.locator(".rv[data-kind=要核实]").nth(0)
+            v0.locator("button[data-st=帮我复核]").click()
+            page.wait_for_selector(".rv[data-kind=要核实] .rv-concl", timeout=15000)
+            assert v0.locator(".rv-state").inner_text().replace(" ", "") == "助手已核把握高" and v0.locator(".rv-concl").inner_text().startswith("世行同一项目的公告写明 2026-12-15 截止。")
+            assert v0.locator(".rv-concl a").get_attribute("href") == "https://projects.worldbank.org/n/1"
+            page.wait_for_function("document.querySelector('.lk-bid .lk-check:nth-child(5)').textContent.includes('2026-12-15 截止')", timeout=10000)
+            assert "找到了原公告(世行采购公告)" in page.locator(".lk-bid .lk-check").nth(1).inner_text()
+            # 忽略此项:划掉
+            v1 = page.locator(".rv[data-kind=要核实]").nth(1)
+            v1.locator("button[data-st=已忽略]").click()
+            page.wait_for_selector(".rv[data-kind=要核实] >> nth=1 >> .rv-state .tag", timeout=10000)
+            assert page.locator("li.rv-off").count() == 1 and page.evaluate("getComputedStyle(document.querySelector('li.rv-off .rv-item')).textDecorationLine") == "line-through"
+            rows = b.rows("review")
+            assert len(rows) == 3 and sorted(b.get("review", r, "status") for r in rows) == ["助手已核", "已忽略", "是同一项目"] and all(b.get("review", r, "material") == URL for r in rows)
+            if os.environ.get("PORTAL_SHOTS"):
+                page.locator(".answer").nth(0).screenshot(path=os.environ["PORTAL_SHOTS"] + "/助手复核按钮.png")
+                page.set_viewport_size({"width": 390, "height": 800})
+                page.locator(".answer").nth(0).screenshot(path=os.environ["PORTAL_SHOTS"] + "/助手复核按钮_手机.png")
+                page.set_viewport_size({"width": 1366, "height": 900})
+            srv.bot.clf = _clf({**MODEL, "deadline": "2026-11-20", "jv": "允许", "pros": ["资金方明确"], "cons": ["2023 年的信息,进展不明"]}, [])
             page.click(".lk-act button")
             page.wait_for_selector(".lk-act b", timeout=10000)
             row = next(r for r in b.rows("lead") if b.get("lead", r, "url") == URL)
@@ -2170,6 +2206,8 @@ def test_home_link_gets_analysis_and_can_be_saved_as_a_lead(monkeypatch):
             page.wait_for_function("document.querySelectorAll('.lk-advice').length === 4", timeout=15000)
             assert page.locator(".lk-advice").nth(3).inner_text() == "入库建议:已在库" and page.locator(".lk-act").nth(1).inner_text() == ""
             assert "库里已有这一条" in page.locator(".lk-bid").nth(1).inner_text()
+            second = page.locator(".answer").nth(0)  # 新答案在最前
+            assert second.locator(".rv-state .tag").all_inner_texts() == ["是同一项目", "助手已核", "已忽略"] and "2026-12-15 截止" in second.locator(".lk-bid").inner_text()  # 点过的还在,评估按它算
             if os.environ.get("PORTAL_SHOTS"):
                 page.set_viewport_size({"width": 390, "height": 800})
                 page.locator(".answer").nth(0).screenshot(path=os.environ["PORTAL_SHOTS"] + "/link_check_phone.png")

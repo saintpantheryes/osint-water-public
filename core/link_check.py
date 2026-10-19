@@ -29,6 +29,7 @@ from urllib.parse import urlparse
 import httpx
 
 from core import geo
+from core.review import material_of
 from core.file_text import FileError, file_text
 from core.storage import USER_AGENT
 from core.watch.fetch import Page
@@ -844,7 +845,7 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
     notes += more
     adv = _advice(src, a, lib)
     step("投标评估")
-    bid = _bid(a, src, lib, found, iso, url, page.url, title, today, scope, records)
+    bid, bid_facts = _bid(a, src, lib, found, iso, url, page.url, title, today, scope, records)
     pub = (a or {}).get("info_date") or _published(page)
     draft = {"title": title, "url": page.url if not src.get("redirected_from") else url, "origin": "用户上传"}
     if a:
@@ -861,11 +862,13 @@ def check(url: str, note: str, today: date, clf=None, db=None, *, fetch=fetch_pa
                      + (f" 用户附言:{note.strip()}" if note.strip() else ""))[:2000]
     return {"ok": True, "url": url, "final_url": page.url, "domain": src["domain"], "title": title, "published": pub,
             "country": {"iso3": iso, "name": geo.name_zh(iso)} if iso else None, "source": src, "analysis": a, **lib,
-            "outside": found, "advice": adv, "bid": bid, "question": answer_question((a or {}).get("question"), a, None, db, today), "draft": draft, "notes": notes}
+            "outside": found, "advice": adv, "bid": bid, "bid_facts": bid_facts, "material": material_of(url, page.url, upload),
+            "question": answer_question((a or {}).get("question"), a, None, db, today), "draft": draft, "notes": notes}
 
 
-def _bid(a: dict | None, src: dict, lib: dict, found: list[dict], iso: str | None, url: str, final_url: str, title: str, today: date, scope, records) -> dict:
-    """单条链接或文件 → 投标评估(core.bid_check.assess)。原公告:官方或开发银行网站自己就是;媒体转述的看世行渠道里有没有对得上的。"""
+def _bid(a: dict | None, src: dict, lib: dict, found: list[dict], iso: str | None, url: str, final_url: str, title: str, today: date, scope, records) -> tuple[dict, dict]:
+    """单条链接或文件 → (投标评估(core.bid_check.assess), 评估依据 facts)。facts 随结果给页面,人点了复核按钮后按它重算(core.review.rebid)。
+    原公告:官方或开发银行网站自己就是;媒体转述的看世行渠道里有没有对得上的。"""
     from core import bid_check
     a = a or {}
     names = a.get("names") or []
@@ -878,4 +881,4 @@ def _bid(a: dict | None, src: dict, lib: dict, found: list[dict], iso: str | Non
     facts = {"title": a.get("title_zh") or title, "url": final_url or url, "country": iso, "sectors": a.get("sectors") or [], "stage": a.get("stage"),
              "category": a.get("category"), "deadline": a.get("deadline"), "requirements": a.get("requirements"), "credibility": a.get("credibility") or {},
              "source": src, "original": original, "sure": sure, "outside": found, "verify_links": [], "pros": a.get("pros") or [], "cons": a.get("cons") or []}
-    return bid_check.assess(facts, today, records, scope, lib)
+    return bid_check.assess(facts, today, records, scope, lib), facts
