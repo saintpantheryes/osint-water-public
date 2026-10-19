@@ -392,11 +392,21 @@ def test_country_report_cover_and_toc_are_separate_pages_with_links(tmp_path, mo
     md.write_text("---\ntitle: \"X 水务市场分析报告\"\nsubtitle: \"内部资料　仅供参考\"\ndate: \"2026 年 10 月\"\n---\n\n目　录\n\n# 摘要\n\n要点。\n\n"
                   "# 第 1 章 研究背景\n\n## 1.1 目的\n\n正文。\n\n# 第 2 章 国家概况\n\n正文。\n\n# 附录\n\n## 附录 A 数据来源登记\n\n来源。\n", encoding="utf-8")
     monkeypatch.setattr(reporting, "toc_pages", lambda path: {"_Toc001": 3, "_Toc002": 4, "_Toc003": 5, "_Toc004": 6})  # 像本机装了排版软件
+    monkeypatch.setattr(reporting, "_org_of", lambda path: "能源环保事业部")  # 像项目报告模板写了编制单位
     out = reporting.to_docx_styled(md, tmp_path / "r.docx", template=tmp_path / "none.docx")
     d = docx.Document(str(out))
     paras = d.paragraphs
     toc_title = next(p for p in paras if p.text.strip() == "目　录")
+    # 封面照成稿(使用方 10-19 对照截图):标题前空 5 行、黑体 26 号加粗居中;底部编制单位(加粗)、年月、版本三行居中;再往下才是目录页
+    cover = paras[:paras.index(toc_title)]
+    texts = [p.text for p in cover]
+    assert texts[:6] == ["", "", "", "", "", "X 水务市场分析报告"] and texts[-3:] == ["能源环保事业部", "2026 年 10 月", "内部资料　仅供参考"]
+    title_run = cover[5].runs[0]
+    assert title_run.font.size.pt == 26 and title_run.font.bold and cover[5].paragraph_format.alignment == 1
+    assert cover[-3].runs[0].font.bold and cover[-3].runs[0].font.size.pt == 12 and cover[-1].runs[0].font.size.pt == 9.5
+    assert all(p.paragraph_format.alignment == 1 for p in cover[-3:]) and all(p.text == "" for p in cover[6:-3]) and len(cover) == 6 + 20 + 3
     assert toc_title.paragraph_format.page_break_before and toc_title.style.name != "Heading 1"  # 目录自己不进目录
+    assert toc_title.paragraph_format.alignment == 0 and toc_title.runs[0].font.size.pt == 18  # 成稿的「目　录」靠左、18 号加粗
     entries = [p for p in paras if p._p.find(qn("w:hyperlink")) is not None and p._p.find(qn("w:hyperlink")).get(qn("w:anchor"))]
     assert [e.text for e in entries] == ["摘要\t3", "第 1 章 研究背景\t4", "第 2 章 国家概况\t5", "附录\t6"]  # 一级标题各一条(节不列),制表到行末接页码
     anchors = [e._p.find(qn("w:hyperlink")).get(qn("w:anchor")) for e in entries]
