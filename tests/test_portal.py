@@ -253,9 +253,13 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
         from core import sample
         real = tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None)
         return sample.SampleClient(real, today=_today) if sample_data else real
+    _tok = lambda cookie: str(cookie or "").split("=", 1)[-1]  # noqa: E731
     bot = Assistant(None, feed=calendar_feed.Feed(base_factory=lambda: tstore.Base(tstore.Client("https://water.example", token, transport=fake.transport, sleep=lambda s: None))),
                     guest=guest_mod.Guest(base_factory=lambda: tstore.Base(_guest_client()),
-                                          outsider=lambda cookie: fake.tokens.get(str(cookie or "").split("=", 1)[-1], ("", "none"))[1] == "none"))
+                                          real_factory=lambda: tstore.Base(tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None)),
+                                          partners=["@bewg.example"],  # 伙伴名单(私有 team.yaml partners):库外账号里邮箱是这个域名的走伙伴档
+                                          whoami=lambda cookie: fake.users.get(fake.tokens.get(_tok(cookie), ("",))[0], {}).get("email", ""),
+                                          outsider=lambda cookie: fake.tokens.get(_tok(cookie), ("", "none"))[1] == "none"))
     bot.feed_token = "test-token"
     if log_asks:  # 记提问用机器账号写真实库(同主机上的助手接口)
         bot.who = lambda cookie: "管理员 <admin@example.org>"
@@ -1007,6 +1011,70 @@ def test_outsider_guest_sees_only_public_content_through_the_worker():
     direct = [p for p in srv.browser_api if p[1].startswith("/api/table/")]
     assert direct == [], direct  # 浏览器没有直接读过表格
     assert all(p[0] == "GET" or p[1] == "/api/auth/signout" for p in srv.browser_api)
+    writes = [x for x in fake.calls[seeded:] if x[0] != "GET"]
+    assert writes == [], writes
+
+
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_partner_sees_real_public_content_but_no_opportunities():
+    """伙伴帐号(库外、邮箱在伙伴名单里,本体 partner 节):读的是真实库——线索总览有真国别,报告页只有公开版;商机总览、商机工作台、日历、线索处理
+    直接打开只给一句说明,菜单里也不列;我方资料不给;帐号区标「伙伴 · 只读」;浏览器没有一个读表请求直接打到表格,没有写。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    from datetime import date
+    today = date.today()
+    b.create("report", [{"kind": "周报", "day": today.isoformat(), "period": "2026-W41", "edition": "公开版", "gen_status": "完成", "key": "周报_2026-W41_公开版.docx"},
+                        {"kind": "国别报告", "day": today.isoformat(), "country": c["id"], "edition": "公开版", "gen_status": "完成", "key": "国别报告_AZE_公开版.docx"},
+                        {"kind": "项目报告", "day": today.isoformat(), "opportunity": o["id"], "edition": "内部版", "gen_status": "完成", "key": "项目报告_AZE-001_内部版.docx"}])
+    b.update("opportunity", o["id"], {"internal_note": "报价底线 4000 万", "priority": "A"})
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg, token="partner-token", sample_data=True)  # 游客这时看示例;伙伴不受影响,读真实库
+    base = f"http://127.0.0.1:{srv.server_port}"
+    seeded = len(fake.calls)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page()
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+            page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text} @ {page.url}") if m.type == "error" and "/media/" not in (m.location or {}).get("url", "") and "403" not in m.text else None)
+            # 线索总览:真实国别在,示例的没有;帐号区「伙伴 · 只读」;菜单里没有商机总览、日历、线索处理
+            page.goto(base + "/overview.html")
+            page.wait_for_function("document.querySelector('#acct .who b') && document.body.innerText.includes('阿塞拜疆')", timeout=15000)
+            page.wait_for_function("!document.body.innerText.includes('读取中')", timeout=15000)
+            body = page.inner_text("body")
+            assert "塔什干北区供水管网改造" not in body and "报价底线" not in body
+            assert "伙伴 · 只读" in page.inner_text("#acct .who")
+            assert page.locator("#nav a[href='opps.html']").count() == 0 and page.locator("#nav a[href='calendar.html']").count() == 0 and page.locator("#nav a[href='inbox.html']").count() == 0
+            assert page.locator("#nav .groups a[href='reports.html']").count() == 1 and page.locator("#nav .groups a[href='country.html']").count() == 1  # 组名「商机跟进」改指报告页
+            assert page.locator("a[href^='/base/']:visible").count() == 0
+            # 报告页:公开版的周报、国别报告在,内部版的项目报告不在
+            page.goto(base + "/reports.html")
+            page.wait_for_selector("#list table", timeout=15000)
+            page.wait_for_selector(".guest-note", timeout=15000)
+            rows = page.inner_text("#list")
+            assert "伙伴帐号" in page.inner_text(".guest-note") and "2026-W41" in rows and "国别报告" in rows and "内部版" not in rows and "项目报告" not in rows
+            # 商机总览、商机工作台、日历、线索处理:只有一句说明,没有商机内容
+            for path in ("/opps.html", f"/opp.html?id={o['id']}", "/calendar.html", "/inbox.html"):
+                page.goto(base + path)
+                page.wait_for_selector(".guest-note", timeout=15000)
+                txt = page.inner_text("body")
+                assert "伙伴帐号不开放" in txt and "甘贾污水厂" not in txt and "AZE-001" not in txt, path
+            # 我方资料:不给
+            page.goto(base + "/company.html")
+            page.wait_for_function("document.querySelector('#list').innerText.includes('伙伴帐号')", timeout=15000)
+            assert page.locator("#form").is_hidden()
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    direct = [p for p in srv.browser_api if p[1].startswith("/api/table/")]
+    assert direct == [], direct
     writes = [x for x in fake.calls[seeded:] if x[0] != "GET"]
     assert writes == [], writes
 

@@ -69,7 +69,7 @@ class Assistant:
         self.log = log
         # 日历订阅、游客只读通道:有 profile(后台任务进程里)就连库;单独跑或测试时可注入
         self.feed = feed if feed is not None else (calendar_feed.Feed(tz=tz, log=log) if profile is not None else None)
-        self.guest = guest if guest is not None else (guest_mod.Guest(log=log) if profile is not None else None)
+        self.guest = guest if guest is not None else (guest_mod.Guest(log=log, partners=guest_mod.load_partners(profile)) if profile is not None else None)
         # 游客(库外的登录账号)下载日历:示例数据(本体 guest.data: sample 时游客通道的库就是示例库)
         self.guest_feed = calendar_feed.Feed(base_factory=lambda: self.guest.base(), tz=tz, log=log) if self.guest is not None else None
         if profile is not None:  # 问金额时按后台当天的汇率折人民币
@@ -505,10 +505,21 @@ def make_handler(bot: Assistant):
             self.wfile.write(body)
 
         def _outsider(self) -> bool:
-            """登录了、但不是库里的人(游客)。没有游客通道(单独跑、测试)时不算。"""
+            """登录了、但不是库里的人(游客或伙伴)。没有游客通道(单独跑、测试)时不算。"""
             if bot.guest is None:
                 return False
             return bot.guest.is_outsider(self.headers.get("Cookie"))
+
+        def _tier(self) -> str:
+            """登录人的档:member / partner / guest(core/guest.py)。测试里只给了 is_outsider 的桩:库外的按游客。"""
+            if bot.guest is None:
+                return "member"
+            if hasattr(bot.guest, "tier"):
+                return bot.guest.tier(self.headers.get("Cookie"))
+            return "guest" if bot.guest.is_outsider(self.headers.get("Cookie")) else "member"
+
+        def _oname(self) -> str:
+            return "伙伴帐号" if self._tier() == "partner" else "游客帐号"
 
         def _site(self) -> str:
             host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or ""
@@ -527,8 +538,8 @@ def make_handler(bot: Assistant):
                 return
             feed = bot.feed
             if logged_in and self._outsider():
-                if bot.guest_feed is None:
-                    self._send(403, {"ok": False, "error": "游客帐号不能下载日历"})
+                if bot.guest_feed is None or self._tier() == "partner":  # 伙伴看不到节点与跟进,没有日历可下
+                    self._send(403, {"ok": False, "error": self._oname() + "不能下载日历"})
                     return
                 feed = bot.guest_feed
             try:
@@ -555,18 +566,21 @@ def make_handler(bot: Assistant):
                 self._send(503, {"ok": False, "error": "游客通道未启用"})
                 return
             parts = path.split("/")[2:]  # ["policy"] | ["table", 表, "record"[, 记录]] | ["table", 表, "aggregation", "row-count"]
+            tier = self._tier()  # 库里的人也能问(页面只在 403 后才来问,按游客答)
+            if tier == "member":
+                tier = "guest"
             try:
                 if parts == ["policy"]:
-                    out: dict | None = bot.guest.policy().public()
+                    out: dict | None = {**bot.guest.policy(tier).public(), "tier": tier}
                 elif len(parts) == 3 and parts[0] == "table" and parts[2] == "record":
-                    out = bot.guest.records(parts[1], qs)
+                    out = bot.guest.records(parts[1], qs, tier)
                 elif len(parts) == 4 and parts[0] == "table" and parts[2] == "record":
-                    out = bot.guest.record(parts[1], parts[3])
+                    out = bot.guest.record(parts[1], parts[3], tier)
                     if out is None:
                         self._send(404, {"ok": False, "error": "没有这条记录"})
                         return
                 elif len(parts) == 4 and parts[0] == "table" and parts[2:] == ["aggregation", "row-count"]:
-                    out = bot.guest.count(parts[1], qs)
+                    out = bot.guest.count(parts[1], qs, tier)
                 else:
                     self._send(404, {"ok": False, "error": "not found"})
                     return
@@ -588,7 +602,7 @@ def make_handler(bot: Assistant):
                 if self.headers.get("X-Portal-Auth") != "1" and not bot.allow_link_without_auth:
                     self._send(403, {"ok": False, "error": "请先登录"})
                 elif self._outsider():
-                    self._send(200, {"ok": False, "done": True, "error": "游客帐号不能用这个功能(要查真实的线索库);可以用正式帐号登录后再试"})
+                    self._send(200, {"ok": False, "done": True, "error": self._oname() + "不能用这个功能(要查真实的线索库与本单位业绩);可以用正式帐号登录后再试"})
                 elif path.endswith("/report.docx"):
                     rep = bot.report_file(path[len("/link/"):-len("/report.docx")])
                     if rep is None:
@@ -614,7 +628,7 @@ def make_handler(bot: Assistant):
                     self._send(403, {"ok": False, "error": "请先登录"})
                     return
                 if self._outsider():
-                    self._send(200, {"ok": False, "error": "游客帐号不能订阅日历(订阅链接给的是真实数据);可以用「下载 .ics」看示例"})
+                    self._send(200, {"ok": False, "error": self._oname() + "不能订阅日历(订阅链接给的是真实数据)" + ("" if self._tier() == "partner" else ";可以用「下载 .ics」看示例")})
                     return
                 token = bot.feed_token if bot.feed_token is not None else calendar_feed.feed_token()
                 if not token or bot.feed is None:
@@ -648,7 +662,7 @@ def make_handler(bot: Assistant):
                     self._send(403, {"ok": False, "error": "请先登录"})
                     return
                 if self._outsider():
-                    self._send(200, {"ok": False, "error": "游客帐号不能用这个功能(要查真实的线索库);可以用正式帐号登录后再试"})
+                    self._send(200, {"ok": False, "error": self._oname() + "不能用这个功能(要查真实的线索库与本单位业绩);可以用正式帐号登录后再试"})
                     return
                 try:
                     upload = base64.b64decode(str(data.get("file") or ""), validate=True) if data.get("file") else None
@@ -693,7 +707,7 @@ def make_handler(bot: Assistant):
                     self._send(403, {"ok": False, "error": "请先登录"})
                     return
                 if self._outsider():
-                    self._send(403, {"ok": False, "error": "游客帐号不能反馈"})
+                    self._send(403, {"ok": False, "error": self._oname() + "不能反馈"})
                     return
                 if not bot.can_log():
                     self._send(200, {"ok": False, "error": "库里还没有「助手提问记录」表"})
@@ -715,7 +729,7 @@ def make_handler(bot: Assistant):
                 if self.headers.get("X-Portal-Auth") != "1" and not bot.allow_link_without_auth:
                     self._send(403, {"ok": False, "error": "请先登录"})
                     return
-                if self._outsider():
+                if self._tier() == "guest":  # 法规是公开资料:伙伴可以查,游客(示例数据)不行
                     self._send(403, {"ok": False, "error": "游客帐号不能查法规条文"})
                     return
                 lp = data.get("law") if isinstance(data.get("law"), dict) else {}

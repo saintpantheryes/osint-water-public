@@ -98,6 +98,7 @@
 
   try {
     await P.load();
+    if (P.isPartner) return P.partnerOnly();  // 伙伴帐号不开放商机跟进
     if (P.isGuest) document.querySelectorAll('#tabs [data-t="over"], #tabs [data-t="review"], #tab-over, #tab-review').forEach((el) => el.remove());  // 游客没有跟进可做
     showTab(tab);
     $("tbl").href = P.tableUrl("opportunity");

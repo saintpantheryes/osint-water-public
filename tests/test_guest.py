@@ -115,3 +115,77 @@ def test_server_guest_routes_need_login_mark(monkeypatch):
         assert httpx.get(f"http://127.0.0.1:{srv2.server_port}/guest/policy", headers={"X-Portal-Auth": "1"}).status_code == 503
     finally:
         srv2.shutdown()
+
+
+def test_partner_policy_and_tier():
+    """伙伴(本体 partner 节):线索去掉处理备注、国别去掉我方机构与备注;商机、节点、跟进、我方资料整表不给;报告只给公开版(不限类型)。
+    分档:库里的人 member;库外的按邮箱对伙伴名单(邮箱或 @域名,大小写不分)→ partner / guest;伙伴读真实库,游客读示例库。"""
+    fake, b, bot_base, c, o, ld = _base_with_reports()
+    p = guest_mod.Policy(bot_base, section="partner")
+    assert p.section == "partner" and "opportunity" not in p.by_oid and "milestone" not in p.by_oid and "followup" not in p.by_oid and "company" not in p.by_oid
+    assert {"lead", "country", "report", "law", "city", "award"} <= set(p.by_oid)
+    assert b.fid("lead", "note") in p.by_oid["lead"]["deny"] and b.fid("country", "presence") in p.by_oid["country"]["deny"] and b.fid("country", "note") in p.by_oid["country"]["deny"]
+    assert p.by_oid["report"]["rows"]["filterSet"] == [b.cond("report", "edition", "is", "公开版")]
+    assert "伙伴" in p.public()["note"]
+    with pytest.raises(guest_mod.Denied):
+        p.table(b.t["opportunity"])
+    # 名单匹配
+    assert guest_mod.is_partner("Chen@BEWG.example", ["@bewg.example"]) and guest_mod.is_partner("a@x.example", ["a@x.example"]) and not guest_mod.is_partner("a@x.example", ["@bewg.example"]) and not guest_mod.is_partner("", ["@bewg.example"]) and not guest_mod.is_partner("a@notbewg.example", ["@bewg.example"])
+    # 分档 + 伙伴读真实库:商机一条不给,报告给公开版(两份:周报、项目报告都是公开版)
+    sample_base = tstore.Base(tstore.Client("https://water.example", "bot-token", transport=fake.transport, sleep=lambda s: None))
+    g = guest_mod.Guest(base_factory=lambda: sample_base, real_factory=lambda: bot_base, partners=["@bewg.example"],
+                        outsider=lambda cookie: cookie != "member", whoami=lambda cookie: {"p": "chen@bewg.example", "g": "someone@other.com"}.get(cookie, ""))
+    assert g.tier("member") == "member" and g.tier("p") == "partner" and g.tier("g") == "guest" and g.tier(None) == "guest"
+    assert g.outsider_name("p") == "伙伴帐号" and g.outsider_name("g") == "游客帐号"
+    with pytest.raises(guest_mod.Denied):
+        g.records(b.t["opportunity"], {}, tier="partner")
+    assert g.records(b.t["opportunity"], {}, tier="guest")["records"]  # 游客那一档照旧放行商机的公开部分
+    reps = g.records(b.t["report"], {}, tier="partner")["records"]
+    assert len(reps) == 2 and all(r["fields"][b.fid("report", "edition")] == "公开版" for r in reps) and all(b.fid("report", "requested_by") not in r["fields"] for r in reps)
+    assert g.count(b.t["report"], {}, tier="partner") == {"rowCount": 2}
+    leads = g.records(b.t["lead"], {}, tier="partner")["records"]
+    assert leads and all(b.fid("lead", "note") not in r["fields"] for r in leads)
+    with pytest.raises(guest_mod.Denied):  # 条件里用了伙伴看不到的字段
+        g.records(b.t["country"], {"filter": [json.dumps(b.filter(b.cond("country", "presence", "isNotEmpty")))]}, tier="partner")
+    # 没有名单:库外的都是游客
+    g2 = guest_mod.Guest(base_factory=lambda: sample_base, outsider=lambda cookie: True, whoami=lambda cookie: "chen@bewg.example")
+    assert g2.tier("x") == "guest"
+
+
+def test_load_partners_reads_private_team_yaml(tmp_path):
+    (tmp_path / "team.yaml").write_text("members:\n  - {code: 市场一部-01, teable: LGH}\npartners:\n  - {email: Chen@bewg.example, org: 北控水务}\n  - '@other.example'\n  - {org: 没写邮箱的不算}\n", encoding="utf-8")
+    prof = type("P", (), {"path": str(tmp_path / "profile.yaml")})()
+    assert guest_mod.load_partners(prof) == ["chen@bewg.example", "@other.example"]
+    assert guest_mod.load_partners(type("P", (), {"path": str(tmp_path / "nope" / "profile.yaml")})()) == []
+    assert guest_mod.load_partners(type("P", (), {})()) == []
+
+
+def test_server_guest_routes_answer_by_tier(monkeypatch):
+    """接口按登录 cookie 分档:伙伴的 policy 带 tier: partner、读真实库、商机 403;游客照旧;法规问答伙伴可用、游客不行;伙伴不能下载日历。"""
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    fake, b, bot_base, c, o, ld = _base_with_reports()
+    g = guest_mod.Guest(base_factory=lambda: bot_base, real_factory=lambda: bot_base, partners=["@bewg.example"],
+                        outsider=lambda cookie: "member" not in str(cookie), whoami=lambda cookie: "chen@bewg.example" if "partner" in str(cookie) else "x@y.example")
+    bot = Assistant(None, guest=g)
+    srv = serve(bot, 0, host="127.0.0.1")
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{srv.server_port}"
+        P, G = {"X-Portal-Auth": "1", "Cookie": "auth_session=partner"}, {"X-Portal-Auth": "1", "Cookie": "auth_session=guest"}
+        pp, gp = httpx.get(base + "/guest/policy", headers=P).json(), httpx.get(base + "/guest/policy", headers=G).json()
+        assert pp["tier"] == "partner" and "opportunity" not in pp["objects"] and "伙伴" in pp["note"]
+        assert gp["tier"] == "guest" and "opportunity" in gp["objects"]
+        assert httpx.get(base + f"/guest/table/{b.t['opportunity']}/record", headers=P).status_code == 403
+        assert len(httpx.get(base + f"/guest/table/{b.t['opportunity']}/record", headers=G).json()["records"]) == 2
+        assert httpx.get(base + f"/guest/table/{b.t['report']}/aggregation/row-count", headers=P).json() == {"rowCount": 2}
+        assert httpx.get(base + f"/guest/table/{b.t['report']}/aggregation/row-count", headers=G).json() == {"rowCount": 1}
+        assert httpx.get(base + f"/guest/table/{b.t['lead']}/record/{ld['id']}", headers=P).status_code == 200
+        assert httpx.get(base + f"/guest/table/{b.t['opportunity']}/record/{o['id']}", headers=P).status_code == 403
+        assert httpx.post(base + "/law", json={"q": "排放标准"}, headers=G).status_code == 403
+        assert httpx.post(base + "/law", json={"q": "排放标准"}, headers=P).status_code == 200  # 伙伴可以问法规(没连法规库时接口答不出,但不是拒绝)
+        r = httpx.post(base + "/link", json={"url": "https://example.org/x"}, headers=P).json()
+        assert r["ok"] is False and r["error"].startswith("伙伴帐号")
+        assert httpx.get(base + "/feed-link", headers=P).json()["error"].startswith("伙伴帐号")
+    finally:
+        srv.shutdown()

@@ -11,6 +11,10 @@ guest 节里列的对象与属性,报告只给定期报告的公开版;跟进记
     GET /guest/table/{表}/record/{记录}                  →  一条记录(报告要符合行规则,否则 404)
     GET /guest/table/{表}/aggregation/row-count?filter=… →  计数
 
+伙伴帐号(2026-10-20 起,本体 partner 节 + 私有 team.yaml 的 partners 名单):也是库外的登录账号,但邮箱在伙伴名单里(写邮箱或 @域名)。
+伙伴走同一条通道读**真实库**,放行范围按本体 partner 节算(线索、国别、城市、趋势、法规、公开版报告;商机、节点、跟进、我方资料整表不给),
+不在名单里的库外账号照旧是游客(示例数据)。通道的每个接口按登录 cookie 分三档(tier):member(库里的人,不走这里)/ partner / guest。
+
 示例数据(本体 guest.data: sample,2026-10-09 起):游客看到的记录全部来自 core/sample.py 编的示例,真实库只提供表与字段的结构;
 放行范围照旧按上面的规则算(两道关)。日历下载也给游客换成示例(is_outsider 按登录 cookie 问表格这人是不是库里的人)。
 """
@@ -20,9 +24,11 @@ import json
 import os
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
 
 from core import ontology as onto_mod
 from core import sample, tstore
@@ -38,8 +44,9 @@ class Denied(Exception):
 class Policy:
     """按本体 guest 节 + 库里的编号算出:哪些表能看、每表去掉哪些字段、报告的行规则。"""
 
-    def __init__(self, b: tstore.Base, raw: dict | None = None):
-        g = (raw if raw is not None else onto_mod.raw()).get("guest") or {}
+    def __init__(self, b: tstore.Base, raw: dict | None = None, section: str = "guest"):
+        g = (raw if raw is not None else onto_mod.raw()).get(section) or {}
+        self.section = section
         self.note = str(g.get("note") or "")
         self.by_table: dict[str, dict] = {}
         self.by_oid: dict[str, dict] = {}
@@ -102,17 +109,47 @@ class Policy:
         return True
 
 
-class Guest:
-    """给助手接口用:懒连库(机器账号),把页面的读请求按策略转给表格。base_factory 便于测试换成内存版。"""
+def load_partners(profile) -> list[str]:
+    """伙伴名单(与 profile 同目录的私有 team.yaml,partners: [{email: 邮箱 或 "@域名", org: 单位}] 或直接写字符串):小写的邮箱 / @域名。没有时空。"""
+    fp = Path(profile.path).parent / "team.yaml" if getattr(profile, "path", None) else None
+    try:
+        raw = (yaml.safe_load(fp.read_text(encoding="utf-8")) or {}) if fp and fp.exists() else {}
+    except Exception:  # noqa: BLE001  名单读不到就没有伙伴,不影响其他人
+        return []
+    out: list[str] = []
+    for m in raw.get("partners") or []:
+        v = m.get("email") if isinstance(m, dict) else m
+        if v and str(v).strip():
+            out.append(str(v).strip().lower())
+    return out
 
-    def __init__(self, base_factory=None, log=print, outsider=None):
+
+def is_partner(email: str | None, partners: list[str]) -> bool:
+    """邮箱在伙伴名单里:整个邮箱相同,或名单里写的 @域名 与邮箱的域名相同(大小写不分)。"""
+    e = (email or "").strip().lower()
+    if not e or "@" not in e:
+        return False
+    dom = e[e.rindex("@"):]
+    return any(p == e or (p.startswith("@") and p == dom) for p in partners)
+
+
+class Guest:
+    """给助手接口用:懒连库(机器账号),把页面的读请求按策略转给表格。base_factory 便于测试换成内存版(游客的库);real_factory 是伙伴读的真实库。"""
+
+    def __init__(self, base_factory=None, log=print, outsider=None, partners: list[str] | None = None, real_factory=None, whoami=None):
         self.log = log
         self._factory = base_factory or self._connect
+        self._real_factory = real_factory or self._connect_real
         self._base: tstore.Base | None = None
         self._policy: Policy | None = None
+        self._real: tstore.Base | None = None
+        self._rpolicy: Policy | None = None
         self._lock = threading.Lock()
         self._outsiders: dict[str, tuple[bool, float]] = {}
+        self._tiers: dict[str, tuple[str, float]] = {}
         self._ask_outsider = outsider  # 测试用:cookie → 是不是库外的人;None 则拿 cookie 问表格
+        self._ask_who = whoami  # 测试用:cookie → 邮箱;None 则拿 cookie 问表格 /api/auth/user
+        self.partners = [str(p).strip().lower() for p in (partners or []) if p and str(p).strip()]
 
     @staticmethod
     def sample_mode(raw: dict | None = None) -> bool:
@@ -124,6 +161,43 @@ class Guest:
         url, token = tstore.credentials()
         real = tstore.Client(url, token)
         return tstore.Base(sample.SampleClient(real) if Guest.sample_mode() else real)
+
+    @staticmethod
+    def _connect_real() -> tstore.Base:
+        url, token = tstore.credentials()
+        return tstore.Base(tstore.Client(url, token))
+
+    def email_of(self, cookie: str | None) -> str:
+        """这个登录 cookie 的邮箱(问表格 /api/auth/user);问不到给空。"""
+        if self._ask_who is not None:
+            return str(self._ask_who(cookie) or "")
+        if not cookie:
+            return ""
+        try:
+            url = (os.environ.get("TEABLE_URL") or "").rstrip("/")
+            r = httpx.get(f"{url}/api/auth/user", headers={"Cookie": cookie}, timeout=10)
+            return str((r.json() or {}).get("email") or "") if r.status_code == 200 else ""
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def tier(self, cookie: str | None) -> str:
+        """登录 cookie 的档:member(库里的人)/ partner(库外、邮箱在伙伴名单里)/ guest(其余库外账号)。按 cookie 记 10 分钟。"""
+        if not self.is_outsider(cookie):
+            return "member"
+        if not self.partners:
+            return "guest"
+        now = time.monotonic()
+        hit = self._tiers.get(cookie or "")
+        if hit and now - hit[1] < 600:
+            return hit[0]
+        t = "partner" if is_partner(self.email_of(cookie), self.partners) else "guest"
+        if len(self._tiers) > 500:
+            self._tiers.clear()
+        self._tiers[cookie or ""] = (t, now)
+        return t
+
+    def outsider_name(self, cookie: str | None) -> str:
+        return "伙伴帐号" if self.tier(cookie) == "partner" else "游客帐号"
 
     def is_outsider(self, cookie: str | None) -> bool:
         """这个登录 cookie 的主人是不是库外的人(游客):拿 cookie 问表格 GET /api/base/{库},403 / 404 就是。结果按 cookie 记 10 分钟。
@@ -147,33 +221,44 @@ class Guest:
         self._outsiders[cookie] = (out, now)
         return out
 
-    def base(self) -> tstore.Base:
+    def base(self, tier: str = "guest") -> tstore.Base:
+        """游客的库(本体 guest.data: sample 时是示例库);伙伴的是真实库,策略按本体 partner 节(没写这一节就按 guest 节)。"""
         with self._lock:
+            if tier == "partner":
+                if self._real is None:
+                    self._real = self._real_factory()
+                    raw = onto_mod.raw()
+                    self._rpolicy = Policy(self._real, raw, "partner" if raw.get("partner") else "guest")
+                return self._real
             if self._base is None:
                 self._base = self._factory()
                 self._policy = Policy(self._base)
             return self._base
 
-    def policy(self) -> Policy:
-        self.base()
-        assert self._policy is not None
-        return self._policy
+    def policy(self, tier: str = "guest") -> Policy:
+        self.base(tier)
+        p = self._rpolicy if tier == "partner" else self._policy
+        assert p is not None
+        return p
 
-    def _forget(self) -> None:
+    def _forget(self, tier: str = "guest") -> None:
         with self._lock:
-            self._base, self._policy = None, None
+            if tier == "partner":
+                self._real, self._rpolicy = None, None
+            else:
+                self._base, self._policy = None, None
 
-    def _req(self, path: str, params: list[tuple[str, Any]]) -> Any:
+    def _req(self, path: str, params: list[tuple[str, Any]], tier: str = "guest") -> Any:
         try:
-            return self.base().api.req("GET", path, params=params)
+            return self.base(tier).api.req("GET", path, params=params)
         except tstore.TStoreError as e:
             if e.status is None or e.status >= 500 or e.status == 401:
-                self._forget()  # 连库出错下次重连
+                self._forget(tier)  # 连库出错下次重连
             raise
 
-    def _params(self, e: dict, qs: dict[str, list[str]]) -> list[tuple[str, Any]]:
+    def _params(self, e: dict, qs: dict[str, list[str]], tier: str = "guest") -> list[tuple[str, Any]]:
         """只带白名单里的参数;filter / orderBy 先核字段;projection 去掉不放行的(表格本身总是要一个 fieldKeyType=id)。"""
-        p = self.policy()
+        p = self.policy(tier)
         out: list[tuple[str, Any]] = [("fieldKeyType", "id")]
         flt = None
         for k, vs in qs.items():
@@ -201,20 +286,22 @@ class Guest:
             out.append(("filter", json.dumps(flt, ensure_ascii=False)))
         return out
 
-    def records(self, tid: str, qs: dict[str, list[str]]) -> dict:
-        e = self.policy().table(tid)
-        page = self._req(f"/table/{tid}/record", self._params(e, qs)) or {}
-        return {**page, "records": [self.policy().strip(e, r) for r in page.get("records") or []]}
+    def records(self, tid: str, qs: dict[str, list[str]], tier: str = "guest") -> dict:
+        p = self.policy(tier)
+        e = p.table(tid)
+        page = self._req(f"/table/{tid}/record", self._params(e, qs, tier), tier) or {}
+        return {**page, "records": [p.strip(e, r) for r in page.get("records") or []]}
 
-    def count(self, tid: str, qs: dict[str, list[str]]) -> dict:
-        e = self.policy().table(tid)
-        params = [x for x in self._params(e, qs) if x[0] in ("filter", "viewId")]
-        r = self._req(f"/table/{tid}/aggregation/row-count", params) or {}
+    def count(self, tid: str, qs: dict[str, list[str]], tier: str = "guest") -> dict:
+        e = self.policy(tier).table(tid)
+        params = [x for x in self._params(e, qs, tier) if x[0] in ("filter", "viewId")]
+        r = self._req(f"/table/{tid}/aggregation/row-count", params, tier) or {}
         return {"rowCount": int(r.get("rowCount") or 0)}
 
-    def record(self, tid: str, rid: str) -> dict | None:
-        e = self.policy().table(tid)
-        rec = self._req(f"/table/{tid}/record/{rid}", [("fieldKeyType", "id")]) or {}
-        if not rec or not self.policy().matches_rows(e, rec):
+    def record(self, tid: str, rid: str, tier: str = "guest") -> dict | None:
+        p = self.policy(tier)
+        e = p.table(tid)
+        rec = self._req(f"/table/{tid}/record/{rid}", [("fieldKeyType", "id")], tier) or {}
+        if not rec or not p.matches_rows(e, rec):
             return None
-        return self.policy().strip(e, rec)
+        return p.strip(e, rec)

@@ -106,6 +106,7 @@
 
   try {
     await P.load();
+    if (P.isPartner) return P.partnerOnly();  // 伙伴帐号看不到节点与跟进,没有日历
     const [opps, countries] = await Promise.all([P.opps(), P.countries()]);
     state.opps = opps;
     P.tracked(opps).forEach((o) => state.tracked.add(o.id));

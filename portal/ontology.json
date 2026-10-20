@@ -10243,6 +10243,42 @@
   },
   "note": "游客登录后在表格里什么也看不到(不在库里);页面上看到的线索、商机、国别、时间节点、报告都是编出来的示例数据,不是真实内容;「打开表格」「在表格里打开」不显示;不能登记跟进、申请报告、订阅日历或改任何字段。"
  },
+ "partner": {
+  "objects": {
+   "lead": {
+    "deny": [
+     "note"
+    ]
+   },
+   "country": {
+    "deny": [
+     "presence",
+     "note"
+    ]
+   },
+   "source": {},
+   "city": {},
+   "supply_plant": {},
+   "sewage_plant": {},
+   "award": {},
+   "contractor": {},
+   "study": {},
+   "water_event": {},
+   "water_area": {},
+   "law": {},
+   "law_clause": {},
+   "local_term": {},
+   "discharge_limit": {},
+   "report": {
+    "deny": [
+     "requested_by"
+    ],
+    "rows": "版本 = 公开版",
+    "edition": "公开版"
+   }
+  },
+  "note": "当前是伙伴帐号:可以看项目线索、国别与城市概况、趋势机会、法规和公开版报告(真实数据);商机跟进、我方资料、内部备注与内部版报告不开放;不能登记、申请或订阅。"
+ },
  "groupings": {
   "funders": {
    "name": "资金来源",

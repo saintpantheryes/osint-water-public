@@ -160,6 +160,7 @@
 
   try {
     await P.load();
+    if (P.isPartner) return P.partnerOnly();  // 伙伴帐号不开放商机跟进
     if (!(await P.canWrite())) P.guest();  // 游客帐号(查看者)只能看
     if (!rid) { $("head").innerHTML = '<div class="note n-bad">网址里没有商机编号,从 <a href="opps.html">商机总览</a> 点进来。</div>'; return; }
     P.choices("followup", "judgment").forEach((s) => { const op = document.createElement("option"); op.textContent = s; $("fuJudg").appendChild(op); });

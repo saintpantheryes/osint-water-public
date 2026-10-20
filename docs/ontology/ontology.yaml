@@ -2751,6 +2751,30 @@ guest:
     report: {deny: [requested_by], rows: "版本 = 公开版 且 类型 ∈ 定期(周报、月报、日报、招标监测)", kinds_group: 定期, edition: 公开版}
   note: 游客登录后在表格里什么也看不到(不在库里);页面上看到的线索、商机、国别、时间节点、报告都是编出来的示例数据,不是真实内容;「打开表格」「在表格里打开」不显示;不能登记跟进、申请报告、订阅日历或改任何字段。
 
+# 伙伴帐号(2026-10-20 起):外单位的合作伙伴。和游客一样不进库(表格里什么也看不到),但页面读的是真实库,放行范围按这一节(core/guest.py 的 Policy 按节算):
+# 项目线索(去掉内部备注)、国别(去掉我方机构、国别备注)、城市、趋势、水厂、已中标项目、法规与排放标准、公开版报告;
+# 商机、节点、跟进记录、我方资料、个人设置整表不给;助手的「判投标」(要用本单位业绩)、反馈、订阅日历不给;法规问答可以用。
+# 谁是伙伴:私有 team.yaml 的 partners 名单(邮箱或 @域名);不在名单里的库外账号仍是游客(示例数据)。
+partner:
+  objects:
+    lead: {deny: [note]}
+    country: {deny: [presence, note]}
+    source: {}
+    city: {}
+    supply_plant: {}
+    sewage_plant: {}
+    award: {}
+    contractor: {}
+    study: {}
+    water_event: {}
+    water_area: {}
+    law: {}
+    law_clause: {}
+    local_term: {}
+    discharge_limit: {}
+    report: {deny: [requested_by], rows: "版本 = 公开版", edition: 公开版}
+  note: 当前是伙伴帐号:可以看项目线索、国别与城市概况、趋势机会、法规和公开版报告(真实数据);商机跟进、我方资料、内部备注与内部版报告不开放;不能登记、申请或订阅。
+
 groupings:
   funders:
     name: 资金来源

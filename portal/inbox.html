@@ -182,6 +182,7 @@
 
   try {
     await P.load();
+    if (P.isPartner) return P.partnerOnly();  // 伙伴帐号不开放线索处理
     if (!(await P.canWrite())) P.guest();  // 游客帐号(查看者)只能看
     const [u, os, cs] = await Promise.all([P.me(), P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "public_stage", "lead_count", "verified", "ai_reason", "scope"] }), P.countries()]);
     me = u; opps = os; opps.forEach((o) => { oppById[o.id] = o; });

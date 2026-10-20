@@ -32,11 +32,13 @@ class HTTPError(Exception):
 class FakeTeable:
     def __init__(self):
         # outsider-token:登录了、但不是库协作者的账号(游客演示帐号移出库后的样子):库、表、记录一律 403,只有 /auth/* 能用
-        self.tokens = {"admin-token": ("usrADM", "owner"), "bot-token": ("usrBOT", "editor"), "guest-token": ("usrGST", "viewer"), "outsider-token": ("usrOUT", "none")}
+        # partner-token:同样是库外账号,但邮箱在伙伴名单里(@bewg.example)→ 伙伴档,读真实库的公开部分
+        self.tokens = {"admin-token": ("usrADM", "owner"), "bot-token": ("usrBOT", "editor"), "guest-token": ("usrGST", "viewer"), "outsider-token": ("usrOUT", "none"), "partner-token": ("usrPTN", "none")}
         self.users = {"usrADM": {"id": "usrADM", "name": "Ada", "email": "ada@example.com"},
                       "usrBOT": {"id": "usrBOT", "name": "机器账号", "email": "bot@example.com"},
                       "usrGST": {"id": "usrGST", "name": "游客", "email": "guest@example.com"},
                       "usrOUT": {"id": "usrOUT", "name": "游客", "email": "outsider@example.com"},
+                      "usrPTN": {"id": "usrPTN", "name": "北控水务-陈", "email": "Chen@bewg.example"},
                       "usrZS": {"id": "usrZS", "name": "张三", "email": "zs@example.com"}}
         self.spaces = [{"id": "spc1", "name": "水务", "role": "owner"}]
         self.bases: dict[str, dict] = {"bseOLD": {"id": "bseOLD", "name": "水务项目机会", "spaceId": "spc1"}}

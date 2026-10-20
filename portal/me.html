@@ -149,7 +149,7 @@
     const tag = role === "none" ? "游客 · 只读" : (P.ROLE_ZH[role] || role || "");
     $("who").innerHTML = '<div class="title-xl">' + P.esc(me.name || me.email || "未登录") + "</div>" + (me.email ? '<div class="muted">' + P.esc(me.email) + "</div>" : "") + (tag ? '<div class="muted small">在表格里的角色:' + P.esc(tag) + "</div>" : "");
     $("logout2").onclick = (e) => { e.preventDefault(); const l = document.getElementById("logout"); if (l) l.click(); };
-    if (P.isGuest) { P.guest("游客帐号是大家共用的,没有自己的关注与订阅。"); $("countries").innerHTML = $("subs").innerHTML = $("ignoreBox").innerHTML = '<p class="empty">游客帐号没有这一项。</p>'; $("cPick").style.display = "none"; return; }
+    if (P.isGuest) { P.guest(P.isPartner ? "伙伴帐号不在库里,没有自己的关注与订阅;改名、改密码在右上角「帐号设置」。" : "游客帐号是大家共用的,没有自己的关注与订阅。"); $("countries").innerHTML = $("subs").innerHTML = $("ignoreBox").innerHTML = '<p class="empty">' + P.outsiderName + '没有这一项。</p>'; $("cPick").style.display = "none"; return; }
     if (!hasTable()) { $("countries").innerHTML = $("subs").innerHTML = $("ignoreBox").innerHTML = '<p class="empty">库里还没有「个人设置」表(管理员跑一次建表命令就有)。</p>'; $("cPick").style.display = "none"; return; }
     if (!(await P.canWrite())) P.guest();
     countries = await P.records("country", { props: ["name_zh", "key"] });
