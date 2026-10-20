@@ -6,7 +6,9 @@
 <title>全球水务开源情报 · 城市概况</title>
 <link rel="icon" href="favicon.png">
 <link rel="stylesheet" href="portal.css">
+<link rel="stylesheet" href="leaflet.css">
 <script src="echarts.min.js"></script>
+<script src="leaflet.js"></script>
 <script src="portal.js"></script>
 </head>
 <body>
@@ -36,6 +38,23 @@
     <div id="ccards"></div>
     <div class="tabs" id="tabs"></div>
     <div class="tab" data-t="info"><div class="panel" id="info"></div><div class="panel"><div id="cmap" class="chart"></div></div></div>
+    <div class="tab" data-t="imagery">
+      <!-- 历史影像(使用方 2026-10-20):按年份逐年播放看城市化进程;要细看就两张图对比(电脑左右、手机上下,同步拖动缩放) -->
+      <div class="panel" id="imgBox">
+        <div class="frow"><b>看法</b><span class="frow" id="imgMode"><button type="button" class="chip-btn on" data-m="play">逐年播放</button><button type="button" class="chip-btn" data-m="cmp">两图对比</button></span><span class="muted small push" id="imgPos"></span></div>
+        <div id="playBox">
+          <div class="frow playbar"><button type="button" class="btn primary" id="play">▶ 播放</button><input type="range" id="yr" min="0" max="0" value="0" aria-label="年份"><b class="yrLbl" id="yrLbl"></b><span class="muted small" id="yrSrc"></span></div>
+          <div class="mapbox"><div id="imgMap" class="chart tall"></div><span class="imglbl l" id="lblP"></span></div>
+        </div>
+        <div id="cmpBox" class="cmp" hidden>
+          <div><div class="frow"><b id="sideL">左图</b><select id="imgL" aria-label="左图年份"></select></div><div class="mapbox"><div id="mapL" class="chart tall"></div><span class="imglbl l" id="lblL"></span></div></div>
+          <div><div class="frow"><b id="sideR">右图</b><select id="imgR" aria-label="右图年份"></select></div><div class="mapbox"><div id="mapR" class="chart tall"></div><span class="imglbl l" id="lblR"></span></div></div>
+        </div>
+        <p class="muted small" id="imgNote">播放按时点从早到晚换影像;拖进度条也能看某一年。滚轮缩放、拖动平移;红点是城市中心,左下角是比例尺,图上细线是经纬网。对比时两张图同步。</p>
+      </div>
+      <h2>城镇化(周边建成区面积)</h2>
+      <div class="panel" id="urbBox"><div id="urbCards"></div><div id="urbChart" class="chart"></div><p class="muted small" id="urbNote"></p></div>
+    </div>
     <div class="tab" data-t="opps"><div class="panel" id="opps">读取中…</div></div>
     <div class="tab" data-t="leads"><div class="panel" id="leads">读取中…</div></div>
     <div class="tab" data-t="plants"><div class="panel" id="pmapBox"><div id="pmap" class="chart"></div><p class="muted small" id="pmapNote"></p></div><h2>自来水厂</h2><div class="panel" id="supply">读取中…</div><h2>污水厂</h2><div class="panel" id="sewage">读取中…</div></div>
@@ -245,7 +264,7 @@
     $("leads").innerHTML = !leads.length ? '<p class="empty">还没有线索关联到这座城市。</p>' :
       P.tableHtml(["标题", "类别", "发布", "最近截止", "所属商机", "处理状态", ""], leads.slice(0, 100).map((l) => { const q = (p) => P.get("lead", l, p);
         return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), q("nearest_deadline"), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
-    const TABS = [["info", "概况"], ["opps", "商机 <b>" + opps.length + "</b>"], ["leads", "线索 <b>" + leads.length + (leads.length >= 200 ? "+" : "") + "</b>"], ["plants", "水厂 <b>" + nPlants + "</b>"]];
+    const TABS = [["info", "概况"], ["imagery", "历史影像"], ["opps", "商机 <b>" + opps.length + "</b>"], ["leads", "线索 <b>" + leads.length + (leads.length >= 200 ? "+" : "") + "</b>"], ["plants", "水厂 <b>" + nPlants + "</b>"]];
     let tab = TABS.some(([k]) => k === q0.get("t")) ? q0.get("t") : "info";
     const showTab = (k) => {
       tab = k;
@@ -279,10 +298,128 @@
           .concat(pts.map((p) => ({ name: p.label, type: "scatter", coordinateSystem: "geo", data: p.data, symbolSize: (v) => 6 + 18 * Math.sqrt((v[2] || 0) / maxCap), itemStyle: { color: p.color, opacity: 0.8 }, z: 2 }))) });
       pmap = mc;
     };
-    const showPlants = (k) => { if (k !== "plants") return; if (pmap) pmap.resize(); else drawPlants(); };
-    $("tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => showPlants(b.dataset.t)));
+    /* 历史影像:Leaflet 上两张卫星图左右分割,拖竖线比较。1975–2010 五个时点是 Landsat 30 米影像(Esri Living Atlas 的 GLS 服务,按时点取云最少的一景),
+       2014 年起每年取 Esri World Imagery Wayback 年初那一版高清图;都不用密钥,只按来源署名。图只在页签第一次打开时画 */
+    const GLS = "https://landsat.arcgis.com/arcgis/rest/services/LandsatGLS/MS/ImageServer";
+    const EPOCHS = [["1975", "Color Infrared with DRA", "1975 前后 · Landsat 假彩色"], ["1990", "Natural Color with DRA", "1990 前后 · Landsat"], ["2000", "Natural Color with DRA", "2000 前后 · Landsat"],
+      ["2005", "Natural Color with DRA", "2005 前后 · Landsat"], ["2010", "Natural Color with DRA", "2010 前后 · Landsat"]];
+    const WAYBACK = [[2014, 10], [2015, 20222], [2016, 3515], [2017, 577], [2018, 13161], [2019, 6036], [2020, 23001], [2021, 1049], [2022, 42663], [2023, 11475], [2024, 41468], [2025, 36557], [2026, 22252]];
+    /* Landsat 一个时点一整张图:按当前视野(四周多留两成)向影像服务要一张,平移缩放后再换一张;不切瓦片是因为自动拉伸(DRA)按请求算,切了瓦片拼起来有明暗接缝 */
+    const Gls = L.Layer.extend({
+      initialize(opt) { L.setOptions(this, opt); this._img = null; this._n = 0; },
+      onAdd(map) { this._map = map; map.on("moveend zoomend resize", this._update, this); this._update(); return this; },
+      onRemove(map) { map.off("moveend zoomend resize", this._update, this); if (this._img) map.removeLayer(this._img); this._img = null; },
+      getContainer() { return this._img ? this._img.getElement() : null; },
+      origin() { return this._img ? this._map.latLngToLayerPoint(this._img.getBounds().getNorthWest()) : L.point(0, 0); },
+      _update() {
+        const map = this._map, size = map.getSize(), pad = size.multiplyBy(0.2);
+        if (!size.x || !size.y) return;  // 还藏着(对比的两张图在播放时没尺寸),露出来 resize 时再取
+        const b = L.latLngBounds(map.containerPointToLatLng(pad.multiplyBy(-1)), map.containerPointToLatLng(size.add(pad)));
+        const sw = L.CRS.EPSG3857.project(b.getSouthWest()), ne = L.CRS.EPSG3857.project(b.getNorthEast()), w = Math.min(4000, Math.round(size.x * 1.4)), h = Math.min(4000, Math.round(size.y * 1.4));
+        const url = GLS + "/exportImage?" + new URLSearchParams({ bbox: [sw.x, sw.y, ne.x, ne.y].join(","), bboxSR: 3857, imageSR: 3857, size: w + "," + h, format: "jpg", f: "image",
+          mosaicRule: JSON.stringify({ mosaicMethod: "esriMosaicAttribute", where: "dataset_id='GLS-" + this.options.epoch + "'", sortField: "CloudCover", sortValue: 0 }), renderingRule: JSON.stringify({ rasterFunction: this.options.fn }) });
+        const n = ++this._n, img = L.imageOverlay(url, b, { attribution: this.options.attribution, interactive: false, pane: "tilePane", className: "gls" });
+        img.once("load", () => { if (n !== this._n || !this._map) { this._map && this._map.removeLayer(img); return; } if (this._img) this._map.removeLayer(this._img); this._img = img; this.fire("ready"); });
+        img.once("error", () => { if (this._map) this._map.removeLayer(img); this.fire("tileerror"); });
+        img.addTo(map);
+      },
+    });
+    const SOURCES = EPOCHS.map(([y, fn, label]) => ({ k: "gls" + y, y, label, group: "Landsat 30 米(1975–2010)", make: () => new Gls({ epoch: y, fn, attribution: "Landsat: Esri, USGS, NASA" }) }))
+      .concat(WAYBACK.map(([y, r]) => ({ k: "wb" + y, y: String(y), label: y + " · 高清", group: "高清影像(2014 起)",
+        make: () => L.tileLayer("https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/" + r + "/{z}/{y}/{x}", { maxNativeZoom: 18, maxZoom: 18, attribution: "Esri Wayback" }) })));
+    let maps = null, playing = null;  // maps:{P, L, R} 三张 Leaflet 图,页签第一次打开时建
+    const drawImagery = () => {
+      if (maps) { Object.values(maps).forEach((m) => m.invalidateSize()); return; }
+      const xy = latlon(g("coords"));
+      if (!xy) { $("imgBox").innerHTML = '<p class="empty">这座城市还没有坐标,画不了影像(在城市表里补上坐标就有)。</p>'; return; }
+      const center = [xy[1], xy[0]];
+      let bad = 0;
+      const onBad = () => { if (++bad === 6) $("imgNote").textContent = "影像加载不出来:影像来自国外服务器(Esri),可能是网络限制;换个网络或稍后再试。"; };
+      /* 一张图的底子:缩放钮、比例尺、城市中心、经纬网、鼠标处坐标 */
+      const build = (el) => {
+        const m = L.map(el, { center, zoom: 11, worldCopyJump: false });
+        m.zoomControl.setPosition("topright"); m.attributionControl.setPrefix(false);
+        L.control.scale({ metric: true, imperial: false }).addTo(m);
+        L.circleMarker(center, { radius: 5, color: "#fff", weight: 2, fillColor: "#ef4444", fillOpacity: 1 }).addTo(m).bindTooltip(cname(ct));
+        const grat = L.layerGroup().addTo(m);
+        const drawGrat = () => { grat.clearLayers(); const z = m.getZoom(), step = z >= 14 ? 0.01 : z >= 12 ? 0.05 : z >= 10 ? 0.1 : z >= 8 ? 0.5 : 1, b = m.getBounds(), d = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
+          const lab = (ll, txt) => L.marker(ll, { icon: L.divIcon({ className: "grat", html: txt, iconSize: null, iconAnchor: [-3, -2] }), interactive: false, keyboard: false });
+          for (let lat = Math.ceil(b.getSouth() / step) * step; lat <= b.getNorth(); lat += step) { grat.addLayer(L.polyline([[lat, b.getWest()], [lat, b.getEast()]], { color: "#fff", weight: 0.6, opacity: 0.5, interactive: false })); grat.addLayer(lab([lat, b.getWest()], lat.toFixed(d) + "°")); }
+          for (let lon = Math.ceil(b.getWest() / step) * step; lon <= b.getEast(); lon += step) { grat.addLayer(L.polyline([[b.getSouth(), lon], [b.getNorth(), lon]], { color: "#fff", weight: 0.6, opacity: 0.5, interactive: false })); grat.addLayer(lab([b.getNorth(), lon], lon.toFixed(d) + "°")); } };
+        m.on("moveend zoomend resize", drawGrat); drawGrat();
+        const pos = (ll) => ll.lat.toFixed(4) + ", " + ll.lng.toFixed(4);
+        m.on("mousemove", (e) => { $("imgPos").textContent = "鼠标处 " + pos(e.latlng); });
+        m.on("moveend", () => { $("imgPos").textContent = "中心 " + pos(m.getCenter()); });
+        m.cur = null;
+        /* 换影像:新的一层先加上,加载好了再撤旧的,不闪;Landsat 整张图发 ready,瓦片层发 load;3 秒没好也换 */
+        m.show = (k) => new Promise((done) => { const src = SOURCES.find((o) => o.k === k), lay = src.make(); let over = false;
+          const fin = () => { if (over) return; over = true; if (m.cur && m.cur !== lay) m.removeLayer(m.cur); m.cur = lay; m.lbl.textContent = src.y; done(src); };
+          lay.on("ready load", fin); lay.on("tileerror", onBad); lay.addTo(m); setTimeout(fin, 3000); });
+        return m;
+      };
+      maps = { P: build($("imgMap")), L: build($("mapL")), R: build($("mapR")) };
+      maps.P.lbl = $("lblP"); maps.L.lbl = $("lblL"); maps.R.lbl = $("lblR");
+      $("imgPos").textContent = "中心 " + center[0].toFixed(4) + ", " + center[1].toFixed(4);
+      /* 三张图视野同步(对比的两张跟着彼此;播放那张也跟着,切换看法时位置不跳) */
+      let syncing = false;
+      Object.values(maps).forEach((m) => m.on("move", () => { if (syncing) return; syncing = true; Object.values(maps).forEach((o) => { if (o !== m) o.setView(m.getCenter(), m.getZoom(), { animate: false }); }); syncing = false; }));
+      /* 逐年播放:进度条一格一个时点,按钮从当前位置往后放到最后;拖进度条看某一年 */
+      let at = SOURCES.findIndex((o) => o.k === "gls1990");
+      $("yr").max = String(SOURCES.length - 1); $("yr").value = String(at);
+      const showAt = (i) => { at = i; $("yr").value = String(i); $("yrLbl").textContent = SOURCES[i].y; $("yrSrc").textContent = SOURCES[i].label.replace(/^\d{4} ?/, ""); return maps.P.show(SOURCES[i].k); };
+      const stop = () => { if (playing) clearTimeout(playing.t); playing = null; $("play").textContent = "▶ 播放"; };
+      const play = () => { if (at >= SOURCES.length - 1) at = -1; playing = { t: 0 }; $("play").textContent = "❚❚ 暂停";
+        const step = async () => { if (!playing) return; await showAt(at + 1); if (!playing) return; if (at >= SOURCES.length - 1) { stop(); return; } playing.t = setTimeout(step, 1500); };
+        step(); };
+      $("play").onclick = () => (playing ? stop() : play());
+      $("yr").oninput = () => { stop(); showAt(Number($("yr").value)); };
+      showAt(at);
+      /* 两图对比:左(上)右(下)各选一个年份 */
+      const fill = (side, dft) => { const el = $("img" + side); let grp = "";
+        el.innerHTML = SOURCES.map((o) => (o.group !== grp ? (grp ? "</optgroup>" : "") + '<optgroup label="' + o.group + '">' : "") + '<option value="' + o.k + '"' + (o.k === dft ? " selected" : "") + ">" + P.esc(o.label) + "</option>" + ((grp = o.group), "")).join("") + "</optgroup>";
+        el.onchange = () => maps[side].show(el.value); };
+      fill("L", "gls1990"); fill("R", "wb" + WAYBACK[WAYBACK.length - 1][0]);
+      maps.L.show("gls1990"); maps.R.show("wb" + WAYBACK[WAYBACK.length - 1][0]);
+      const narrow = () => window.matchMedia("(max-width: 600px)").matches;
+      const sides = () => { $("sideL").textContent = narrow() ? "上图" : "左图"; $("sideR").textContent = narrow() ? "下图" : "右图"; };
+      sides(); window.addEventListener("resize", sides);
+      /* 看法切换 */
+      $("imgMode").querySelectorAll("button").forEach((b) => { b.onclick = () => { const cmp = b.dataset.m === "cmp"; stop();
+        $("imgMode").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+        $("playBox").hidden = cmp; $("cmpBox").hidden = !cmp;
+        const from = cmp ? maps.P : maps.L;  // 露出来的图接着原来的位置看
+        Object.values(maps).forEach((m) => { m.invalidateSize({ animate: false }); m.setView(from.getCenter(), from.getZoom(), { animate: false }); }); }; });
+      /* 各时点实际拍摄日期:问一次影像服务,写进下拉与播放说明(问不到就只写「前后」) */
+      fetch(GLS + "/query?" + new URLSearchParams({ where: "Category=1", outFields: "dataset_id,AcquisitionDate", returnGeometry: "false", geometry: xy[0] + "," + xy[1], geometryType: "esriGeometryPoint", inSR: 4326, spatialRel: "esriSpatialRelIntersects", f: "json" }))
+        .then((r) => r.json()).then((d) => { const when = {}; (d.features || []).forEach((f) => { const a = f.attributes; if (a.AcquisitionDate) when[a.dataset_id] = new Date(a.AcquisitionDate).toISOString().slice(0, 10); });
+          EPOCHS.forEach(([y]) => { const w = when["GLS-" + y], src = SOURCES.find((o) => o.k === "gls" + y); if (!w || !src) return; src.label = src.label.replace(y + " 前后", y + " 前后(实拍 " + w + ")");
+            document.querySelectorAll('option[value="gls' + y + '"]').forEach((o) => { o.textContent = src.label; }); });
+          $("yrSrc").textContent = SOURCES[at].label.replace(/^\d{4} ?/, ""); }).catch(() => {});
+    };
+    /* 城镇化:周边 12.5 公里内的建成区面积曲线。数来自私有配置仓 portal/media/city_urban.json(scripts/build_city_urban.py 按 HLUH-5km 栅格算,到 2023 年) */
+    let urbDone = false;
+    const drawUrban = async () => {
+      if (urbDone) return; urbDone = true;
+      let d = null;
+      try { const r = await fetch("media/city_urban.json"); if (r.ok) d = await r.json(); } catch (e) { d = null; }
+      const s = d && d.cities && d.cities[String(g("key") || "")];
+      if (!s) { $("urbBox").innerHTML = '<p class="empty">这座城市还没有城镇化数据' + (d ? "(数据算到 2023 年;后来新建的城市要重跑一次脚本才有)" : "(私有配置仓的 portal/media/ 里还没放 city_urban.json)") + "。</p>"; return; }
+      const ys = d.years, at = (y) => s[ys.indexOf(y)], a23 = at(2023), a90 = at(1990), a10 = at(2010);
+      const times = a90 > 0 ? a23 / a90 : null, pct = a10 > 0 ? (a23 / a10 - 1) * 100 : null;
+      $("urbCards").innerHTML = P.kpiHtml([{ value: a23 >= 10 ? Math.round(a23).toLocaleString("zh-CN") : a23.toFixed(1), label: "建成区面积(km²,2023)" }, { value: times ? times.toFixed(1) + " 倍" : "—", label: "1990 → 2023" },
+        { value: pct !== null ? (pct >= 0 ? "+" : "") + Math.round(pct) + "%" : "—", label: "2010 → 2023 增幅" }]);
+      const ch = echarts.init($("urbChart"));
+      ch.setOption({ animation: false, grid: { left: 56, right: 16, top: 28, bottom: 28 }, tooltip: { trigger: "axis", formatter: (ps) => ps[0].axisValue + " 年:建成区 " + Number(ps[0].value).toLocaleString("zh-CN") + " km²" },
+        xAxis: { type: "category", data: ys.map(String) }, yAxis: { type: "value", name: "km²", nameTextStyle: { color: "#64748b" } },
+        series: [{ type: "line", data: s, symbol: "circle", symbolSize: 6, lineStyle: { color: "#2563eb" }, itemStyle: { color: "#2563eb" }, areaStyle: { color: "rgba(37,99,235,.12)" },
+          markLine: { silent: true, symbol: "none", lineStyle: { color: "#94a3b8", type: "dashed" }, label: { formatter: "{b}", color: "#64748b" }, data: [{ xAxis: "1990", name: "Landsat 影像起" }, { xAxis: "2015", name: "高清影像起(2014)" }] } }] });
+      $("urbNote").textContent = "周边 " + d.radius_km + " 公里范围内的建成区面积,按 HLUH-5km 全球土地利用格网(北师大,2026,CC BY 4.0)推算,属公开资料、待核实;1950–1995 由统计数反推,2000 年起逐年更新。" +
+        "曲线上的年份不都有影像:1975、1990、2000、2005、2010 前后有 Landsat 30 米影像,2014 年起有高清影像,其余年份只有数、没有图可佐证。";
+    };
+    const onTab = (k) => { if (k === "plants") { if (pmap) pmap.resize(); else drawPlants(); } if (k === "imagery") { drawImagery(); drawUrban(); } };
+    $("tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => onTab(b.dataset.t)));
     showTab(tab);
-    showPlants(tab);
+    onTab(tab);
     const xy = latlon(g("coords"));
     if (xy) { try { await world(); cmap = onMap($("cmap"), [ct], { center: xy, zoom: 6 }); } catch (e) { $("cmap").innerHTML = '<p class="muted">地图没画出来:' + P.esc(e.message) + "</p>"; } }
     else $("cmap").parentNode.style.display = "none";

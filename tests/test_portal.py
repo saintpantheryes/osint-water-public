@@ -2018,13 +2018,28 @@ def test_city_page_lists_cities_and_opens_one():
                 page.screenshot(path=str(shots / "city_list.png"), full_page=True)
             # 一座城市:卡片、概况,商机与线索各在自己的页签里
             page.goto(base + f"/city.html?id={city['id']}")
-            page.wait_for_function("document.querySelectorAll('#tabs button').length === 4", timeout=15000)
+            page.wait_for_function("document.querySelectorAll('#tabs button').length === 5", timeout=15000)
             assert page.inner_text("#cname") == "甘贾" and "阿塞拜疆" in page.inner_text("#info") and "34\n万" in page.inner_text("#ccards")
             info = page.inner_text("#info")
             assert "0.7 AZN/立方米" in info and "2024-03-01" in info and "居民价\n非居民 2.0" in info  # 水价挂城市(人填)
-            assert page.locator("#tabs button").all_inner_texts() == ["概况", "商机 1", "线索 1", "水厂 1"]
+            assert page.locator("#tabs button").all_inner_texts() == ["概况", "历史影像", "商机 1", "线索 1", "水厂 1"]
             if shots:
                 page.screenshot(path=str(shots / "city_one.png"), full_page=True)
+            # 历史影像(使用方 2026-10-20):缺省逐年播放(播放按钮、进度条一格一个时点、年份角标);「两图对比」是两张同步地图(电脑左右、手机上下);
+            # 城镇化数据文件没放时说清楚
+            page.click("#tabs button[data-t='imagery']")
+            page.wait_for_selector("#imgMap.leaflet-container .leaflet-tile-pane", state="attached", timeout=15000)
+            assert page.inner_text("#play") == "▶ 播放" and page.get_attribute("#yr", "max") == "17" and page.input_value("#yr") == "1" and page.inner_text("#yrLbl") == "1990"
+            assert page.locator("#imgMap .leaflet-control-scale").count() == 1 and page.locator("#imgMap .grat").count() >= 2 and page.is_hidden("#cmpBox")
+            page.fill("#yr", "17"); page.dispatch_event("#yr", "input")
+            assert page.inner_text("#yrLbl") == "2026"
+            page.click("#imgMode button[data-m='cmp']")
+            assert page.is_visible("#mapL") and page.is_visible("#mapR") and page.is_hidden("#playBox") and page.inner_text("#sideL") == "左图"
+            assert page.locator("#imgL option").count() == 5 + 13 and page.input_value("#imgL") == "gls1990" and page.input_value("#imgR").startswith("wb")
+            page.select_option("#imgL", "gls2000")
+            page.wait_for_function("document.querySelector('#lblL').textContent === '2000'", timeout=15000)
+            page.wait_for_function("document.querySelector('#urbBox .empty')", timeout=15000)
+            assert "还没有城镇化数据" in page.inner_text("#urbBox") and "t=imagery" in page.url
             page.click("#tabs button[data-t='opps']")
             assert "AZE-001" in page.inner_text("#opps") and "t=opps" in page.url
             page.click("#tabs button[data-t='leads']")
@@ -2054,6 +2069,11 @@ def test_city_page_lists_cities_and_opens_one():
             assert phone.evaluate("document.documentElement.scrollWidth") <= 390
             if shots:
                 phone.screenshot(path=str(shots / "city_phone.png"), full_page=False)
+            phone.goto(base + f"/city.html?id={city['id']}&t=imagery")
+            phone.wait_for_selector("#imgMap.leaflet-container", state="attached", timeout=15000)
+            phone.click("#imgMode button[data-m='cmp']")
+            assert phone.inner_text("#sideL") == "上图" and phone.locator("#mapL").bounding_box()["y"] < phone.locator("#mapR").bounding_box()["y"]  # 窄屏上下排
+            assert phone.evaluate("document.documentElement.scrollWidth") <= 390
             assert not errors, errors
             browser.close()
     finally:

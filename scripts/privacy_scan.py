@@ -9,7 +9,7 @@
    私有配置目录 private/privacy_terms.txt(存在才读),或 --terms / 环境变量 OW_PRIVACY_TERMS 指定的文件。
    公开仓的 CI 没有私有目录,只跑通用规则;在有私有检出的机器上(主机、Mac)两类都查。
 
-不扫:.git、.venv、node_modules、__pycache__、data/、private/、第三方库与地图数据(portal/echarts.min.js、portal/world.geo.json)、本文件。
+不扫:.git、.venv、node_modules、__pycache__、data/、private/、第三方库与地图数据(portal/echarts.min.js、portal/leaflet.js、portal/leaflet.css、portal/world.geo.json)、本文件。
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", "data", "private", ".pytest_cache"}
-SKIP_FILES = {"portal/echarts.min.js", "portal/world.geo.json", "scripts/privacy_scan.py", "tests/test_privacy.py"}
+SKIP_FILES = {"portal/echarts.min.js", "portal/leaflet.js", "portal/leaflet.css", "portal/world.geo.json", "scripts/privacy_scan.py", "tests/test_privacy.py"}
 TEXT_SUFFIXES = {".py", ".js", ".html", ".css", ".md", ".yaml", ".yml", ".json", ".txt", ".sh", ".toml", ".cfg", ".ini", ".caddy", ".example", ""}
 
 # 通用规则:名字 → (正则, 允许的例外正则)
