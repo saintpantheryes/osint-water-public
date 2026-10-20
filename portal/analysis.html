@@ -24,6 +24,7 @@
     <div class="frow" id="rowMore" style="display:none"><b></b><span id="fCountry2" class="frow"></span></div>
   </div>
   <p class="muted small ig-note" id="igNote"></p>
+  <p class="muted small ig-note" id="arNote"></p>
   <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
   <div class="tabs" id="tabs"></div>
   <div class="tab" data-t="trend">
@@ -60,10 +61,10 @@
   const $ = (id) => document.getElementById(id);
   const BLUE = "#0e6ba8", GREY = "#cbd5e1", PAL = ["#0e6ba8", "#15803d", "#b45309", "#6d28d9", "#be185d", "#0f766e", "#64748b", "#ca8a04", "#1d4ed8", "#9f1239", "#4d7c0f", "#7c3aed"];
   const q = new URLSearchParams(location.search);
-  const state = { w: q.get("w") || "30", rel: q.get("rel") || "", r: q.get("r") || "", c: q.get("c") || "", ig: q.get("ig") === "1" ? "1" : "" };
+  const state = { w: q.get("w") || "30", rel: q.get("rel") || "", r: q.get("r") || "", c: q.get("c") || "", ig: q.get("ig") === "1" ? "1" : "", ar: q.get("ar") === "1" ? "1" : "" };
   const TABS = [["trend", "每日新增"], ["country", "国别"], ["kind", "类别与领域"], ["source", "资金来源与信源"], ["status", "判定·状态·归属"]];
   let tab = TABS.some(([k]) => k === q.get("t")) ? q.get("t") : "trend";
-  let leads = [], countries = [], cname = {}, cregion = {}, charts = {}, bl = new Set(), igIds = new Set(), nIgn = 0;  // bl:忽略的国别(ISO3);igIds:它们在国别表里的编号
+  let leads = [], countries = [], cname = {}, cregion = {}, charts = {}, bl = new Set(), igIds = new Set(), nIgn = 0, nArc = 0;  // bl:忽略的国别(ISO3);igIds:它们在国别表里的编号;nArc:已归档的线索数
   const g = (l, p) => P.get("lead", l, p);
   const dayOf = (l) => P.day(g(l, "found_at"));
   const inRegion = (c) => !state.r || P.regionOf(c) === state.r;
@@ -79,7 +80,10 @@
     /* 忽略国别的线索默认不算(点「显示」露出,网址 ig=1);直接选了一个忽略的国别就照常算它 */
     const isIg = (l) => igIds.has(P.linkId(g(l, "country")));
     nIgn = igIds.has(state.c) ? 0 : pass.filter(isIg).length;
-    return state.ig || !nIgn ? pass : pass.filter((l) => !isIg(l));
+    const vis = state.ig || !nIgn ? pass : pass.filter((l) => !isIg(l));
+    /* 已归档的线索(截止已过或超过一年,后台标的)默认也不算;点「显示」露出(网址 ar=1) */
+    nArc = vis.filter((l) => g(l, "archived") === true).length;
+    return state.ar || !nArc ? vis : vis.filter((l) => g(l, "archived") !== true);
   }
   function count(rows, key) { const m = new Map(); rows.forEach((l) => { const ks = key(l); (Array.isArray(ks) ? ks : [ks]).forEach((k) => { if (k === undefined || k === null) return; m.set(k, (m.get(k) || 0) + 1); }); }); return m; }
   const sortDesc = (m) => [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -106,6 +110,7 @@
     const rows = current();
     history.replaceState(null, "", location.pathname + "?" + new URLSearchParams(Object.assign({}, state, { t: tab })));
     P.igNote($("igNote"), nIgn ? [nIgn.toLocaleString("zh-CN") + " 条线索"] : [], !!state.ig, () => { state.ig = state.ig ? "" : "1"; chipRows(); refresh().catch((e) => P.fail($("cards"), e)); });
+    P.arcNote($("arNote"), nArc, !!state.ar, () => { state.ar = state.ar ? "" : "1"; refresh().catch((e) => P.fail($("cards"), e)); });
     const rel = rows.filter((l) => g(l, "relevant") === true);
     const pending = rows.filter((l) => g(l, "status") === "待处理").length, assign = rows.filter(toAssign).length;
     const inOpp = rel.filter((l) => P.linkId(g(l, "opportunity"))).length, uploads = rows.filter((l) => g(l, "origin") === "用户上传").length;
@@ -247,7 +252,7 @@
   try {
     await P.load();
     catOrder = P.choices("lead", "category"); secOrder = P.choices("lead", "sectors");
-    const [cs, ls] = await Promise.all([P.countries(), P.records("lead", { props: ["key", "title", "url", "relevant", "category", "sectors", "country", "funder", "found_at", "status", "opportunity", "suggested_opp", "maybe_new", "judged_by", "source", "origin", "summary_zh", "project_name"] }), P.zhTerms()]);
+    const [cs, ls] = await Promise.all([P.countries(), P.records("lead", { props: ["key", "title", "url", "relevant", "category", "sectors", "country", "funder", "found_at", "status", "opportunity", "suggested_opp", "maybe_new", "judged_by", "source", "origin", "summary_zh", "project_name"].concat(P.has("lead", "archived") ? ["archived"] : []) }), P.zhTerms()]);
     countries = cs; leads = ls;
     bl = await P.ignored(); igIds = new Set(cs.filter((c) => bl.has(P.get("country", c, "key"))).map((c) => c.id));
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); cregion[c.id] = P.regionOf(c); });

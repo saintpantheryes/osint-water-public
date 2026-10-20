@@ -247,6 +247,7 @@ views:
     - {name: 待确认归属, filter: {and: [[所属商机, isEmpty], {or: [{and: [[建议所属商机, isNotEmpty], [处理状态, isNot, 已忽略]]},
                                                                    {and: [[可能是新项目, is, true], [处理状态, is, 待处理]]}]}]}}
     - {name: 按国别, group: [[国别, asc]], sort: [[发现时间, desc]]}
+    - {name: 已归档, filter: {and: [[已归档, is, true]]}, sort: [[归档时间, desc]]}   # 过期线索(A49)
   opportunity:
     - {name: 建议商机, filter: {and: [[我方阶段, is, 建议]]}, group: [[国别, asc]]}
     - {name: 跟踪看板, type: kanban, stack: 我方阶段, filter: {and: [[我方阶段, isAnyOf, [跟踪中, 准备投标, 已投标]]]}}

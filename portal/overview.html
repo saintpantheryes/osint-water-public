@@ -25,6 +25,7 @@
     <div class="frow"><b>搜索</b><input id="fText" placeholder="搜标题、项目名、中文摘要或线索号" size="30" aria-label="搜线索"><span class="muted push" id="fNote"></span></div>
   </div>
   <p class="muted small ig-note" id="igNote"></p>
+  <p class="muted small ig-note" id="arNote"></p>
   <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
   <div class="home">
     <div class="col">
@@ -46,7 +47,7 @@
   const $ = (id) => document.getElementById(id);
   let fc = null, mc = null, opps = [], countries = [], canWrite = false, bl = new Set(), igIds = [];  // bl:忽略的国别(ISO3);igIds:它们在国别表里的编号
   const q = new URLSearchParams(location.search);
-  const state = { r: q.get("r") || "", c: q.get("c") || "", s: (q.get("s") || "").split(",").filter(Boolean), k: q.get("k") || "", f: q.get("f") || "", w: q.get("w") || "", q: (q.get("q") || "").trim(), ig: q.get("ig") === "1" ? "1" : "" };
+  const state = { r: q.get("r") || "", c: q.get("c") || "", s: (q.get("s") || "").split(",").filter(Boolean), k: q.get("k") || "", f: q.get("f") || "", w: q.get("w") || "", q: (q.get("q") || "").trim(), ig: q.get("ig") === "1" ? "1" : "", ar: q.get("ar") === "1" ? "1" : "" };
   const inRegion = (c) => !state.r || P.regionOf(c) === state.r;
 
   /* 当前筛选 → 线索表的条件(国别、领域、类别、资金来源、发现时间、搜索词) */
@@ -71,8 +72,8 @@
   }
 
   async function refresh() {
-    const user = leadConds(), base = user.concat(igCond() || []), cur = oppsNow(), tracked = P.tracked(cur);
-    history.replaceState(null, "", location.pathname + (user.length || state.ig ? "?" + new URLSearchParams({ r: state.r, c: state.c, s: state.s.join(","), k: state.k, f: state.f, w: state.w, q: state.q, ig: state.ig }) : ""));
+    const user = leadConds(), vis = user.concat(igCond() || []), base = vis.concat(P.arcCond(state.ar) || []), cur = oppsNow(), tracked = P.tracked(cur);  // base:加上「不算忽略国别、不算已归档」
+    history.replaceState(null, "", location.pathname + (user.length || state.ig || state.ar ? "?" + new URLSearchParams({ r: state.r, c: state.c, s: state.s.join(","), k: state.k, f: state.f, w: state.w, q: state.q, ig: state.ig, ar: state.ar }) : ""));
     /* 有搜索词:右边清单直接列出搜到的线索(连同上面其余筛选);清掉搜索词,清单回到提示 */
     if (state.q) drill("搜索「" + state.q + "」", P.and(...base)).catch((e) => P.fail($("drill"), e));
     else if (searched) { $("drillTitle").textContent = "清单"; $("drill").innerHTML = DRILL_HINT; }
@@ -89,10 +90,12 @@
       P.count("lead", P.and(...base, P.cond("lead", "status", "is", "待处理"))),
       P.count("lead", P.and(...base, P.cond("lead", "opportunity", "isEmpty"), P.or(P.and(P.cond("lead", "suggested_opp", "isNotEmpty"), P.cond("lead", "status", "isNot", "已忽略")), P.and(P.cond("lead", "maybe_new", "is", true), P.cond("lead", "status", "is", "待处理"))))),  // 与「待确认归属」视图同一条件
       igIds.length && !igIds.includes(state.c) ? P.count("lead", P.and(...user, P.cond("lead", "country", "isAnyOf", igIds))) : 0,  // 忽略国别的有几条(说明行用)
+      P.has("lead", "archived") ? P.count("lead", P.and(...vis, P.cond("lead", "archived", "is", true))) : 0,  // 已归档的有几条(说明行用)
     ]));
-    const [total, , , , , pending, toAssign, nIgn] = counts;
+    const [total, , , , , pending, toAssign, nIgn, nArc] = counts;
     $("fNote").textContent = user.length ? "已按筛选统计(地图不受筛选影响)" : "";
     P.igNote($("igNote"), nIgn ? [nIgn.toLocaleString("zh-CN") + " 条线索"] : [], !!state.ig, () => { state.ig = state.ig ? "" : "1"; chipRows(); refresh().catch((e) => P.fail($("cards"), e)); });
+    P.arcNote($("arNote"), nArc, !!state.ar, () => { state.ar = state.ar ? "" : "1"; refresh().catch((e) => P.fail($("cards"), e)); });
     const stageCount = {}; cur.forEach((o) => { const s = P.get("opportunity", o, "stage") || "建议"; stageCount[s] = (stageCount[s] || 0) + 1; });
     $("cards").innerHTML = P.kpiHtml([
       [total, "线索", P.tableUrl("lead")], [pending, "待处理线索", P.tableUrl("lead", "待处理")], [toAssign, "待确认归属", "inbox.html"],

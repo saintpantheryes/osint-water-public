@@ -281,6 +281,7 @@ def run_job(profile: Profile, job: str | None, today: date, only: str | None = N
         return 0
     if job == "expire":
         print(f"  过期节点改已发生:{expire.run(ctx) or '没有过期的'}")
+        print(f"  过期线索归档:{expire.archive_leads(ctx) or '没有要归档的'}")
         return 0
     return 2
 

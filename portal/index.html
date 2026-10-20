@@ -169,6 +169,7 @@
     if (f.funders.length) c.push(P.or(...f.funders.map((g) => P.funderCond("lead", "funder", g))));
     if (f.status.length) c.push(P.cond("lead", "status", "isAnyOf", f.status));
     if (f.relevant === true || f.relevant === false) c.push(P.cond("lead", "relevant", "is", f.relevant));
+    if (!f.archived && P.arcCond()) c.push(P.arcCond());  // 已归档(过期)的线索默认不算,问到「归档」才算(与线索页面一致)
     // 关键词与行业术语(本体 terms)都查标题和中文摘要:标题多为英、法、西等原文,中文词只能在摘要里找到;每个术语的相关词含任一个即算
     const text = (ws) => P.or(...ws.flatMap((k) => [P.cond("lead", "title", "contains", k), P.cond("lead", "summary_zh", "contains", k)]));
     if (f.keywords.length) c.push(text(f.keywords));

@@ -267,7 +267,7 @@ def vocab() -> Vocab:
 def empty_plan() -> dict:
     return {"intent": "list", "object": "lead",
             "filters": {"countries": [], "regions": [], "sectors": [], "sectors_fine": [], "categories": [], "funders": [], "stages": [],
-                        "tracked": None, "status": [], "relevant": None, "days": None, "from": None, "to": None, "future_days": None,
+                        "tracked": None, "status": [], "relevant": None, "archived": None, "days": None, "from": None, "to": None, "future_days": None,
                         "kinds": [], "keywords": [], "terms": [],
                         "contract_types": [], "deliveries": [], "winner_countries": [], "winners": [], "capacity": None,
                         "price": None, "assets": [],
@@ -766,6 +766,7 @@ def country_plan(p: dict, text: str, ms: list[dict]) -> dict:
               "winner_countries", "winners", "assets"):
         f[k] = []
     f["tracked"] = f["relevant"] = f["capacity"] = f["price"] = None
+    f["archived"] = None
     f["days"] = f["from"] = f["to"] = f["future_days"] = None  # B-READY 一期一个数,不按时间筛
     p["understood"] = [x for x in p["understood"] if x[0] != "时间"]
     p["group_by"] = None
@@ -948,6 +949,8 @@ def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
             f["relevant"] = False
         elif re.search(r"相关", text):
             f["relevant"] = True
+        if re.search(r"归档|过期|失效", text):  # 问到归档才把已归档的线索算进来(默认不算,与页面一致)
+            f["archived"] = True
         if re.search(r"新线索|新增", text) and not re.search(r"最近|近|过去|本周|上周|本月|上月|今天|昨天|今年", text):
             f["days"] = 7
             p["understood"].append(["时间", "最近 7 天(「新」按一周算)"])
@@ -1047,13 +1050,14 @@ SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器�
 - intent:count 问数量;list 要清单(缺省);chart 要分组统计 / 分布 / 趋势 / 哪些国家最多;report 要生成一份新报告;help 看不懂或与系统无关。
 - group_by:chart 时的分组维度,线索可选 country / category / sectors / funder / day / status / source,商机 country / stage / sectors / funder,时间节点 country / kind / day,报告 kind / country,
   已中标项目 country / sector / contract_type / delivery / asset / winner_country / funder / year。
+- archived:问到「归档」「过期」「失效」的线索给 true(把已归档的也算进来);否则 null(系统默认不算后台归档的过期线索)。
 - limit:要几条(1–200),没说就 50。
 
 {guide}"""
 
 GUIDE = """输出格式:只输出一个 JSON 对象,不要任何其他文字。字段与示例:
 {"object": "lead", "intent": "chart", "countries": ["埃及"], "sectors": ["供水"], "categories": ["招标"], "funders": ["世界银行"],
- "stages": [], "tracked": null, "status": [], "relevant": null, "days": 30, "from": null, "to": null, "future_days": null,
+ "stages": [], "tracked": null, "status": [], "relevant": null, "archived": null, "days": 30, "from": null, "to": null, "future_days": null,
  "kinds": [], "keywords": [], "contract_types": [], "deliveries": [], "assets": [], "winner_countries": [], "winners": [], "capacity_min": null, "capacity_max": null,
  "measure": "count", "agg": null, "group_by": "country", "limit": 50, "unresolved": [], "unsupported": null}
 没有的字段给空数组或 null;object 只能取 lead / opportunity / milestone / report / award / country / law / city;intent 只能取 count / list / chart / report / help。"""
@@ -1066,6 +1070,7 @@ SCHEMA = {
         "categories": {"type": "array", "items": {"type": "string"}}, "funders": {"type": "array", "items": {"type": "string"}},
         "stages": {"type": "array", "items": {"type": "string"}}, "tracked": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
         "status": {"type": "array", "items": {"type": "string"}}, "relevant": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
+        "archived": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
         "days": {"anyOf": [{"type": "integer"}, {"type": "null"}]}, "from": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "to": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "future_days": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
         "kinds": {"type": "array", "items": {"type": "string"}}, "keywords": {"type": "array", "items": {"type": "string"}},
@@ -1077,7 +1082,7 @@ SCHEMA = {
         "group_by": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "limit": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
         "unresolved": {"type": "array", "items": {"type": "string"}}, "unsupported": {"anyOf": [{"type": "string"}, {"type": "null"}]},
     },
-    "required": ["object", "intent", "countries", "sectors", "categories", "funders", "stages", "tracked", "status", "relevant", "days", "from",
+    "required": ["object", "intent", "countries", "sectors", "categories", "funders", "stages", "tracked", "status", "relevant", "archived", "days", "from",
                  "to", "future_days", "kinds", "keywords", "contract_types", "deliveries", "assets", "winner_countries", "winners", "capacity_min", "capacity_max",
                  "measure", "agg", "group_by", "limit", "unresolved", "unsupported"],
     "additionalProperties": False,
@@ -1234,6 +1239,7 @@ def from_model(data: dict, today: date, q: str = "", force_object: str | None = 
     if p["object"] == "lead":
         f["status"] = keep(_strs(data.get("status")), v.statuses, v.words["statuses"])
         f["relevant"] = data.get("relevant") if isinstance(data.get("relevant"), bool) else None
+        f["archived"] = True if data.get("archived") is True or re.search(r"归档|过期|失效", q or "") else None
     if p["object"] == "milestone":
         f["kinds"] = keep(_strs(data.get("kinds")), v.milestone_kinds)
     if p["object"] == "report":
@@ -1305,6 +1311,8 @@ def finish(p: dict) -> dict:
         u.append(["处理状态", "、".join(f["status"])])
     if f["relevant"] is not None:
         u.append(["是否相关", "相关" if f["relevant"] else "不相关"])
+    if f.get("archived"):
+        u.append(["已归档", "算进来(平时不算)"])
     if f["kinds"]:
         u.append(["类型", "、".join(f["kinds"])])
     for t in f.get("terms") or []:

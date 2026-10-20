@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -313,3 +313,26 @@ def test_expire_marks_past_milestones_done_and_leaves_today_and_future(env):
     assert got["投标截止2026-09-20"] == "已发生" and got["意向书截止2026-10-02"] == "已发生"
     assert got["投标截止" + TODAY.isoformat()] == "官方计划" and got["贷款签署2027-01-15"] == "推断"
     assert expire.run(ctx) == {}  # 第二遍没得改
+
+
+def test_archive_leads_marks_expired_and_stale_unassigned_only_once(env):
+    """A49:截止已过的、或发布超过一年且没归入商机的线索标「已归档」;归入商机的旧线索、一年内的、人取消过归档的都不动;第二遍没得改。"""
+    from core.jobs import expire
+    fake, admin, b, ctx = env
+    opp = b.create("opportunity", [{"code": "AZE-001", "name_zh": "甘贾污水厂", "stage": "跟踪中"}])[0]
+    old = (TODAY - timedelta(days=400)).isoformat()
+    rows = b.create("lead", [
+        {"key": "l-old-free", "title": "old unassigned", "url": "https://example.org/1", "published": old},
+        {"key": "l-old-opp", "title": "old in opp", "url": "https://example.org/2", "published": old, "opportunity": opp["id"]},
+        {"key": "l-old-found", "title": "old by found_at", "url": "https://example.org/3", "found_at": old + "T01:00:00.000Z"},
+        {"key": "l-new", "title": "recent", "url": "https://example.org/4", "published": (TODAY - timedelta(days=30)).isoformat()},
+        {"key": "l-dead", "title": "deadline passed", "url": "https://example.org/5", "published": TODAY.isoformat(), "opportunity": opp["id"]},
+        {"key": "l-undone", "title": "human un-archived", "url": "https://example.org/6", "published": old, "archived_at": (TODAY - timedelta(days=2)).isoformat()},
+    ])
+    b.create("milestone", [{"lead": rows[4]["id"], "opportunity": opp["id"], "kind": "投标截止", "day": (TODAY - timedelta(days=1)).isoformat(), "status": "官方计划"}])
+    out = expire.archive_leads(ctx)
+    assert out == {"过期线索归档": 3, "超过一年": 2, "截止已过": 1}, out
+    got = {b.get("lead", r, "key"): (b.get("lead", r, "archived"), b.get("lead", r, "archive_reason")) for r in b.rows("lead", props=["key", "archived", "archive_reason", "archived_at"])}
+    assert got["l-old-free"] == (True, "超过一年") and got["l-old-found"] == (True, "超过一年") and got["l-dead"] == (True, "截止已过")
+    assert not got["l-old-opp"][0] and not got["l-new"][0] and not got["l-undone"][0]
+    assert expire.archive_leads(ctx) == {}

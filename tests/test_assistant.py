@@ -48,6 +48,9 @@ def test_rules_lead_questions():
     assert p["group_by"] == "day" and p["filters"]["from"] == "2026-10-05" and p["filters"]["to"] == "2026-10-08"
     p = A.rules_parse("前 20 条供水线索", TODAY)
     assert p["intent"] == "list" and p["limit"] == 20
+    p = A.rules_parse("摩洛哥已归档的过期线索", TODAY)  # 问到归档才把后台归档的过期线索算进来(页面默认不算)
+    assert p["filters"]["archived"] is True and ["已归档", "算进来(平时不算)"] in p["understood"]
+    assert A.rules_parse("摩洛哥的线索", TODAY)["filters"]["archived"] is None
 
 
 def test_rules_other_objects_and_help():

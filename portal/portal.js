@@ -471,6 +471,18 @@
         ' <button type="button" class="btn quiet">' + (shown ? "不显示" : "显示") + "</button>";
       el.querySelector("button").onclick = toggle;
     },
+    /* 过期线索归档(本体 lead.archived,A49):截止已过、或发布超过一年没归入商机的线索由后台标「已归档」;线索页面与助手默认不算它们(网址 ar=1 露出),
+       商机工作台照旧全列(已归档的在有效线索下面)。表里还没这个字段(没跑建表)时不加条件、不显示说明行 */
+    ARC_WHY: "截止已过或发布超过一年没归入商机",
+    arcCond(show) { return !show && this.has("lead", "archived") ? this.cond("lead", "archived", "is", false) : null; },
+    arcNote(el, n, shown, toggle) {
+      if (!el) return;
+      if (!n || !this.has("lead", "archived")) { el.innerHTML = ""; return; }
+      const k = Number(n).toLocaleString("zh-CN");
+      el.innerHTML = (shown ? "已显示归档(" + this.ARC_WHY + ")的 " + k + " 条线索。" : "已归档(" + this.ARC_WHY + ")的 " + k + " 条线索没算进来。") +
+        ' <button type="button" class="btn quiet">' + (shown ? "不显示" : "显示") + "</button>";
+      el.querySelector("button").onclick = toggle;
+    },
     hatchNote(mapEl, set) {
       if (!mapEl || !set || !set.size || (mapEl.nextElementSibling && mapEl.nextElementSibling.classList.contains("hatch-note"))) return;
       const p = document.createElement("p");

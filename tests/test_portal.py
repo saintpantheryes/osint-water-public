@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import pathlib
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 import json
 import re
 from pathlib import Path
@@ -3137,3 +3137,64 @@ def test_every_page_fits_a_phone_and_a_laptop():
     finally:
         srv.shutdown()
         srv.assistant.shutdown()
+
+
+def test_archived_leads_hidden_by_default_but_listed_under_the_opportunity():
+    """过期线索归档(使用方 2026-10-20):后台标「已归档」的线索,线索总览默认不算、一行说明「已归档 N 条 · 显示」点开才算;
+    商机工作台的所属线索照旧全列,已归档的在有效线索下面单独一段(不然没法整体判断)。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    _seed(admin, fake)
+    b = tstore.Base(admin)
+    opp = next(r for r in b.rows("opportunity", props=["code"]) if b.get("opportunity", r, "code") == "AZE-001")
+    c = b.rows("country", props=["key"])[0]
+    old = (_today() - timedelta(days=400)).isoformat()
+    b.create("lead", [{"key": "dddddddd", "title": "Old Ganja feasibility notice", "url": "https://example.org/d", "relevant": True, "category": "立项或规划", "country": c["id"],
+                       "found_at": old + "T02:00:00.000Z", "published": old, "opportunity": opp["id"], "status": "已处理", "origin": "机器采集",
+                       "archived": True, "archive_reason": "截止已过", "archived_at": _today().isoformat()},
+                      {"key": "eeeeeeee", "title": "Stale unassigned notice", "url": "https://example.org/e", "relevant": True, "category": "项目动态", "country": c["id"],
+                       "found_at": old + "T03:00:00.000Z", "published": old, "status": "待处理", "origin": "机器采集",
+                       "archived": True, "archive_reason": "超过一年", "archived_at": _today().isoformat()}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    shot = os.environ.get("SHOT")
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            errors: list[str] = []
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + "/overview.html")
+            page.wait_for_function("document.querySelector('#cards .kpi .kn') && !document.getElementById('fNote').textContent.includes('统计中') && document.getElementById('arNote').textContent.includes('已归档')", timeout=15000)
+            assert page.inner_text("#cards .kpi .kn") == "3" and "2 条线索没算进来" in page.inner_text("#arNote")
+            if shot:
+                page.screenshot(path=f"{shot}/线索总览_已归档说明.png", full_page=False)
+            page.click("#arNote button")
+            page.wait_for_function("document.querySelector('#cards .kpi .kn').textContent === '5' && location.search.includes('ar=1')", timeout=15000)
+            assert "已显示归档" in page.inner_text("#arNote")
+            page.click("#arNote button")
+            page.wait_for_function("document.querySelector('#cards .kpi .kn').textContent === '3' && !location.search.includes('ar=1')", timeout=15000)
+            # 线索分析、线索处理也默认不算,说明行一样
+            page.goto(base + "/analysis.html")
+            page.wait_for_selector("#fWin .chip-btn", timeout=15000)
+            page.click("#fWin .chip-btn:text-is('全部')")  # 全部时间(缺省只看最近 30 天,旧线索本来就不在窗口里)
+            page.wait_for_function("document.querySelector('#cards .kpi .kn') && document.getElementById('arNote').textContent.includes('已归档')", timeout=15000)
+            assert "2 条线索没算进来" in page.inner_text("#arNote")
+            page.goto(base + "/inbox.html")
+            page.wait_for_selector("#assign .item", timeout=15000)
+            assert "eeeeeeee" not in page.inner_text("#assign") or page.locator("#assign .item:has-text('eeeeeeee')").first.evaluate("(e) => !e.offsetParent")
+            # 商机工作台:有效线索在上,已归档的单独一段在下面
+            page.goto(base + f"/opp.html?id={opp['id']}")
+            page.wait_for_function("document.getElementById('leads').textContent.includes('已归档')", timeout=15000)
+            txt = page.inner_text("#leads")
+            assert txt.index("aaaaaaaa") < txt.index("已归档 1 条") < txt.index("dddddddd") and "截止已过" in txt
+            if shot:
+                page.screenshot(path=f"{shot}/商机工作台_已归档线索.png", full_page=True)
+            browser.close()
+            assert not errors, errors
+    finally:
+        srv.shutdown()

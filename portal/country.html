@@ -114,7 +114,7 @@
     const hasArea = !!(P.cfg.tables && P.cfg.tables.water_area) && P.has("opportunity", "area");
     const listsP = Promise.all([  // 这几张清单只要国别编号:与读整条国别记录同时发出,不排队
       P.records("opportunity", { filter: P.and(P.cond("opportunity", "country", "is", c.id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "priority"].concat(hasArea ? ["area"] : []) }),
-      P.records("lead", { filter: P.and(P.cond("lead", "country", "is", c.id), P.cond("lead", "relevant", "is", true), P.cond("lead", "found_at", "isOnOrAfter", P.onDay(since))),
+      P.records("lead", { filter: P.and(P.cond("lead", "country", "is", c.id), P.cond("lead", "relevant", "is", true), P.cond("lead", "found_at", "isOnOrAfter", P.onDay(since)), ...(P.arcCond() ? [P.arcCond()] : [])),  // 已归档(过期)的不列
         take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "category", "published", "found_at", "nearest_deadline", "summary_zh", "project_name", "opportunity", "status"] }),
       P.records("milestone", { filter: P.and(...P.between("milestone", "day", today, until)), props: ["opportunity", "lead", "country", "kind", "day", "status", "label"] }),
       hasCity ? P.records("city", { filter: P.and(P.cond("city", "country", "is", c.id)), orderBy: [{ fieldId: P.f("city", "population"), order: "desc" }],

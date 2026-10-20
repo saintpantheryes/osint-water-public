@@ -595,7 +595,8 @@ class FakeTeable:
             elif op == "isNotEmpty":
                 res.append(not empty)
             elif op == "is":
-                res.append(v == want or (want is not None and want in titles) or (isinstance(v, list) and want in v))
+                res.append(v == want or (want is not None and want in titles) or (isinstance(v, list) and want in v)
+                           or (want is False and empty))  # 复选框没勾存 null,真 Teable 按「is false」也能查到它们(2026-10-20 线上核过)
             elif op == "isNot":
                 res.append(v != want)
             elif op in ("isAnyOf", "hasAnyOf"):
