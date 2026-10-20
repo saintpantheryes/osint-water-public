@@ -20,6 +20,7 @@
   </div>
   <section class="tab on" id="tab-list">
   <div id="upd"></div>
+  <p class="muted small ig-note" id="arNote"></p>
   <div class="filters">
     <div class="frow"><b>阶段</b><span id="fStage" class="frow"></span></div>
     <div class="frow"><b>区域</b><span id="fRegion" class="frow"></span></div>
@@ -49,9 +50,9 @@
   let opps = [], cname = {}, creg = {};
   const q = new URLSearchParams(location.search);
   /* 筛选状态(与线索总览同一套平铺按钮;写进地址栏,刷新、转发都保得住):阶段 ""=跟踪中的、"*"=全部;领域可多选 */
-  const state = { stage: q.get("stage") || "", r: q.get("r") || "", c: q.get("c") || "", s: (q.get("s") || "").split(",").filter(Boolean), f: q.get("f") || "", w: q.get("w") || "", u: q.get("u") || "" };
+  const state = { stage: q.get("stage") || "", r: q.get("r") || "", c: q.get("c") || "", s: (q.get("s") || "").split(",").filter(Boolean), f: q.get("f") || "", w: q.get("w") || "", u: q.get("u") || "", ar: q.get("ar") === "1" ? "1" : "" };  // ar=1:把已归档(放弃跟踪)的商机也算进来
   let tab = q.get("t") || "list";
-  const here = () => { const u = new URLSearchParams({ stage: state.stage, r: state.r, c: state.c, s: state.s.join(","), f: state.f, w: state.w }); if (state.u) u.set("u", state.u); if (tab !== "list") u.set("t", tab); return location.pathname + "?" + u; };
+  const here = () => { const u = new URLSearchParams({ stage: state.stage, r: state.r, c: state.c, s: state.s.join(","), f: state.f, w: state.w }); if (state.u) u.set("u", state.u); if (state.ar) u.set("ar", "1"); if (tab !== "list") u.set("t", tab); return location.pathname + "?" + u; };
   /* 线索更新(使用方 2026-10-16:要主动提醒商机有进展):近 7 天挂到商机上的线索,按商机数一数——今天的、近 7 天的各几条、最近一天是哪天。
      「今天」按当前日期现算(R12),不靠表里的 TODAY();机器 08:30 采集挂接,同事上传的也算 */
   const upd = {};  // 商机 id → { today: 今天几条, week: 近 7 天几条, last: 最近一天 }
@@ -73,7 +74,7 @@
     const g = (o, p) => P.get("opportunity", o, p);
     let rows = opps.filter((o) => {
       const stage = g(o, "stage");
-      if (st === "") { if (!P.tracked([o]).length) return false; } else if (st !== "*" && stage !== st) return false;
+      if (st === "") { if (!P.tracked([o]).length) return false; } else if (st !== "*" && stage !== st) return false;  // 跟踪中的不含已归档;「全部已立项」在 ar=1 时含
       if (c && P.linkId(g(o, "country")) !== c) return false;
       if (!c && state.r && (creg[P.linkId(g(o, "country"))] || P.REGION_EMPTY) !== state.r) return false;
       if (state.s.length && !(g(o, "sectors") || []).some((x) => state.s.includes(x))) return false;
@@ -90,7 +91,7 @@
     $("list").innerHTML = P.tableHtml(["编号", "名称", "国别", "我方阶段", "投资规模", "优先级", "负责人", "下一节点", "下一步", "到期", "最近跟进", "线索"], rows.map((o) => {
       const due = P.day(g(o, "next_due")), over = due && due < today;
       return [P.raw(P.star("opportunity", o) + '<a href="' + P.oppUrl(o.id) + '"><b>' + P.esc(g(o, "code")) + "</b></a>"), P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(g(o, "name_zh") || "") + "</a>" + (updTag(o) ? " " + updTag(o) : "")),
-        cname[P.linkId(g(o, "country"))] || P.text(g(o, "country")), P.raw(P.stageTag(g(o, "stage"))),
+        cname[P.linkId(g(o, "country"))] || P.text(g(o, "country")), P.raw(P.stageTag(g(o, "stage")) + (P.isArchived(o) ? " " + P.tagHtml("已归档", "", "放弃跟踪" + (P.day(g(o, "archived_at")) ? " " + P.day(g(o, "archived_at")) : "") + (g(o, "archive_reason") ? ":" + g(o, "archive_reason") : "")) : "")),
         P.sizeText("opportunity", o), g(o, "priority"), P.text(g(o, "owner")), g(o, "next_milestone"), g(o, "next_step"), P.raw(due ? '<span class="' + (over ? "over" : "") + '">' + due + (over ? " 逾期" : "") + "</span>" : ""),
         P.day(g(o, "last_followup")), g(o, "lead_count")];
     }));
@@ -103,9 +104,13 @@
     showTab(tab);
     $("tbl").href = P.tableUrl("opportunity");
     const since = P.addDays(P.today(), -6);
-    const [os, cs, , ls] = await Promise.all([P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "next_milestone", "public_stage", "priority", "next_step", "next_due", "last_followup", "lead_count", "sectors", "financing", "size_value", "currency", "size_cny", "review_updates"] }), P.countries(), P.followed(),
+    const [os, cs, , ls] = await Promise.all([P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "next_milestone", "public_stage", "priority", "next_step", "next_due", "last_followup", "lead_count", "sectors", "financing", "size_value", "currency", "size_cny", "review_updates"].concat(P.OPP_ARC) }), P.countries(), P.followed(),
       P.records("lead", { filter: P.and(P.cond("lead", "found_at", "isOnOrAfter", P.onDay(since)), P.cond("lead", "opportunity", "isNotEmpty")), props: ["opportunity", "found_at"] }).catch(() => null)]);  // 线索读不到不拖累商机列表
-    opps = P.decided(os);  // 只算人立项过的(glossary.decided):提醒、筛选数字、三个页签都在这些里算,AI 推荐的不进这一步(使用方 2026-10-16)
+    /* 只算人立项过的(glossary.decided):提醒、筛选数字、三个页签都在这些里算,AI 推荐的不进这一步(使用方 2026-10-16);
+       已归档(放弃跟踪)的默认也不算(glossary.archived_opp),上面一行说明「已归档 N 个商机 · 显示」,点了(网址 ar=1)才列进来 */
+    const dec = os.filter((o) => P.DECIDED.includes(P.get("opportunity", o, "stage"))), nArc = P.archivedOpps(dec).length;
+    opps = state.ar ? dec : dec.filter((o) => !P.isArchived(o));
+    P.oppArcNote($("arNote"), nArc, !!state.ar, () => { state.ar = state.ar ? "" : "1"; if (state.ar) state.stage = "*"; location.href = here(); });  // 点「显示」顺带切到「全部已立项」,不然已归档的(多是「放弃」)在「跟踪中的」里看不到
     ls && ls.forEach((l) => {
       const oid = P.linkId(P.get("lead", l, "opportunity")), d = P.day(P.get("lead", l, "found_at"));
       if (!oid || !d || d < since) return;

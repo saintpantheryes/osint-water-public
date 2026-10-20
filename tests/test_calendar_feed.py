@@ -39,6 +39,10 @@ def test_collect_matches_the_page_calendar_scope():
     assert {e["summary"] for e in calendar_feed.collect(b, today, country="MAR")} == set()
     only = calendar_feed.collect(b, today, opp="aze-001")
     assert only and all("AZE-001" in e["summary"] for e in only)
+    # 放弃跟踪(勾了「已归档」,A50)的商机不进日历,与页面同一口径
+    o = b.rows("opportunity", filter=b.filter(b.cond("opportunity", "code", "is", "AZE-001")))[0]
+    b.update("opportunity", o["id"], {"archived": True, "archive_reason": "业主改为本国预算", "archived_at": today.isoformat()})
+    assert not any("AZE-001" in e["summary"] for e in calendar_feed.collect(b, today))
 
 
 def test_render_is_valid_ics_with_all_day_events_and_folding():

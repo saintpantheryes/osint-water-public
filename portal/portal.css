@@ -66,7 +66,15 @@ th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 .btn, button.conv, .form button, .toolbar button, .it-act button, .batch button, .convbox button {
   font: inherit; font-size: 14px; line-height: 1.4; padding: 5px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--card); color: var(--ink); cursor: pointer; text-align: center; white-space: nowrap; }
+/* 主按钮 = 关键操作(保存跟进、跟踪、转为商机、排队生成、放弃跟踪…):比普通按钮大一号、更深、带阴影,一眼能找到(使用方 2026-10-20:关键操作按钮要醒目);.danger 是红色的主按钮,放弃、删除这类用 */
 .btn.primary, .form button.primary, .toolbar .primary, .it-act button.primary, .batch button.primary, .convbox button.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.btn.primary, .btn.danger, .form button.primary, .toolbar .primary, .it-act button.primary, .batch button.primary, .convbox button.primary {
+  font-size: 15px; padding: 8px 20px; min-height: 40px; border-radius: 8px; letter-spacing: .02em; box-shadow: 0 2px 6px rgba(14, 107, 168, .28); transition: filter .12s, transform .12s; }
+.btn.primary:hover, .form button.primary:hover, .toolbar .primary:hover, .it-act button.primary:hover, .batch button.primary:hover, .convbox button.primary:hover { filter: brightness(1.1); }
+.btn.primary:active, .btn.danger:active, .form button.primary:active { transform: translateY(1px); box-shadow: none; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; box-shadow: 0 2px 6px rgba(220, 38, 38, .28); }
+.btn.danger:hover { filter: brightness(1.08); }
+.it-act button.primary { font-size: 14px; padding: 6px 14px; min-height: 36px; }  /* 清单每行里的主按钮(跟踪、归入)小半号,一行放得下 */
 .btn.quiet { border-color: transparent; background: none; color: var(--brand); padding-inline: 6px; }
 button.conv { color: var(--brand); border-color: var(--brand); }
 .btn:disabled, .form button:disabled, .it-act button:disabled, .batch button:disabled, .convbox :disabled { opacity: .6; cursor: default; }
@@ -660,3 +668,10 @@ li.rv-off > .rv-item { text-decoration: line-through; color: var(--muted); }
 #list td .tag { white-space: nowrap; margin-right: 0; }  /* 报告清单:类型、版本、状态都是标签,不在格子里折行 */
 #list td:first-child { white-space: nowrap; }
 .rp-legend .tag { margin: 0 2px; }
+
+/* 商机工作台:放弃跟踪 / 归档(A50)——按钮一行带一句说明;确认框与已归档说明是提醒色的 note,按钮靠右,手机上折行 */
+.arc-act { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0 12px; }
+.arc-box { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.arc-box > div { flex: 1 1 260px; min-width: 0; }
+.arc-box input { display: block; width: 100%; max-width: 420px; margin-top: 4px; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); }
+.arc-btns { display: flex; gap: 8px; flex-wrap: wrap; }

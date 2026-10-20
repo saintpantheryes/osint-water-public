@@ -220,7 +220,7 @@
     await P.load();
     if (!(await P.canWrite())) P.guest();  // 游客帐号(查看者)只能看
     $("tbl").href = P.tableUrl("report");
-    const [u, cs, os] = await Promise.all([P.me(), P.countries(), P.records("opportunity", { props: ["code", "name_zh", "stage", "country"] })]);
+    const [u, cs, os] = await Promise.all([P.me(), P.countries(), P.records("opportunity", { props: ["code", "name_zh", "stage", "country"].concat(P.OPP_ARC) })]);
     me = u; opps = P.tracked(os).concat(os.filter((o) => !P.tracked([o]).length));
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); ciso[c.id] = P.get("country", c, "key"); });
     ["fCountry", "rpCountry"].forEach((id) => P.fillCountrySelect($(id), cs.map((c) => [c.id, cname[c.id]])));

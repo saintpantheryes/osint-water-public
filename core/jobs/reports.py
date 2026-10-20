@@ -774,7 +774,7 @@ def build_periodic(ctx: Ctx, kind: str, start: date, end: date, iso: str | None)
     fus = _followups_between(ctx, start, end, set(code_of))
     changed = {tstore.link_id(b.get("followup", r, "opportunity")) for r in fus if b.get("followup", r, "stage_change")}
     touched = [r for r in all_opps if r["id"] in changed or r in new_opps]
-    tracked = {r["id"] for r in all_opps if b.get("opportunity", r, "stage") in TRACKED_STAGES}  # 与页面同一口径(本体 glossary.tracked)
+    tracked = {r["id"] for r in all_opps if b.get("opportunity", r, "stage") in TRACKED_STAGES and not b.is_archived("opportunity", r)}  # 与页面同一口径(本体 glossary.tracked,不含已归档)
     ms = _milestones(ctx, ctx.today, ctx.today + timedelta(days=UPCOMING_DAYS), tracked, {r["id"] for r in leads})
     by_c = Counter(_cell(b.get("lead", r, "country")) for r in leads)
     by_k = Counter(str(b.get("lead", r, "category") or "") for r in leads)

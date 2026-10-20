@@ -22,6 +22,7 @@
   <div class="tab" data-t="biz"><h2>营商环境(世界银行 B-READY)</h2><div id="biz"></div></div>
   <div class="tab" data-t="opps">
     <h2>商机(按我方阶段)</h2>
+    <p class="muted small ig-note" id="oppArc"></p>
     <div class="panel" id="opps">读取中…</div>
   </div>
   <div class="tab" data-t="leads">
@@ -113,7 +114,7 @@
     const hasCity = !!(P.cfg.tables && P.cfg.tables.city);  /* 「城市」表建了才有(表结构没更新时页签显示「未建表」) */
     const hasArea = !!(P.cfg.tables && P.cfg.tables.water_area) && P.has("opportunity", "area");
     const listsP = Promise.all([  // 这几张清单只要国别编号:与读整条国别记录同时发出,不排队
-      P.records("opportunity", { filter: P.and(P.cond("opportunity", "country", "is", c.id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "priority"].concat(hasArea ? ["area"] : []) }),
+      P.records("opportunity", { filter: P.and(P.cond("opportunity", "country", "is", c.id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "priority"].concat(P.OPP_ARC, hasArea ? ["area"] : []) }),
       P.records("lead", { filter: P.and(P.cond("lead", "country", "is", c.id), P.cond("lead", "relevant", "is", true), P.cond("lead", "found_at", "isOnOrAfter", P.onDay(since)), ...(P.arcCond() ? [P.arcCond()] : [])),  // 已归档(过期)的不列
         take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "category", "published", "found_at", "nearest_deadline", "summary_zh", "project_name", "opportunity", "status"] }),
       P.records("milestone", { filter: P.and(...P.between("milestone", "day", today, until)), props: ["opportunity", "lead", "country", "kind", "day", "status", "label"] }),
@@ -176,7 +177,9 @@
       sec("相关法律法规", dots(f("laws"), ["法规", "领域", "要点", "链接"]), true) + sec("市场准入与竞争", notes(f("access")), true);
     $("biz").innerHTML = P.bready(full, g("name_zh") || iso);
     $("inst").innerHTML = inst || '<p class="empty">这个国家还没填机构、国企、法规与市场准入资料(国别表里补上就显示)。</p>';
-    const [opps, leads, ms, cities] = await listsP;
+    const [oppsAll, leads, ms, cities] = await listsP;
+    const opps = oppsAll.filter((o) => !P.isArchived(o)), oppsArc = P.archivedOpps(oppsAll);  // 已归档(放弃跟踪)的商机默认不算(glossary.archived_opp),下面一行说明
+    $("oppArc").innerHTML = oppsArc.length ? "已归档(放弃跟踪)的 " + oppsArc.length + ' 个商机没列出来,在 <a href="opps.html?stage=*&ar=1">商机总览</a> 点「显示」看。' : "";
     const stage = {}; opps.forEach((o) => { const s = P.get("opportunity", o, "stage") || "建议"; stage[s] = (stage[s] || 0) + 1; });
     const tracked = P.tracked(opps);
     $("cards").innerHTML = P.kpiHtml([[Number(g("lead_count")) || 0, "线索(全部)"], [leads.length + (leads.length >= 200 ? "+" : ""), "最近 90 天相关线索"], [opps.length, "商机"], [tracked.length, "跟踪中"], [stage["建议"] || 0, "AI 推荐"]]

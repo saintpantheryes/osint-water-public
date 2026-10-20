@@ -422,6 +422,10 @@ class Base:
     def get(self, oid: str, rec: dict, prop: str, default=None):
         return (rec.get("fields") or {}).get(self.fid(oid, prop), default)
 
+    def is_archived(self, oid: str, rec: dict) -> bool:
+        """勾了「已归档」的记录(线索 A49、商机 A50;本体 glossary.archived_opp):页面与后台默认不算。表里还没这个字段时都算没归档。"""
+        return self.has(oid, "archived") and self.get(oid, rec, "archived") is True
+
     def me(self) -> dict:
         if self._me is None:
             self._me = self.api.me()

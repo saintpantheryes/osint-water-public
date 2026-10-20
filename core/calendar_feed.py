@@ -87,11 +87,11 @@ def collect(b: tstore.Base, today: date, country: str | None = None, opp: str | 
     start, end = today - timedelta(days=PAST_DAYS), today + timedelta(days=AHEAD_DAYS)
     country = (country or "").strip().upper() or None
     opp = (opp or "").strip().upper() or None
-    opps = b.rows("opportunity", props=["code", "name_zh", "stage", "country"])
+    opps = b.rows("opportunity", props=["code", "name_zh", "stage", "country"] + (["archived"] if b.has("opportunity", "archived") else []))
     iso_of = {r["id"]: str(b.get("country", r, "key") or "") for r in b.rows("country", props=["key"])}
     keep: dict[str, dict] = {}
     for r in opps:
-        if str(b.get("opportunity", r, "stage") or "") not in tracked:
+        if str(b.get("opportunity", r, "stage") or "") not in tracked or b.is_archived("opportunity", r):  # 已归档(放弃跟踪)的不进日历
             continue
         code = str(b.get("opportunity", r, "code") or "")
         iso = iso_of.get(tstore.link_id(b.get("opportunity", r, "country")) or "", "")

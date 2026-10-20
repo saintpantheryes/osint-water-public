@@ -51,6 +51,9 @@ def test_rules_lead_questions():
     p = A.rules_parse("摩洛哥已归档的过期线索", TODAY)  # 问到归档才把后台归档的过期线索算进来(页面默认不算)
     assert p["filters"]["archived"] is True and ["已归档", "算进来(平时不算)"] in p["understood"]
     assert A.rules_parse("摩洛哥的线索", TODAY)["filters"]["archived"] is None
+    p = A.rules_parse("已归档的商机有几个", TODAY)  # 放弃跟踪的商机(A50)同理:问到归档、放弃才算
+    assert p["object"] == "opportunity" and p["filters"]["archived"] is True and ["已归档", "算进来(平时不算)"] in p["understood"]
+    assert A.rules_parse("在跟踪的商机", TODAY)["filters"]["archived"] is None
 
 
 def test_rules_other_objects_and_help():

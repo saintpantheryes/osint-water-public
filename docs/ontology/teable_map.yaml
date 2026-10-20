@@ -251,6 +251,7 @@ views:
   opportunity:
     - {name: 建议商机, filter: {and: [[我方阶段, is, 建议]]}, group: [[国别, asc]]}
     - {name: 跟踪看板, type: kanban, stack: 我方阶段, filter: {and: [[我方阶段, isAnyOf, [跟踪中, 准备投标, 已投标]]]}}
+    - {name: 已归档, filter: {and: [[已归档, is, true]]}, sort: [[归档时间, desc]]}   # 放弃跟踪的商机(A50)
     - {name: 按国别, group: [[国别, asc]]}
     - {name: 待核更新, filter: {and: [[待核更新, isNotEmpty]]}}
   followup:

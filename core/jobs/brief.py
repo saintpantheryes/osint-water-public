@@ -107,10 +107,10 @@ def build_daily(ctx: Ctx, today: date | None = None) -> tuple[str, set[str], set
     past = Counter(day_of[r["id"]] for r in leads)
     week_mid = median(past.get((today - timedelta(days=i)).isoformat(), 0) for i in range(1, WEEK + 1))
 
-    opps = b.rows("opportunity", props=["code", "name_zh", "stage", "country"])
+    opps = b.rows("opportunity", props=["code", "name_zh", "stage", "country"] + (["archived"] if b.has("opportunity", "archived") else []))
     og = lambda r, p: b.get("opportunity", r, p)  # noqa: E731
     code_of = {r["id"]: str(og(r, "code") or "") for r in opps}
-    tracked = [r for r in opps if str(og(r, "stage") or "") in TRACKED_STAGES]
+    tracked = [r for r in opps if str(og(r, "stage") or "") in TRACKED_STAGES and not b.is_archived("opportunity", r)]  # 已归档(放弃跟踪)的不算,与页面一致
     suggested = [r for r in opps if str(og(r, "stage") or "建议") == "建议"]
     new_opps = [r for r in opps if str(r.get("createdTime") or "")[:10] == d0 or tstore.day(r.get("createdTime"), tz) == d0]
     fus = [r for r in b.rows("followup", props=["day", "opportunity", "stage_change"]) if tstore.day(b.get("followup", r, "day"), tz) == d0 and b.get("followup", r, "stage_change")]
