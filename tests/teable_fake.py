@@ -50,6 +50,8 @@ class FakeTeable:
         self.comments: list[dict] = []
         self.invitations: list[dict] = []
         self.added: list[tuple[str, str]] = []  # 账号管理页直接加进库的 (用户, 角色)
+        self.mailed: list[tuple[str, str]] = []  # 账号管理页让表格发的邀请邮件 (邮箱, 角色)
+        self.reset_mails: list[str] = []  # 账号管理页替人发的重置密码邮件
         self.role_changes: list[tuple[str, str]] = []  # 「账号管理」页改的角色
         self.removed: list[str] = []  # 「账号管理」页移出的协作者
         self.calls: list[tuple[str, str]] = []
@@ -114,6 +116,9 @@ class FakeTeable:
         if method == "GET" and path == "/auth/user":
             return dict(self.users[self.user])
         if path == "/auth/signout" and method == "POST":
+            return None
+        if path == "/auth/send-reset-password-email" and method == "POST":  # 公开接口:按邮箱发重置密码邮件
+            self.reset_mails.append((body or {}).get("email"))
             return None
         if self.role == "none":  # 不是协作者:看不到空间、库、表
             raise HTTPError(403, "no permission")
@@ -188,6 +193,10 @@ class FakeTeable:
                    "inviteUrl": f"https://water.example/invite/link?invitationId=inv{self._n}&invitationCode=code-{self._n}"}
             self.invitations.append(inv)
             return inv
+        if (r := m(r"/base/([^/]+)/invitation/email")) and method == "POST":  # 表格给对方发邀请邮件
+            self._owner()
+            self.mailed.extend((e, body.get("role")) for e in body.get("emails") or [])
+            return {e: {"invitationId": self._id("inv")} for e in body.get("emails") or []}
         if (r := m(r"/base/([^/]+)/invitation/link/([^/]+)")) and method == "DELETE":
             self._owner()
             self.invitations = [i for i in self.invitations if i["invitationId"] != r.group(2)]
@@ -252,6 +261,11 @@ class FakeTeable:
             if method == "PATCH":
                 self._writer()
                 return {"records": self.write(r.group(1), body, create=False)}
+            if method == "DELETE":
+                self._writer()
+                ids = {v for k, v in params if k in ("recordIds", "recordIds[]")}
+                self.records[r.group(1)] = [x for x in self.records[r.group(1)] if x["id"] not in ids]
+                return None
         if (r := m(r"/table/([^/]+)/aggregation/row-count")) and method == "GET":
             return {"rowCount": len(self._select(r.group(1), params))}
         if (r := m(r"/table/([^/]+)/record/([^/]+)/([^/]+)/uploadAttachment")) and method == "POST":
