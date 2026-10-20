@@ -13,7 +13,7 @@
 <script>document.getElementById("nav").innerHTML = P.nav("me.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
   <h1>账号管理 <span class="muted h-sub">(<a href="me.html">我的</a> › 账号管理)</span></h1>
-  <p class="muted">所有账号一张表,「权限」一栏直接改:<b>创建者 / 编辑者 / 查看者</b>是本单位同事(进库,整库可看;编辑者起能改);<b>伙伴</b>是外单位(不进库,只看公开内容的真实数据,可限定国别);<b>游客</b>只看示例数据。密码、头像由每个人自己在「帐号设置」里改。</p>
+  <p class="muted">所有账号一张表,「权限」一栏直接改:<b>创建者 / 编辑者 / 查看者</b>是本单位同事(进库,整库可看;编辑者起能改);<b>伙伴</b>是外单位(不进库,只看公开内容的真实数据,可限定国别);<b>移除</b>把人从系统里去掉(对方再登录什么都看不到)。密码、姓名、头像由每个人自己在「帐号设置」里改;忘了密码,点那一行的「发重置邮件」。</p>
   <div id="gate"></div>
   <div id="body" hidden>
     <div class="panel">
@@ -26,19 +26,20 @@
         <div class="row"><label>备注</label><input id="aNote" placeholder="(可不填)"></div>
         <div class="row"><label></label><button type="button" class="primary" id="aSave">加上</button><span class="muted small" id="aMsg"></span></div>
       </div>
-      <p class="muted small">同事:对方已有本系统账号的,加上就进库;还没有的,这里会生成一个邀请链接,发给对方,对方打开后注册(或登录)就以这个权限进库。伙伴:对方用这个邮箱登录就按伙伴看。</p>
+      <p class="muted small">同事:对方已有本系统账号的,加上就进库;还没有的,系统给对方发一封邀请邮件(表里标「邀请中」,也可复制链接自己发),对方打开后注册就以这个权限进库。伙伴:对方用这个邮箱登录就按伙伴看。</p>
     </div>
     <h2>账号 <span class="muted" id="aCount"></span></h2>
     <div class="panel" id="accounts">读取中…</div>
-    <div id="invBox" hidden><h3 class="tight">等对方打开的邀请链接</h3><p class="muted small">谁拿到都能用,对方进库后记得删。</p><div id="invites"></div></div>
+    <div id="invBox" hidden><h3 class="tight">等对方打开的邀请链接</h3><p class="muted small">链接谁拿到都能用;对方进库后自动删。</p><div id="invites"></div></div>
   </div>
 </main>
 <script>
 (async function () {
   const $ = (id) => document.getElementById(id);
-  const ROLE_ORDER = ["owner", "creator", "editor", "commenter", "viewer", "partner", "none"];
+  const ROLE_ORDER = ["owner", "creator", "editor", "commenter", "viewer", "invited", "partner", "none"];
   const COLLEAGUE = ["creator", "editor", "viewer"];
-  const TIER_ZH = Object.assign({ partner: "伙伴", none: "游客" }, P.ROLE_ZH);
+  const TIER_ZH = Object.assign({ partner: "伙伴", invited: "邀请中", none: "移除" }, P.ROLE_ZH);
+  const props = () => ["email", "org", "countries", "enabled", "note", "invite_role", "invite_id"].filter((k) => k === "email" || P.f("partner_account", k));  // 旧库没有邀请两列也能用
   let me = {}, members = [], prows = [], invites = [], rows = [], countries = [], cname = {};
   const form = { countries: [] };
   const g = (r, p) => P.get("partner_account", r, p);
@@ -56,20 +57,30 @@
   const inviteUrl = (l) => l.inviteUrl || (location.origin + "/invite/link?invitationId=" + encodeURIComponent(l.invitationId) + "&invitationCode=" + encodeURIComponent(l.invitationCode || l.inviteCode || ""));
 
   /* ---------- 读:库的协作者 + 伙伴帐号表 + 邀请链接 → 一张表 ---------- */
-  async function loadAll() {
+  const inviteOf = (r) => (hasInvite() && g(r, "invite_id")) || "";
+  const hasInvite = () => hasTable() && !!P.f("partner_account", "invite_id");
+  async function loadAll(again) {
     const [m, p, i] = await Promise.all([
       api("GET", BASE() + "/collaborators?take=1000").then((r) => ((r && r.collaborators) || []).filter((c) => c.type !== "department")),
-      hasTable() ? P.records("partner_account", { props: ["email", "org", "countries", "enabled", "note"] }) : Promise.resolve([]),
+      hasTable() ? P.records("partner_account", { props: props() }) : Promise.resolve([]),
       api("GET", BASE() + "/invitation/link").catch(() => []),
     ]);
     members = m; prows = p; invites = i || [];
+    const inBase = new Set(members.map((c) => norm(c.email)));
+    const done = prows.filter((r) => inviteOf(r) && inBase.has(norm(g(r, "email"))));  // 邀请中的人已经进库:删链接、清掉记录
+    if (done.length && !again) {
+      for (const r of done) {
+        try { await api("DELETE", BASE() + "/invitation/link/" + encodeURIComponent(inviteOf(r))); } catch (e) { console.warn("删邀请链接失败", e); }
+        try { await dropOrClear(r); } catch (e) { console.warn("清邀请记录失败", e); }
+      }
+      return loadAll(true);
+    }
     const byEmail = {}; prows.forEach((r) => { byEmail[norm(g(r, "email"))] = r; });
     rows = members.map((c) => ({ kind: "member", id: c.userId, name: c.userName || "", email: c.email || "", role: c.role, last: c.lastSignTime, prow: byEmail[norm(c.email)] || null }));
-    const inBase = new Set(members.map((c) => norm(c.email)));
     prows.forEach((r) => {
       const email = norm(g(r, "email"));
       if (inBase.has(email)) return;  // 既在库里又在伙伴表里:按库里的算(伙伴行多半是改成同事时留下的记录)
-      rows.push({ kind: "partner", id: r.id, name: isDomain(email) ? "整个单位" : "", email, role: g(r, "enabled") ? "partner" : "none", last: null, prow: r });
+      rows.push({ kind: "partner", id: r.id, name: isDomain(email) ? "整个单位" : "", email, role: inviteOf(r) ? "invited" : g(r, "enabled") ? "partner" : "none", last: null, prow: r });
     });
     rows.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || (a.prow ? String(g(a.prow, "org") || "") : "").localeCompare(b.prow ? String(g(b.prow, "org") || "") : "") || a.email.localeCompare(b.email));
     render();
@@ -77,11 +88,12 @@
   function tierOptions(row) {
     const self = row.kind === "member" && row.id === me.id;
     if (row.role === "owner" || self) return null;  // 所有者(和自己)不在这里改
-    if (isDomain(row.email)) return ["partner", "none"];  // @域名只能是伙伴或停用
+    if (row.role === "invited") return null;  // 邀请中:只有取消
+    if (isDomain(row.email)) return ["partner", "none"];  // @域名只能是伙伴或移除
     return COLLEAGUE.concat(["partner", "none"]);
   }
   function countriesCell(row) {
-    if (row.role !== "partner") return row.role === "none" ? "—" : P.raw('<span class="muted">全部(同事)</span>');
+    if (row.role !== "partner") return row.role === "none" || row.role === "invited" ? "—" : P.raw('<span class="muted">全部(同事)</span>');
     const ids = (g(row.prow, "countries") || []).map((x) => x.id);
     return P.raw('<span class="frow" data-c="' + P.esc(row.id) + '">' + (ids.length ? ids.map((id) => '<span class="tag">' + P.esc(cname[id] || id) + "</span>").join("") : '<span class="muted">全部国别</span>') +
       ' <button type="button" class="chip-btn" data-a="cedit" data-id="' + P.esc(row.id) + '">改</button></span>');
@@ -90,18 +102,48 @@
     $("aCount").textContent = rows.length + " 个";
     $("accounts").innerHTML = rows.length ? P.tableHtml(["姓名", "邮箱", "单位", "权限", "可看国别", "最近登录", "备注", ""], rows.map((row) => {
       const opts = tierOptions(row);
-      const sel = !opts ? '<span class="tag ' + (row.role === "owner" ? "t-info" : "") + '">' + P.esc(TIER_ZH[row.role] || row.role) + (row.kind === "member" && row.id === me.id ? "(我)" : "") + "</span>"
-        : '<span class="frow"><select data-a="tier" data-id="' + P.esc(row.id) + '" data-k="' + row.kind + '">' + opts.map((v) => '<option value="' + v + '"' + (v === row.role ? " selected" : "") + ">" + P.esc(TIER_ZH[v]) + (v === "none" ? "(停用)" : "") + "</option>").join("") + "</select></span>";
-      return [P.raw("<b>" + P.esc(row.name) + "</b>"), row.email, row.prow ? (g(row.prow, "org") || "") : (row.kind === "member" ? P.raw('<span class="muted">本单位</span>') : ""),
-        P.raw(sel), countriesCell(row), day(row.last), row.prow ? (g(row.prow, "note") || "") : "",
-        row.prow ? P.raw(P.open("partner_account", row.prow.id)) : ""];
+      const link = row.role === "invited" ? invites.find((l) => l.invitationId === inviteOf(row.prow)) : null;
+      const sel = row.role === "invited"
+        ? '<span class="frow"><span class="tag t-warn">邀请中 · ' + P.esc(TIER_ZH[g(row.prow, "invite_role")] || g(row.prow, "invite_role") || "") + "</span>" + (link ? ' <button type="button" class="chip-btn" data-a="copy" data-u="' + P.esc(inviteUrl(link)) + '">复制链接</button>' : "") + ' <button type="button" class="chip-btn" data-a="uninvite" data-id="' + P.esc(row.id) + '">取消</button></span>'
+        : !opts ? '<span class="tag ' + (row.role === "owner" ? "t-info" : "") + '">' + P.esc(TIER_ZH[row.role] || row.role) + (row.kind === "member" && row.id === me.id ? "(我)" : "") + "</span>"
+        : '<span class="frow"><select data-a="tier" data-id="' + P.esc(row.id) + '" data-k="' + row.kind + '">' + opts.map((v) => '<option value="' + v + '"' + (v === row.role ? " selected" : "") + ">" + P.esc(v === "none" && row.role === "none" ? "已停用" : TIER_ZH[v]) + "</option>").join("") + (row.role === "none" ? '<option value="delete">移除</option>' : "") + "</select></span>";
+      const tail = row.kind === "member" && row.id !== me.id ? '<button type="button" class="chip-btn" data-a="reset" data-e="' + P.esc(row.email) + '" title="给对方发一封重置密码的邮件,对方点链接自己设新密码">发重置邮件</button>' : "";
+      return [P.raw("<b>" + P.esc(row.name || (row.role === "invited" ? "(等注册)" : "")) + "</b>"), row.email, row.prow ? (g(row.prow, "org") || "") : (row.kind === "member" ? P.raw('<span class="muted">本单位</span>') : ""),
+        P.raw(sel), countriesCell(row), row.role === "invited" ? "—" : day(row.last), row.prow ? (g(row.prow, "note") || "") : "",
+        P.raw(tail + (row.prow && row.role !== "invited" ? " " + P.open("partner_account", row.prow.id) : ""))];
     })) : '<p class="empty">还没有账号。</p>';
     $("accounts").querySelectorAll('select[data-a="tier"]').forEach((s) => { s.onchange = () => setTier(s); });
     $("accounts").querySelectorAll('button[data-a="cedit"]').forEach((b) => { b.onclick = () => editCountries(b.dataset.id); });
+    $("accounts").querySelectorAll('button[data-a="reset"]').forEach((b) => { b.onclick = () => resetMail(b); });
+    $("accounts").querySelectorAll('button[data-a="uninvite"]').forEach((b) => { b.onclick = () => uninvite(b); });
     $("invBox").hidden = !invites.length;
-    $("invites").innerHTML = invites.length ? '<ul class="list">' + invites.map((l) => '<li><span class="tag">' + P.esc(TIER_ZH[l.role] || l.role) + '</span> <code class="small">' + P.esc(inviteUrl(l)) + '</code> <span class="frow"><button type="button" class="chip-btn" data-a="copy" data-u="' + P.esc(inviteUrl(l)) + '">复制</button> <button type="button" class="chip-btn" data-a="del" data-id="' + P.esc(l.invitationId) + '">删除</button></span></li>').join("") + "</ul>" : "";
-    $("invites").querySelectorAll('button[data-a="copy"]').forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.u); P.toast("已复制"); } catch (e) { P.toast("复制失败,请手动选中复制", true); } }; });
-    $("invites").querySelectorAll('button[data-a="del"]').forEach((b) => { b.onclick = async () => { b.disabled = true; try { await api("DELETE", BASE() + "/invitation/link/" + encodeURIComponent(b.dataset.id)); P.toast("已删除"); await loadAll(); } catch (e) { P.toast(e.message, true); b.disabled = false; } }; });
+    const who = (l) => { const r = prows.find((x) => inviteOf(x) === l.invitationId); return r ? "给 " + g(r, "email") + " 的" : "(没记录给谁)"; };
+    $("invites").innerHTML = invites.length ? '<ul class="list">' + invites.map((l) => '<li><span class="tag">' + P.esc(TIER_ZH[l.role] || l.role) + "</span> <b>" + P.esc(who(l)) + '</b> <code class="small">' + P.esc(inviteUrl(l)) + '</code> <span class="frow"><button type="button" class="chip-btn" data-a="copy" data-u="' + P.esc(inviteUrl(l)) + '">复制</button> <button type="button" class="chip-btn" data-a="del" data-id="' + P.esc(l.invitationId) + '">删除</button></span></li>').join("") + "</ul>" : "";
+    $("body").querySelectorAll('button[data-a="copy"]').forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.u); P.toast("已复制"); } catch (e) { P.toast("复制失败,请手动选中复制", true); } }; });
+    $("invites").querySelectorAll('button[data-a="del"]').forEach((b) => { b.onclick = async () => { b.disabled = true; try { await api("DELETE", BASE() + "/invitation/link/" + encodeURIComponent(b.dataset.id)); const r = prows.find((x) => inviteOf(x) === b.dataset.id); if (r) await dropOrClear(r); P.toast("已删除"); await loadAll(); } catch (e) { P.toast(e.message, true); b.disabled = false; } }; });
+  }
+  async function resetMail(b) {  /* 替对方发一封重置密码邮件(公开接口,按邮箱) */
+    b.disabled = true;
+    try {
+      const r = await fetch("/api/auth/send-reset-password-email", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: b.dataset.e }) });  // 公开接口,回包是空的
+      if (!r.ok) throw new Error(r.status + " " + (await r.text()).slice(0, 200));
+      P.toast("重置密码邮件已发给 " + b.dataset.e + ",对方点邮件里的链接设新密码(收不到看垃圾邮件)"); }
+    catch (e) { P.toast("没发出去:" + e.message, true); }
+    b.disabled = false;
+  }
+  async function uninvite(b) {  /* 取消邀请:删链接、清记录 */
+    const row = rows.find((r) => r.id === b.dataset.id && r.kind === "partner"); if (!row) return;
+    b.disabled = true;
+    try { try { await api("DELETE", BASE() + "/invitation/link/" + encodeURIComponent(inviteOf(row.prow))); } catch (e) { console.warn(e); } await dropOrClear(row.prow); P.toast("已取消邀请 " + row.email); await loadAll(); }
+    catch (e) { P.toast(e.message, true); b.disabled = false; }
+  }
+  async function delRow(rid) {  /* 删伙伴表的一行(回包是空的,不走 P.send) */
+    const r = await fetch("/api/table/" + P.t("partner_account").id + "/record?recordIds[]=" + encodeURIComponent(rid), { method: "DELETE", credentials: "same-origin" });
+    if (!r.ok) throw new Error("删行 → " + r.status + " " + (await r.text()).slice(0, 200));
+  }
+  async function dropOrClear(prow) {  /* 伙伴表的行:只是邀请记录 / 停用的就删掉,启用的伙伴只清邀请两列 */
+    if (g(prow, "enabled")) { const f = {}; f[P.f("partner_account", "invite_role")] = null; f[P.f("partner_account", "invite_id")] = null; await P.send("PATCH", "/table/" + P.t("partner_account").id + "/record", { fieldKeyType: "id", records: [{ id: prow.id, fields: f }] }); }
+    else await delRow(prow.id);
   }
 
   /* ---------- 改权限:一个下拉管全部转换 ---------- */
@@ -119,17 +161,21 @@
       await P.send("PATCH", "/table/" + P.t("partner_account").id + "/record", { fieldKeyType: "id", typecast: true, records: [{ id: row.prow.id, fields }] });
     } else await P.create("partner_account", Object.assign({ email: row.email }, values));
   }
-  async function addColleague(email, role, uid) {  /* 有账号的直接加进库;没有的生成邀请链接 */
-    const u = uid ? { id: uid } : await findUser(email);
-    if (u) { await api("POST", BASE() + "/collaborator", { collaborators: [{ principalId: u.id, principalType: "user" }], role }); return "added"; }
-    await api("POST", BASE() + "/invitation/link", { role });
-    return "invited";
+  async function addColleague(row, role, uid, extra) {  /* 有账号的直接加进库;没有的:生成邀请链接 + 记一行「邀请中」+ 让表格发邀请邮件 */
+    const u = uid ? { id: uid } : await findUser(row.email);
+    if (u) { await api("POST", BASE() + "/collaborator", { collaborators: [{ principalId: u.id, principalType: "user" }], role }); return { how: "added" }; }
+    const inv = await api("POST", BASE() + "/invitation/link", { role });
+    if (hasInvite()) await upsertPartner(row, Object.assign({ enabled: false, invite_role: role, invite_id: inv.invitationId }, extra || {}));
+    let mailed = false;
+    try { await api("POST", BASE() + "/invitation/email", { emails: [row.email], role }); mailed = true; } catch (e) { console.warn("邀请邮件没发出去", e); }
+    return { how: "invited", mailed };
   }
+  const invitedMsg = (r, role) => "对方还没有本系统账号:" + (r.mailed ? "已给对方发邀请邮件" : "邀请邮件没发出去,请复制链接发给对方") + ",打开后注册即为" + TIER_ZH[role] + "(表里标「邀请中」)";
   async function setTier(sel) {
     const row = rows.find((r) => r.id === sel.dataset.id && r.kind === sel.dataset.k), to = sel.value, from = row.role;
     if (!row || to === from) return;
-    if (to === "none" && sel.dataset.sure !== "1") {  /* 停用 / 移出要点两次(不用弹窗):先回到原值,再选一次才做 */
-      sel.dataset.sure = "1"; P.toast("再选一次「游客(停用)」就移出 " + (row.name || row.email), true); sel.value = from;
+    if ((to === "none" || to === "delete") && sel.dataset.sure !== "1") {  /* 移除要点两次(不用弹窗):先回到原值,再选一次才做 */
+      sel.dataset.sure = "1"; P.toast("再选一次「移除」就把 " + (row.name || row.email) + " 从系统里去掉", true); sel.value = from;
       setTimeout(() => { sel.dataset.sure = ""; }, 8000); return;
     }
     sel.disabled = true;
@@ -137,16 +183,19 @@
       let msg = "已改成" + TIER_ZH[to];
       if (COLLEAGUE.includes(to)) {
         if (COLLEAGUE.includes(from)) await api("PATCH", BASE() + "/collaborators", { principalId: row.id, principalType: "user", role: to });
-        else {  // 伙伴 / 游客 → 同事
-          const how = await addColleague(row.email, to);
+        else {  // 伙伴 / 停用 → 同事
           if (row.prow && g(row.prow, "enabled")) await upsertPartner(row, { enabled: false });
-          msg = how === "added" ? "已加进库,改成" + TIER_ZH[to] : "对方还没有本系统账号:已生成邀请链接(见下方),发给对方,打开后注册即为" + TIER_ZH[to];
+          const r = await addColleague(row, to);
+          msg = r.how === "added" ? "已加进库,改成" + TIER_ZH[to] : invitedMsg(r, to);
         }
-      } else {  // → 伙伴 / 游客
+      } else if (to === "partner") {
         if (COLLEAGUE.includes(from)) await api("DELETE", BASE() + "/collaborators?principalId=" + encodeURIComponent(row.id) + "&principalType=user");
-        if (to === "partner") await upsertPartner(row, { enabled: true });
-        else if (row.prow && g(row.prow, "enabled")) await upsertPartner(row, { enabled: false });
-        msg = to === "partner" ? "已改成伙伴(可看国别在同一行改)" : "已停用(对方再登录按游客,只看示例数据)";
+        await upsertPartner(row, { enabled: true });
+        msg = "已改成伙伴(可看国别在同一行改)";
+      } else {  // 移除:移出库,伙伴表的行删掉
+        if (COLLEAGUE.includes(from)) await api("DELETE", BASE() + "/collaborators?principalId=" + encodeURIComponent(row.id) + "&principalType=user");
+        if (row.prow) await delRow(row.prow.id);
+        msg = "已移除 " + (row.name || row.email) + ":对方再登录什么都看不到";
       }
       P.toast(msg); await loadAll(); await refreshWorker();
     } catch (e) { P.toast(e.message, true); sel.disabled = false; sel.value = from; }
@@ -179,6 +228,7 @@
     const email = norm($("aEmail").value), tier = $("aTier").value, note = $("aNote").value.trim();
     if (!/^(@|[^@\s]+@)[^@\s]+\.[^@\s]+$/.test(email) || (isDomain(email) && tier !== "partner")) { P.toast(isDomain(email) ? "@域名只能加为伙伴" : "邮箱要像 someone@example.com", true); return; }
     const exist = rows.find((r) => r.email === email);
+    if (exist && exist.role === "invited") { P.toast("已经邀请过这个邮箱了,在那一行「取消」后再加", true); return; }
     if (exist && exist.role !== "none") { P.toast("这个邮箱已经在表里了(" + TIER_ZH[exist.role] + "),在那一行改权限即可", true); return; }
     const btn = $("aSave"); btn.disabled = true; $("aMsg").textContent = "保存中…";
     try {
@@ -187,9 +237,9 @@
         await upsertPartner(exist || { email, prow: null, name: "", kind: "partner" }, { org: $("aOrg").value.trim(), countries: form.countries, enabled: true, note });
         msg = "已加为伙伴:对方用这个邮箱登录就按伙伴看";
       } else {
-        const how = await addColleague(email, tier);
-        if (exist && exist.prow && note) await upsertPartner(exist, { note });
-        msg = how === "added" ? "已加进库,权限 " + TIER_ZH[tier] : "对方还没有本系统账号:已生成邀请链接(见下方),发给对方,打开后注册即进库";
+        const r = await addColleague(exist || { email, prow: null, name: "", kind: "partner" }, tier, null, note ? { note } : null);
+        if (r.how === "added" && note && exist && exist.prow) await upsertPartner(exist, { note });
+        msg = r.how === "added" ? "已加进库,权限 " + TIER_ZH[tier] : invitedMsg(r, tier);
       }
       P.toast(msg); $("aEmail").value = ""; $("aOrg").value = ""; $("aNote").value = ""; form.countries = []; renderChips();
       await loadAll(); await refreshWorker();

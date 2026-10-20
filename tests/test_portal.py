@@ -1024,8 +1024,10 @@ def test_outsider_guest_sees_only_public_content_through_the_worker():
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
 def test_accounts_page_lets_the_owner_manage_colleagues_and_partners():
     """账号管理页(仅所有者 / 创建者;使用方 10-20 第二版:一张总表,权限一个下拉):库的协作者和伙伴帐号表合成一张表;
-    同事改角色、同事改伙伴(移出库 + 伙伴表加一行)、伙伴改同事(按邮箱找到账号直接加进库;找不到就生成邀请链接)、停用要选两次;
-    伙伴的可看国别在行里改;「加账号」按权限分别加进库或加为伙伴;改完通知后台重读名单;编辑者打开只看到一句说明。"""
+    同事改角色、同事改伙伴(移出库 + 伙伴表加一行)、伙伴改同事(按邮箱找到账号直接加进库;找不到就生成邀请链接)、移除要选两次;
+    伙伴的可看国别在行里改;「加账号」按权限分别加进库或加为伙伴;改完通知后台重读名单;编辑者打开只看到一句说明。
+    第三版(10-20):没账号的同事 → 邀请链接 + 伙伴表记一行「邀请中」(邮箱、权限、链接号)+ 让表格发邀请邮件,链接栏写明给谁;对方进库后自动删链接、清记录;
+    每个同事一行「发重置邮件」;「移除」= 移出库 + 删伙伴行。"""
     from playwright.sync_api import Error as PWError, sync_playwright
     fake, admin = _fake_with_schema()
     c, o, ld = _seed(admin, fake)
@@ -1056,13 +1058,17 @@ def test_accounts_page_lets_the_owner_manage_colleagues_and_partners():
             page.select_option("#accounts select[data-id='usrZS']", "viewer")
             wait_toast(page, "已改成查看者")
             assert fake.role_changes == [("usrZS", "viewer")]
-            # 停用要选两次:第一次只提示并回到原值
+            # 替同事发重置密码邮件
+            page.click("#accounts button[data-a='reset'][data-e='zs@example.com']")
+            wait_toast(page, "重置密码邮件已发给 zs@example.com")
+            assert fake.reset_mails == ["zs@example.com"]
+            # 移除要选两次:第一次只提示并回到原值
             page.wait_for_selector("#accounts select[data-id='usrGST']", timeout=15000)
             page.select_option("#accounts select[data-id='usrGST']", "none")
             wait_toast(page, "再选一次")
             assert page.input_value("#accounts select[data-id='usrGST']") == "viewer" and fake.removed == []
             page.select_option("#accounts select[data-id='usrGST']", "none")
-            wait_toast(page, "已停用")
+            wait_toast(page, "已移除")
             assert fake.removed == ["usrGST"]
             page.wait_for_function("!document.querySelector(\"#accounts select[data-id='usrGST']\")", timeout=15000)
             # 同事改伙伴:张三移出库,伙伴表加一行
@@ -1087,13 +1093,23 @@ def test_accounts_page_lets_the_owner_manage_colleagues_and_partners():
             page.wait_for_function("document.querySelector(\"#accounts select[data-id='usrPTN']\")", timeout=15000)
             assert page.input_value("#accounts select[data-id='usrPTN']") == "editor"
             assert any(p[1] == "/guest/refresh" for p in srv.bot_calls), srv.bot_calls  # 通知后台重读名单
-            # 加账号:同事但没有账号 → 邀请链接;伙伴 → 伙伴表一行;重复的不让加
+            # 加账号:同事但没有账号 → 邀请链接 + 邀请邮件 + 表里一行「邀请中」;伙伴 → 伙伴表一行;重复的不让加
             page.fill("#aEmail", "newbie@example.com")
             page.select_option("#aTier", "viewer")
+            page.fill("#aNote", "新来的")
             page.click("#aSave")
-            wait_toast(page, "邀请链接")
+            wait_toast(page, "已给对方发邀请邮件")
             page.wait_for_selector("#invites li", timeout=15000)
-            assert "查看者" in page.inner_text("#invites") and fake.invitations[-1]["role"] == "viewer"
+            assert "查看者" in page.inner_text("#invites") and "给 newbie@example.com 的" in page.inner_text("#invites") and fake.invitations[-1]["role"] == "viewer"
+            assert fake.mailed == [("newbie@example.com", "viewer")]
+            nb = next(r for r in b.rows("partner_account") if b.get("partner_account", r, "email") == "newbie@example.com")
+            assert b.get("partner_account", nb, "invite_id") == fake.invitations[-1]["invitationId"] and b.get("partner_account", nb, "invite_role") == "viewer" and b.get("partner_account", nb, "note") == "新来的"
+            assert "邀请中" in page.inner_text("#accounts") and page.locator("#accounts button[data-a='uninvite']").count() == 1
+            if shot:
+                page.screenshot(path=f"{shot}/账号管理_邀请中.png", full_page=True)
+            page.fill("#aEmail", "newbie@example.com")
+            page.click("#aSave")
+            wait_toast(page, "已经邀请过")
             page.fill("#aEmail", "@Another.example")
             page.select_option("#aTier", "partner")
             page.fill("#aOrg", "某设计院")
@@ -1107,9 +1123,30 @@ def test_accounts_page_lets_the_owner_manage_colleagues_and_partners():
             page.fill("#aEmail", "zs@example.com")
             page.click("#aSave")
             wait_toast(page, "已经在表里")
+            # 对方注册、进库了:再打开页面,链接自动删、「邀请中」那一行自动清掉,人按库里的算
+            fake.users["usrNEW"] = {"id": "usrNEW", "name": "Newbie", "email": "newbie@example.com"}
+            fake.tokens["tok-usrNEW"] = ("usrNEW", "viewer")
+            page.reload()
+            page.wait_for_function("document.querySelector('#accounts table') && document.querySelector('#accounts').innerText.includes('Newbie')", timeout=15000)
+            page.wait_for_function("!document.querySelector('#invites li')", timeout=15000)
+            assert fake.invitations == [] and "邀请中" not in page.inner_text("#accounts")
+            assert not [r for r in b.rows("partner_account") if b.get("partner_account", r, "email") == "newbie@example.com"]
+            # 再邀请一个,从链接栏删:链接和记录一起没了
+            page.fill("#aEmail", "second@example.com")
+            page.select_option("#aTier", "editor")
+            page.click("#aSave")
+            wait_toast(page, "邀请")
+            page.wait_for_selector("#invites li", timeout=15000)
             page.click("#invites button[data-a='del']")
             page.wait_for_function("!document.querySelector('#invites li')", timeout=15000)
-            assert fake.invitations == []
+            assert fake.invitations == [] and not [r for r in b.rows("partner_account") if b.get("partner_account", r, "email") == "second@example.com"]
+            # 移除一个伙伴:伙伴表的行删掉,表里不再有
+            page.select_option("#accounts select[data-id='" + dom["id"] + "']", "none")
+            wait_toast(page, "再选一次")
+            page.select_option("#accounts select[data-id='" + dom["id"] + "']", "none")
+            wait_toast(page, "已移除")
+            page.wait_for_function("!document.querySelector('#accounts').innerText.includes('@another.example')", timeout=15000)
+            assert not [r for r in b.rows("partner_account") if b.get("partner_account", r, "email") == "@another.example"]
             # 「我的」页有入口
             page.goto(base + "/me.html")
             page.wait_for_function("document.querySelector('#acctAdmin') && !document.querySelector('#acctAdmin').hidden", timeout=15000)
