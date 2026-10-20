@@ -7,16 +7,16 @@
 <title>登录 · 全球水务开源情报</title>
 <link rel="icon" href="/portal/favicon.png">
 <!--
-  自己的登录页:替换表格(Teable)默认登录页,左边是系统标志、站名和首页视频,右边是登录框。
+  自己的登录页:替换表格(Teable)默认登录页,左边是系统标志、站名和首页同一段 ASCII 动画,右边是登录框。
   Caddy 把 /auth/login 直接指到这个文件(deploy/teable/portal.caddy),不经过表格的页面;
   登录用的仍是表格自己的接口 POST /api/auth/signin(同一个 cookie),登录后回到网址里 redirect 指的页面(只认本站路径,别的回首页)。
-  页面用到的字体、标志、视频走 /portal/fonts、/portal/logo.png、/portal/media,这几样没登录也能取;其余页面和接口照旧要先登录。
+  页面用到的字体、标志、动画脚本走 /portal/fonts、/portal/logo.png、/portal/ascii-water.js,这几样没登录也能取;其余页面和接口照旧要先登录。
   只用本文件里的样式与脚本,不引 portal.css / portal.js(那两个要登录后才取得到)。
 -->
 <style>
 @font-face { font-family: "Huiwen Mincho"; src: url("/portal/fonts/huiwen-title.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Typewriter Title"; src: url("/portal/fonts/truetypewriter-latin.woff2") format("woff2"); font-display: swap; }
-:root { --ink: #0b1b3a; --muted: #6b7280; --line: #d5dce5; --brand: #0b2a5a; --err: #b42318; --vh: 100vh; --r: 1.3657; }
+:root { --ink: #0b1b3a; --muted: #6b7280; --line: #d5dce5; --brand: #0b2a5a; --err: #b42318; --vh: 100vh; --r: 1.6; }
 @supports (height: 100svh) { :root { --vh: 100svh; } }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -39,11 +39,10 @@ a:hover { text-decoration: underline; }
 .intro { text-align: center; margin-top: clamp(8px, 3vh, 40px); }
 .intro h1 { margin: 0; font-size: clamp(34px, min(5vw, 8.4vh), 96px); line-height: 1.08; letter-spacing: .02em; color: var(--ink); }
 .intro p { margin: clamp(2px, .8vh, 10px) 0 0; font-size: clamp(14px, min(1.8vw, 3vh), 32px); letter-spacing: .16em; color: #33415c; }
-/* 视频卡:在剩下的空间里按片子宽高比放到最大,整幅显示不裁(和首页一样) */
+/* 动画卡:在剩下的空间里按 16:10 放到最大(和首页一样) */
 .media-box { flex: 1 1 auto; min-height: 0; margin-top: clamp(12px, 3vh, 36px); display: grid; place-items: center; container-type: size; }
 .vid { width: min(100%, calc(100cqh * var(--r))); aspect-ratio: var(--r); max-height: 100%; border-radius: clamp(18px, 2.4vh, 36px); overflow: hidden; background: var(--ink); box-shadow: 0 18px 50px rgba(11, 27, 58, .18); }
-.vid video, .vid img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.media-box.none { display: none; }
+.vid canvas { display: block; width: 100%; height: 100%; }
 
 .side { display: flex; align-items: center; justify-content: center; padding: 32px 24px; }
 .login { width: min(360px, 100%); }
@@ -186,9 +185,9 @@ a:hover { text-decoration: underline; }
       <h1 class="zh">全球水务开源情报</h1>
       <p class="en">Global Water OSINT</p>
     </div>
-    <div class="media-box" id="mediaBox">
-      <!-- 首页同一段视频与封面(私有配置仓的 portal/media/);没有就整块收起。静音循环,手机里内嵌播放 -->
-      <div class="vid" id="vid"><video id="v" muted loop playsinline webkit-playsinline x5-playsinline x5-video-player-type="h5" preload="metadata" poster="/portal/media/hero.jpg" data-src="/portal/media/hero.mp4"></video></div>
+    <div class="media-box">
+      <!-- 首页同一段「ASCII 水面世界」动画(/portal/ascii-water.js,不用登录也能取):字符画的世界地图,不取任何文件,打开就有 -->
+      <div class="vid"><canvas id="heroAscii" aria-hidden="true"></canvas></div>
     </div>
   </section>
   <main class="side">
@@ -303,6 +302,7 @@ a:hover { text-decoration: underline; }
   <div class="cmd"><code id="aiCmd">请帮我安装全球水务开源情报:先读 https://raw.githubusercontent.com/saintpantheryes/osint-water-public/main/docs/AI_INSTALL.md ,然后一步步带我做。</code><button type="button" id="copyCmd">复制</button></div>
   <p class="src"><a href="https://github.com/saintpantheryes/osint-water-public" target="_blank" rel="noopener">在 GitHub 上看源代码 →</a></p>
 </section>
+<script src="/portal/ascii-water.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -335,29 +335,8 @@ a:hover { text-decoration: underline; }
   if (invited) showSignup();
   else fetch("/api/admin/setting/public", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).then((s) => { if (s && s.disallowSignUp === false) showSignup(); }).catch(() => {});
 
-  /* 视频:能放就静音循环;放不了换封面;封面也没有就整块收起。尺寸按片子真实宽高比走,整幅显示不裁 */
-  const v = $("v"), box = $("mediaBox");
-  const ratio = (w, h) => { if (w && h) document.documentElement.style.setProperty("--r", (w / h).toFixed(4)); };
-  v.addEventListener("loadedmetadata", () => ratio(v.videoWidth, v.videoHeight));
-  const src = document.createElement("source");  // 监听先挂上再给片源,404 来得再快也不会漏掉
-  src.src = v.dataset.src; src.type = "video/mp4";
-  src.addEventListener("error", () => {
-    const img = new Image();
-    img.alt = "";
-    img.onload = () => { ratio(img.naturalWidth, img.naturalHeight); v.replaceWith(img); };
-    img.onerror = () => box.classList.add("none");
-    img.src = v.getAttribute("poster");
-  });
-  v.muted = true;
-  v.appendChild(src);
-  v.load();
-  if (!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
-    const play = () => { const p = v.play(); if (p && p.catch) p.catch(() => {}); };
-    ["touchstart", "click", "scroll"].forEach((ev) => document.addEventListener(ev, () => { if (v.paused && v.isConnected) play(); }, { once: true, passive: true }));
-    document.addEventListener("WeixinJSBridgeReady", play, { once: true });
-    v.addEventListener("canplay", play, { once: true });
-    play();
-  }
+  /* 首屏动画:字符画的世界地图;系统设了「减少动态效果」只画一帧 */
+  if (window.asciiWater) window.asciiWater($("heroAscii"));
 
   /* 复制那句安装提示:能用剪贴板就用,不能就把文字选中让人自己复制 */
   $("copyCmd").onclick = () => {

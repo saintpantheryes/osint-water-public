@@ -277,7 +277,7 @@ body.guest .form button, body.guest .form input, body.guest .form select, body.g
 .hero-en { font-family: "Typewriter Title", "Courier New", Courier, monospace; font-size: clamp(15px, min(4.6vw, 3.1vh), 36px); line-height: 1.25; letter-spacing: .16em; color: #33415c; margin: clamp(2px, .6vh, 8px) 0 0; }
 .hero-sub { font-size: clamp(14px, min(4vw, 2.2vh), 22px); line-height: 1.45; color: #4b5563; margin: clamp(6px, 1.4vh, 16px) 0 clamp(10px, 2.6vh, 30px); text-wrap: balance; }
 /* 视频卡:宽 =(屏幕高 − 视频以外占的高)× 片子宽高比,夹在 320px(或整行)与 1120px 之间;提问框嵌在卡片顶上(仿 america.gov 的白色胶囊) */
-.hero-card { --pad: clamp(8px, 1.3vh, 14px); position: relative; width: clamp(min(100%, 320px), calc((var(--vh) - var(--hero-used, 440px)) * var(--hero-ratio, 1.3657)), min(100%, 1120px)); margin: 0 auto; background: var(--ink-strong); border-radius: clamp(20px, 2.8vh, 40px); padding: var(--pad) var(--pad) 0; overflow: hidden; box-shadow: 0 18px 50px rgba(11, 27, 58, .18); }
+.hero-card { --pad: clamp(8px, 1.3vh, 14px); position: relative; width: clamp(min(100%, 320px), calc((var(--vh) - var(--hero-used, 440px)) * var(--hero-ratio, 1.6)), min(100%, 1120px)); margin: 0 auto; background: var(--ink-strong); border-radius: clamp(20px, 2.8vh, 40px); padding: var(--pad) var(--pad) 0; overflow: hidden; box-shadow: 0 18px 50px rgba(11, 27, 58, .18); }
 .hero-card.nomedia { width: min(100%, 860px); padding-bottom: var(--pad); }
 .hero-ask { --ask-h: clamp(46px, 6.4vh, 68px); margin: 0; position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; height: var(--ask-h); padding: 0 calc((var(--ask-h) - var(--go-h)) / 2 - 2px) 0 clamp(16px, 1.6vw, 26px); background: #fff; border: 2px solid var(--ink-strong); border-radius: 999px; box-shadow: 0 6px 24px rgba(15, 23, 42, .10); --go-h: calc(var(--ask-h) - 14px); }
 .hero-ask .att { flex: 0 0 auto; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #475569; display: grid; place-items: center; cursor: pointer; margin-left: -6px; }
@@ -290,8 +290,8 @@ body.guest .form button, body.guest .form input, body.guest .form select, body.g
 .hero-ask:focus-within { box-shadow: 0 0 0 3px rgba(14, 107, 168, .35), 0 6px 24px rgba(15, 23, 42, .10); }
 .hero-ask input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; border-radius: 0; outline: 0; background: transparent; box-shadow: none; font-size: clamp(15px, 2vh, 20px); }
 .hero-ask .go { flex: 0 0 auto; width: var(--go-h); height: var(--go-h); padding: 0; border: 0; border-radius: 50%; font-size: clamp(17px, 2.2vh, 22px); line-height: 1; background: #0b2a5a; color: #fff; }
-.hero-media { margin: var(--pad) calc(-1 * var(--pad)) 0; aspect-ratio: 1434 / 1050; background: var(--ink-strong); overflow: hidden; }
-.hero-media video, .hero-media img { width: 100%; height: 100%; object-fit: contain; display: block; }  /* 完整显示,不裁;容器比例由脚本按文件实际尺寸设 */
+.hero-media { margin: var(--pad) calc(-1 * var(--pad)) 0; aspect-ratio: 16 / 10; background: var(--ink-strong); overflow: hidden; }  /* 动画卡 16:10(原视频 1434:1050) */
+.hero-media canvas, .hero-media img { width: 100%; height: 100%; object-fit: contain; display: block; }  /* 画布铺满卡片;动画按画布实际大小画,不裁 */
 .hero-media.nomedia { display: none; }
 .hero-examples { justify-content: center; max-width: 1120px; margin: clamp(8px, 1.8vh, 20px) auto 0; padding: 0; }
 .hero-examples > b { flex: 0 0 auto; margin-right: 2px; }

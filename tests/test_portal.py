@@ -567,9 +567,9 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             assert page.locator(".hero-title").inner_text() == "全球水务开源情报" and page.locator(".hero-en").inner_text() == "Global Water OSINT" and page.locator(".hero-card #q").count() == 1
             assert (PORTAL / "fonts" / "huiwen-title.woff2").exists() and (PORTAL / "fonts" / "truetypewriter-latin.woff2").exists() and (PORTAL / "fonts" / "OFL.txt").exists() and 'url("fonts/huiwen-title.woff2")' in (PORTAL / "portal.css").read_text(encoding="utf-8")  # 站名字体随页面一起托管
             assert page.evaluate("document.fonts.check('20px \"Huiwen Mincho\"') && document.fonts.check('20px \"Typewriter Title\"')")  # 两个字体真的加载上了
-            assert page.locator("#heroVideo").get_attribute("data-src") == "media/hero.webm media/hero.mp4" and page.locator("#heroVideo").get_attribute("data-poster") == "media/hero.jpg"
-            # 视频文件来自私有配置仓(portal/media/ 是挂载点):本地没放时收起只留底色;放了就接上(开源 Chromium 放不了 H.264 时换成封面图)
-            page.wait_for_function("document.querySelector('.hero-media.nomedia') || document.querySelector('#heroVideo source') || document.querySelector('.hero-media img')", timeout=15000)
+            # 提问框下是「ASCII 水面世界」动画(使用方 2026-10-20 参考 ascii-sharks 提出,替掉 10 MB 的视频):脚本自己画,不取任何文件,一打开就有画面
+            assert page.locator(".hero-card canvas#heroAscii").count() == 1 and page.locator("#heroVideo").count() == 0 and "media/hero" not in (PORTAL / "index.html").read_text(encoding="utf-8")
+            page.wait_for_function("(() => { const c = document.getElementById('heroAscii'); return c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v > 80); })()", timeout=15000)  # 真的画上了字符(不只是底色)
             page.wait_for_selector("#menu", state="attached", timeout=15000)  # 顶栏与菜单卡片一打开就画好(读完配置补上帐号区)
             assert page.locator("#nav .menu-btn").count() == 1 and not page.locator("#menu").is_visible() and not page.locator("#menuVeil").is_visible()  # 首页只有「菜单」按钮
             page.click("#nav .menu-btn")
@@ -1118,24 +1118,15 @@ def test_phone_layout_uses_menu_bar_and_collapsed_filters():
 
 
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
-def test_home_fits_one_screen_and_keeps_the_whole_video():
+def test_home_fits_one_screen_and_keeps_the_whole_animation():
     """首页首屏(仿 america.gov 的大圆角面板):1920×1080、1366×768 这类屏幕(浏览器里实际可见约 950、657 高)一屏放下顶栏、标题、
-    提问框、视频卡、示例与说明;视频卡按「剩下的高度 × 片子宽高比」定宽,片子整幅显示(比例不变、不裁)。"""
+    提问框、动画卡、示例与说明;动画卡按「剩下的高度 × 16:10」定宽,画布铺满卡片(动画按画布实际大小画,不裁)。"""
     from playwright.sync_api import Error as PWError, sync_playwright
     fake, admin = _fake_with_schema()
     _seed(admin, fake)
     cfg = schema.read_config(admin, NEW, ONTO)
     srv = _serve(fake, cfg)
     base = f"http://127.0.0.1:{srv.server_port}"
-    poster = '<svg xmlns="http://www.w3.org/2000/svg" width="1434" height="1050"><rect width="100%" height="100%" fill="#345"/></svg>'
-
-    def media(route):  # 视频文件在私有配置仓:这里假装 mp4 在(HEAD 200),但浏览器放不了 → 换成封面图(1434×1050,和线上片子同比例)
-        u, m = route.request.url, route.request.method
-        if u.endswith("/media/hero.jpg"):
-            return route.fulfill(status=200, content_type="image/svg+xml", body=poster)
-        if u.endswith("/media/hero.mp4") and m == "HEAD":
-            return route.fulfill(status=200, body="")
-        return route.fulfill(status=404, body="")
     try:
         with sync_playwright() as pw:
             try:
@@ -1144,18 +1135,17 @@ def test_home_fits_one_screen_and_keeps_the_whole_video():
                 browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
             for w, h in ((1920, 950), (1536, 730), (1366, 657), (390, 700)):
                 page = browser.new_page(viewport={"width": w, "height": h})
-                page.route("**/media/*", media)
                 page.goto(base + "/index.html")
-                page.wait_for_function("document.getElementById('llmNote').textContent.includes('按词表解析') && document.querySelector('.hero-media img') && document.querySelector('.hero-media img').naturalWidth > 0", timeout=15000)
+                page.wait_for_function("document.getElementById('llmNote').textContent.includes('按词表解析') && document.getElementById('heroAscii').width > 0", timeout=15000)
                 page.wait_for_timeout(300)
                 box = page.evaluate("""() => {
                   const r = (s) => document.querySelector(s).getBoundingClientRect();
-                  const m = r('.hero-media');
+                  const m = r('.hero-media'), c = r('#heroAscii');
                   return { doc: r('#heroFrame').bottom, vh: innerHeight, card: r('.hero-card').bottom, ex: r('#examples').bottom, note: r('#llmNote').bottom,
-                           mw: m.width, mh: m.height, fit: getComputedStyle(document.querySelector('.hero-media img')).objectFit };
+                           mw: m.width, mh: m.height, cw: c.width, chh: c.height };
                 }""")
                 assert box["doc"] <= box["vh"] + 1 and max(box["card"], box["ex"], box["note"]) <= box["vh"], (w, h, box)  # 首屏面板一屏放下(简介在面板下面,往下滚才看到)
-                assert abs(box["mw"] / box["mh"] - 1434 / 1050) < 0.01 and box["fit"] == "contain", (w, h, box)  # 片子整幅、比例不变
+                assert abs(box["mw"] / box["mh"] - 1.6) < 0.01 and abs(box["cw"] - box["mw"]) < 1 and abs(box["chh"] - box["mh"]) < 1, (w, h, box)  # 卡片 16:10,画布铺满
                 assert box["mw"] >= (300 if w < 640 else 340), (w, h, box)
                 page.close()
             browser.close()

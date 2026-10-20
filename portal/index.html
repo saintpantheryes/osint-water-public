@@ -8,9 +8,10 @@
 <link rel="stylesheet" href="portal.css">
 <script src="echarts.min.js"></script>
 <script src="portal.js"></script>
+<script src="ascii-water.js"></script>
 </head>
 <body class="hero-page">
-<!-- 仿 america.gov:顶栏与首屏放在一整块大圆角浅色面板里;视频卡的宽度按「屏幕剩下的高度 × 片子宽高比」算(脚本写 --hero-used、--hero-ratio),
+<!-- 仿 america.gov:顶栏与首屏放在一整块大圆角浅色面板里;动画卡的宽度按「屏幕剩下的高度 × 卡片宽高比」算(脚本写 --hero-used、--hero-ratio),
      1920×1080、1366×768 这类屏幕一屏就能看全,片子照旧整幅显示不裁。提问后面板收起,换成对话模式 -->
 <div class="hero-frame" id="heroFrame">
 <!-- 顶栏与菜单紧跟着就画(不等读表,读完 load 补上帐号区);放在页尾的大脚本里的话,慢手机上会先画出没有顶栏的一帧,标题再被推下去 -->
@@ -31,8 +32,8 @@
         <button type="submit" class="go" id="go" aria-label="提问">→</button>
       </form>
       <div class="hero-media" id="heroMedia">
-        <!-- 视频与封面来自私有配置仓的 portal/media/(compose 把它挂到页面目录的 media/);没有就只显示封面或底色。静音自动循环,手机里也内嵌播放 -->
-        <video id="heroVideo" muted loop playsinline webkit-playsinline x5-playsinline x5-video-player-type="h5" preload="metadata" data-src="media/hero.webm media/hero.mp4" data-poster="media/hero.jpg"></video>
+        <!-- 「ASCII 水面世界」:字符画的世界地图,海面流动、陆地冒信号(ascii-water.js 自己画,不取任何文件,打开就有;原来的 10 MB 视频不再用) -->
+        <canvas id="heroAscii" aria-hidden="true"></canvas>
       </div>
     </div>
     <div class="frow hero-examples" id="examples"></div>
@@ -1169,8 +1170,8 @@
     });
   }
 
-  /* 首屏一屏放下:量出视频以外的东西(顶栏、标题、提问框、示例、说明、面板留白)一共占多高,写进 --hero-used;
-     CSS 拿「屏幕高度 − 这个数」当视频的高,再乘片子的宽高比(--hero-ratio)得出视频卡的宽,太宽、太窄各有上下限 */
+  /* 首屏一屏放下:量出动画卡以外的东西(顶栏、标题、提问框、示例、说明、面板留白)一共占多高,写进 --hero-used;
+     CSS 拿「屏幕高度 − 这个数」当动画的高,再乘卡片的宽高比(--hero-ratio,16:10)得出动画卡的宽,太宽、太窄各有上下限 */
   function sizeHero() {
     if (document.body.classList.contains("asked")) return;
     const hero = $("hero"), media = $("heroMedia"), frame = $("heroFrame");
@@ -1186,11 +1187,10 @@
   window.addEventListener("resize", sizeHero);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeHero);
 
-  /* 提问后切成对话模式:标题、视频、示例全部收起,问题靠右、答案靠左,提问框与说明固定在页面底部;点左上角站名回到完整首页 */
+  /* 提问后切成对话模式:标题、动画、示例全部收起(动画画布不在视野里自动停),问题靠右、答案靠左,提问框与说明固定在页面底部;点左上角站名回到完整首页 */
   function asked() {
     if (document.body.classList.contains("asked")) return;
     document.body.classList.add("asked");
-    const v = $("heroVideo"); try { v.pause(); } catch (e) {}
     $("askDockIn").append($("askForm"), $("llmNote"));
     /* 把底部提问框的实际高度写进 --dock-h,正文底部按它留白(说明文字换行、手机窄屏都算得准) */
     const dock = $("askDock");
@@ -1334,34 +1334,8 @@
     sizeHero();
   });
 
-  /* 视频:先问一次有没有文件(私有配置仓的 portal/media/ 可能还没放),有才接上并自动播;两种格式(webm、mp4,都可选)浏览器挑能放的;
-     系统设了「减少动态效果」的只显示封面;都放不了就收起只留底色。不等读表,一打开就去问 */
-  (async function () {
-    const v = $("heroVideo");
-    const noMedia = () => { v.parentElement.classList.add("nomedia"); v.closest(".hero-card").classList.add("nomedia"); sizeHero(); };  // 没有视频:卡片只剩提问框
-    try {
-      const srcs = v.dataset.src.split(" ");
-      const heads = await Promise.all(srcs.map((u) => fetch(u, { method: "HEAD", credentials: "same-origin" }).then((r) => r.ok).catch(() => false)));
-      const have = srcs.filter((u, i) => heads[i]);
-      if (have.length) {
-        v.poster = v.dataset.poster;
-        const fit = (w, hh) => { if (w && hh) { v.parentElement.style.aspectRatio = w + " / " + hh; document.documentElement.style.setProperty("--hero-ratio", (w / hh).toFixed(4)); sizeHero(); } };  // 容器跟着片子的真实宽高走,整幅显示不裁;视频卡的宽按这个比例算
-        v.addEventListener("loadedmetadata", () => fit(v.videoWidth, v.videoHeight));
-        have.forEach((u, i) => { const el = document.createElement("source"); el.src = u; el.type = u.endsWith(".webm") ? "video/webm" : "video/mp4"; if (i === have.length - 1) el.addEventListener("error", () => { const img = document.createElement("img"); img.src = v.dataset.poster; img.alt = ""; img.onload = () => fit(img.naturalWidth, img.naturalHeight); v.style.display = "none"; v.insertAdjacentElement("afterend", img); }); v.appendChild(el); });  // 都放不了:换成封面图
-        v.load();
-        if (!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
-          /* 手机(尤其微信、QQ 这类内置浏览器)不让脚本直接起播:静音 + 内嵌已经声明;播不起来就等页面第一次被点、滑,或微信的桥接就绪事件,再播一次 */
-          v.muted = true; v.autoplay = true;
-          const tryPlay = () => { if (document.body.classList.contains("asked")) return; const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); };  // 已经切到对话模式就不播了
-          const later = () => { if (v.paused) tryPlay(); };
-          ["touchstart", "touchend", "click", "scroll"].forEach((ev) => document.addEventListener(ev, later, { once: true, passive: true }));
-          document.addEventListener("WeixinJSBridgeReady", later, { once: true });
-          v.addEventListener("canplay", later, { once: true });
-          tryPlay();
-        }
-      } else noMedia();
-    } catch (e) { noMedia(); }
-  })();
+  /* 首屏动画:字符画的世界地图(ascii-water.js),不取文件、不等读表,一打开就画;切到对话模式后标题与动画收起,画布不在视野里自动停 */
+  window.asciiWater($("heroAscii"));
 
   /* 读表:配置、登录角色、词表、国别读完才能答题;提问在这之前就点了的,等它读完再答 */
   ready = (async function () {
