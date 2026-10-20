@@ -67,6 +67,7 @@ def tick(profile, now: datetime, state: dict, use_llm: bool = True) -> None:
     if state.get("expired") != today.isoformat():  # 每天第一个周期:过期节点改「已发生」,让含 TODAY 的公式重算(Teable 隔天不自动算)
         try:
             out = expire.run(ctx)
+            out.update(expire.archive_leads(ctx))  # 过期线索标「已归档」(A49)
             state["expired"] = today.isoformat()
             if out:
                 log(f"expire:{out}")

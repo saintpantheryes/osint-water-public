@@ -15,6 +15,7 @@
   <h1>线索处理</h1>
   <p class="muted" id="intro">机器做完它能做的,剩下要人定的线索都在这里:确认归属,决定 AI 推荐的商机跟不跟。每条一键处理,也可以勾选后批量处理,处理完就消失。商机的「下一步已逾期」「待核更新」在<a href="opps.html?t=over">商机总览</a>。</p>
   <p class="muted small ig-note" id="igNote"></p>
+  <p class="muted small ig-note" id="arNote"></p>
   <div class="tabs" id="tabs">
     <button type="button" data-t="assign" class="on">线索归属待确认<b id="nAssign">…</b></button>
     <button type="button" data-t="suggest">AI 推荐的商机<b id="nSuggest">…</b></button>
@@ -49,7 +50,8 @@
   let me = null, opps = [], cname = {}, ciso = {};
   /* 忽略国别(地图上灰色,不再采集)的线索、AI 推荐的商机默认不列、不算;点「显示」露出(网址 ig=1) */
   let igIds = new Set(), igShow = new URLSearchParams(location.search).get("ig") === "1";
-  const igOk = (it) => igShow || !igIds.has(it.dataset.cid);
+  let arShow = new URLSearchParams(location.search).get("ar") === "1";  // 已归档的线索(后台标的过期线索)默认不列
+  const igOk = (it) => (igShow || !igIds.has(it.dataset.cid)) && (arShow || it.dataset.arc !== "1");
   const g = (o, p) => P.get("opportunity", o, p);
   const oppById = {};
   const trunc = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n) + "…" : s; };
@@ -66,8 +68,11 @@
     });
     applyFilter("assign"); applyFilter("suggest");
     const ig = (box) => [...$(box).querySelectorAll(".item")].filter((it) => igIds.has(it.dataset.cid)).length, a = ig("assign"), b = ig("suggest");
+    const url = () => location.pathname + ([igShow ? "ig=1" : "", arShow ? "ar=1" : ""].filter(Boolean).length ? "?" + [igShow ? "ig=1" : "", arShow ? "ar=1" : ""].filter(Boolean).join("&") : "") + location.hash;
     P.igNote($("igNote"), [a ? a + " 条待确认归属的线索" : "", b ? b + " 个 AI 推荐的商机" : ""].filter(Boolean), igShow, () => {
-      igShow = !igShow; history.replaceState(null, "", location.pathname + (igShow ? "?ig=1" : "") + location.hash); refreshCounts(); });
+      igShow = !igShow; history.replaceState(null, "", url()); refreshCounts(); });
+    const nArc = [...$("assign").querySelectorAll(".item")].filter((it) => it.dataset.arc === "1" && (igShow || !igIds.has(it.dataset.cid))).length;
+    P.arcNote($("arNote"), nArc, arShow, () => { arShow = !arShow; history.replaceState(null, "", url()); refreshCounts(); });
   }
   /* 标签页:地址栏 #suggest 之类直接打开对应页;原来的 #over、#review(下一步已逾期、待核更新)已挪到商机总览 */
   if (/^#(over|review)$/.test(location.hash)) { location.replace("opps.html?t=" + location.hash.slice(1)); return; }
@@ -140,7 +145,7 @@
   function leadItem(l) {
     const q = (p) => P.get("lead", l, p);
     const cid = P.linkId(q("country")), sid = P.linkId(q("suggested_opp")), sug = sid ? oppById[sid] : null;
-    const el = document.createElement("div"); el.className = "item"; el.dataset.cid = cid || ""; el.dataset.cat = q("category") || ""; el.dataset.sug = sug ? "sug" : q("maybe_new") ? "new" : "none";
+    const el = document.createElement("div"); el.className = "item"; el.dataset.cid = cid || ""; el.dataset.arc = q("archived") === true ? "1" : ""; el.dataset.cat = q("category") || ""; el.dataset.sug = sug ? "sug" : q("maybe_new") ? "new" : "none";
     el._do = { ign: () => P.patch("lead", l.id, { status: "已忽略" }), sug: sug ? () => P.leadToOpp(l.id, sug.id) : null };
     const same = opps.filter((o) => P.linkId(g(o, "country")) === cid && (g(o, "stage") || "建议") !== "不跟进"), others = opps.filter((o) => P.linkId(g(o, "country")) !== cid);
     const opts = (arr) => arr.map((o) => '<option value="' + o.id + '">' + P.esc((g(o, "code") || "") + " " + (g(o, "name_zh") || "")) + "</option>").join("");
@@ -189,8 +194,8 @@
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); ciso[c.id] = P.get("country", c, "key"); });
     const bl = await P.ignored(); igIds = new Set(cs.filter((c) => bl.has(P.get("country", c, "key"))).map((c) => c.id));
     const [leads, pending] = await Promise.all([
-      P.records("lead", { viewId: P.view("lead", "待确认归属"), take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "country", "category", "summary_zh", "suggested_opp", "suggest_reliable", "maybe_new", "project_name", "status", "found_at"] }),
-      P.count("lead", P.and(P.cond("lead", "relevant", "is", true), P.cond("lead", "status", "is", "待处理"))),
+      P.records("lead", { viewId: P.view("lead", "待确认归属"), take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "country", "category", "summary_zh", "suggested_opp", "suggest_reliable", "maybe_new", "project_name", "status", "found_at"].concat(P.has("lead", "archived") ? ["archived"] : []) }),
+      P.count("lead", P.and(P.cond("lead", "relevant", "is", true), P.cond("lead", "status", "is", "待处理"), ...(P.arcCond() ? [P.arcCond()] : []))),
     ]);
     $("assign").innerHTML = ""; leads.forEach((l) => $("assign").appendChild(leadItem(l)));
     $("suggest").innerHTML = ""; opps.filter((o) => (g(o, "stage") || "建议") === "建议").forEach((o) => $("suggest").appendChild(oppItem(o)));
