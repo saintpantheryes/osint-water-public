@@ -1023,69 +1023,93 @@ def test_outsider_guest_sees_only_public_content_through_the_worker():
 
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
 def test_accounts_page_lets_the_owner_manage_colleagues_and_partners():
-    """账号管理页(仅所有者 / 创建者):同事清单带角色下拉,改角色、两步移出都以登录人身份打到表格;生成 / 删除邀请链接;
-    伙伴表增一行(邮箱、单位、可看国别、启用)、停用一行,改完通知后台重读名单;编辑者打开只看到一句说明。帐号区与「我的」页有入口。"""
+    """账号管理页(仅所有者 / 创建者;使用方 10-20 第二版:一张总表,权限一个下拉):库的协作者和伙伴帐号表合成一张表;
+    同事改角色、同事改伙伴(移出库 + 伙伴表加一行)、伙伴改同事(按邮箱找到账号直接加进库;找不到就生成邀请链接)、停用要选两次;
+    伙伴的可看国别在行里改;「加账号」按权限分别加进库或加为伙伴;改完通知后台重读名单;编辑者打开只看到一句说明。"""
     from playwright.sync_api import Error as PWError, sync_playwright
     fake, admin = _fake_with_schema()
     c, o, ld = _seed(admin, fake)
     b = tstore.Base(admin)
-    b.create("partner_account", [{"email": "old@bewg.example", "org": "北控水务", "enabled": True}])
+    b.create("partner_account", [{"email": "chen@bewg.example", "org": "北控水务", "enabled": True}])  # 库外的 usrPTN 在伙伴表里
     cfg = schema.read_config(admin, NEW, ONTO)
     srv = _serve(fake, cfg, token="admin-token")
     base = f"http://127.0.0.1:{srv.server_port}"
+    shot = os.environ.get("SHOT")
+    wait_toast = lambda page, word: page.wait_for_function(f"document.querySelector('#toast') && document.querySelector('#toast').textContent.includes('{word}')", timeout=15000)  # noqa: E731
     try:
         with sync_playwright() as pw:
             try:
                 browser = pw.chromium.launch()
             except PWError:
                 browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
-            page = browser.new_page()
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
             page.goto(base + "/accounts.html")
-            page.wait_for_selector("#members table", timeout=15000)
-            page.wait_for_selector("#partners table", timeout=15000)
+            page.wait_for_selector("#accounts table", timeout=15000)
             assert "账号管理" in page.inner_text("#acct")
-            rows = page.inner_text("#members")
-            assert "Ada" in rows and "所有者(我)" in rows and "游客" in rows and "张三" in rows and "outsider@example.com" not in rows  # 库外的不在
-            # 改张三的角色成查看者
-            page.select_option("#members select[data-id='usrZS']", "viewer")
-            page.wait_for_function("document.querySelector('#toast') && document.querySelector('#toast').textContent.includes('角色已改成')", timeout=15000)
+            txt = page.inner_text("#accounts")
+            assert "Ada" in txt and "所有者(我)" in txt and "张三" in txt and "chen@bewg.example" in txt and "北控水务" in txt and "全部国别" in txt and "outsider@example.com" not in txt
+            if shot:
+                page.screenshot(path=f"{shot}/账号管理.png", full_page=True)
+            # 同事改角色:张三 → 查看者
+            page.select_option("#accounts select[data-id='usrZS']", "viewer")
+            wait_toast(page, "已改成查看者")
             assert fake.role_changes == [("usrZS", "viewer")]
-            # 两步移出游客演示帐号(usrGST)
-            page.click("#members button[data-a='out'][data-id='usrGST']")
-            assert "确认移出" in page.inner_text("#members button[data-a='out'][data-id='usrGST']")
-            page.click("#members button[data-a='out'][data-id='usrGST']")
-            page.wait_for_function("!document.querySelector(\"#members button[data-a='out'][data-id='usrGST']\")", timeout=15000)
+            # 停用要选两次:第一次只提示并回到原值
+            page.wait_for_selector("#accounts select[data-id='usrGST']", timeout=15000)
+            page.select_option("#accounts select[data-id='usrGST']", "none")
+            wait_toast(page, "再选一次")
+            assert page.input_value("#accounts select[data-id='usrGST']") == "viewer" and fake.removed == []
+            page.select_option("#accounts select[data-id='usrGST']", "none")
+            wait_toast(page, "已停用")
             assert fake.removed == ["usrGST"]
-            # 邀请链接:生成(查看者)、出现在清单、删除
-            page.select_option("#invRole", "viewer")
-            page.click("#invMake")
+            page.wait_for_function("!document.querySelector(\"#accounts select[data-id='usrGST']\")", timeout=15000)
+            # 同事改伙伴:张三移出库,伙伴表加一行
+            page.select_option("#accounts select[data-id='usrZS']", "partner")
+            wait_toast(page, "已改成伙伴")
+            assert fake.removed == ["usrGST", "usrZS"]
+            zs = next(r for r in b.rows("partner_account") if b.get("partner_account", r, "email") == "zs@example.com")
+            assert b.get("partner_account", zs, "enabled") is True
+            page.wait_for_function("document.querySelector('#accounts').innerText.includes('zs@example.com')", timeout=15000)
+            # 伙伴的可看国别在行里改
+            page.click("#accounts button[data-a='cedit'][data-id='" + zs["id"] + "']")
+            page.select_option("#accounts [data-c='" + zs["id"] + "'] select[data-a='pick']", c["id"])
+            page.click("#accounts [data-c='" + zs["id"] + "'] button[data-a='csave']")
+            wait_toast(page, "可看国别已改")
+            assert tstore.link_ids(b.get("partner_account", b.record("partner_account", zs["id"]), "countries")) == [c["id"]]
+            page.wait_for_function("document.querySelector('#accounts').innerText.includes('阿塞拜疆')", timeout=15000)
+            # 伙伴改同事:北控的陈有账号(usrPTN)→ 直接加进库为编辑者,伙伴行停用
+            prow = next(r for r in b.rows("partner_account") if b.get("partner_account", r, "email") == "chen@bewg.example")
+            page.select_option("#accounts select[data-id='" + prow["id"] + "']", "editor")
+            wait_toast(page, "已加进库")
+            assert fake.added == [("usrPTN", "editor")] and not b.get("partner_account", b.record("partner_account", prow["id"]), "enabled")
+            page.wait_for_function("document.querySelector(\"#accounts select[data-id='usrPTN']\")", timeout=15000)
+            assert page.input_value("#accounts select[data-id='usrPTN']") == "editor"
+            assert any(p[1] == "/guest/refresh" for p in srv.bot_calls), srv.bot_calls  # 通知后台重读名单
+            # 加账号:同事但没有账号 → 邀请链接;伙伴 → 伙伴表一行;重复的不让加
+            page.fill("#aEmail", "newbie@example.com")
+            page.select_option("#aTier", "viewer")
+            page.click("#aSave")
+            wait_toast(page, "邀请链接")
             page.wait_for_selector("#invites li", timeout=15000)
-            assert "查看者" in page.inner_text("#invites") and "invite/link" in page.inner_text("#invites") and fake.invitations[-1]["role"] == "viewer"
+            assert "查看者" in page.inner_text("#invites") and fake.invitations[-1]["role"] == "viewer"
+            page.fill("#aEmail", "@Another.example")
+            page.select_option("#aTier", "partner")
+            page.fill("#aOrg", "某设计院")
+            page.select_option("#aPick", c["id"])
+            page.click("#aSave")
+            wait_toast(page, "已加为伙伴")
+            page.wait_for_function("document.querySelector('#accounts').innerText.includes('@another.example')", timeout=15000)
+            dom = next(r for r in b.rows("partner_account") if b.get("partner_account", r, "email") == "@another.example")
+            assert b.get("partner_account", dom, "org") == "某设计院" and tstore.link_ids(b.get("partner_account", dom, "countries")) == [c["id"]]
+            assert "整个单位" in page.inner_text("#accounts")
+            page.fill("#aEmail", "zs@example.com")
+            page.click("#aSave")
+            wait_toast(page, "已经在表里")
             page.click("#invites button[data-a='del']")
             page.wait_for_function("!document.querySelector('#invites li')", timeout=15000)
             assert fake.invitations == []
-            # 伙伴:已有一行;加一行带可看国别;停用
-            assert "old@bewg.example" in page.inner_text("#partners") and "全部国别" in page.inner_text("#partners")
-            page.fill("#pEmail", "New@Partner.example")
-            page.fill("#pOrg", "新伙伴")
-            page.select_option("#pPick", c["id"])
-            assert "阿塞拜疆" in page.inner_text("#pCountries")
-            page.click("#pSave")
-            page.wait_for_function("document.querySelector('#partners').innerText.includes('new@partner.example')", timeout=15000)
-            rows = b.rows("partner_account")
-            new = next(r for r in rows if b.get("partner_account", r, "email") == "new@partner.example")
-            assert tstore.link_ids(b.get("partner_account", new, "countries")) == [c["id"]] and b.get("partner_account", new, "org") == "新伙伴" and b.get("partner_account", new, "enabled") is True
-            assert "阿塞拜疆" in page.inner_text("#partners")
-            page.click("#partners button[data-a='toggle'][data-id='" + new["id"] + "']")
-            page.wait_for_function("document.querySelector('#partners').innerText.includes('已停用')", timeout=15000)
-            assert not b.get("partner_account", b.record("partner_account", new["id"]), "enabled")
-            assert any(p[1] == "/guest/refresh" for p in srv.bot_calls), srv.bot_calls  # 通知后台重读名单
-            # 重复邮箱不让加
-            page.fill("#pEmail", "old@bewg.example")
-            page.click("#pSave")
-            page.wait_for_function("document.querySelector('#toast') && document.querySelector('#toast').textContent.includes('已经在名单里')", timeout=15000)
             # 「我的」页有入口
             page.goto(base + "/me.html")
             page.wait_for_function("document.querySelector('#acctAdmin') && !document.querySelector('#acctAdmin').hidden", timeout=15000)
