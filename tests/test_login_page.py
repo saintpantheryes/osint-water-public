@@ -1,5 +1,5 @@
-"""自己的登录页(portal/login.html):Caddy 把 /auth/login 指到这个文件,左边系统标志、站名、首页同一段 ASCII 动画,右边登录框;
-登录走表格自己的接口 POST /api/auth/signin,登录后回到 redirect 指的本站页面。登录页用到的字体、标志、动画脚本不用登录也能取,其余照旧要登录。
+"""自己的登录页(portal/login.html):Caddy 把 /auth/login 指到这个文件,整页深蓝底、首页同一段字符动画当背景,左边系统标志、站名,右边登录框;
+登录走表格自己的接口 POST /api/auth/signin,登录后回到 redirect 指的本站页面。登录页用到的字体、标志、动画脚本与帧图不用登录也能取,其余照旧要登录。
 有 Playwright 与本地 Chromium 时,用一个仿 Caddy + 假表格的小服务把登录真的走一遍(没有就跳过那部分)。"""
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 PORTAL = ROOT / "portal"
 KIT = ROOT / "deploy" / "teable"
-OPEN_FILES = ("/fonts/huiwen-title.woff2", "/fonts/truetypewriter-latin.woff2", "/ascii-water.js", "/logo.png", "/favicon.png")
+OPEN_FILES = ("/fonts/huiwen-title.woff2", "/fonts/truetypewriter-latin.woff2", "/ascii-water.js", "/media/hero_ascii.jpg", "/media/hero_ascii.json", "/logo.png", "/favicon.png")
 
 
 def _caddy() -> str:
@@ -30,7 +30,7 @@ def test_caddy_serves_own_login_page_and_only_its_assets_without_login():
     assert 'X-Frame-Options "DENY"' in login and 'Cache-Control "no-cache"' in login
     # 表格页面里的站内跳转取登录页数据时给 404,浏览器改成整页打开 /auth/login
     assert "@ow_login_data path_regexp ^/_next/data/[^/]+/auth/login\\.json$" in c and re.search(r"handle @ow_login_data \{\s*respond 404\s*\}", c)
-    # 不用登录就能取的只有这几个文件(写死文件名,不用通配);页面、配置照旧要登录
+    # 不用登录就能取的只有这几个文件(写死文件名,不用通配);页面、配置、私有仓 media 里的说明文件照旧要登录
     m = re.search(r"@ow_open path ([^\n]+)", c)
     assert m and tuple(m.group(1).split()) == OPEN_FILES
     assert "*" not in m.group(1) and "config.json" not in m.group(1) and ".html" not in m.group(1)
@@ -38,7 +38,8 @@ def test_caddy_serves_own_login_page_and_only_its_assets_without_login():
     assert portal.index("handle @ow_open") < portal.index("forward_auth teable:3000") < portal.index("handle_path /api/assistant/*") < portal.rindex("file_server")
     assert "redir * /auth/login?redirect=%2Fportal%2F 302" in portal  # 没登录照旧转到登录页(现在是自己的这一页)
     for f in OPEN_FILES:
-        assert (PORTAL / f.lstrip("/")).is_file(), f
+        if not f.startswith("/media/"):  # 帧图来自私有配置仓的挂载
+            assert (PORTAL / f.lstrip("/")).is_file(), f
 
 
 def test_login_page_carries_the_same_intro_as_home():
@@ -78,7 +79,7 @@ def test_login_page_is_self_contained_and_uses_the_table_sign_in():
     assert "TEABLE_TOKEN" not in s and "Bearer" not in s
     for f in re.findall(r'(?:src|href|poster|data-src)="(/portal/[^"]+)"', s) + re.findall(r'url\("(/portal/[^"]+)"\)', s):
         assert f[len("/portal"):] in OPEN_FILES, f  # 页面用到的每个文件都在不用登录的名单里
-    assert "全球水务开源情报" in s and "Global Water OSINT" in s and 'src="/portal/ascii-water.js"' in s and "/portal/logo.png" in s and "media/hero" not in s  # 动画脚本随页面来;10 MB 的视频不再用
+    assert "全球水务开源情报" in s and "Global Water OSINT" in s and 'src="/portal/ascii-water.js"' in s and '"/portal/media/hero_ascii"' in s and "/portal/logo.png" in s and "hero.mp4" not in s  # 动画脚本 + 帧图;10 MB 的视频不再用
     assert 'href="/auth/forget-password"' in s and "/auth/signup" in s
 
 
@@ -163,11 +164,11 @@ def test_login_page_signs_in_and_returns_to_the_page():
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(base + "/auth/login?redirect=%2Fportal%2Fme.html")
-            # 左边:标志、站名(中英)、首页同一段 ASCII 动画(脚本画在画布上,不取任何文件)
+            # 整页背景是字符动画画布(测试里没有帧图 → 画字符世界地图);左边标志、站名(中英),右边登录卡
             page.wait_for_function("(() => { const c = document.getElementById('heroAscii'); return c && c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v > 80); })()", timeout=10000)
             assert page.get_attribute(".brand img", "src") == "/portal/logo.png" and page.inner_text(".intro h1") == "全球水务开源情报" and page.inner_text(".intro p") == "Global Water OSINT"
-            v = page.evaluate("(() => { const b = document.querySelector('.vid').getBoundingClientRect(); return { w: b.width, h: b.height, bottom: b.bottom, doc: document.querySelector('.page').getBoundingClientRect().bottom, about: document.getElementById('about').getBoundingClientRect().top }; })()")
-            assert abs(v["w"] / v["h"] - 1.6) < 0.01 and v["bottom"] <= 950 and v["doc"] <= 951 and v["about"] >= 950, v  # 比例不变、首屏一屏放下;简介在下面,往下滚才看到
+            v = page.evaluate("(() => { const b = document.getElementById('heroAscii').getBoundingClientRect(), p = document.querySelector('.page').getBoundingClientRect(); return { w: b.width, h: b.height, pw: p.width, ph: p.height, doc: p.bottom, about: document.getElementById('about').getBoundingClientRect().top, form: document.getElementById('f').getBoundingClientRect().bottom }; })()")
+            assert abs(v["w"] - 1920) < 1 and abs(v["h"] - v["ph"]) < 1 and v["ph"] >= 949 and v["doc"] <= 951 and v["form"] <= 950 and v["about"] >= 950, v  # 画布铺满整页首屏、登录框一屏放下;简介在下面,往下滚才看到
             assert page.evaluate("document.fonts.check('20px \"Huiwen Mincho\"')")  # 站名字体没登录也取得到
             assert not page.locator("#signup").is_visible()  # 没开注册、也不是邀请链接:不露「先注册」
             # 填错的几种情况
@@ -219,13 +220,13 @@ def test_login_page_signs_in_and_returns_to_the_page():
             p3.wait_for_selector("#signup", state="visible", timeout=5000)
             assert p3.get_attribute("#signupLink", "href") == "/auth/signup" + q
             ctx.close()
-            # 手机:站名、登录框在上(第一屏就能填),动画在下面
+            # 手机:站名、登录框在上(第一屏就能填),动画在整页背景里
             ctx = browser.new_context(viewport={"width": 390, "height": 760})
             p4 = ctx.new_page()
             p4.goto(base + "/auth/login?redirect=%2Fportal%2F")
             p4.wait_for_function("document.getElementById('heroAscii').width > 0", timeout=10000)
-            f = p4.evaluate("(() => { const a = document.getElementById('f').getBoundingClientRect(), b = document.querySelector('.vid').getBoundingClientRect(); return { formBottom: a.bottom, vidTop: b.top, w: document.documentElement.scrollWidth }; })()")
-            assert f["formBottom"] <= 760 and f["vidTop"] >= f["formBottom"] and f["w"] <= 390, f
+            f = p4.evaluate("(() => { const a = document.getElementById('f').getBoundingClientRect(), t = document.querySelector('.intro h1').getBoundingClientRect(); return { formBottom: a.bottom, titleTop: t.top, titleBottom: t.bottom, w: document.documentElement.scrollWidth }; })()")
+            assert f["formBottom"] <= 760 and f["titleTop"] >= 0 and f["titleBottom"] <= p4.evaluate("document.getElementById('f').getBoundingClientRect().top") and f["w"] <= 390, f  # 站名在登录框上面、看得见
             ctx.close()
             browser.close()
     finally:

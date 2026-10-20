@@ -1,7 +1,9 @@
-/* 首页与登录页的「ASCII 水面世界」动画:用字符在画布上画一张世界地图,海面是流动的波纹,陆地上不时冒出一圈圈「信号」。
-   参考 stackedlol/ascii-sharks 的想法(字符格子 + 画布),代码是自己写的,不依赖任何库、不取任何文件:
-   陆地轮廓是 portal/world.geo.json 按 1° 格子算好的位图(scripts/landmask.py 生成),随脚本一起带着,登录前也能画。
-   用法:window.asciiWater(canvas) → { stop }。系统设了「减少动态效果」只画一帧;标签页不可见、画布滚出视野时暂停。 */
+/* 首页与登录页的字符动画背景(参考 stackedlol/ascii-sharks 的想法:字符格子 + 画布;代码自己写,不依赖任何库)。
+   两种画法:
+   1. 有「帧图」时(私有配置仓 portal/media/hero_ascii.jpg + .json,由 scripts/ascii_sheet.py 从原来的首页视频转成:每帧缩成 112×49 个格子,所有帧拼成一张图,
+      约 0.6 MB,原视频 10 MB):按格子取原片的颜色与亮度,亮的地方字符密、暗的地方留空,颜色沿用原片,10 帧/秒循环——就是原视频的字符版,铺满整块背景(居中裁边)。
+   2. 没有帧图时(公开仓自己跑、测试里):画一张字符世界地图,海面波纹流动,陆地上冒一圈圈「信号」;陆地轮廓是 world.geo.json 按 1° 算好的位图(scripts/landmask.py),随脚本带着。
+   用法:window.asciiWater(canvas, { src: "media/hero_ascii" }) → { stop }。系统设了「减少动态效果」只画一帧;标签页不可见、画布滚出视野时暂停。 */
 (function () {
   "use strict";
   var MASK_W = 360, MASK_H = 140, LAT_TOP = 80;  // 位图:经度 -180…180、纬度 80…-60,每格 1°
@@ -23,6 +25,26 @@
   function miller(lat) { var r = lat * Math.PI / 180; return 1.25 * Math.log(Math.tan(Math.PI / 4 + 0.4 * r)); }
   function unmiller(y) { return (Math.atan(Math.exp(y / 1.25)) - Math.PI / 4) / 0.4 * 180 / Math.PI; }
 
+  var RAMP = [" ", " ", ".", ":", "-", "=", "+", "*", "#", "%", "@"];  // 按亮度从暗到亮挑字符,最暗的两档留空
+
+  /* 取帧图:说明 JSON + 整张图读进内存(像素数组);任一步失败就回退到世界地图 */
+  function loadSheet(src) {
+    if (!src || !window.fetch) return Promise.resolve(null);
+    return fetch(src + ".json", { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (meta) {
+      if (!meta || !meta.cols || !meta.rows || !meta.frames) return null;
+      return new Promise(function (resolve) {
+        var img = new Image();
+        img.onload = function () {
+          var off = document.createElement("canvas"); off.width = img.naturalWidth; off.height = img.naturalHeight;
+          var c = off.getContext("2d"); c.drawImage(img, 0, 0);
+          try { meta.px = c.getImageData(0, 0, off.width, off.height).data; meta.sheetW = off.width; resolve(meta); } catch (e) { resolve(null); }
+        };
+        img.onerror = function () { resolve(null); };
+        img.src = src + ".jpg";
+      });
+    }).catch(function () { return null; });
+  }
+
   window.asciiWater = function (canvas, opts) {
     opts = opts || {};
     if (!mask) mask = unpack();
@@ -30,6 +52,7 @@
     var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     var fps = opts.fps || 24, cols = 0, rows = 0, cw = 0, ch = 0, dpr = 1;
     var kind = null, edge = null, pings = [], last = 0, t0 = performance.now(), raf = 0, visible = true, onscreen = true, stopped = false;
+    var sheet = null, sc = null;  // 帧图及其在画布上的摆法(格子大小、裁掉多少)
 
     function build() {
       var W = canvas.clientWidth, H = canvas.clientHeight;
@@ -57,6 +80,40 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.font = "600 " + (ch * 0.92).toFixed(1) + "px ui-monospace, Menlo, Consolas, \"Courier New\", monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      if (sheet) {
+        /* 帧图铺满画布(像 background-size: cover):格子放大到宽、高都盖住,多出来的部分居中裁掉 */
+        var cw2 = Math.max(W / sheet.cols, H * 0.6 / sheet.rows), ch2 = cw2 / 0.6;
+        sc = { cw: cw2, ch: ch2, c0: Math.max(0, Math.floor((sheet.cols - W / cw2) / 2)), r0: Math.max(0, Math.floor((sheet.rows - H / ch2) / 2)),
+               nc: Math.min(sheet.cols, Math.ceil(W / cw2) + 1), nr: Math.min(sheet.rows, Math.ceil(H / ch2) + 1),
+               ox: (W - sheet.cols * cw2) / 2, oy: (H - sheet.rows * ch2) / 2 };
+        sc.font = "600 " + (ch2 * 0.95).toFixed(1) + "px ui-monospace, Menlo, Consolas, \"Courier New\", monospace";
+      }
+    }
+
+    /* 帧图模式:取当前帧,每个格子按亮度挑字符、颜色沿用原片(稍微提亮,深蓝底上看得清) */
+    function frameSheet(t) {
+      var W = canvas.clientWidth, H = canvas.clientHeight, s = (t - t0) / 1000;
+      var f = still ? 0 : Math.floor(s * sheet.fps) % sheet.frames;
+      var fx = (f % sheet.perRow) * sheet.cols, fy = Math.floor(f / sheet.perRow) * sheet.rows, px = sheet.px, sw = sheet.sheetW;
+      ctx.fillStyle = opts.bg || "#0b1b3a"; ctx.fillRect(0, 0, W, H);
+      ctx.font = sc.font;
+      var buckets = {};
+      for (var r = sc.r0; r < sc.r0 + sc.nr && r < sheet.rows; r++) {
+        var y = sc.oy + (r + 0.5) * sc.ch, row = (fy + r) * sw;
+        for (var c = sc.c0; c < sc.c0 + sc.nc && c < sheet.cols; c++) {
+          var i = (row + fx + c) * 4, R = px[i], G = px[i + 1], B = px[i + 2];
+          var lum = (0.299 * R + 0.587 * G + 0.114 * B) / 255;
+          var chr = RAMP[Math.min(RAMP.length - 1, Math.floor(lum * RAMP.length))];
+          if (chr === " ") continue;
+          var k = ((R + 40) >> 4) + "," + ((G + 40) >> 4) + "," + ((B + 60) >> 4);  // 颜色量化成 16 级,同色一批写,少换画笔
+          (buckets[k] || (buckets[k] = [])).push(sc.ox + (c + 0.5) * sc.cw, y, chr);
+        }
+      }
+      for (var key in buckets) {
+        var q = key.split(","); ctx.fillStyle = "rgb(" + Math.min(255, q[0] * 16 + 8) + "," + Math.min(255, q[1] * 16 + 8) + "," + Math.min(255, q[2] * 16 + 8) + ")";
+        var b = buckets[key];
+        for (var j = 0; j < b.length; j += 3) ctx.fillText(b[j + 2], b[j], b[j + 1]);
+      }
     }
 
     function addPing(t) {
@@ -70,6 +127,7 @@
       var W = canvas.clientWidth, H = canvas.clientHeight;
       if (!cols || Math.round(W * dpr) !== canvas.width || Math.round(H * dpr) !== canvas.height) build();
       if (!cols) return;
+      if (sheet) return frameSheet(t);
       var s = (t - t0) / 1000;
       ctx.fillStyle = opts.bg || "#0b1b3a";
       ctx.fillRect(0, 0, W, H);
@@ -123,7 +181,7 @@
       if (stopped) return;
       raf = 0;
       if (!visible || !onscreen) return;
-      if (t - last >= 1000 / fps - 2) { last = t; frame(t); }
+      if (t - last >= 1000 / (sheet ? sheet.fps : fps) - 2) { last = t; frame(t); }
       if (!still) raf = requestAnimationFrame(loop);
     }
     function wake() { if (!raf && !stopped && visible && onscreen) raf = requestAnimationFrame(loop); }
@@ -136,6 +194,7 @@
     document.addEventListener("visibilitychange", onVis);
     build();
     wake();
+    loadSheet(opts.src).then(function (m) { if (m && !stopped) { sheet = m; build(); if (still) frame(performance.now()); else wake(); } });  // 帧图到了就换成原片的字符版
     return {
       stop: function () { stopped = true; if (raf) cancelAnimationFrame(raf); if (io) io.disconnect(); if (ro) ro.disconnect(); document.removeEventListener("visibilitychange", onVis); },
       frame: function () { build(); frame(performance.now()); }

@@ -88,8 +88,9 @@ bash deploy/teable/worker_from_mac.sh ~/.ssh/<密钥>.pem <主机IP> <所有者>
   类型选日报、期间填 YYYY-MM-DD。**升级到这版后管理员跑一次 `python -m core.schema --profile private/profile.yaml`**:它给报告表补「简报正文」列、
   给「类型」「适用类型」补「日报」选项(表格锁了自动加选项,后台写不进去),并重写 private/portal/config.json(页面要用新列的编号)。
 - 国别信息:每月 1 日按世行、IMF 接口刷新指标与收入组,新国别出现后第二天补齐;机构、国企、法规只追加,市场分级等人管的列不动。
-- 首页与登录页的动画:字符画的「水面世界地图」由 `portal/ascii-water.js` 自己画,不取任何文件、不用配置(原来放在私有配置仓 `portal/media/` 的
-  `hero.mp4` 视频与封面不再用,目录可以删;compose 里那条只读挂载留着也无妨)。
+- 首页与登录页的背景动画:原首页视频转成的「字符动画」。私有配置仓 `portal/media/` 下放 `hero_ascii.jpg` + `hero_ascii.json`(帧图:
+  `python3 scripts/ascii_sheet.py hero.mp4 portal/media/` 从视频生成,112×49 格、10 帧/秒、约 0.6 MB;原来 10 MB 的 `hero.mp4`、`hero.jpg` 可以删),
+  compose 把该目录只读挂到页面目录的 `media/`;页面脚本 `portal/ascii-water.js` 按格子取颜色、亮度写字符。没有帧图时画一张字符世界地图。
 - 助手(首页的提问框):后台任务进程里另起一个线程跑助手接口(`core/assistant_server.py`,容器内网 `worker:8765`,不对外开端口;
   环境变量 `ASSISTANT_PORT` 改端口,0 不起),Caddy 把 `/portal/api/assistant/*` 转过去(`portal.caddy`,登录检查在前)。接口只把一句提问翻成
   筛选条件(国别、领域、类别、资金来源、阶段、时间、关键词),页面带着登录人的 cookie 自己查表格并呈现,模型看不到表里的数据。配了模型密钥时由

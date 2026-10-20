@@ -44,7 +44,7 @@ handle @ow_portal {
 	uri strip_prefix /portal
 	root * /srv/portal
 	# 登录页要用的站名字体、标志、首页视频与封面:没登录也能取(只这几个文件;页面、配置、接口照旧要先登录)
-	@ow_open path /fonts/huiwen-title.woff2 /fonts/truetypewriter-latin.woff2 /ascii-water.js /logo.png /favicon.png
+	@ow_open path /fonts/huiwen-title.woff2 /fonts/truetypewriter-latin.woff2 /ascii-water.js /media/hero_ascii.jpg /media/hero_ascii.json /logo.png /favicon.png
 	handle @ow_open {
 		file_server
 	}

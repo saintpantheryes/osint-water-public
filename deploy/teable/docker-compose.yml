@@ -15,7 +15,7 @@ services:
       - ./caddy.d:/etc/caddy/caddy.d:ro  # 附加路由(只读页面 /portal/ 的 portal.caddy 放这里,架构方案第 5 节);空目录时什么也不多引入
       - /opt/osint-water/portal:/srv/portal:ro  # 只读页面的静态文件(程序检出里的 portal/;每天随程序更新)
       - /opt/osint-water-private/portal/config.json:/srv/portal/config.json:ro  # 页面配置(库、表、字段编号)来自私有配置仓的检出
-      - /opt/osint-water-private/portal/media:/srv/portal/media:ro  # 以前首页的视频放这里;现在首页动画由脚本画,不再用,挂载留着无妨
+      - /opt/osint-water-private/portal/media:/srv/portal/media:ro  # 首页背景字符动画的帧图(hero_ascii.jpg、hero_ascii.json,由视频转成)来自私有配置仓;没有时页面画字符世界地图
       - caddy-data:/data
       - caddy-config:/config
     depends_on:

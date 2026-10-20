@@ -7,7 +7,7 @@
 <title>登录 · 全球水务开源情报</title>
 <link rel="icon" href="/portal/favicon.png">
 <!--
-  自己的登录页:替换表格(Teable)默认登录页,左边是系统标志、站名和首页同一段 ASCII 动画,右边是登录框。
+  自己的登录页:替换表格(Teable)默认登录页,整页深蓝底,背景是首页同一段字符动画,左边系统标志与站名,右边登录框。
   Caddy 把 /auth/login 直接指到这个文件(deploy/teable/portal.caddy),不经过表格的页面;
   登录用的仍是表格自己的接口 POST /api/auth/signin(同一个 cookie),登录后回到网址里 redirect 指的页面(只认本站路径,别的回首页)。
   页面用到的字体、标志、动画脚本走 /portal/fonts、/portal/logo.png、/portal/ascii-water.js,这几样没登录也能取;其余页面和接口照旧要先登录。
@@ -16,7 +16,7 @@
 <style>
 @font-face { font-family: "Huiwen Mincho"; src: url("/portal/fonts/huiwen-title.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Typewriter Title"; src: url("/portal/fonts/truetypewriter-latin.woff2") format("woff2"); font-display: swap; }
-:root { --ink: #0b1b3a; --muted: #6b7280; --line: #d5dce5; --brand: #0b2a5a; --err: #b42318; --vh: 100vh; --r: 1.6; }
+:root { --ink: #0b1b3a; --muted: #6b7280; --line: #d5dce5; --brand: #0b2a5a; --err: #b42318; --vh: 100vh; }
 @supports (height: 100svh) { :root { --vh: 100svh; } }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -27,25 +27,22 @@ a:hover { text-decoration: underline; }
 .zh { font-family: "Huiwen Mincho", "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", SimSun, Georgia, serif; font-weight: 400; }
 .en { font-family: "Typewriter Title", "Courier New", Courier, monospace; }
 
-/* 电脑:左边大圆角浅色面板(标志 + 站名 + 视频),右边登录框 */
-.page { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(400px, 1fr); min-height: var(--vh); }
-.show { margin: clamp(8px, 1.4vh, 16px); border-radius: clamp(24px, 2.6vw, 44px); background: radial-gradient(130% 90% at 50% 0%, #fafbfd 0%, #f1f4f8 55%, #e9eef4 100%);
-  padding: clamp(14px, 2.6vh, 30px) clamp(18px, 2.6vw, 44px) clamp(16px, 3vh, 36px); display: flex; flex-direction: column; min-height: 0; height: calc(var(--vh) - 2 * clamp(8px, 1.4vh, 16px)); }
-.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; }
+/* 电脑:整屏深蓝底,背景是字符动画画布(绝对定位铺满);左边标志 + 站名,右边白色登录卡 */
+.page { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(400px, 1fr); min-height: var(--vh); background: var(--ink); color: #fff; overflow: hidden; }
+.hero-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; }
+.page::after { content: ""; position: absolute; inset: 0; z-index: 0; background: linear-gradient(180deg, rgba(11, 27, 58, .62) 0%, rgba(11, 27, 58, .28) 45%, rgba(11, 27, 58, 0) 75%); pointer-events: none; }  /* 上半段压暗一点,站名看得清 */
+.page .show, .page .side, .page .brand, .page .intro { position: relative; z-index: 1; }  /* 手机上 .show 是 display: contents,所以里面的标志、站名也各自提到画布上面 */
+.show { padding: clamp(14px, 2.6vh, 30px) clamp(18px, 2.6vw, 44px) clamp(16px, 3vh, 36px); display: flex; flex-direction: column; justify-content: flex-start; min-height: 0; }
+.brand { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }
 .brand:hover { text-decoration: none; }
 .brand img { width: 30px; height: 30px; }
 .brand .zh { font-size: 20px; }
-.brand .en { font-size: 14px; letter-spacing: .06em; color: var(--muted); }
-.intro { text-align: center; margin-top: clamp(8px, 3vh, 40px); }
-.intro h1 { margin: 0; font-size: clamp(34px, min(5vw, 8.4vh), 96px); line-height: 1.08; letter-spacing: .02em; color: var(--ink); }
-.intro p { margin: clamp(2px, .8vh, 10px) 0 0; font-size: clamp(14px, min(1.8vw, 3vh), 32px); letter-spacing: .16em; color: #33415c; }
-/* 动画卡:在剩下的空间里按 16:10 放到最大(和首页一样) */
-.media-box { flex: 1 1 auto; min-height: 0; margin-top: clamp(12px, 3vh, 36px); display: grid; place-items: center; container-type: size; }
-.vid { width: min(100%, calc(100cqh * var(--r))); aspect-ratio: var(--r); max-height: 100%; border-radius: clamp(18px, 2.4vh, 36px); overflow: hidden; background: var(--ink); box-shadow: 0 18px 50px rgba(11, 27, 58, .18); }
-.vid canvas { display: block; width: 100%; height: 100%; }
-
+.brand .en { font-size: 14px; letter-spacing: .06em; color: rgba(255, 255, 255, .75); }
+.intro { text-align: center; margin-top: clamp(40px, 22vh, 260px); }
+.intro h1 { margin: 0; font-size: clamp(34px, min(5vw, 8.4vh), 96px); line-height: 1.08; letter-spacing: .02em; color: #fff; text-shadow: 0 2px 18px rgba(0, 0, 0, .55); }
+.intro p { margin: clamp(2px, .8vh, 10px) 0 0; font-size: clamp(14px, min(1.8vw, 3vh), 32px); letter-spacing: .16em; color: rgba(255, 255, 255, .82); text-shadow: 0 1px 10px rgba(0, 0, 0, .5); }
 .side { display: flex; align-items: center; justify-content: center; padding: 32px 24px; }
-.login { width: min(360px, 100%); }
+.login { width: min(400px, 100%); background: #fff; color: #1f2937; border-radius: 20px; padding: 28px 24px 24px; box-shadow: 0 18px 50px rgba(0, 0, 0, .35); }
 .login h2 { margin: 0; font-size: 30px; line-height: 1.2; color: var(--ink); }
 .login .lead { margin: 6px 0 26px; color: var(--muted); }
 .login label { display: block; font-size: 14px; font-weight: 600; color: #111827; margin: 0 0 6px; }
@@ -64,7 +61,7 @@ a:hover { text-decoration: underline; }
 
 /* 手机、窄窗口:站名在上,登录框紧跟,视频放在下面 */
 @media (max-width: 900px) {
-  .page { display: flex; flex-direction: column; min-height: var(--vh); background: radial-gradient(130% 70% at 50% 0%, #fafbfd 0%, #f1f4f8 60%, #e9eef4 100%); }
+  .page { display: flex; flex-direction: column; min-height: var(--vh); }
   .show { display: contents; }
   .brand { order: 1; padding: 22px 18px 0; justify-content: center; }  /* 站名下面有大标题,这里只留标志 */
   .brand img { width: 40px; height: 40px; }
@@ -72,12 +69,10 @@ a:hover { text-decoration: underline; }
   .intro { order: 2; margin: 8px 16px 0; }
   .intro h1 { font-size: clamp(30px, 9vw, 46px); }
   .intro p { font-size: clamp(13px, 4vw, 18px); }
-  .side { order: 3; padding: 18px 12px 0; }
-  .login { width: 100%; max-width: 440px; background: #fff; border-radius: 20px; padding: 22px 18px 20px; box-shadow: 0 10px 30px rgba(15, 23, 42, .08); }
+  .side { order: 3; padding: 18px 12px 24px; }
+  .login { width: 100%; max-width: 440px; padding: 22px 18px 20px; }
   .login h2 { font-size: 24px; }
   .login .lead { margin-bottom: 18px; }
-  .media-box { order: 4; flex: 0 0 auto; margin: 18px 12px 24px; container-type: normal; }
-  .vid { width: 100%; max-width: 440px; max-height: none; border-radius: 18px; }
 }
 
 /* 系统简介(与首页同一套,从 portal.css 抄过来,类名 intro → about;登录页不引 portal.css):左边圆角图卡、右边大标题 + 一段话 + 入口;手机上上下排。图卡都是页面画的示意,不读表 */
@@ -179,15 +174,13 @@ a:hover { text-decoration: underline; }
 </head>
 <body>
 <div class="page">
+  <!-- 背景:首页同一段字符动画(/portal/ascii-water.js + 私有配置仓的帧图 /portal/media/hero_ascii.jpg,不用登录也能取;没有帧图就画字符世界地图) -->
+  <canvas class="hero-bg" id="heroAscii" aria-hidden="true"></canvas>
   <section class="show" aria-label="全球水务开源情报">
     <a class="brand" href="/portal/"><img src="/portal/logo.png" alt=""><span class="zh">全球水务开源情报</span><span class="en">Global Water OSINT</span></a>
     <div class="intro">
       <h1 class="zh">全球水务开源情报</h1>
       <p class="en">Global Water OSINT</p>
-    </div>
-    <div class="media-box">
-      <!-- 首页同一段「ASCII 水面世界」动画(/portal/ascii-water.js,不用登录也能取):字符画的世界地图,不取任何文件,打开就有 -->
-      <div class="vid"><canvas id="heroAscii" aria-hidden="true"></canvas></div>
     </div>
   </section>
   <main class="side">
@@ -335,8 +328,8 @@ a:hover { text-decoration: underline; }
   if (invited) showSignup();
   else fetch("/api/admin/setting/public", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).then((s) => { if (s && s.disallowSignUp === false) showSignup(); }).catch(() => {});
 
-  /* 首屏动画:字符画的世界地图;系统设了「减少动态效果」只画一帧 */
-  if (window.asciiWater) window.asciiWater($("heroAscii"));
+  /* 背景动画:原首页视频的字符版(帧图约 0.6 MB;没有就画字符世界地图);系统设了「减少动态效果」只画一帧 */
+  if (window.asciiWater) window.asciiWater($("heroAscii"), { src: "/portal/media/hero_ascii" });
 
   /* 复制那句安装提示:能用剪贴板就用,不能就把文字选中让人自己复制 */
   $("copyCmd").onclick = () => {
