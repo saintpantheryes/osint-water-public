@@ -2018,13 +2018,22 @@ def test_city_page_lists_cities_and_opens_one():
                 page.screenshot(path=str(shots / "city_list.png"), full_page=True)
             # 一座城市:卡片、概况,商机与线索各在自己的页签里
             page.goto(base + f"/city.html?id={city['id']}")
-            page.wait_for_function("document.querySelectorAll('#tabs button').length === 4", timeout=15000)
+            page.wait_for_function("document.querySelectorAll('#tabs button').length === 5", timeout=15000)
             assert page.inner_text("#cname") == "甘贾" and "阿塞拜疆" in page.inner_text("#info") and "34\n万" in page.inner_text("#ccards")
             info = page.inner_text("#info")
             assert "0.7 AZN/立方米" in info and "2024-03-01" in info and "居民价\n非居民 2.0" in info  # 水价挂城市(人填)
-            assert page.locator("#tabs button").all_inner_texts() == ["概况", "商机 1", "线索 1", "水厂 1"]
+            assert page.locator("#tabs button").all_inner_texts() == ["概况", "历史影像", "商机 1", "线索 1", "水厂 1"]
             if shots:
                 page.screenshot(path=str(shots / "city_one.png"), full_page=True)
+            # 历史影像(使用方 2026-10-20):Leaflet 地图、左右两个年份下拉(Landsat 五个时点 + 高清逐年)、分割线;城镇化数据文件没放时说清楚
+            page.click("#tabs button[data-t='imagery']")
+            page.wait_for_selector("#imgMap.leaflet-container .leaflet-tile-pane", state="attached", timeout=15000)
+            assert page.locator("#imgL option").count() == 5 + 13 and page.input_value("#imgL") == "gls1990" and page.input_value("#imgR").startswith("wb")
+            assert page.inner_text("#lblL") == "1990" and page.locator(".leaflet-control-scale").count() == 1 and page.locator("#imgMap .grat").count() >= 2
+            page.wait_for_function("document.querySelector('#urbBox .empty')", timeout=15000)
+            assert "还没有城镇化数据" in page.inner_text("#urbBox") and "t=imagery" in page.url
+            page.select_option("#imgL", "gls2000")
+            assert page.inner_text("#lblL") == "2000"
             page.click("#tabs button[data-t='opps']")
             assert "AZE-001" in page.inner_text("#opps") and "t=opps" in page.url
             page.click("#tabs button[data-t='leads']")
