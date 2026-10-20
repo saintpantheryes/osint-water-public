@@ -676,17 +676,14 @@ li.rv-off > .rv-item { text-decoration: line-through; color: var(--muted); }
 .arc-box input { display: block; width: 100%; max-width: 420px; margin-top: 4px; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); }
 .arc-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 
-/* 城市页「历史影像」:两张卫星图左右分割(拖中间竖线),图上的经纬度标签与左右角的年份 */
-.swipebox { position: relative; }
-.swipebox .leaflet-container { background: #0b1324; font: inherit; }
-.swipe { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; -webkit-appearance: none; appearance: none; background: none; pointer-events: none; z-index: 800; }
-.swipe::-webkit-slider-runnable-track { height: 100%; background: none; }
-.swipe::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; pointer-events: auto; width: 36px; height: 100%; border: 0; border-radius: 0; cursor: ew-resize; background: linear-gradient(90deg, transparent 16px, #fff 16px, #fff 20px, transparent 20px); }
-.swipe::-moz-range-track { height: 100%; background: none; border: 0; }
-.swipe::-moz-range-thumb { pointer-events: auto; width: 36px; height: 100%; border: 0; border-radius: 0; cursor: ew-resize; background: linear-gradient(90deg, transparent 16px, #fff 16px, #fff 20px, transparent 20px); }
-.swipe:focus-visible { outline: none; }
-.swipe:focus-visible::-webkit-slider-thumb { background: linear-gradient(90deg, transparent 16px, var(--brand) 16px, var(--brand) 20px, transparent 20px); }
+/* 城市页「历史影像」:播放条、图上的经纬度标签与年份角标;两图对比电脑左右、手机上下 */
+.mapbox { position: relative; }
+.mapbox .leaflet-container { background: #0b1324; font: inherit; }
+.playbar { margin-bottom: 8px; }
+.playbar input[type="range"] { flex: 1 1 200px; min-width: 120px; accent-color: var(--brand); }
+.yrLbl { font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-strong); min-width: 3.2em; }
 .grat { color: #fff; font-size: 11px; line-height: 1; text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap; padding: 2px 3px; }
-.imglbl { position: absolute; top: 10px; z-index: 700; background: rgba(15, 23, 42, .72); color: #fff; font-size: 13px; font-weight: 600; padding: 3px 9px; border-radius: 6px; pointer-events: none; }
-.imglbl.l { left: 10px; } .imglbl.r { right: 48px; }
-@media (max-width: 600px) { #imgMap.chart.tall { height: 60vh; } .tabs:not(.grouped) { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .tabs:not(.grouped) button { padding: 8px 9px; white-space: nowrap; } }  /* 手机:页签多了横着滑,不折行(和国别页分组页签一样) */
+.imglbl { position: absolute; top: 10px; left: 10px; z-index: 700; background: rgba(15, 23, 42, .72); color: #fff; font-size: 13px; font-weight: 600; padding: 3px 9px; border-radius: 6px; pointer-events: none; }
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cmp[hidden], #playBox[hidden] { display: none; }
+@media (max-width: 600px) { .cmp { grid-template-columns: 1fr; } .cmp .chart.tall, #imgMap.chart.tall { height: 52vh; } .tabs:not(.grouped) { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .tabs:not(.grouped) button { padding: 8px 9px; white-space: nowrap; } }  /* 手机:对比改上下两图;页签多了横着滑,不折行(和国别页分组页签一样) */
