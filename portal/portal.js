@@ -135,7 +135,8 @@
       document.body.classList.add("guest");
       const main = document.querySelector("main") || document.body;
       const el = document.createElement("div"); el.className = "note n-info guest-note";
-      el.textContent = note || (this.isPartner ? ((this.gpol && this.gpol.note) || "当前是伙伴帐号:只看公开内容(真实数据);商机跟进、我方资料、内部备注与内部版报告不开放;不能登记、申请或订阅。")
+      const scope = this.isPartner && this.gpol && Array.isArray(this.gpol.countries) ? "只看这些国家:" + (this.gpol.countries.map((c) => c.name).join("、") || "(没有)") + "。" : "";
+      el.textContent = note || (this.isPartner ? (((this.gpol && this.gpol.note) || "当前是伙伴帐号:只看公开内容(真实数据);商机跟进、我方资料、内部备注与内部版报告不开放;不能登记、申请或订阅。") + scope)
         : this.isGuest ? "当前是游客帐号:页面上的线索、商机、国别、时间节点和报告都是编出来的示例数据,用来演示系统怎么用,不是真实内容;不能登记、申请或订阅。"
         : "当前帐号只有查看权限(游客演示帐号):可以浏览全部页面,登记跟进、申请报告、归入和改负责人这些操作不可用。");
       main.insertBefore(el, main.firstChild);
@@ -382,7 +383,7 @@
         const who = this.esc(me.name || me.email || "未登录"), tag = role === "none" ? (this.isPartner ? "伙伴 · 只读" : "游客 · 只读") : ro ? "只读" : (this.ROLE_ZH[role] || "");
         /* 「帐号设置」直接落在表格设置里的个人资料页(改名、改密码在那一页;/setting 本身落在访问令牌页,同事会懵) */
         el.innerHTML = '<span class="who" title="' + this.esc(me.email || "") + '">' + who + (tag ? ' <b class="' + (ro ? "ro" : "rw") + '">' + tag + "</b>" : "") + "</span>" +
-          (role === "none" || role === undefined ? "" : '<a href="me.html">我的</a>') + '<a href="/setting/account" target="_blank" rel="noopener">帐号设置</a><a href="#" id="logout">退出登录</a>';
+          (role === "none" || role === undefined ? "" : '<a href="me.html">我的</a>') + (role === "owner" || role === "creator" ? '<a href="accounts.html">账号管理</a>' : "") + '<a href="/setting/account" target="_blank" rel="noopener">帐号设置</a><a href="#" id="logout">退出登录</a>';
         document.getElementById("logout").onclick = async (e) => {
           e.preventDefault();
           /* 表格的登出接口是 POST /api/auth/signout(线上核过:/api/auth/logout 是 404,所以之前点了没反应) */

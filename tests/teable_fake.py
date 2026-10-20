@@ -49,6 +49,8 @@ class FakeTeable:
         self.history: dict[str, list[dict]] = {}
         self.comments: list[dict] = []
         self.invitations: list[dict] = []
+        self.role_changes: list[tuple[str, str]] = []  # 「账号管理」页改的角色
+        self.removed: list[str] = []  # 「账号管理」页移出的协作者
         self.calls: list[tuple[str, str]] = []
         self._n = 0
         self._clock = datetime(2026, 10, 3, 1, 0, tzinfo=timezone.utc)
@@ -128,13 +130,43 @@ class FakeTeable:
             if not b:
                 raise HTTPError(404, "no base")
             return dict(b, role=self.role)
-        if (r := m(r"/base/([^/]+)/collaborators")) and method == "GET":
-            return {"collaborators": [{"userId": u["id"], "userName": u["name"], "email": u["email"]} for u in self.users.values()]}
+        if (r := m(r"/base/([^/]+)/collaborators")) and method == "GET":  # 库的协作者(库外的 usrOUT / usrPTN 不在)
+            roles = {uid: role for uid, role in self.tokens.values()}
+            return {"collaborators": [{"type": "user", "userId": u["id"], "userName": u["name"], "email": u["email"], "role": roles.get(u["id"], "editor"), "lastSignTime": "2026-10-19T08:00:00.000Z"}
+                                      for u in self.users.values() if roles.get(u["id"], "editor") != "none"]}
+        if (r := m(r"/base/([^/]+)/collaborators")) and method == "PATCH":  # 改角色:所有者才行
+            self._owner()
+            uid, role = body.get("principalId"), body.get("role")
+            if uid not in self.users or role not in ("creator", "editor", "commenter", "viewer"):
+                raise HTTPError(400, "bad collaborator")
+            for tok, (u, _) in list(self.tokens.items()):
+                if u == uid:
+                    self.tokens[tok] = (u, role)
+            self.role_changes.append((uid, role))
+            return None
+        if (r := m(r"/base/([^/]+)/collaborators")) and method == "DELETE":
+            self._owner()
+            uid = dict(params).get("principalId")
+            if uid not in self.users:
+                raise HTTPError(400, "bad collaborator")
+            for tok, (u, _) in list(self.tokens.items()):
+                if u == uid:
+                    self.tokens[tok] = (u, "none")
+            self.removed.append(uid)
+            return None
+        if (r := m(r"/base/([^/]+)/invitation/link")) and method == "GET":
+            self._owner()
+            return [i for i in self.invitations if i["baseId"] == r.group(1)]
         if (r := m(r"/base/([^/]+)/invitation/link")) and method == "POST":
             self._owner()
-            inv = {"invitationId": self._id("inv"), "inviteCode": "code-" + str(self._n), "role": body.get("role"), "baseId": r.group(1)}
+            inv = {"invitationId": self._id("inv"), "inviteCode": "code-" + str(self._n), "invitationCode": "code-" + str(self._n), "role": body.get("role"), "baseId": r.group(1),
+                   "inviteUrl": f"https://water.example/invite/link?invitationId=inv{self._n}&invitationCode=code-{self._n}"}
             self.invitations.append(inv)
             return inv
+        if (r := m(r"/base/([^/]+)/invitation/link/([^/]+)")) and method == "DELETE":
+            self._owner()
+            self.invitations = [i for i in self.invitations if i["invitationId"] != r.group(2)]
+            return None
         if (r := m(r"/base/([^/]+)/table/?")):
             if method == "GET":
                 return [t for t in self.tables.values() if t["baseId"] == r.group(1)]

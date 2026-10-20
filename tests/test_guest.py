@@ -189,3 +189,43 @@ def test_server_guest_routes_answer_by_tier(monkeypatch):
         assert httpx.get(base + "/feed-link", headers=P).json()["error"].startswith("伙伴帐号")
     finally:
         srv.shutdown()
+
+
+def test_partner_list_from_table_and_country_scope():
+    """伙伴名单从表「伙伴帐号」读(启用的行;邮箱或 @域名;整个邮箱优先于域名),team.yaml 后备;
+    写了可看国别的伙伴:带「所属国别」的表只给这些国家的记录,国别表只给这些国家,单条记录越界 404,信源表不限;停用的行不算。"""
+    fake, b, bot_base, c, o, ld = _base_with_reports()
+    uzb = b.create("country", [{"name_zh": "乌兹别克斯坦", "key": "UZB", "region": "亚洲 · 中亚"}])[0]
+    b.create("lead", [{"key": "x-uzb-1", "title": "Tashkent water", "url": "https://example.org/uzb1", "country": uzb["id"], "found_at": "2026-10-01", "relevant": True}])
+    b.create("partner_account", [{"email": "Only@bewg.example", "org": "北控", "countries": [uzb["id"]], "enabled": True},
+                                 {"email": "@bewg.example", "org": "北控(全域)", "enabled": True},
+                                 {"email": "off@bewg.example", "org": "停用的", "enabled": False, "countries": [uzb["id"]]},
+                                 {"email": "all@x.example", "org": "不限国别", "enabled": True}])
+    g = guest_mod.Guest(base_factory=lambda: bot_base, real_factory=lambda: bot_base, partners=["@fallback.example"],
+                        outsider=lambda cookie: cookie != "member", whoami=lambda cookie: str(cookie))
+    assert g.lookup("only@bewg.example") == (True, [uzb["id"]])  # 整个邮箱的行优先,大小写不分
+    assert g.lookup("someone@bewg.example") == (True, None)  # 域名的行,不限国别
+    assert g.lookup("off@bewg.example") == (True, None)  # 停用的那行不算;落到域名的行
+    assert g.lookup("all@x.example") == (True, None) and g.lookup("a@fallback.example") == (True, None) and g.lookup("a@other.example") == (False, None)
+    assert g.tier("only@bewg.example") == "partner" and g.scope("only@bewg.example") == [uzb["id"]] and g.scope("someone@bewg.example") is None and g.scope("member") is None
+    assert g.scope_info([uzb["id"]]) == [{"id": uzb["id"], "iso3": "UZB", "name": "乌兹别克斯坦"}] and g.scope_isos([uzb["id"]]) == ["UZB"]
+    sc = [uzb["id"]]
+    leads = g.records(b.t["lead"], {}, "partner", sc)["records"]
+    assert len(leads) == 1 and b.fid("lead", "title") in leads[0]["fields"] and leads[0]["fields"][b.fid("lead", "title")] == "Tashkent water"
+    assert len(g.records(b.t["lead"], {}, "partner", None)["records"]) >= 2  # 不限国别时都有
+    cs = g.records(b.t["country"], {}, "partner", sc)["records"]
+    assert [r["id"] for r in cs] == [uzb["id"]]
+    assert g.count(b.t["country"], {}, "partner", sc) == {"rowCount": 1}
+    assert g.record(b.t["country"], c["id"], "partner", sc) is None and g.record(b.t["country"], uzb["id"], "partner", sc) is not None
+    assert g.record(b.t["lead"], ld["id"], "partner", sc) is None  # 阿塞拜疆的线索越界
+    assert g._scope_cond(g.policy("partner").table(b.t["source"]), sc, "partner") is None  # 信源没有所属国别:不限
+    assert g.records(b.t["source"], {}, "partner", sc)["records"] == g.records(b.t["source"], {}, "partner", None)["records"]
+    assert g.records(b.t["lead"], {}, "partner", [])["records"] == []  # 范围空(国别都删了)= 什么都看不到
+    # 页面自己的条件与范围叠加
+    page = g.records(b.t["lead"], {"filter": [json.dumps(b.filter(b.cond("lead", "relevant", "is", True)))]}, "partner", sc)["records"]
+    assert len(page) == 1
+    # 改了名单:forget_partners 后马上重读
+    b.update("partner_account", b.rows("partner_account", filter=b.filter(b.cond("partner_account", "email", "is", "all@x.example")))[0]["id"], {"enabled": False})
+    assert g.lookup("all@x.example") == (True, None)  # 还在 5 分钟缓存里
+    g.forget_partners()
+    assert g.lookup("all@x.example") == (False, None)

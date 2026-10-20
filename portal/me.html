@@ -22,6 +22,7 @@
         <ul class="list">
           <li><a href="/setting" target="_blank" rel="noopener">帐号设置 ↗</a> <span class="muted small">改密码、头像、通知</span></li>
           <li><a href="company.html">我方资料</a> <span class="muted small">我们公司的资质证书与历史业绩,勾了的写进报告</span></li>
+          <li id="acctAdmin" hidden><a href="accounts.html">账号管理</a> <span class="muted small">同事的角色、伙伴的名单与可看国别(仅所有者、创建者)</span></li>
           <li><a href="calendar.html">日历</a> <span class="muted small">导出或订阅,订阅可存到这里</span></li>
           <li><a href="#" id="logout2">退出登录</a></li>
         </ul>
@@ -152,6 +153,7 @@
     if (P.isGuest) { P.guest(P.isPartner ? "伙伴帐号不在库里,没有自己的关注与订阅;改名、改密码在右上角「帐号设置」。" : "游客帐号是大家共用的,没有自己的关注与订阅。"); $("countries").innerHTML = $("subs").innerHTML = $("ignoreBox").innerHTML = '<p class="empty">' + P.outsiderName + '没有这一项。</p>'; $("cPick").style.display = "none"; return; }
     if (!hasTable()) { $("countries").innerHTML = $("subs").innerHTML = $("ignoreBox").innerHTML = '<p class="empty">库里还没有「个人设置」表(管理员跑一次建表命令就有)。</p>'; $("cPick").style.display = "none"; return; }
     if (!(await P.canWrite())) P.guest();
+    { const r = await P.role(); if (r === "owner" || r === "creator") $("acctAdmin").hidden = false; }
     countries = await P.records("country", { props: ["name_zh", "key"] });
     countries.sort((a, b) => P.zhCmp(P.get("country", a, "name_zh"), P.get("country", b, "name_zh")));
     countries.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || c.id; ciso[c.id] = P.get("country", c, "key") || ""; });

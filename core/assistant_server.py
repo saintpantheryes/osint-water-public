@@ -567,20 +567,24 @@ def make_handler(bot: Assistant):
                 return
             parts = path.split("/")[2:]  # ["policy"] | ["table", 表, "record"[, 记录]] | ["table", 表, "aggregation", "row-count"]
             tier = self._tier()  # 库里的人也能问(页面只在 403 后才来问,按游客答)
+            scope = bot.guest.scope(self.headers.get("Cookie")) if tier == "partner" else None  # 伙伴的可看国别
             if tier == "member":
                 tier = "guest"
             try:
                 if parts == ["policy"]:
-                    out: dict | None = {**bot.guest.policy(tier).public(), "tier": tier}
+                    out: dict | None = {**bot.guest.policy(tier).public(), "tier": tier, "countries": bot.guest.scope_info(scope)}
+                elif parts == ["refresh"]:  # 「账号管理」页改了伙伴名单:后台马上重读
+                    bot.guest.forget_partners()
+                    out = {"ok": True}
                 elif len(parts) == 3 and parts[0] == "table" and parts[2] == "record":
-                    out = bot.guest.records(parts[1], qs, tier)
+                    out = bot.guest.records(parts[1], qs, tier, scope)
                 elif len(parts) == 4 and parts[0] == "table" and parts[2] == "record":
-                    out = bot.guest.record(parts[1], parts[3], tier)
+                    out = bot.guest.record(parts[1], parts[3], tier, scope)
                     if out is None:
                         self._send(404, {"ok": False, "error": "没有这条记录"})
                         return
                 elif len(parts) == 4 and parts[0] == "table" and parts[2:] == ["aggregation", "row-count"]:
-                    out = bot.guest.count(parts[1], qs, tier)
+                    out = bot.guest.count(parts[1], qs, tier, scope)
                 else:
                     self._send(404, {"ok": False, "error": "not found"})
                     return
@@ -734,6 +738,10 @@ def make_handler(bot: Assistant):
                     return
                 lp = data.get("law") if isinstance(data.get("law"), dict) else {}
                 isos = [c for c in (data.get("countries") or [])[:10] if isinstance(c, str) and assistant.geo.iso3(c) == c]
+                if self._tier() == "partner":  # 伙伴只在可看国别里查法规
+                    allowed = bot.guest.scope_isos(bot.guest.scope(self.headers.get("Cookie")))
+                    if allowed is not None:
+                        isos = [c for c in isos if c in allowed] or list(allowed)[:10] or ["__none__"]
                 try:
                     out = bot.law_answer(q[:assistant.MAX_Q], {"kind": "text", "keywords": [str(k)[:40] for k in (lp.get("keywords") or [])[:8]]}, isos)
                 except Exception as e:  # noqa: BLE001

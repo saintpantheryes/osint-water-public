@@ -198,6 +198,9 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
         def do_PATCH(self):  # noqa: N802
             self._api("PATCH")
 
+        def do_DELETE(self):  # noqa: N802  账号管理页:移出协作者、删邀请链接
+            self._api("DELETE")
+
         def do_HEAD(self):  # noqa: N802  首页探视频文件在不在(主机上由 Caddy 答;portal/media/ 是挂载点,测试里通常是空的 → 404)
             fp = PORTAL / self.path.split("?")[0].lstrip("/")
             self.send_response(200 if fp.is_file() else 404)
@@ -212,6 +215,7 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
                 self.wfile.write(body)
                 return
             if self.path.startswith("/api/assistant/"):
+                H.bot_calls.append(("GET", self.path[len("/api/assistant"):].split("?")[0]))
                 r = httpx.get(f"http://127.0.0.1:{self.assistant_port}" + self.path[len("/api/assistant"):], headers={"X-Portal-Auth": "1", "Host": "water.example", "Cookie": "auth_session=" + token})
                 self.send_response(r.status_code)
                 self.send_header("Content-Type", r.headers.get("content-type", "application/json"))
@@ -248,6 +252,7 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
     from core import calendar_feed, guest as guest_mod
     from core.assistant_server import Assistant, serve as serve_assistant
     H.browser_api = []  # 浏览器以登录人身份直接打到表格的请求(游客不该有任何读表的)
+    H.bot_calls = []  # 页面打到助手接口的请求 (method, path)
 
     def _guest_client():  # 游客通道:机器账号读真实库;sample_data 时换成示例数据(core/sample.py,本体 guest.data: sample)
         from core import sample
@@ -273,6 +278,7 @@ def _serve(fake: FakeTeable, cfg: dict, token: str = "admin-token", sample_data:
     srv.assistant = asrv
     srv.bot = bot
     srv.browser_api = H.browser_api
+    srv.bot_calls = H.bot_calls
     return srv
 
 
@@ -1013,6 +1019,140 @@ def test_outsider_guest_sees_only_public_content_through_the_worker():
     assert all(p[0] == "GET" or p[1] == "/api/auth/signout" for p in srv.browser_api)
     writes = [x for x in fake.calls[seeded:] if x[0] != "GET"]
     assert writes == [], writes
+
+
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_accounts_page_lets_the_owner_manage_colleagues_and_partners():
+    """账号管理页(仅所有者 / 创建者):同事清单带角色下拉,改角色、两步移出都以登录人身份打到表格;生成 / 删除邀请链接;
+    伙伴表增一行(邮箱、单位、可看国别、启用)、停用一行,改完通知后台重读名单;编辑者打开只看到一句说明。帐号区与「我的」页有入口。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    b.create("partner_account", [{"email": "old@bewg.example", "org": "北控水务", "enabled": True}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg, token="admin-token")
+    base = f"http://127.0.0.1:{srv.server_port}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page()
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+            page.goto(base + "/accounts.html")
+            page.wait_for_selector("#members table", timeout=15000)
+            page.wait_for_selector("#partners table", timeout=15000)
+            assert "账号管理" in page.inner_text("#acct")
+            rows = page.inner_text("#members")
+            assert "Ada" in rows and "所有者(我)" in rows and "游客" in rows and "张三" in rows and "outsider@example.com" not in rows  # 库外的不在
+            # 改张三的角色成查看者
+            page.select_option("#members select[data-id='usrZS']", "viewer")
+            page.wait_for_function("document.querySelector('#toast') && document.querySelector('#toast').textContent.includes('角色已改成')", timeout=15000)
+            assert fake.role_changes == [("usrZS", "viewer")]
+            # 两步移出游客演示帐号(usrGST)
+            page.click("#members button[data-a='out'][data-id='usrGST']")
+            assert "确认移出" in page.inner_text("#members button[data-a='out'][data-id='usrGST']")
+            page.click("#members button[data-a='out'][data-id='usrGST']")
+            page.wait_for_function("!document.querySelector(\"#members button[data-a='out'][data-id='usrGST']\")", timeout=15000)
+            assert fake.removed == ["usrGST"]
+            # 邀请链接:生成(查看者)、出现在清单、删除
+            page.select_option("#invRole", "viewer")
+            page.click("#invMake")
+            page.wait_for_selector("#invites li", timeout=15000)
+            assert "查看者" in page.inner_text("#invites") and "invite/link" in page.inner_text("#invites") and fake.invitations[-1]["role"] == "viewer"
+            page.click("#invites button[data-a='del']")
+            page.wait_for_function("!document.querySelector('#invites li')", timeout=15000)
+            assert fake.invitations == []
+            # 伙伴:已有一行;加一行带可看国别;停用
+            assert "old@bewg.example" in page.inner_text("#partners") and "全部国别" in page.inner_text("#partners")
+            page.fill("#pEmail", "New@Partner.example")
+            page.fill("#pOrg", "新伙伴")
+            page.select_option("#pPick", c["id"])
+            assert "阿塞拜疆" in page.inner_text("#pCountries")
+            page.click("#pSave")
+            page.wait_for_function("document.querySelector('#partners').innerText.includes('new@partner.example')", timeout=15000)
+            rows = b.rows("partner_account")
+            new = next(r for r in rows if b.get("partner_account", r, "email") == "new@partner.example")
+            assert tstore.link_ids(b.get("partner_account", new, "countries")) == [c["id"]] and b.get("partner_account", new, "org") == "新伙伴" and b.get("partner_account", new, "enabled") is True
+            assert "阿塞拜疆" in page.inner_text("#partners")
+            page.click("#partners button[data-a='toggle'][data-id='" + new["id"] + "']")
+            page.wait_for_function("document.querySelector('#partners').innerText.includes('已停用')", timeout=15000)
+            assert not b.get("partner_account", b.record("partner_account", new["id"]), "enabled")
+            assert any(p[1] == "/guest/refresh" for p in srv.bot_calls), srv.bot_calls  # 通知后台重读名单
+            # 重复邮箱不让加
+            page.fill("#pEmail", "old@bewg.example")
+            page.click("#pSave")
+            page.wait_for_function("document.querySelector('#toast') && document.querySelector('#toast').textContent.includes('已经在名单里')", timeout=15000)
+            # 「我的」页有入口
+            page.goto(base + "/me.html")
+            page.wait_for_function("document.querySelector('#acctAdmin') && !document.querySelector('#acctAdmin').hidden", timeout=15000)
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    # 编辑者:只看到说明
+    srv2 = _serve(fake, cfg, token="bot-token")
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page()
+            page.goto(f"http://127.0.0.1:{srv2.server_port}/accounts.html")
+            page.wait_for_selector("#gate .note", timeout=15000)
+            assert "只有库的所有者、创建者能用" in page.inner_text("#gate") and page.locator("#body").is_hidden()
+            assert "账号管理" not in page.inner_text("#acct") or page.locator("#acct a[href='accounts.html']").count() == 0
+            browser.close()
+    finally:
+        srv2.shutdown()
+
+
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_partner_with_country_scope_sees_only_those_countries():
+    """表「伙伴帐号」里写了可看国别(只有乌兹别克斯坦)的伙伴:线索总览与国别页只有乌兹别克斯坦,阿塞拜疆的线索、国别、报告都不出现;顶部说明写明只看这些国家。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    from datetime import date
+    today = date.today()
+    uzb = b.create("country", [{"name_zh": "乌兹别克斯坦", "key": "UZB", "region": "亚洲 · 中亚", "market": "重点"}])[0]
+    b.create("lead", [{"key": "x-uzb-1", "title": "Tashkent north water network", "summary_zh": "塔什干北部供水管网", "url": "https://example.org/uzb1", "country": uzb["id"], "found_at": today.isoformat(), "relevant": True, "category": "招标"}])
+    b.create("report", [{"kind": "国别报告", "day": today.isoformat(), "country": c["id"], "edition": "公开版", "gen_status": "完成", "key": "国别报告_AZE_公开版.docx"},
+                        {"kind": "国别报告", "day": today.isoformat(), "country": uzb["id"], "edition": "公开版", "gen_status": "完成", "key": "国别报告_UZB_公开版.docx"}])
+    b.create("partner_account", [{"email": "chen@bewg.example", "org": "北控水务", "countries": [uzb["id"]], "enabled": True}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg, token="partner-token", sample_data=True)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page()
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+            page.goto(base + "/reports.html")
+            page.wait_for_selector(".guest-note", timeout=15000)
+            page.wait_for_selector("#list table", timeout=15000)
+            assert "只看这些国家:乌兹别克斯坦" in page.inner_text(".guest-note")
+            rows = page.inner_text("#list")
+            assert "乌兹别克斯坦" in rows and "阿塞拜疆" not in rows
+            page.goto(base + "/overview.html")
+            page.wait_for_function("document.querySelector('#acct .who b') && !document.body.innerText.includes('读取中')", timeout=15000)
+            body = page.inner_text("body")
+            assert "乌兹别克斯坦" in body and "阿塞拜疆" not in body and "甘贾" not in body and "Ganja" not in body  # 国别筛选里只有乌兹别克斯坦
+            assert not errors, errors
+            browser.close()
+    finally:
+        srv.shutdown()
+    direct = [p for p in srv.browser_api if p[1].startswith("/api/table/")]
+    assert direct == [], direct
 
 
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")

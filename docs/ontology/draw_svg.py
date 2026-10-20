@@ -362,7 +362,11 @@ asklog = obj(880, fy + fh + 22, 350, "助手提问记录", sections=[
 rev = obj(880, asklog[1] + asklog[3] + 22, 350, "助手复核记录", sections=[
     ("ai", "机器写(按钮经助手接口写,A47 / A48)", "编号 · 材料 · 项目 · 条目类型(要核实 / 库里线索) · 条目 · 线索 · 处理(已复核 / 已忽略 / 是同一项目 / 不是同一项目 / 助手已核) · 结论 · 依据 · 补充事实 · 操作人 · 时间"),
 ])
-B2_BOT = max(fy + fh, ky + kh, pref[1] + pref[3], ty + th, rev[1] + rev[3]) + 30
+# 伙伴帐号(业务对象,2026-10-20):个人设置下面;外单位伙伴的邮箱、单位、可看国别、启用,后台按它认伙伴
+pacct = obj(296, pref[1] + pref[3] + 22, 310, "伙伴帐号", sections=[
+    ("hu", "人写(「账号管理」页,管理员)", "邮箱(或 @域名) · 单位 · 可看国别(空 = 全部) · 启用 · 备注"),
+])
+B2_BOT = max(fy + fh, ky + kh, pacct[1] + pacct[3], ty + th, rev[1] + rev[3]) + 30
 R(40, B2_TOP, 1500, B2_BOT - B2_TOP, "#FFF6F5", C["band_b"], sw=1.5, rx=8)
 out.insert(next(i for i, s in enumerate(out) if "成员" in s) - 3, out.pop())
 T(56, B2_TOP + 26, "人 · 业务数据(公司内部的跟进与判断)", size=15, fill="#455A64", weight="bold")
