@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球水务开源情报 · 账号管理</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="portal.css">
+<script src="portal.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<script>document.getElementById("nav").innerHTML = P.nav("me.html");  /* 顶栏紧跟着就画,不等读表 */</script>
+<main>
+  <h1>账号管理 <span class="muted h-sub">(<a href="me.html">我的</a> › 账号管理)</span></h1>
+  <p class="muted">只有库的所有者、创建者能进这一页。登录账号分三档:<b>同事</b>(库里的协作者,按角色能看能改)、<b>伙伴</b>(外单位,不进库,只看公开内容的真实数据,可限定国别)、<b>游客</b>(其余账号,只看示例数据)。密码、头像由每个人自己在「帐号设置」里改;新账号要开通找系统管理员。</p>
+  <div id="gate"></div>
+  <div id="body" hidden>
+    <h2>同事 <span class="muted" id="mCount"></span></h2>
+    <p class="muted small">查看者只能看;编辑者能登记跟进、改商机、录线索;创建者还能改表结构。所有者不能在这里改。移出后对方再登录就按游客(示例数据),除非在下面加为伙伴。</p>
+    <div class="panel" id="members">读取中…</div>
+    <div class="panel"><h3 class="tight">加同事</h3>
+      <p class="muted small">生成一个邀请链接发给对方:对方先登录自己的账号,再打开链接,就以这个角色进库。链接谁拿到都能用,用完就删。</p>
+      <div class="frow"><select id="invRole" class="inline"><option value="viewer">查看者(只看)</option><option value="editor" selected>编辑者(能改)</option></select><button type="button" id="invMake" class="btn">生成邀请链接</button></div>
+      <div id="invites"></div>
+    </div>
+
+    <h2>伙伴 <span class="muted" id="pCount"></span></h2>
+    <p class="muted small">写邮箱(一个账号)或 @域名(该单位所有账号)。可看国别留空 = 全部国别;填了就只给这些国家的线索、国别、城市、水厂、中标、法规和公开版报告。改完几秒内生效(对方刷新页面)。伙伴帐号不要加进上面的协作者,加了就成了同事、整库可看。</p>
+    <div class="two">
+      <div class="col">
+        <div class="form" id="pForm"><h3 id="pTitle">加一个伙伴</h3>
+          <div class="row"><label>邮箱</label><input id="pEmail" placeholder="someone@partner.example 或 @partner.example"></div>
+          <div class="row"><label>单位</label><input id="pOrg" placeholder="如:某水务集团"></div>
+          <div class="row"><label>可看国别</label><span id="pCountries" class="frow grow"></span></div>
+          <div class="row"><label></label><select id="pPick" class="inline"><option value="">+ 加一个国别</option></select></div>
+          <div class="row"><label>启用</label><label class="check"><input id="pEnabled" type="checkbox" checked> 停用后对方再登录就按游客</label></div>
+          <div class="row"><label>备注</label><input id="pNote" placeholder="(可不填)"></div>
+          <div class="row"><label></label><button type="button" class="primary" id="pSave">保存</button><button type="button" id="pCancel" hidden>取消</button><span class="muted" id="pMsg"></span></div>
+        </div>
+      </div>
+      <div class="col wide"><div class="panel" id="partners">读取中…</div></div>
+    </div>
+  </div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const ROLE_ORDER = ["owner", "creator", "editor", "commenter", "viewer"];
+  const EDITABLE = ["viewer", "commenter", "editor", "creator"];
+  let me = {}, members = [], prows = [], countries = [], cname = {}, editing = null;
+  const form = { countries: [] };
+  const g = (r, p) => P.get("partner_account", r, p);
+  const hasTable = () => !!(P.cfg.tables || {}).partner_account;
+  const api = async (method, path, body) => {  /* 以登录人(管理员)身份直接调表格的协作者接口 */
+    const r = await fetch("/api" + path, { method, credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (r.status === 401) { location.href = "/auth/login?redirect=" + encodeURIComponent(location.pathname); return null; }
+    if (!r.ok) throw new Error(r.status === 403 ? "没有权限(要库的所有者或创建者)" : path + " → " + r.status + " " + (await r.text()).slice(0, 160));
+    const t = await r.text(); return t ? JSON.parse(t) : null;
+  };
+  const day = (s) => (s ? String(s).slice(0, 10) : "—");
+
+  /* ---------- 同事(库的协作者) ---------- */
+  async function loadMembers() {
+    const r = await api("GET", "/base/" + P.cfg.base.id + "/collaborators?take=1000");
+    members = ((r && r.collaborators) || []).filter((c) => c.type !== "department");
+    members.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || String(a.userName || "").localeCompare(String(b.userName || "")));
+    $("mCount").textContent = members.length + " 人";
+    $("members").innerHTML = P.tableHtml(["姓名", "邮箱", "角色", "最近登录", ""], members.map((c) => {
+      const self = c.userId === me.id, fixed = c.role === "owner" || self;
+      const sel = fixed ? '<span class="tag ' + (c.role === "owner" ? "t-info" : "") + '">' + P.esc(P.ROLE_ZH[c.role] || c.role) + (self ? "(我)" : "") + "</span>"
+        : '<span class="frow"><select data-a="role" data-id="' + P.esc(c.userId) + '">' + EDITABLE.map((v) => '<option value="' + v + '"' + (v === c.role ? " selected" : "") + ">" + P.esc(P.ROLE_ZH[v]) + "</option>").join("") + "</select></span>";
+      return [P.raw("<b>" + P.esc(c.userName || "") + "</b>"), c.email || "", P.raw(sel), day(c.lastSignTime),
+        fixed ? "" : P.raw('<span class="frow"><button type="button" class="chip-btn" data-a="out" data-id="' + P.esc(c.userId) + '" data-n="' + P.esc(c.userName || c.email || "") + '">移出</button></span>')];
+    }));
+    $("members").querySelectorAll('select[data-a="role"]').forEach((s) => { s.onchange = () => setRole(s.dataset.id, s.value, s); });
+    $("members").querySelectorAll('button[data-a="out"]').forEach((b) => { b.onclick = () => removeMember(b); });
+  }
+  async function setRole(uid, role, el) {
+    el.disabled = true;
+    try { await api("PATCH", "/base/" + P.cfg.base.id + "/collaborators", { principalId: uid, principalType: "user", role }); P.toast("角色已改成" + P.ROLE_ZH[role]); await loadMembers(); }
+    catch (e) { P.toast(e.message, true); el.disabled = false; }
+  }
+  async function removeMember(btn) {  /* 两步:第一下变成「确认移出」,再点才移(不用弹窗) */
+    if (btn.dataset.sure !== "1") { btn.dataset.sure = "1"; btn.textContent = "确认移出 " + btn.dataset.n; btn.classList.add("on"); setTimeout(() => { btn.dataset.sure = ""; btn.textContent = "移出"; btn.classList.remove("on"); }, 6000); return; }
+    btn.disabled = true;
+    try { await api("DELETE", "/base/" + P.cfg.base.id + "/collaborators?principalId=" + encodeURIComponent(btn.dataset.id) + "&principalType=user"); P.toast("已移出"); await loadMembers(); }
+    catch (e) { P.toast(e.message, true); btn.disabled = false; }
+  }
+  async function loadInvites() {
+    let links = [];
+    try { links = (await api("GET", "/base/" + P.cfg.base.id + "/invitation/link")) || []; } catch (e) { $("invites").innerHTML = '<p class="muted small">' + P.esc(e.message) + "</p>"; return; }
+    const url = (l) => l.inviteUrl || (location.origin + "/invite/link?invitationId=" + encodeURIComponent(l.invitationId) + "&invitationCode=" + encodeURIComponent(l.invitationCode || l.inviteCode || ""));
+    $("invites").innerHTML = links.length ? '<ul class="list">' + links.map((l) => '<li><span class="tag">' + P.esc(P.ROLE_ZH[l.role] || l.role) + '</span> <code class="small">' + P.esc(url(l)) + '</code> <span class="frow"><button type="button" class="chip-btn" data-a="copy" data-u="' + P.esc(url(l)) + '">复制</button> <button type="button" class="chip-btn" data-a="del" data-id="' + P.esc(l.invitationId) + '">删除</button></span></li>').join("") + "</ul>"
+      : '<p class="muted small">现在没有有效的邀请链接。</p>';
+    $("invites").querySelectorAll('button[data-a="copy"]').forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.u); P.toast("已复制"); } catch (e) { P.toast("复制失败,请手动选中复制", true); } }; });
+    $("invites").querySelectorAll('button[data-a="del"]').forEach((b) => { b.onclick = async () => { b.disabled = true; try { await api("DELETE", "/base/" + P.cfg.base.id + "/invitation/link/" + encodeURIComponent(b.dataset.id)); P.toast("已删除"); await loadInvites(); } catch (e) { P.toast(e.message, true); b.disabled = false; } }; });
+  }
+  $("invMake").onclick = async () => {
+    $("invMake").disabled = true;
+    try { await api("POST", "/base/" + P.cfg.base.id + "/invitation/link", { role: $("invRole").value }); P.toast("链接已生成,复制发给对方"); await loadInvites(); }
+    catch (e) { P.toast(e.message, true); } finally { $("invMake").disabled = false; }
+  };
+
+  /* ---------- 伙伴(表「伙伴帐号」) ---------- */
+  function renderChips() {
+    $("pCountries").innerHTML = form.countries.map((id) => '<button type="button" class="chip-btn on" data-id="' + P.esc(id) + '" title="点一下去掉">' + P.esc(cname[id] || id) + " ×</button>").join("") || '<span class="muted small">(空 = 全部国别)</span>';
+    $("pCountries").querySelectorAll("button").forEach((b) => { b.onclick = () => { form.countries = form.countries.filter((x) => x !== b.dataset.id); renderChips(); }; });
+  }
+  function fillForm(r) {
+    editing = r || null;
+    $("pTitle").textContent = r ? "改这个伙伴" : "加一个伙伴";
+    $("pCancel").hidden = !r;
+    $("pEmail").value = r ? (g(r, "email") || "") : "";
+    $("pOrg").value = r ? (g(r, "org") || "") : "";
+    $("pNote").value = r ? (g(r, "note") || "") : "";
+    $("pEnabled").checked = r ? !!g(r, "enabled") : true;
+    form.countries = r ? (g(r, "countries") || []).map((x) => x.id) : [];
+    renderChips();
+  }
+  function renderPartners() {
+    $("pCount").textContent = prows.length + " 个";
+    $("partners").innerHTML = prows.length ? P.tableHtml(["邮箱", "单位", "可看国别", "状态", "备注", ""], prows.map((r) => [
+      P.raw("<b>" + P.esc(g(r, "email") || "") + "</b>"), g(r, "org") || "",
+      (g(r, "countries") || []).map((x) => cname[x.id] || x.title).join("、") || P.raw('<span class="muted">全部国别</span>'),
+      P.raw(!g(r, "enabled") ? '<span class="tag">已停用</span>' : '<span class="tag t-ok">启用</span>'), g(r, "note") || "",
+      P.raw('<span class="frow"><button type="button" class="chip-btn" data-a="edit" data-id="' + r.id + '">改</button> <button type="button" class="chip-btn" data-a="toggle" data-id="' + r.id + '">' + (!g(r, "enabled") ? "启用" : "停用") + "</button></span> " + P.open("partner_account", r.id)),
+    ])) : '<p class="empty">还没有伙伴,在左边加第一个。</p>';
+    $("partners").querySelectorAll('button[data-a="edit"]').forEach((b) => { b.onclick = () => { fillForm(prows.find((x) => x.id === b.dataset.id)); $("pForm").scrollIntoView({ behavior: "smooth", block: "start" }); }; });
+    $("partners").querySelectorAll('button[data-a="toggle"]').forEach((b) => { b.onclick = () => togglePartner(b.dataset.id, b); });
+  }
+  async function refreshWorker() { try { await fetch("api/assistant/guest/refresh", { credentials: "same-origin" }); } catch (e) { console.warn("通知后台重读名单失败", e); } }
+  async function loadPartners() {
+    if (!hasTable()) { $("partners").innerHTML = '<p class="empty">库里还没有「伙伴帐号」表:管理员跑一次建表命令就有。在那之前,伙伴只按私有配置里的名单认。</p>'; $("pForm").hidden = true; $("pCount").textContent = ""; return; }
+    prows = await P.records("partner_account", { props: ["email", "org", "countries", "enabled", "note"] });
+    prows.sort((a, b) => String(g(a, "org") || "").localeCompare(String(g(b, "org") || "")) || String(g(a, "email") || "").localeCompare(String(g(b, "email") || "")));
+    renderPartners();
+  }
+  async function togglePartner(rid, btn) {
+    const r = prows.find((x) => x.id === rid); if (!r) return;
+    btn.disabled = true;
+    try { await P.patch("partner_account", rid, { enabled: !g(r, "enabled") }); P.toast(!g(r, "enabled") ? "已启用" : "已停用"); await loadPartners(); await refreshWorker(); }
+    catch (e) { P.toast(e.message, true); btn.disabled = false; }
+  }
+  async function savePartner() {
+    const email = $("pEmail").value.trim().toLowerCase();
+    if (!/^(@|[^@\s]+@)[^@\s]+\.[^@\s]+$/.test(email)) { P.toast("邮箱要像 someone@partner.example,或 @partner.example", true); return; }
+    const dup = prows.find((r) => String(g(r, "email") || "").trim().toLowerCase() === email && (!editing || r.id !== editing.id));
+    if (dup) { P.toast("这个邮箱已经在名单里了", true); return; }
+    const values = { email, org: $("pOrg").value.trim(), countries: form.countries, enabled: $("pEnabled").checked, note: $("pNote").value.trim() };
+    const btn = $("pSave"); btn.disabled = true; $("pMsg").textContent = "保存中…";
+    try {
+      if (editing) {  /* 改:清空的国别也要写过去(P.val 对空数组不发),按字段编号直接写 */
+        const fields = P.fieldsOf("partner_account", values);
+        fields[P.f("partner_account", "countries")] = form.countries.map((id) => ({ id }));
+        fields[P.f("partner_account", "enabled")] = values.enabled;
+        await P.send("PATCH", "/table/" + P.t("partner_account").id + "/record", { fieldKeyType: "id", typecast: true, records: [{ id: editing.id, fields }] });
+      } else await P.create("partner_account", values);
+      P.toast(editing ? "已改好" : "已加上");
+      fillForm(null);
+      await loadPartners(); await refreshWorker();
+    } catch (e) { P.toast(e.message, true); } finally { btn.disabled = false; $("pMsg").textContent = ""; }
+  }
+  $("pSave").onclick = savePartner;
+  $("pCancel").onclick = () => fillForm(null);
+  $("pPick").onchange = () => { const v = $("pPick").value; if (v && !form.countries.includes(v)) form.countries.push(v); $("pPick").value = ""; renderChips(); };
+
+  try {
+    await P.load();
+    const role = await P.role();
+    if (P.isGuest || !(role === "owner" || role === "creator")) {
+      $("gate").innerHTML = '<div class="note n-warn">这一页只有库的所有者、创建者能用;你现在的角色是「' + P.esc(P.isGuest ? P.outsiderName : (P.ROLE_ZH[role] || role || "未知")) + '」。要开账号、改权限,找系统管理员。</div>';
+      return;
+    }
+    $("body").hidden = false;
+    me = (await P.me()) || {};
+    countries = await P.countries();
+    countries.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || c.id; });
+    $("pPick").innerHTML = '<option value="">+ 加一个国别</option>' + countries.slice().sort((a, b) => String(cname[a.id]).localeCompare(String(cname[b.id]), "zh")).map((c) => '<option value="' + P.esc(c.id) + '">' + P.esc(cname[c.id]) + "</option>").join("");
+    fillForm(null);
+    await Promise.all([loadMembers().catch((e) => { $("members").innerHTML = '<p class="muted">' + P.esc(e.message) + "</p>"; }), loadInvites(), loadPartners().catch((e) => { $("partners").innerHTML = '<p class="muted">' + P.esc(e.message) + "</p>"; })]);
+  } catch (e) { $("gate").innerHTML = '<div class="note n-bad">' + P.esc(e.message) + "</div>"; }
+})();
+</script>
+</body>
+</html>

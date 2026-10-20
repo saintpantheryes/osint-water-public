@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="3545" viewBox="0 0 1800 3545" font-family="'PingFang SC','Microsoft YaHei','Noto Sans CJK SC','WenQuanYi Zen Hei',sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="3592" viewBox="0 0 1800 3592" font-family="'PingFang SC','Microsoft YaHei','Noto Sans CJK SC','WenQuanYi Zen Hei',sans-serif">
 <defs>
 <marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D32F2F"/></marker>
 <marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1976D2"/></marker>
@@ -10,11 +10,11 @@
 <marker id="aV" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7B1FA2"/></marker>
 <marker id="dK" viewBox="0 0 16 10" refX="1" refY="5" markerWidth="14" markerHeight="9" orient="auto-start-reverse"><path d="M0,5 L8,0 L16,5 L8,10 z" fill="#212121"/></marker>
 </defs>
-<rect x="0.0" y="0.0" width="1800.0" height="3545.0" rx="0" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
-<text x="40.0" y="50.0" font-size="28" fill="#212121" font-weight="bold" text-anchor="start">全球水务开源情报 本体模型 v2.32 · 对象 — 行为 — 规则</text>
-<text x="40.0" y="80.0" font-size="14" fill="#555555" font-weight="normal" text-anchor="start">SAM/SCBRD × OBR(对象 · 行为 · 规则)  |  4 个核心对象 + 23 个支撑对象  |  判定是行为、日历是查询  |  每个对象只存一处  |  每个口径只定一次</text>
-<text x="1760.0" y="50.0" font-size="15" fill="#1976D2" font-weight="bold" text-anchor="end">«system» Ontology · Global Water OSINT v2.32</text>
-<text x="1760.0" y="78.0" font-size="12.5" fill="#888888" font-weight="normal" text-anchor="end">2026-10-19 · 唯一业务库 Teable · 机器可读版 docs/ontology/ontology.yaml(分类体系与口径见 本体.md)</text>
+<rect x="0.0" y="0.0" width="1800.0" height="3592.0" rx="0" fill="#FFFFFF" stroke="none" stroke-width="1.5"/>
+<text x="40.0" y="50.0" font-size="28" fill="#212121" font-weight="bold" text-anchor="start">全球水务开源情报 本体模型 v2.33 · 对象 — 行为 — 规则</text>
+<text x="40.0" y="80.0" font-size="14" fill="#555555" font-weight="normal" text-anchor="start">SAM/SCBRD × OBR(对象 · 行为 · 规则)  |  4 个核心对象 + 24 个支撑对象  |  判定是行为、日历是查询  |  每个对象只存一处  |  每个口径只定一次</text>
+<text x="1760.0" y="50.0" font-size="15" fill="#1976D2" font-weight="bold" text-anchor="end">«system» Ontology · Global Water OSINT v2.33</text>
+<text x="1760.0" y="78.0" font-size="12.5" fill="#888888" font-weight="normal" text-anchor="end">2026-10-20 · 唯一业务库 Teable · 机器可读版 docs/ontology/ontology.yaml(分类体系与口径见 本体.md)</text>
 <line x1="40" y1="96" x2="1760" y2="96" stroke="#E0E0E0" stroke-width="1.5"/>
 <text x="40.0" y="124.0" font-size="14" fill="#D32F2F" font-weight="bold" text-anchor="start">关键路径 «keypath»:</text>
 <polygon points="210,106 410,106 424,123.0 410,140 210,140 222,123.0" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
@@ -332,7 +332,7 @@
 <text x="70.0" y="2362.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">向</text>
 <text x="70.0" y="2381.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">后台按本体补行(A43)</text>
 <text x="790.0" y="182.0" font-size="15" fill="#455A64" font-weight="bold" text-anchor="middle">AI · 公开数据(机器采集、判定、建议;人可增删改)</text>
-<rect x="40.0" y="2454.0" width="1500.0" height="689.5" rx="8" fill="#FFF6F5" stroke="#BDBDBD" stroke-width="1.5"/>
+<rect x="40.0" y="2454.0" width="1500.0" height="736.5" rx="8" fill="#FFF6F5" stroke="#BDBDBD" stroke-width="1.5"/>
 <rect x="296.0" y="2518.0" width="310.0" height="103.5" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
 <rect x="297.5" y="2519.5" width="307.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
 <text x="308.0" y="2536.0" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
@@ -419,8 +419,16 @@
 <text x="894.0" y="3057.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">条目 · 线索 ·</text>
 <text x="894.0" y="3076.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">处理(已复核 / 已忽略 / 是同一项目 / 不是同一项目 / </text>
 <text x="894.0" y="3094.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">助手已核) · 结论 · 依据 · 补充事实 · 操作人 · 时间</text>
+<rect x="296.0" y="3038.5" width="310.0" height="122.0" rx="6" fill="#FFFFFF" stroke="#37474F" stroke-width="1.8"/>
+<rect x="297.5" y="3040.0" width="307.0" height="43.0" rx="5" fill="#E3F2FD" stroke="none" stroke-width="1.5"/>
+<text x="308.0" y="3056.5" font-size="11.5" fill="#666666" font-weight="normal" text-anchor="start" font-style="italic">«object»</text>
+<text x="308.0" y="3075.5" font-size="17" fill="#212121" font-weight="bold" text-anchor="start">伙伴帐号</text>
+<rect x="302.0" y="3088.5" width="298.0" height="64.0" rx="4" fill="#F8CECC" stroke="#B85450" stroke-width="1"/>
+<text x="310.0" y="3104.5" font-size="11.5" fill="#B85450" font-weight="bold" text-anchor="start">人写(「账号管理」页,管理员)</text>
+<text x="310.0" y="3123.0" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">邮箱(或 @域名) · 单位 · 可看国别(空 = 全部) ·</text>
+<text x="310.0" y="3141.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="start">启用 · 备注</text>
 <text x="56.0" y="2480.0" font-size="15" fill="#455A64" font-weight="bold" text-anchor="start">人 · 业务数据(公司内部的跟进与判断)</text>
-<rect x="1562.0" y="158.0" width="210.0" height="2985.5" rx="8" fill="#FBF7FC" stroke="#7B1FA2" stroke-width="1.6" stroke-dasharray="7 5"/>
+<rect x="1562.0" y="158.0" width="210.0" height="3032.5" rx="8" fill="#FBF7FC" stroke="#7B1FA2" stroke-width="1.6" stroke-dasharray="7 5"/>
 <text x="1667.0" y="184.0" font-size="15" fill="#7B1FA2" font-weight="bold" text-anchor="middle">视图 «view»</text>
 <text x="1667.0" y="204.0" font-size="12" fill="#666666" font-weight="normal" text-anchor="middle">查询,不存(R10)</text>
 <rect x="1572.0" y="222.0" width="190.0" height="70.0" rx="5" fill="#FFFFFF" stroke="#CE93D8" stroke-width="1.2"/>
@@ -561,107 +569,107 @@
 <path d="M1522,495.0 L1522,2572.0" fill="none" stroke="#757575" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#aY)" stroke-linecap="round"/>
 <path d="M1230,2642.25 L1290,2642.25" fill="none" stroke="#757575" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#aY)" stroke-linecap="round"/>
 <text x="1514.0" y="2560.0" font-size="12" fill="#757575" font-weight="normal" text-anchor="end" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">派生</text>
-<text x="40.0" y="3195.5" font-size="15" fill="#455A64" font-weight="bold" text-anchor="start">状态 «state»</text>
-<text x="150.0" y="3195.5" font-size="13.5" fill="#B85450" font-weight="bold" text-anchor="start">线索·处理状态(人)</text>
-<rect x="60.0" y="3213.5" width="110.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
-<text x="115.0" y="3236.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">待处理</text>
-<rect x="240.0" y="3197.5" width="110.0" height="32.0" rx="16.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
-<text x="295.0" y="3218.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">已处理</text>
-<rect x="240.0" y="3239.5" width="110.0" height="32.0" rx="16.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
-<text x="295.0" y="3260.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">已忽略</text>
-<path d="M170,3225.5 L240,3213.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
-<path d="M170,3239.5 L240,3255.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
-<text x="400.0" y="3223.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">可撤回到待处理;</text>
-<text x="400.0" y="3241.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">线索上没有进展、</text>
-<text x="400.0" y="3259.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">负责人、下一步(R7)</text>
-<text x="560.0" y="3195.5" font-size="13.5" fill="#B85450" font-weight="bold" text-anchor="start">商机·我方阶段(机器只能新建为「建议」;其余转换都由人在商机上改,机器自动补一条跟进 R5 R6)</text>
-<rect x="560.0" y="3213.5" width="104.0" height="36.0" rx="18.0" fill="#D5E8D4" stroke="#82B366" stroke-width="1.6"/>
-<text x="612.0" y="3236.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">建议</text>
-<rect x="710.0" y="3213.5" width="104.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
-<text x="762.0" y="3236.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">跟踪中</text>
-<rect x="860.0" y="3213.5" width="104.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
-<text x="912.0" y="3236.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">准备投标</text>
-<rect x="1010.0" y="3213.5" width="104.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
-<text x="1062.0" y="3236.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">已投标</text>
-<path d="M664,3231.5 L710,3231.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
-<path d="M814,3231.5 L860,3231.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
-<path d="M964,3231.5 L1010,3231.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
-<text x="687.0" y="3223.5" font-size="11.5" fill="#B85450" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">立项</text>
-<rect x="1160.0" y="3195.5" width="96.0" height="30.0" rx="15.0" fill="#C8E6C9" stroke="#2E7D32" stroke-width="1.6"/>
-<text x="1208.0" y="3215.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">中标</text>
-<rect x="1160.0" y="3235.5" width="96.0" height="30.0" rx="15.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
-<text x="1208.0" y="3255.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">未中标</text>
-<path d="M1114,3225.5 L1160,3210.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
-<path d="M1114,3237.5 L1160,3250.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
-<rect x="560.0" y="3271.5" width="104.0" height="30.0" rx="15.0" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.6"/>
-<text x="612.0" y="3291.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">不跟进</text>
-<path d="M612,3249.5 L612,3271.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
-<rect x="860.0" y="3271.5" width="104.0" height="30.0" rx="15.0" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.6"/>
-<text x="912.0" y="3291.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">放弃</text>
-<path d="M762,3249.5 L912,3271.5" fill="none" stroke="#B85450" stroke-width="1.2" marker-end="url(#aP)" stroke-linecap="round"/>
-<path d="M912,3249.5 L912,3271.5" fill="none" stroke="#B85450" stroke-width="1.2" marker-end="url(#aP)" stroke-linecap="round"/>
-<path d="M1062,3249.5 L912,3271.5" fill="none" stroke="#B85450" stroke-width="1.2" marker-end="url(#aP)" stroke-linecap="round"/>
-<text x="1280.0" y="3217.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">建议 = AI 推荐的商机</text>
-<text x="1280.0" y="3235.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">跟踪中、准备投标、已投标</text>
-<text x="1280.0" y="3253.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">= 正在跟踪的商机</text>
-<text x="1280.0" y="3271.5" font-size="12.5" fill="#D32F2F" font-weight="bold" text-anchor="start">两者同一张表,只差这一列</text>
-<text x="40.0" y="3333.5" font-size="15" fill="#C62828" font-weight="bold" text-anchor="start">规则 «principle»(不变式,详见 本体.md R1–R11)</text>
-<polygon points="54.0,3361.5 230.0,3361.5 244.0,3375.5 244.0,3419.5 230.0,3433.5 54.0,3433.5 40.0,3419.5 40.0,3375.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
-<text x="142.0" y="3383.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R1 一个对象只存一处</text>
-<text x="142.0" y="3403.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">全在 Teable;页面只读,不存副本</text>
-<polygon points="267.0,3361.5 443.0,3361.5 457.0,3375.5 457.0,3419.5 443.0,3433.5 267.0,3433.5 253.0,3419.5 253.0,3375.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
-<text x="355.0" y="3383.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R2 人写的不被机器覆盖</text>
-<text x="355.0" y="3403.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">只填空、只新建、列表只追加;改</text>
-<text x="355.0" y="3419.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">值写待核更新</text>
-<polygon points="480.0,3361.5 656.0,3361.5 670.0,3375.5 670.0,3419.5 656.0,3433.5 480.0,3433.5 466.0,3419.5 466.0,3375.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
-<text x="568.0" y="3383.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R3 公开事实带出处</text>
-<text x="568.0" y="3403.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">每条引用一条线索,推断写明依据</text>
-<polygon points="693.0,3361.5 869.0,3361.5 883.0,3375.5 883.0,3419.5 869.0,3433.5 693.0,3433.5 679.0,3419.5 679.0,3375.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
-<text x="781.0" y="3383.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R4 线索至多属一个商机</text>
-<text x="781.0" y="3403.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">可靠才自动归属,其余人确认</text>
-<polygon points="906.0,3361.5 1082.0,3361.5 1096.0,3375.5 1096.0,3419.5 1082.0,3433.5 906.0,3433.5 892.0,3419.5 892.0,3375.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
-<text x="994.0" y="3383.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R5 阶段只由人推进</text>
-<text x="994.0" y="3403.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">机器只能新建「建议」商机</text>
-<polygon points="1119.0,3361.5 1295.0,3361.5 1309.0,3375.5 1309.0,3419.5 1295.0,3433.5 1119.0,3433.5 1105.0,3419.5 1105.0,3375.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
-<text x="1207.0" y="3383.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R6 改阶段留一条跟进</text>
-<text x="1207.0" y="3403.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">机器自动补记,人补原因</text>
-<polygon points="1332.0,3361.5 1508.0,3361.5 1522.0,3375.5 1522.0,3419.5 1508.0,3433.5 1332.0,3433.5 1318.0,3419.5 1318.0,3375.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
-<text x="1420.0" y="3383.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R9 报告是快照</text>
-<text x="1420.0" y="3403.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">生成后不改;公开版不含内部信息</text>
-<polygon points="1545.0,3361.5 1721.0,3361.5 1735.0,3375.5 1735.0,3419.5 1721.0,3433.5 1545.0,3433.5 1531.0,3419.5 1531.0,3375.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
-<text x="1633.0" y="3383.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R10 派生不存</text>
-<text x="1633.0" y="3403.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">日历、漏斗、下一步都现算</text>
-<line x1="40" y1="3447.5" x2="1760" y2="3447.5" stroke="#E0E0E0" stroke-width="1.5"/>
-<text x="40.0" y="3469.5" font-size="13.5" fill="#212121" font-weight="bold" text-anchor="start">图例 «legend»</text>
-<rect x="150.0" y="3455.5" width="26.0" height="18.0" rx="3" fill="#D5E8D4" stroke="#82B366" stroke-width="1.2"/>
-<text x="184.0" y="3469.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">机器写(只填空、列表只追加;人可改)</text>
-<rect x="418.5" y="3455.5" width="26.0" height="18.0" rx="3" fill="#F8CECC" stroke="#B85450" stroke-width="1.2"/>
-<text x="452.5" y="3469.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">人写(机器不写)</text>
-<rect x="567.5" y="3455.5" width="26.0" height="18.0" rx="3" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.2"/>
-<text x="601.5" y="3469.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">派生(查询,不存)</text>
-<rect x="723.5" y="3453.5" width="30.0" height="22.0" rx="4" fill="#E3F2FD" stroke="#37474F" stroke-width="1.6"/>
-<text x="761.5" y="3469.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">矩形 = 对象 «object»</text>
-<polygon points="935.5,3451.5 949.5,3464.5 935.5,3477.5 921.5,3464.5" fill="#FFE0B2" stroke="#F57C00" stroke-width="1.4"/>
-<text x="957.5" y="3469.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">菱形 = 判定(行为)</text>
-<rect x="1085.5" y="3453.5" width="30.0" height="22.0" rx="4" fill="#FBF7FC" stroke="#7B1FA2" stroke-width="1.4" stroke-dasharray="5 3"/>
-<text x="1123.5" y="3469.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">虚线框 = 视图</text>
-<polygon points="1231.0,3453.5 1249.0,3453.5 1255.0,3459.5 1255.0,3469.5 1249.0,3475.5 1231.0,3475.5 1225.0,3469.5 1225.0,3459.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.4"/>
-<text x="1263.0" y="3469.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">八边形 = 规则</text>
-<path d="M40,3493.5 L92,3493.5" fill="none" stroke="#D32F2F" stroke-width="4" marker-end="url(#aR)" stroke-linecap="round"/>
-<text x="100.0" y="3498.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">关键路径</text>
-<path d="M180.0,3493.5 L232.0,3493.5" fill="none" stroke="#1976D2" stroke-width="2" marker-end="url(#aB)" stroke-linecap="round"/>
-<text x="240.0" y="3498.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">信息流(读进报告等)</text>
-<path d="M384.0,3493.5 L436.0,3493.5" fill="none" stroke="#388E3C" stroke-width="2.2" stroke-dasharray="8 5" marker-end="url(#aG)" stroke-linecap="round"/>
-<text x="444.0" y="3498.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">人的动作改状态</text>
-<path d="M561.5,3493.5 L613.5,3493.5" fill="none" stroke="#B85450" stroke-width="2.2" stroke-dasharray="7 5" marker-end="url(#aP)" stroke-linecap="round"/>
-<text x="621.5" y="3498.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">人工录入 / 状态转换</text>
-<path d="M766.5,3493.5 L818.5,3493.5" fill="none" stroke="#F57C00" stroke-width="2" stroke-dasharray="3 5" marker-end="url(#aO)" stroke-linecap="round"/>
-<text x="826.5" y="3498.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">写回(反馈)</text>
-<path d="M920.5,3493.5 L972.5,3493.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
-<text x="980.5" y="3498.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">关联(带基数)</text>
-<path d="M1101.0,3493.5 L1139.0,3493.5" fill="none" stroke="#212121" stroke-width="1.8" marker-start="url(#dK)" stroke-linecap="round"/>
-<text x="1147.0" y="3498.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">组合(实心菱形)</text>
-<path d="M1266.0,3493.5 L1318.0,3493.5" fill="none" stroke="#757575" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#aY)" stroke-linecap="round"/>
-<text x="1326.0" y="3498.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">派生依赖</text>
-<text x="1760.0" y="3531.0" font-size="11.5" fill="#999999" font-weight="normal" text-anchor="end">SAM/SCBRD 系统架构可视化建模 · OBR 本体  |  参考 github.com/sharptoolbox/visual-model(CC BY 4.0)</text>
+<text x="40.0" y="3242.5" font-size="15" fill="#455A64" font-weight="bold" text-anchor="start">状态 «state»</text>
+<text x="150.0" y="3242.5" font-size="13.5" fill="#B85450" font-weight="bold" text-anchor="start">线索·处理状态(人)</text>
+<rect x="60.0" y="3260.5" width="110.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="115.0" y="3283.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">待处理</text>
+<rect x="240.0" y="3244.5" width="110.0" height="32.0" rx="16.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="295.0" y="3265.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">已处理</text>
+<rect x="240.0" y="3286.5" width="110.0" height="32.0" rx="16.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="295.0" y="3307.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">已忽略</text>
+<path d="M170,3272.5 L240,3260.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M170,3286.5 L240,3302.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<text x="400.0" y="3270.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">可撤回到待处理;</text>
+<text x="400.0" y="3288.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">线索上没有进展、</text>
+<text x="400.0" y="3306.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">负责人、下一步(R7)</text>
+<text x="560.0" y="3242.5" font-size="13.5" fill="#B85450" font-weight="bold" text-anchor="start">商机·我方阶段(机器只能新建为「建议」;其余转换都由人在商机上改,机器自动补一条跟进 R5 R6)</text>
+<rect x="560.0" y="3260.5" width="104.0" height="36.0" rx="18.0" fill="#D5E8D4" stroke="#82B366" stroke-width="1.6"/>
+<text x="612.0" y="3283.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">建议</text>
+<rect x="710.0" y="3260.5" width="104.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="762.0" y="3283.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">跟踪中</text>
+<rect x="860.0" y="3260.5" width="104.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="912.0" y="3283.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">准备投标</text>
+<rect x="1010.0" y="3260.5" width="104.0" height="36.0" rx="18.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="1062.0" y="3283.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">已投标</text>
+<path d="M664,3278.5 L710,3278.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M814,3278.5 L860,3278.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M964,3278.5 L1010,3278.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<text x="687.0" y="3270.5" font-size="11.5" fill="#B85450" font-weight="normal" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">立项</text>
+<rect x="1160.0" y="3242.5" width="96.0" height="30.0" rx="15.0" fill="#C8E6C9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="1208.0" y="3262.5" font-size="13" fill="#212121" font-weight="bold" text-anchor="middle">中标</text>
+<rect x="1160.0" y="3282.5" width="96.0" height="30.0" rx="15.0" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+<text x="1208.0" y="3302.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">未中标</text>
+<path d="M1114,3272.5 L1160,3257.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M1114,3284.5 L1160,3297.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<rect x="560.0" y="3318.5" width="104.0" height="30.0" rx="15.0" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.6"/>
+<text x="612.0" y="3338.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">不跟进</text>
+<path d="M612,3296.5 L612,3318.5" fill="none" stroke="#B85450" stroke-width="1.6" marker-end="url(#aP)" stroke-linecap="round"/>
+<rect x="860.0" y="3318.5" width="104.0" height="30.0" rx="15.0" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.6"/>
+<text x="912.0" y="3338.5" font-size="13" fill="#212121" font-weight="normal" text-anchor="middle">放弃</text>
+<path d="M762,3296.5 L912,3318.5" fill="none" stroke="#B85450" stroke-width="1.2" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M912,3296.5 L912,3318.5" fill="none" stroke="#B85450" stroke-width="1.2" marker-end="url(#aP)" stroke-linecap="round"/>
+<path d="M1062,3296.5 L912,3318.5" fill="none" stroke="#B85450" stroke-width="1.2" marker-end="url(#aP)" stroke-linecap="round"/>
+<text x="1280.0" y="3264.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">建议 = AI 推荐的商机</text>
+<text x="1280.0" y="3282.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">跟踪中、准备投标、已投标</text>
+<text x="1280.0" y="3300.5" font-size="12.5" fill="#555555" font-weight="normal" text-anchor="start">= 正在跟踪的商机</text>
+<text x="1280.0" y="3318.5" font-size="12.5" fill="#D32F2F" font-weight="bold" text-anchor="start">两者同一张表,只差这一列</text>
+<text x="40.0" y="3380.5" font-size="15" fill="#C62828" font-weight="bold" text-anchor="start">规则 «principle»(不变式,详见 本体.md R1–R11)</text>
+<polygon points="54.0,3408.5 230.0,3408.5 244.0,3422.5 244.0,3466.5 230.0,3480.5 54.0,3480.5 40.0,3466.5 40.0,3422.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="142.0" y="3430.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R1 一个对象只存一处</text>
+<text x="142.0" y="3450.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">全在 Teable;页面只读,不存副本</text>
+<polygon points="267.0,3408.5 443.0,3408.5 457.0,3422.5 457.0,3466.5 443.0,3480.5 267.0,3480.5 253.0,3466.5 253.0,3422.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="355.0" y="3430.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R2 人写的不被机器覆盖</text>
+<text x="355.0" y="3450.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">只填空、只新建、列表只追加;改</text>
+<text x="355.0" y="3466.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">值写待核更新</text>
+<polygon points="480.0,3408.5 656.0,3408.5 670.0,3422.5 670.0,3466.5 656.0,3480.5 480.0,3480.5 466.0,3466.5 466.0,3422.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="568.0" y="3430.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R3 公开事实带出处</text>
+<text x="568.0" y="3450.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">每条引用一条线索,推断写明依据</text>
+<polygon points="693.0,3408.5 869.0,3408.5 883.0,3422.5 883.0,3466.5 869.0,3480.5 693.0,3480.5 679.0,3466.5 679.0,3422.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="781.0" y="3430.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R4 线索至多属一个商机</text>
+<text x="781.0" y="3450.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">可靠才自动归属,其余人确认</text>
+<polygon points="906.0,3408.5 1082.0,3408.5 1096.0,3422.5 1096.0,3466.5 1082.0,3480.5 906.0,3480.5 892.0,3466.5 892.0,3422.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="994.0" y="3430.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R5 阶段只由人推进</text>
+<text x="994.0" y="3450.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">机器只能新建「建议」商机</text>
+<polygon points="1119.0,3408.5 1295.0,3408.5 1309.0,3422.5 1309.0,3466.5 1295.0,3480.5 1119.0,3480.5 1105.0,3466.5 1105.0,3422.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="1207.0" y="3430.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R6 改阶段留一条跟进</text>
+<text x="1207.0" y="3450.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">机器自动补记,人补原因</text>
+<polygon points="1332.0,3408.5 1508.0,3408.5 1522.0,3422.5 1522.0,3466.5 1508.0,3480.5 1332.0,3480.5 1318.0,3466.5 1318.0,3422.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="1420.0" y="3430.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R9 报告是快照</text>
+<text x="1420.0" y="3450.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">生成后不改;公开版不含内部信息</text>
+<polygon points="1545.0,3408.5 1721.0,3408.5 1735.0,3422.5 1735.0,3466.5 1721.0,3480.5 1545.0,3480.5 1531.0,3466.5 1531.0,3422.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.8"/>
+<text x="1633.0" y="3430.5" font-size="13.5" fill="#C62828" font-weight="bold" text-anchor="middle">R10 派生不存</text>
+<text x="1633.0" y="3450.5" font-size="12" fill="#424242" font-weight="normal" text-anchor="middle">日历、漏斗、下一步都现算</text>
+<line x1="40" y1="3494.5" x2="1760" y2="3494.5" stroke="#E0E0E0" stroke-width="1.5"/>
+<text x="40.0" y="3516.5" font-size="13.5" fill="#212121" font-weight="bold" text-anchor="start">图例 «legend»</text>
+<rect x="150.0" y="3502.5" width="26.0" height="18.0" rx="3" fill="#D5E8D4" stroke="#82B366" stroke-width="1.2"/>
+<text x="184.0" y="3516.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">机器写(只填空、列表只追加;人可改)</text>
+<rect x="418.5" y="3502.5" width="26.0" height="18.0" rx="3" fill="#F8CECC" stroke="#B85450" stroke-width="1.2"/>
+<text x="452.5" y="3516.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">人写(机器不写)</text>
+<rect x="567.5" y="3502.5" width="26.0" height="18.0" rx="3" fill="#F0F0F0" stroke="#BDBDBD" stroke-width="1.2"/>
+<text x="601.5" y="3516.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">派生(查询,不存)</text>
+<rect x="723.5" y="3500.5" width="30.0" height="22.0" rx="4" fill="#E3F2FD" stroke="#37474F" stroke-width="1.6"/>
+<text x="761.5" y="3516.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">矩形 = 对象 «object»</text>
+<polygon points="935.5,3498.5 949.5,3511.5 935.5,3524.5 921.5,3511.5" fill="#FFE0B2" stroke="#F57C00" stroke-width="1.4"/>
+<text x="957.5" y="3516.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">菱形 = 判定(行为)</text>
+<rect x="1085.5" y="3500.5" width="30.0" height="22.0" rx="4" fill="#FBF7FC" stroke="#7B1FA2" stroke-width="1.4" stroke-dasharray="5 3"/>
+<text x="1123.5" y="3516.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">虚线框 = 视图</text>
+<polygon points="1231.0,3500.5 1249.0,3500.5 1255.0,3506.5 1255.0,3516.5 1249.0,3522.5 1231.0,3522.5 1225.0,3516.5 1225.0,3506.5" fill="#FFCDD2" stroke="#C62828" stroke-width="1.4"/>
+<text x="1263.0" y="3516.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">八边形 = 规则</text>
+<path d="M40,3540.5 L92,3540.5" fill="none" stroke="#D32F2F" stroke-width="4" marker-end="url(#aR)" stroke-linecap="round"/>
+<text x="100.0" y="3545.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">关键路径</text>
+<path d="M180.0,3540.5 L232.0,3540.5" fill="none" stroke="#1976D2" stroke-width="2" marker-end="url(#aB)" stroke-linecap="round"/>
+<text x="240.0" y="3545.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">信息流(读进报告等)</text>
+<path d="M384.0,3540.5 L436.0,3540.5" fill="none" stroke="#388E3C" stroke-width="2.2" stroke-dasharray="8 5" marker-end="url(#aG)" stroke-linecap="round"/>
+<text x="444.0" y="3545.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">人的动作改状态</text>
+<path d="M561.5,3540.5 L613.5,3540.5" fill="none" stroke="#B85450" stroke-width="2.2" stroke-dasharray="7 5" marker-end="url(#aP)" stroke-linecap="round"/>
+<text x="621.5" y="3545.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">人工录入 / 状态转换</text>
+<path d="M766.5,3540.5 L818.5,3540.5" fill="none" stroke="#F57C00" stroke-width="2" stroke-dasharray="3 5" marker-end="url(#aO)" stroke-linecap="round"/>
+<text x="826.5" y="3545.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">写回(反馈)</text>
+<path d="M920.5,3540.5 L972.5,3540.5" fill="none" stroke="#212121" stroke-width="1.6" marker-end="url(#aK)" stroke-linecap="round"/>
+<text x="980.5" y="3545.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">关联(带基数)</text>
+<path d="M1101.0,3540.5 L1139.0,3540.5" fill="none" stroke="#212121" stroke-width="1.8" marker-start="url(#dK)" stroke-linecap="round"/>
+<text x="1147.0" y="3545.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">组合(实心菱形)</text>
+<path d="M1266.0,3540.5 L1318.0,3540.5" fill="none" stroke="#757575" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#aY)" stroke-linecap="round"/>
+<text x="1326.0" y="3545.5" font-size="12.5" fill="#212121" font-weight="normal" text-anchor="start">派生依赖</text>
+<text x="1760.0" y="3578.0" font-size="11.5" fill="#999999" font-weight="normal" text-anchor="end">SAM/SCBRD 系统架构可视化建模 · OBR 本体  |  参考 github.com/sharptoolbox/visual-model(CC BY 4.0)</text>
 </svg>

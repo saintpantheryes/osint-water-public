@@ -139,7 +139,7 @@
   }
   try {
     await P.load();
-    if (P.isGuest) { P.guest("我方资料是内部资料,游客帐号看不到。"); $("list").innerHTML = '<p class="muted">游客帐号看不到我方资料。</p>'; $("form").style.display = "none"; return; }
+    if (P.isGuest) { P.guest("我方资料是内部资料," + P.outsiderName + "看不到。"); $("list").innerHTML = '<p class="muted">' + P.outsiderName + '看不到我方资料。</p>'; $("form").style.display = "none"; return; }
     if (!(await P.canWrite())) P.guest();
     if (hasTable()) $("tbl").href = P.tableUrl("company"); else $("tbl").parentElement.style.display = "none";
     $("cKind").innerHTML = P.values("company_kind").map((v) => '<option value="' + P.esc(v) + '">' + P.esc(v) + "</option>").join("");

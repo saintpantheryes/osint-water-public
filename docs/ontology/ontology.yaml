@@ -16,8 +16,8 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.32
-date: 2026-10-19
+version: 2.33
+date: 2026-10-20
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
   - 商机的公开事实(原台账 YAML)搬进 Teable
@@ -155,6 +155,11 @@ changes_v2_16:   # 已中标项目补数据源(2026-10-13):使用方看到摩洛
   - 世行数据把几家韩国公司(也有刚果本地单位)的国别录成了朝鲜:世行不与朝鲜往来,导入时改回韩国(刚果的按借款国)
   - 要跑一次建表命令(新字段)
 
+changes_v2_33:   # 伙伴帐号与账号管理(2026-10-20):使用方要给伙伴公司开账号并控制权限,问「管理员可以在账号管理页面去修改不同伙伴、账号的权限吗?」
+  - 登录账号分三档:库里的人(按 Teable 角色能看能改)、伙伴(库外、邮箱在伙伴名单里:读真实库的公开部分,范围按新加的 partner 节)、游客(库外、不在名单:示例数据)
+  - 新增业务对象「伙伴帐号」(partner_account):邮箱(或 @域名)、单位、可看国别(空 = 全部)、启用、备注。后台任务按它认伙伴、按可看国别过滤伙伴读到的每张表;
+    私有 team.yaml 的 partners 名单作后备。密码、登录仍在 Teable 的帐号里
+  - 页面「账号管理」(仅库的所有者 / 创建者):同事(库的协作者)改角色、移出、发邀请链接;伙伴加 / 停用 / 改可看国别。要跑一次建表命令(新表)
 changes_v2_32:   # 复核按钮(2026-10-19):使用方问「助手给出结论,需要人工复核的地方,能否增加"已复核""帮我复核""忽略此项"之类按钮?如果做到对话框里是不是 AI 助手不好理解?」
   - 助手看一条链接或一份文件的结果里,「要核实」的每一条后面有 已复核 / 帮我复核 / 忽略此项,「库里可能是同一项目」的每条线索后面有 是同一项目 / 帮我复核 / 不是同一项目。
     按钮是页面上的操作,不是说给模型听的话(模型只看原文和附言,看不到按钮),所以不会让助手糊涂
@@ -953,6 +958,19 @@ objects:
       - {id: who, name: 操作人, type: text, by: ai, note: 点按钮的登录帐号;「帮我复核」写「助手」}
       - {id: at, name: 时间, type: datetime, by: ai}
 
+  - id: partner_account
+    name: 伙伴帐号
+    core: false
+    band: business
+    definition: 外单位合作伙伴的登录账号一行:邮箱(或 @域名)、单位、能看的国别、是否启用。后台任务按它判定谁是伙伴、每个伙伴能看哪些国别(core/guest.py);管理员在「账号管理」页读写。密码、登录在 Teable 的帐号里,不在这里;伙伴帐号不加进库的协作者。
+    key: 邮箱(一个邮箱一行;写 @域名 则该域名下的账号都算)
+    properties:
+      - {id: email, name: 邮箱, type: text, by: human, required: true, example: someone@partner.example, note: "整个邮箱,或 @域名(该域名下的登录账号都按伙伴)"}
+      - {id: org, name: 单位, type: text, by: human, example: 某水务集团}
+      - {id: countries, name: 可看国别, type: links:country, by: human, note: 线索、国别、城市、水厂、中标、法规、报告只给这些国家的;空 = 全部国别}
+      - {id: enabled, name: 启用, type: bool, by: human, default: true, note: "没勾 = 停用:再登录就按游客(示例数据);表格里直接加的行也要勾上才算"}
+      - {id: note, name: 备注, type: longtext, by: human}
+
   - id: phrase
     name: 语义层说法
     core: false
@@ -1683,6 +1701,8 @@ as_is:
     - Teable「助手提问记录」表(唯一)
   review:
     - Teable「助手复核记录」表(唯一;看链接的结果页按材料读它)
+  partner_account:
+    - Teable「伙伴帐号」表(唯一);私有 team.yaml 的 partners 名单作后备(没建表、或表里没写的邮箱)
   phrase:
     - Teable「语义层说法」表(唯一)
     - 本体 semantic 节:初始说法;后台按它给表里没有的指向补行(A43),表没建或读不到时助手用它兜底
@@ -2750,6 +2770,31 @@ guest:
     discharge_limit: {}
     report: {deny: [requested_by], rows: "版本 = 公开版 且 类型 ∈ 定期(周报、月报、日报、招标监测)", kinds_group: 定期, edition: 公开版}
   note: 游客登录后在表格里什么也看不到(不在库里);页面上看到的线索、商机、国别、时间节点、报告都是编出来的示例数据,不是真实内容;「打开表格」「在表格里打开」不显示;不能登记跟进、申请报告、订阅日历或改任何字段。
+
+# 伙伴帐号(2026-10-20 起):外单位的合作伙伴。和游客一样不进库(表格里什么也看不到),但页面读的是真实库,放行范围按这一节(core/guest.py 的 Policy 按节算):
+# 项目线索(去掉内部备注)、国别(去掉我方机构、国别备注)、城市、趋势、水厂、已中标项目、法规与排放标准、公开版报告;
+# 商机、节点、跟进记录、我方资料、个人设置整表不给;助手的「判投标」(要用本单位业绩)、反馈、订阅日历不给;法规问答可以用。
+# 谁是伙伴:Teable「伙伴帐号」表(启用的行;管理员在「账号管理」页维护)+ 私有 team.yaml 的 partners 名单作后备;不在名单里的库外账号仍是游客(示例数据)。
+# 国别范围:伙伴帐号行的「可看国别」非空时,下面每个带「所属国别」的对象只给这些国家的记录,国别表只给这些国家;法规条文、本国定义、排放标准按所属国别同样过滤。
+partner:
+  objects:
+    lead: {deny: [note]}
+    country: {deny: [presence, note]}
+    source: {}
+    city: {}
+    supply_plant: {}
+    sewage_plant: {}
+    award: {}
+    contractor: {}
+    study: {}
+    water_event: {}
+    water_area: {}
+    law: {}
+    law_clause: {}
+    local_term: {}
+    discharge_limit: {}
+    report: {deny: [requested_by], rows: "版本 = 公开版", edition: 公开版}
+  note: 当前是伙伴帐号:可以看项目线索、国别与城市概况、趋势机会、法规和公开版报告(真实数据);商机跟进、我方资料、内部备注与内部版报告不开放;不能登记、申请或订阅。
 
 groupings:
   funders:

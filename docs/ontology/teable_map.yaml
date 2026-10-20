@@ -6,7 +6,7 @@
 schema: osint-water/teable-map@1
 base: 水务项目机会 新版
 timezone: Asia/Shanghai
-order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award, study, water_event, water_area, law, law_clause, local_term, discharge_limit, phrase, ask_log, review]   # 建表顺序(关联字段在所有表建好后再加)
+order: [country, city, source, opportunity, lead, milestone, followup, template, report, company, preference, supply_plant, sewage_plant, term, contractor, award, study, water_event, water_area, law, law_clause, local_term, discharge_limit, phrase, ask_log, review, partner_account]   # 建表顺序(关联字段在所有表建好后再加)
 
 tables:
   lead:
@@ -151,6 +151,10 @@ tables:
     table: 助手复核记录
     primary: item
     optional: true   # 2026-10-19 新加的表:库里还没建时复核按钮的点选只在这一页有效
+  partner_account:
+    table: 伙伴帐号
+    primary: email
+    optional: true   # 2026-10-20 新加的表:库里还没建时伙伴只按私有 team.yaml 的 partners 名单认,没有国别范围
   report:
     table: 报告
     key: {name: 文件名, note: 报告文件的文件名(含扩展名);生成报告时写,迁移与再生成按它增量——附件上传失败也认得出这一行}
