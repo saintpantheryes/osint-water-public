@@ -49,6 +49,7 @@ class FakeTeable:
         self.history: dict[str, list[dict]] = {}
         self.comments: list[dict] = []
         self.invitations: list[dict] = []
+        self.added: list[tuple[str, str]] = []  # 账号管理页直接加进库的 (用户, 角色)
         self.role_changes: list[tuple[str, str]] = []  # 「账号管理」页改的角色
         self.removed: list[str] = []  # 「账号管理」页移出的协作者
         self.calls: list[tuple[str, str]] = []
@@ -134,6 +135,27 @@ class FakeTeable:
             roles = {uid: role for uid, role in self.tokens.values()}
             return {"collaborators": [{"type": "user", "userId": u["id"], "userName": u["name"], "email": u["email"], "role": roles.get(u["id"], "editor"), "lastSignTime": "2026-10-19T08:00:00.000Z"}
                                       for u in self.users.values() if roles.get(u["id"], "editor") != "none"]}
+        if (r := m(r"/base/([^/]+)/collaborators/users")) and method == "GET":  # 按名字 / 邮箱找账号(库外的也找得到),账号管理页按它把伙伴加进库
+            q = str(dict(params).get("search") or "").lower()
+            us = [u for u in self.users.values() if not q or q in u["email"].lower() or q in u["name"].lower()]
+            return {"users": [{"id": u["id"], "name": u["name"], "email": u["email"], "avatar": None} for u in us], "total": len(us)}
+        if (r := m(r"/base/([^/]+)/collaborator")) and method == "POST":  # 直接把已有账号加进库
+            self._owner()
+            role = body.get("role")
+            if role not in ("creator", "editor", "commenter", "viewer"):
+                raise HTTPError(400, "bad role")
+            for c in body.get("collaborators") or []:
+                uid = c.get("principalId")
+                if uid not in self.users:
+                    raise HTTPError(400, "no such user")
+                hit = False
+                for tok, (u, _) in list(self.tokens.items()):
+                    if u == uid:
+                        self.tokens[tok] = (u, role); hit = True
+                if not hit:
+                    self.tokens["tok-" + uid] = (uid, role)
+                self.added.append((uid, role))
+            return None
         if (r := m(r"/base/([^/]+)/collaborators")) and method == "PATCH":  # 改角色:所有者才行
             self._owner()
             uid, role = body.get("principalId"), body.get("role")
@@ -149,9 +171,12 @@ class FakeTeable:
             uid = dict(params).get("principalId")
             if uid not in self.users:
                 raise HTTPError(400, "bad collaborator")
+            hit = False
             for tok, (u, _) in list(self.tokens.items()):
                 if u == uid:
-                    self.tokens[tok] = (u, "none")
+                    self.tokens[tok] = (u, "none"); hit = True
+            if not hit:
+                self.tokens["tok-" + uid] = (uid, "none")  # 没有令牌的用户(如张三)也要从协作者里消失
             self.removed.append(uid)
             return None
         if (r := m(r"/base/([^/]+)/invitation/link")) and method == "GET":

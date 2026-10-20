@@ -13,42 +13,33 @@
 <script>document.getElementById("nav").innerHTML = P.nav("me.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
   <h1>账号管理 <span class="muted h-sub">(<a href="me.html">我的</a> › 账号管理)</span></h1>
-  <p class="muted">只有库的所有者、创建者能进这一页。登录账号分三档:<b>同事</b>(库里的协作者,按角色能看能改)、<b>伙伴</b>(外单位,不进库,只看公开内容的真实数据,可限定国别)、<b>游客</b>(其余账号,只看示例数据)。密码、头像由每个人自己在「帐号设置」里改;新账号要开通找系统管理员。</p>
+  <p class="muted">所有账号一张表,「权限」一栏直接改:<b>创建者 / 编辑者 / 查看者</b>是本单位同事(进库,整库可看;编辑者起能改);<b>伙伴</b>是外单位(不进库,只看公开内容的真实数据,可限定国别);<b>游客</b>只看示例数据。密码、头像由每个人自己在「帐号设置」里改。</p>
   <div id="gate"></div>
   <div id="body" hidden>
-    <h2>同事 <span class="muted" id="mCount"></span></h2>
-    <p class="muted small">查看者只能看;编辑者能登记跟进、改商机、录线索;创建者还能改表结构。所有者不能在这里改。移出后对方再登录就按游客(示例数据),除非在下面加为伙伴。</p>
-    <div class="panel" id="members">读取中…</div>
-    <div class="panel"><h3 class="tight">加同事</h3>
-      <p class="muted small">生成一个邀请链接发给对方:对方先登录自己的账号,再打开链接,就以这个角色进库。链接谁拿到都能用,用完就删。</p>
-      <div class="frow"><select id="invRole" class="inline"><option value="viewer">查看者(只看)</option><option value="editor" selected>编辑者(能改)</option></select><button type="button" id="invMake" class="btn">生成邀请链接</button></div>
-      <div id="invites"></div>
-    </div>
-
-    <h2>伙伴 <span class="muted" id="pCount"></span></h2>
-    <p class="muted small">写邮箱(一个账号)或 @域名(该单位所有账号)。可看国别留空 = 全部国别;填了就只给这些国家的线索、国别、城市、水厂、中标、法规和公开版报告。改完几秒内生效(对方刷新页面)。伙伴帐号不要加进上面的协作者,加了就成了同事、整库可看。</p>
-    <div class="two">
-      <div class="col">
-        <div class="form" id="pForm"><h3 id="pTitle">加一个伙伴</h3>
-          <div class="row"><label>邮箱</label><input id="pEmail" placeholder="someone@partner.example 或 @partner.example"></div>
-          <div class="row"><label>单位</label><input id="pOrg" placeholder="如:某水务集团"></div>
-          <div class="row"><label>可看国别</label><span id="pCountries" class="frow grow"></span></div>
-          <div class="row"><label></label><select id="pPick" class="inline"><option value="">+ 加一个国别</option></select></div>
-          <div class="row"><label>启用</label><label class="check"><input id="pEnabled" type="checkbox" checked> 停用后对方再登录就按游客</label></div>
-          <div class="row"><label>备注</label><input id="pNote" placeholder="(可不填)"></div>
-          <div class="row"><label></label><button type="button" class="primary" id="pSave">保存</button><button type="button" id="pCancel" hidden>取消</button><span class="muted" id="pMsg"></span></div>
-        </div>
+    <div class="panel">
+      <h3 class="tight">加账号</h3>
+      <div class="form" id="aForm">
+        <div class="row"><label>邮箱</label><input id="aEmail" placeholder="someone@example.com;伙伴也可写 @单位域名(该单位所有账号)"></div>
+        <div class="row"><label>权限</label><select id="aTier" class="inline"><option value="editor">编辑者(同事,能改)</option><option value="viewer">查看者(同事,只看)</option><option value="creator">创建者(同事,还能改表结构)</option><option value="partner">伙伴(外单位,只看公开内容)</option></select></div>
+        <div class="row" id="aOrgRow" hidden><label>单位</label><input id="aOrg" placeholder="如:某水务集团"></div>
+        <div class="row" id="aCRow" hidden><label>可看国别</label><span class="frow grow"><span id="aCountries" class="frow"></span><select id="aPick" class="inline"><option value="">+ 加一个国别</option></select></span></div>
+        <div class="row"><label>备注</label><input id="aNote" placeholder="(可不填)"></div>
+        <div class="row"><label></label><button type="button" class="primary" id="aSave">加上</button><span class="muted small" id="aMsg"></span></div>
       </div>
-      <div class="col wide"><div class="panel" id="partners">读取中…</div></div>
+      <p class="muted small">同事:对方已有本系统账号的,加上就进库;还没有的,这里会生成一个邀请链接,发给对方,对方打开后注册(或登录)就以这个权限进库。伙伴:对方用这个邮箱登录就按伙伴看。</p>
     </div>
+    <h2>账号 <span class="muted" id="aCount"></span></h2>
+    <div class="panel" id="accounts">读取中…</div>
+    <div id="invBox" hidden><h3 class="tight">等对方打开的邀请链接</h3><p class="muted small">谁拿到都能用,对方进库后记得删。</p><div id="invites"></div></div>
   </div>
 </main>
 <script>
 (async function () {
   const $ = (id) => document.getElementById(id);
-  const ROLE_ORDER = ["owner", "creator", "editor", "commenter", "viewer"];
-  const EDITABLE = ["viewer", "commenter", "editor", "creator"];
-  let me = {}, members = [], prows = [], countries = [], cname = {}, editing = null;
+  const ROLE_ORDER = ["owner", "creator", "editor", "commenter", "viewer", "partner", "none"];
+  const COLLEAGUE = ["creator", "editor", "viewer"];
+  const TIER_ZH = Object.assign({ partner: "伙伴", none: "游客" }, P.ROLE_ZH);
+  let me = {}, members = [], prows = [], invites = [], rows = [], countries = [], cname = {};
   const form = { countries: [] };
   const g = (r, p) => P.get("partner_account", r, p);
   const hasTable = () => !!(P.cfg.tables || {}).partner_account;
@@ -58,112 +49,155 @@
     if (!r.ok) throw new Error(r.status === 403 ? "没有权限(要库的所有者或创建者)" : path + " → " + r.status + " " + (await r.text()).slice(0, 160));
     const t = await r.text(); return t ? JSON.parse(t) : null;
   };
+  const BASE = () => "/base/" + P.cfg.base.id;
   const day = (s) => (s ? String(s).slice(0, 10) : "—");
+  const norm = (e) => String(e || "").trim().toLowerCase();
+  const isDomain = (e) => /^@/.test(e);
+  const inviteUrl = (l) => l.inviteUrl || (location.origin + "/invite/link?invitationId=" + encodeURIComponent(l.invitationId) + "&invitationCode=" + encodeURIComponent(l.invitationCode || l.inviteCode || ""));
 
-  /* ---------- 同事(库的协作者) ---------- */
-  async function loadMembers() {
-    const r = await api("GET", "/base/" + P.cfg.base.id + "/collaborators?take=1000");
-    members = ((r && r.collaborators) || []).filter((c) => c.type !== "department");
-    members.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || String(a.userName || "").localeCompare(String(b.userName || "")));
-    $("mCount").textContent = members.length + " 人";
-    $("members").innerHTML = P.tableHtml(["姓名", "邮箱", "角色", "最近登录", ""], members.map((c) => {
-      const self = c.userId === me.id, fixed = c.role === "owner" || self;
-      const sel = fixed ? '<span class="tag ' + (c.role === "owner" ? "t-info" : "") + '">' + P.esc(P.ROLE_ZH[c.role] || c.role) + (self ? "(我)" : "") + "</span>"
-        : '<span class="frow"><select data-a="role" data-id="' + P.esc(c.userId) + '">' + EDITABLE.map((v) => '<option value="' + v + '"' + (v === c.role ? " selected" : "") + ">" + P.esc(P.ROLE_ZH[v]) + "</option>").join("") + "</select></span>";
-      return [P.raw("<b>" + P.esc(c.userName || "") + "</b>"), c.email || "", P.raw(sel), day(c.lastSignTime),
-        fixed ? "" : P.raw('<span class="frow"><button type="button" class="chip-btn" data-a="out" data-id="' + P.esc(c.userId) + '" data-n="' + P.esc(c.userName || c.email || "") + '">移出</button></span>')];
-    }));
-    $("members").querySelectorAll('select[data-a="role"]').forEach((s) => { s.onchange = () => setRole(s.dataset.id, s.value, s); });
-    $("members").querySelectorAll('button[data-a="out"]').forEach((b) => { b.onclick = () => removeMember(b); });
+  /* ---------- 读:库的协作者 + 伙伴帐号表 + 邀请链接 → 一张表 ---------- */
+  async function loadAll() {
+    const [m, p, i] = await Promise.all([
+      api("GET", BASE() + "/collaborators?take=1000").then((r) => ((r && r.collaborators) || []).filter((c) => c.type !== "department")),
+      hasTable() ? P.records("partner_account", { props: ["email", "org", "countries", "enabled", "note"] }) : Promise.resolve([]),
+      api("GET", BASE() + "/invitation/link").catch(() => []),
+    ]);
+    members = m; prows = p; invites = i || [];
+    const byEmail = {}; prows.forEach((r) => { byEmail[norm(g(r, "email"))] = r; });
+    rows = members.map((c) => ({ kind: "member", id: c.userId, name: c.userName || "", email: c.email || "", role: c.role, last: c.lastSignTime, prow: byEmail[norm(c.email)] || null }));
+    const inBase = new Set(members.map((c) => norm(c.email)));
+    prows.forEach((r) => {
+      const email = norm(g(r, "email"));
+      if (inBase.has(email)) return;  // 既在库里又在伙伴表里:按库里的算(伙伴行多半是改成同事时留下的记录)
+      rows.push({ kind: "partner", id: r.id, name: isDomain(email) ? "整个单位" : "", email, role: g(r, "enabled") ? "partner" : "none", last: null, prow: r });
+    });
+    rows.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || (a.prow ? String(g(a.prow, "org") || "") : "").localeCompare(b.prow ? String(g(b.prow, "org") || "") : "") || a.email.localeCompare(b.email));
+    render();
   }
-  async function setRole(uid, role, el) {
-    el.disabled = true;
-    try { await api("PATCH", "/base/" + P.cfg.base.id + "/collaborators", { principalId: uid, principalType: "user", role }); P.toast("角色已改成" + P.ROLE_ZH[role]); await loadMembers(); }
-    catch (e) { P.toast(e.message, true); el.disabled = false; }
+  function tierOptions(row) {
+    const self = row.kind === "member" && row.id === me.id;
+    if (row.role === "owner" || self) return null;  // 所有者(和自己)不在这里改
+    if (isDomain(row.email)) return ["partner", "none"];  // @域名只能是伙伴或停用
+    return COLLEAGUE.concat(["partner", "none"]);
   }
-  async function removeMember(btn) {  /* 两步:第一下变成「确认移出」,再点才移(不用弹窗) */
-    if (btn.dataset.sure !== "1") { btn.dataset.sure = "1"; btn.textContent = "确认移出 " + btn.dataset.n; btn.classList.add("on"); setTimeout(() => { btn.dataset.sure = ""; btn.textContent = "移出"; btn.classList.remove("on"); }, 6000); return; }
-    btn.disabled = true;
-    try { await api("DELETE", "/base/" + P.cfg.base.id + "/collaborators?principalId=" + encodeURIComponent(btn.dataset.id) + "&principalType=user"); P.toast("已移出"); await loadMembers(); }
-    catch (e) { P.toast(e.message, true); btn.disabled = false; }
+  function countriesCell(row) {
+    if (row.role !== "partner") return row.role === "none" ? "—" : P.raw('<span class="muted">全部(同事)</span>');
+    const ids = (g(row.prow, "countries") || []).map((x) => x.id);
+    return P.raw('<span class="frow" data-c="' + P.esc(row.id) + '">' + (ids.length ? ids.map((id) => '<span class="tag">' + P.esc(cname[id] || id) + "</span>").join("") : '<span class="muted">全部国别</span>') +
+      ' <button type="button" class="chip-btn" data-a="cedit" data-id="' + P.esc(row.id) + '">改</button></span>');
   }
-  async function loadInvites() {
-    let links = [];
-    try { links = (await api("GET", "/base/" + P.cfg.base.id + "/invitation/link")) || []; } catch (e) { $("invites").innerHTML = '<p class="muted small">' + P.esc(e.message) + "</p>"; return; }
-    const url = (l) => l.inviteUrl || (location.origin + "/invite/link?invitationId=" + encodeURIComponent(l.invitationId) + "&invitationCode=" + encodeURIComponent(l.invitationCode || l.inviteCode || ""));
-    $("invites").innerHTML = links.length ? '<ul class="list">' + links.map((l) => '<li><span class="tag">' + P.esc(P.ROLE_ZH[l.role] || l.role) + '</span> <code class="small">' + P.esc(url(l)) + '</code> <span class="frow"><button type="button" class="chip-btn" data-a="copy" data-u="' + P.esc(url(l)) + '">复制</button> <button type="button" class="chip-btn" data-a="del" data-id="' + P.esc(l.invitationId) + '">删除</button></span></li>').join("") + "</ul>"
-      : '<p class="muted small">现在没有有效的邀请链接。</p>';
+  function render() {
+    $("aCount").textContent = rows.length + " 个";
+    $("accounts").innerHTML = rows.length ? P.tableHtml(["姓名", "邮箱", "单位", "权限", "可看国别", "最近登录", "备注", ""], rows.map((row) => {
+      const opts = tierOptions(row);
+      const sel = !opts ? '<span class="tag ' + (row.role === "owner" ? "t-info" : "") + '">' + P.esc(TIER_ZH[row.role] || row.role) + (row.kind === "member" && row.id === me.id ? "(我)" : "") + "</span>"
+        : '<span class="frow"><select data-a="tier" data-id="' + P.esc(row.id) + '" data-k="' + row.kind + '">' + opts.map((v) => '<option value="' + v + '"' + (v === row.role ? " selected" : "") + ">" + P.esc(TIER_ZH[v]) + (v === "none" ? "(停用)" : "") + "</option>").join("") + "</select></span>";
+      return [P.raw("<b>" + P.esc(row.name) + "</b>"), row.email, row.prow ? (g(row.prow, "org") || "") : (row.kind === "member" ? P.raw('<span class="muted">本单位</span>') : ""),
+        P.raw(sel), countriesCell(row), day(row.last), row.prow ? (g(row.prow, "note") || "") : "",
+        row.prow ? P.raw(P.open("partner_account", row.prow.id)) : ""];
+    })) : '<p class="empty">还没有账号。</p>';
+    $("accounts").querySelectorAll('select[data-a="tier"]').forEach((s) => { s.onchange = () => setTier(s); });
+    $("accounts").querySelectorAll('button[data-a="cedit"]').forEach((b) => { b.onclick = () => editCountries(b.dataset.id); });
+    $("invBox").hidden = !invites.length;
+    $("invites").innerHTML = invites.length ? '<ul class="list">' + invites.map((l) => '<li><span class="tag">' + P.esc(TIER_ZH[l.role] || l.role) + '</span> <code class="small">' + P.esc(inviteUrl(l)) + '</code> <span class="frow"><button type="button" class="chip-btn" data-a="copy" data-u="' + P.esc(inviteUrl(l)) + '">复制</button> <button type="button" class="chip-btn" data-a="del" data-id="' + P.esc(l.invitationId) + '">删除</button></span></li>').join("") + "</ul>" : "";
     $("invites").querySelectorAll('button[data-a="copy"]').forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.u); P.toast("已复制"); } catch (e) { P.toast("复制失败,请手动选中复制", true); } }; });
-    $("invites").querySelectorAll('button[data-a="del"]').forEach((b) => { b.onclick = async () => { b.disabled = true; try { await api("DELETE", "/base/" + P.cfg.base.id + "/invitation/link/" + encodeURIComponent(b.dataset.id)); P.toast("已删除"); await loadInvites(); } catch (e) { P.toast(e.message, true); b.disabled = false; } }; });
+    $("invites").querySelectorAll('button[data-a="del"]').forEach((b) => { b.onclick = async () => { b.disabled = true; try { await api("DELETE", BASE() + "/invitation/link/" + encodeURIComponent(b.dataset.id)); P.toast("已删除"); await loadAll(); } catch (e) { P.toast(e.message, true); b.disabled = false; } }; });
   }
-  $("invMake").onclick = async () => {
-    $("invMake").disabled = true;
-    try { await api("POST", "/base/" + P.cfg.base.id + "/invitation/link", { role: $("invRole").value }); P.toast("链接已生成,复制发给对方"); await loadInvites(); }
-    catch (e) { P.toast(e.message, true); } finally { $("invMake").disabled = false; }
-  };
 
-  /* ---------- 伙伴(表「伙伴帐号」) ---------- */
-  function renderChips() {
-    $("pCountries").innerHTML = form.countries.map((id) => '<button type="button" class="chip-btn on" data-id="' + P.esc(id) + '" title="点一下去掉">' + P.esc(cname[id] || id) + " ×</button>").join("") || '<span class="muted small">(空 = 全部国别)</span>';
-    $("pCountries").querySelectorAll("button").forEach((b) => { b.onclick = () => { form.countries = form.countries.filter((x) => x !== b.dataset.id); renderChips(); }; });
-  }
-  function fillForm(r) {
-    editing = r || null;
-    $("pTitle").textContent = r ? "改这个伙伴" : "加一个伙伴";
-    $("pCancel").hidden = !r;
-    $("pEmail").value = r ? (g(r, "email") || "") : "";
-    $("pOrg").value = r ? (g(r, "org") || "") : "";
-    $("pNote").value = r ? (g(r, "note") || "") : "";
-    $("pEnabled").checked = r ? !!g(r, "enabled") : true;
-    form.countries = r ? (g(r, "countries") || []).map((x) => x.id) : [];
-    renderChips();
-  }
-  function renderPartners() {
-    $("pCount").textContent = prows.length + " 个";
-    $("partners").innerHTML = prows.length ? P.tableHtml(["邮箱", "单位", "可看国别", "状态", "备注", ""], prows.map((r) => [
-      P.raw("<b>" + P.esc(g(r, "email") || "") + "</b>"), g(r, "org") || "",
-      (g(r, "countries") || []).map((x) => cname[x.id] || x.title).join("、") || P.raw('<span class="muted">全部国别</span>'),
-      P.raw(!g(r, "enabled") ? '<span class="tag">已停用</span>' : '<span class="tag t-ok">启用</span>'), g(r, "note") || "",
-      P.raw('<span class="frow"><button type="button" class="chip-btn" data-a="edit" data-id="' + r.id + '">改</button> <button type="button" class="chip-btn" data-a="toggle" data-id="' + r.id + '">' + (!g(r, "enabled") ? "启用" : "停用") + "</button></span> " + P.open("partner_account", r.id)),
-    ])) : '<p class="empty">还没有伙伴,在左边加第一个。</p>';
-    $("partners").querySelectorAll('button[data-a="edit"]').forEach((b) => { b.onclick = () => { fillForm(prows.find((x) => x.id === b.dataset.id)); $("pForm").scrollIntoView({ behavior: "smooth", block: "start" }); }; });
-    $("partners").querySelectorAll('button[data-a="toggle"]').forEach((b) => { b.onclick = () => togglePartner(b.dataset.id, b); });
-  }
+  /* ---------- 改权限:一个下拉管全部转换 ---------- */
   async function refreshWorker() { try { await fetch("api/assistant/guest/refresh", { credentials: "same-origin" }); } catch (e) { console.warn("通知后台重读名单失败", e); } }
-  async function loadPartners() {
-    if (!hasTable()) { $("partners").innerHTML = '<p class="empty">库里还没有「伙伴帐号」表:管理员跑一次建表命令就有。在那之前,伙伴只按私有配置里的名单认。</p>'; $("pForm").hidden = true; $("pCount").textContent = ""; return; }
-    prows = await P.records("partner_account", { props: ["email", "org", "countries", "enabled", "note"] });
-    prows.sort((a, b) => String(g(a, "org") || "").localeCompare(String(g(b, "org") || "")) || String(g(a, "email") || "").localeCompare(String(g(b, "email") || "")));
-    renderPartners();
+  async function findUser(email) {  /* 按邮箱找已有账号的编号(表格的用户检索);找不到 → null */
+    try { const r = await api("GET", BASE() + "/collaborators/users?search=" + encodeURIComponent(email) + "&take=20"); return ((r && r.users) || []).find((u) => norm(u.email) === email) || null; }
+    catch (e) { return null; }
   }
-  async function togglePartner(rid, btn) {
-    const r = prows.find((x) => x.id === rid); if (!r) return;
-    btn.disabled = true;
-    try { await P.patch("partner_account", rid, { enabled: !g(r, "enabled") }); P.toast(!g(r, "enabled") ? "已启用" : "已停用"); await loadPartners(); await refreshWorker(); }
-    catch (e) { P.toast(e.message, true); btn.disabled = false; }
+  async function upsertPartner(row, values) {  /* 伙伴表里的那一行:有就改,没有就建(email 为键) */
+    if (!hasTable()) throw new Error("库里还没有「伙伴帐号」表:管理员跑一次建表命令就有");
+    if (row.prow) {
+      const fields = P.fieldsOf("partner_account", values);
+      if ("countries" in values) fields[P.f("partner_account", "countries")] = values.countries.map((id) => ({ id }));
+      if ("enabled" in values) fields[P.f("partner_account", "enabled")] = values.enabled;
+      await P.send("PATCH", "/table/" + P.t("partner_account").id + "/record", { fieldKeyType: "id", typecast: true, records: [{ id: row.prow.id, fields }] });
+    } else await P.create("partner_account", Object.assign({ email: row.email }, values));
   }
-  async function savePartner() {
-    const email = $("pEmail").value.trim().toLowerCase();
-    if (!/^(@|[^@\s]+@)[^@\s]+\.[^@\s]+$/.test(email)) { P.toast("邮箱要像 someone@partner.example,或 @partner.example", true); return; }
-    const dup = prows.find((r) => String(g(r, "email") || "").trim().toLowerCase() === email && (!editing || r.id !== editing.id));
-    if (dup) { P.toast("这个邮箱已经在名单里了", true); return; }
-    const values = { email, org: $("pOrg").value.trim(), countries: form.countries, enabled: $("pEnabled").checked, note: $("pNote").value.trim() };
-    const btn = $("pSave"); btn.disabled = true; $("pMsg").textContent = "保存中…";
+  async function addColleague(email, role, uid) {  /* 有账号的直接加进库;没有的生成邀请链接 */
+    const u = uid ? { id: uid } : await findUser(email);
+    if (u) { await api("POST", BASE() + "/collaborator", { collaborators: [{ principalId: u.id, principalType: "user" }], role }); return "added"; }
+    await api("POST", BASE() + "/invitation/link", { role });
+    return "invited";
+  }
+  async function setTier(sel) {
+    const row = rows.find((r) => r.id === sel.dataset.id && r.kind === sel.dataset.k), to = sel.value, from = row.role;
+    if (!row || to === from) return;
+    if (to === "none" && sel.dataset.sure !== "1") {  /* 停用 / 移出要点两次(不用弹窗):先回到原值,再选一次才做 */
+      sel.dataset.sure = "1"; P.toast("再选一次「游客(停用)」就移出 " + (row.name || row.email), true); sel.value = from;
+      setTimeout(() => { sel.dataset.sure = ""; }, 8000); return;
+    }
+    sel.disabled = true;
     try {
-      if (editing) {  /* 改:清空的国别也要写过去(P.val 对空数组不发),按字段编号直接写 */
-        const fields = P.fieldsOf("partner_account", values);
-        fields[P.f("partner_account", "countries")] = form.countries.map((id) => ({ id }));
-        fields[P.f("partner_account", "enabled")] = values.enabled;
-        await P.send("PATCH", "/table/" + P.t("partner_account").id + "/record", { fieldKeyType: "id", typecast: true, records: [{ id: editing.id, fields }] });
-      } else await P.create("partner_account", values);
-      P.toast(editing ? "已改好" : "已加上");
-      fillForm(null);
-      await loadPartners(); await refreshWorker();
-    } catch (e) { P.toast(e.message, true); } finally { btn.disabled = false; $("pMsg").textContent = ""; }
+      let msg = "已改成" + TIER_ZH[to];
+      if (COLLEAGUE.includes(to)) {
+        if (COLLEAGUE.includes(from)) await api("PATCH", BASE() + "/collaborators", { principalId: row.id, principalType: "user", role: to });
+        else {  // 伙伴 / 游客 → 同事
+          const how = await addColleague(row.email, to);
+          if (row.prow && g(row.prow, "enabled")) await upsertPartner(row, { enabled: false });
+          msg = how === "added" ? "已加进库,改成" + TIER_ZH[to] : "对方还没有本系统账号:已生成邀请链接(见下方),发给对方,打开后注册即为" + TIER_ZH[to];
+        }
+      } else {  // → 伙伴 / 游客
+        if (COLLEAGUE.includes(from)) await api("DELETE", BASE() + "/collaborators?principalId=" + encodeURIComponent(row.id) + "&principalType=user");
+        if (to === "partner") await upsertPartner(row, { enabled: true });
+        else if (row.prow && g(row.prow, "enabled")) await upsertPartner(row, { enabled: false });
+        msg = to === "partner" ? "已改成伙伴(可看国别在同一行改)" : "已停用(对方再登录按游客,只看示例数据)";
+      }
+      P.toast(msg); await loadAll(); await refreshWorker();
+    } catch (e) { P.toast(e.message, true); sel.disabled = false; sel.value = from; }
   }
-  $("pSave").onclick = savePartner;
-  $("pCancel").onclick = () => fillForm(null);
-  $("pPick").onchange = () => { const v = $("pPick").value; if (v && !form.countries.includes(v)) form.countries.push(v); $("pPick").value = ""; renderChips(); };
+
+  /* ---------- 可看国别:在行里改 ---------- */
+  function editCountries(id) {
+    const row = rows.find((r) => r.id === id && r.role === "partner"); if (!row) return;
+    const cell = $("accounts").querySelector('[data-c="' + id + '"]'); if (!cell) return;
+    let ids = (g(row.prow, "countries") || []).map((x) => x.id);
+    const draw = () => {
+      cell.innerHTML = ids.map((i) => '<button type="button" class="chip-btn on" data-id="' + P.esc(i) + '" title="点一下去掉">' + P.esc(cname[i] || i) + " ×</button>").join("") + (ids.length ? "" : '<span class="muted small">(空 = 全部国别)</span>') +
+        ' <select class="inline" data-a="pick"><option value="">+ 加一个国别</option>' + pickOptions() + '</select> <button type="button" class="btn primary small" data-a="csave">保存</button> <button type="button" class="btn quiet small" data-a="ccancel">取消</button>';
+      cell.querySelectorAll("button[data-id]").forEach((b) => { b.onclick = () => { ids = ids.filter((x) => x !== b.dataset.id); draw(); }; });
+      cell.querySelector('[data-a="pick"]').onchange = (ev) => { const v = ev.target.value; if (v && !ids.includes(v)) ids.push(v); draw(); };
+      cell.querySelector('[data-a="csave"]').onclick = async () => { try { await upsertPartner(row, { countries: ids }); P.toast(ids.length ? "可看国别已改" : "已改成全部国别"); await loadAll(); await refreshWorker(); } catch (e) { P.toast(e.message, true); } };
+      cell.querySelector('[data-a="ccancel"]').onclick = () => render();
+    };
+    draw();
+  }
+  const pickOptions = () => countries.slice().sort((a, b) => String(cname[a.id]).localeCompare(String(cname[b.id]), "zh")).map((c) => '<option value="' + P.esc(c.id) + '">' + P.esc(cname[c.id]) + "</option>").join("");
+
+  /* ---------- 加账号 ---------- */
+  function renderChips() {
+    $("aCountries").innerHTML = form.countries.map((id) => '<button type="button" class="chip-btn on" data-id="' + P.esc(id) + '" title="点一下去掉">' + P.esc(cname[id] || id) + " ×</button>").join("") || '<span class="muted small">(空 = 全部国别)</span>';
+    $("aCountries").querySelectorAll("button").forEach((b) => { b.onclick = () => { form.countries = form.countries.filter((x) => x !== b.dataset.id); renderChips(); }; });
+  }
+  function syncForm() { const p = $("aTier").value === "partner"; $("aOrgRow").hidden = !p; $("aCRow").hidden = !p; }
+  async function addAccount() {
+    const email = norm($("aEmail").value), tier = $("aTier").value, note = $("aNote").value.trim();
+    if (!/^(@|[^@\s]+@)[^@\s]+\.[^@\s]+$/.test(email) || (isDomain(email) && tier !== "partner")) { P.toast(isDomain(email) ? "@域名只能加为伙伴" : "邮箱要像 someone@example.com", true); return; }
+    const exist = rows.find((r) => r.email === email);
+    if (exist && exist.role !== "none") { P.toast("这个邮箱已经在表里了(" + TIER_ZH[exist.role] + "),在那一行改权限即可", true); return; }
+    const btn = $("aSave"); btn.disabled = true; $("aMsg").textContent = "保存中…";
+    try {
+      let msg;
+      if (tier === "partner") {
+        await upsertPartner(exist || { email, prow: null, name: "", kind: "partner" }, { org: $("aOrg").value.trim(), countries: form.countries, enabled: true, note });
+        msg = "已加为伙伴:对方用这个邮箱登录就按伙伴看";
+      } else {
+        const how = await addColleague(email, tier);
+        if (exist && exist.prow && note) await upsertPartner(exist, { note });
+        msg = how === "added" ? "已加进库,权限 " + TIER_ZH[tier] : "对方还没有本系统账号:已生成邀请链接(见下方),发给对方,打开后注册即进库";
+      }
+      P.toast(msg); $("aEmail").value = ""; $("aOrg").value = ""; $("aNote").value = ""; form.countries = []; renderChips();
+      await loadAll(); await refreshWorker();
+    } catch (e) { P.toast(e.message, true); } finally { btn.disabled = false; $("aMsg").textContent = ""; }
+  }
+  $("aSave").onclick = addAccount;
+  $("aTier").onchange = syncForm;
+  $("aPick").onchange = () => { const v = $("aPick").value; if (v && !form.countries.includes(v)) form.countries.push(v); $("aPick").value = ""; renderChips(); };
 
   try {
     await P.load();
@@ -176,9 +210,10 @@
     me = (await P.me()) || {};
     countries = await P.countries();
     countries.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || c.id; });
-    $("pPick").innerHTML = '<option value="">+ 加一个国别</option>' + countries.slice().sort((a, b) => String(cname[a.id]).localeCompare(String(cname[b.id]), "zh")).map((c) => '<option value="' + P.esc(c.id) + '">' + P.esc(cname[c.id]) + "</option>").join("");
-    fillForm(null);
-    await Promise.all([loadMembers().catch((e) => { $("members").innerHTML = '<p class="muted">' + P.esc(e.message) + "</p>"; }), loadInvites(), loadPartners().catch((e) => { $("partners").innerHTML = '<p class="muted">' + P.esc(e.message) + "</p>"; })]);
+    $("aPick").innerHTML = '<option value="">+ 加一个国别</option>' + pickOptions();
+    renderChips(); syncForm();
+    if (!hasTable()) $("gate").innerHTML = '<div class="note n-warn">库里还没有「伙伴帐号」表:管理员跑一次建表命令就有。在那之前只能改同事的权限,伙伴只按私有配置里的名单认。</div>';
+    await loadAll();
   } catch (e) { $("gate").innerHTML = '<div class="note n-bad">' + P.esc(e.message) + "</div>"; }
 })();
 </script>
