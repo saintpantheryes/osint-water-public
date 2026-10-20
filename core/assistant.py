@@ -943,6 +943,8 @@ def rules_parse(q: str, today: date, force_object: str | None = None) -> dict:
         if any(w in text for w in SUGGESTED_WORDS) and "建议" not in f["stages"]:
             f["stages"].append("建议")
         f["sectors_fine"] = [x for s in f["sectors"] for x in v.sectors_fine.get(s, [s])]
+        if re.search(r"归档|放弃", text):  # 问到归档、放弃的商机才把已归档的算进来(默认不算,与商机总览一致)
+            f["archived"] = True
     if p["object"] == "lead":
         f["status"] = _pick(text, v.words["statuses"])
         if re.search(r"不相关|无关|不算相关", text):
@@ -1050,7 +1052,7 @@ SYSTEM = """你是「全球水务开源情报」系统首页的提问解析器�
 - intent:count 问数量;list 要清单(缺省);chart 要分组统计 / 分布 / 趋势 / 哪些国家最多;report 要生成一份新报告;help 看不懂或与系统无关。
 - group_by:chart 时的分组维度,线索可选 country / category / sectors / funder / day / status / source,商机 country / stage / sectors / funder,时间节点 country / kind / day,报告 kind / country,
   已中标项目 country / sector / contract_type / delivery / asset / winner_country / funder / year。
-- archived:问到「归档」「过期」「失效」的线索给 true(把已归档的也算进来);否则 null(系统默认不算后台归档的过期线索)。
+- archived:问到「归档」「过期」「失效」的线索,或「归档」「放弃」的商机给 true(把已归档的也算进来);否则 null(系统默认不算归档的过期线索与放弃跟踪的商机)。
 - limit:要几条(1–200),没说就 50。
 
 {guide}"""
@@ -1236,6 +1238,7 @@ def from_model(data: dict, today: date, q: str = "", force_object: str | None = 
         f["stages"] = keep(_strs(data.get("stages")), v.stages)
         f["tracked"] = True if data.get("tracked") is True else None
         f["sectors_fine"] = [x for s in f["sectors"] for x in v.sectors_fine.get(s, [s])]
+        f["archived"] = True if data.get("archived") is True or re.search(r"归档|放弃", q or "") else None
     if p["object"] == "lead":
         f["status"] = keep(_strs(data.get("status")), v.statuses, v.words["statuses"])
         f["relevant"] = data.get("relevant") if isinstance(data.get("relevant"), bool) else None

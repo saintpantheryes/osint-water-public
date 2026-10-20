@@ -191,12 +191,13 @@
     return c.concat(dateConds("report", "day", f));
   }
   async function oppRows(f) {
-    const rows = await P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "sectors", "financing", "next_milestone", "public_stage", "priority", "last_followup", "lead_count"] });
+    const rows = await P.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "sectors", "financing", "next_milestone", "public_stage", "priority", "last_followup", "lead_count"].concat(P.OPP_ARC) });
     const cids = new Set(countryIds(f));
     const want = new Set(f.sectors_fine || []);
     return rows.filter((o) => {
       if ((f.countries.length || (f.regions || []).length) && !cids.has(P.linkId(P.get("opportunity", o, "country")))) return false;
       const st = P.get("opportunity", o, "stage") || "建议";
+      if (!f.archived && P.isArchived(o)) return false;  // 已归档(放弃跟踪)的商机默认不算,问到「归档 / 放弃」才算(与商机总览一致)
       if (f.tracked && !P.tracked([o]).length) return false;
       if (f.stages.length && !f.stages.includes(st)) return false;
       if (want.size && !(P.get("opportunity", o, "sectors") || []).some((s) => want.has(s))) return false;

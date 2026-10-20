@@ -3198,3 +3198,99 @@ def test_archived_leads_hidden_by_default_but_listed_under_the_opportunity():
             assert not errors, errors
     finally:
         srv.shutdown()
+
+
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_opportunity_can_be_abandoned_and_archived_then_restored():
+    """放弃跟踪与归档商机(使用方 2026-10-20,本体 A50):商机工作台「放弃跟踪」→ 确认(可写原因)→ 阶段改「放弃」、勾已归档、留一条跟进;
+    商机总览默认不算它,一行说明「已归档 1 个商机 · 显示」点开才列;页面顶上说明日期与原因,「恢复跟踪」改回跟踪中。危险操作是红色主按钮。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    b.create("opportunity", [{"code": "AZE-003", "name_zh": "巴库供水管网", "country": c["id"], "stage": "跟踪中"}])
+    srv = _serve(fake, schema.read_config(admin, NEW, ONTO))
+    base = f"http://127.0.0.1:{srv.server_port}"
+    shot = os.environ.get("SHOT")
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            errors: list[str] = []
+            page = browser.new_page(viewport={"width": 1366, "height": 900})
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(base + f"/opp.html?id={o['id']}")
+            page.wait_for_selector("#arcGo", timeout=15000)
+            assert page.inner_text("#arcGo") == "放弃跟踪" and "danger" in page.get_attribute("#arcGo", "class")
+            assert page.evaluate("getComputedStyle(document.getElementById('arcGo')).backgroundColor") == "rgb(220, 38, 38)"
+            assert page.evaluate("parseFloat(getComputedStyle(document.getElementById('fuSave')).fontSize)") >= 15  # 主按钮比普通按钮大
+            if shot:
+                page.screenshot(path=f"{shot}/商机工作台_放弃跟踪按钮.png", full_page=False)
+            page.click("#arcGo")
+            page.wait_for_selector("#arcYes", timeout=5000)
+            assert "确定放弃跟踪「AZE-001 甘贾污水厂」" in page.inner_text("#arc")
+            page.fill("#arcWhy", "业主改为本国预算建设")
+            if shot:
+                page.screenshot(path=f"{shot}/商机工作台_放弃跟踪确认.png", full_page=False)
+            page.click("#arcYes")
+            page.wait_for_selector("#arcUndo", timeout=15000)
+            head = page.inner_text("#head")
+            assert "放弃" in head and "已归档" in head
+            box = page.inner_text("#arc")
+            assert "这个商机已归档" in box and _today().isoformat() in box and "业主改为本国预算建设" in box
+            assert "放弃跟踪,归档:业主改为本国预算建设" in page.inner_text("#timeline") and "阶段 → 放弃" in page.inner_text("#timeline")
+            if shot:
+                page.screenshot(path=f"{shot}/商机工作台_已归档.png", full_page=False)
+            row = next(r for r in b.rows("opportunity", props=["code", "stage", "archived", "archive_reason", "archived_at"]) if b.get("opportunity", r, "code") == "AZE-001")
+            assert b.get("opportunity", row, "stage") == "放弃" and b.get("opportunity", row, "archived") is True and b.get("opportunity", row, "archive_reason") == "业主改为本国预算建设"
+            assert len([r for r in b.rows("lead", props=["opportunity"]) if tstore.link_id(b.get("lead", r, "opportunity")) == o["id"]]) == 1  # 所属线索不动
+            # 商机总览:默认不算,说明行点「显示」才列
+            page.goto(base + "/opps.html")
+            page.wait_for_function("document.getElementById('arNote').textContent.includes('已归档')", timeout=15000)
+            assert "1 个商机没算进来" in page.inner_text("#arNote") and page.inner_text("#nList") == "1" and "AZE-001" not in page.inner_text("#list")
+            assert "全部已立项 1" in page.inner_text("#fStage")
+            if shot:
+                page.screenshot(path=f"{shot}/商机总览_已归档说明.png", full_page=False)
+            page.click("#arNote button")
+            page.wait_for_function("location.search.includes('ar=1') && document.getElementById('list').textContent.includes('AZE-001')", timeout=15000)
+            assert "已显示归档" in page.inner_text("#arNote") and "全部已立项 2" in page.inner_text("#fStage") and "已归档" in page.inner_text("#list")
+            if shot:
+                page.screenshot(path=f"{shot}/商机总览_显示已归档.png", full_page=False)
+            # 日历、首页助手也不算
+            page.goto(base + "/calendar.html")
+            page.wait_for_function("document.querySelectorAll('#fOpp option').length >= 2", timeout=15000)
+            assert "AZE-001" not in page.inner_text("#fOpp") and "AZE-003" in page.inner_text("#fOpp")
+            # 恢复跟踪
+            page.goto(base + f"/opp.html?id={o['id']}")
+            page.wait_for_selector("#arcUndo", timeout=15000)
+            page.click("#arcUndo")
+            page.wait_for_selector("#arcGo", timeout=15000)
+            assert "跟踪中" in page.inner_text("#head") and "已归档" not in page.inner_text("#head") and "恢复跟踪(取消归档)" in page.inner_text("#timeline")
+            row = next(r for r in b.rows("opportunity", props=["code", "stage", "archived"]) if b.get("opportunity", r, "code") == "AZE-001")
+            assert b.get("opportunity", row, "stage") == "跟踪中" and not b.get("opportunity", row, "archived")
+            # 手机宽度:按钮与确认框不把页面撑宽
+            phone = browser.new_page(viewport={"width": 390, "height": 844})
+            phone.on("pageerror", lambda e: errors.append(str(e)))
+            phone.goto(base + f"/opp.html?id={o['id']}")
+            phone.wait_for_selector("#arcGo", timeout=15000)
+            phone.click("#arcGo")
+            phone.wait_for_selector("#arcYes", timeout=5000)
+            assert phone.evaluate(LAYOUT, "main") == []
+            if shot:
+                phone.screenshot(path=f"{shot}/商机工作台_放弃跟踪确认_手机.png", full_page=False)
+            phone.click("#arcYes")
+            phone.wait_for_selector("#arcUndo", timeout=15000)
+            assert phone.evaluate(LAYOUT, "main") == []
+            if shot:
+                phone.screenshot(path=f"{shot}/商机工作台_已归档_手机.png", full_page=False)
+            phone.goto(base + "/opps.html")
+            phone.wait_for_function("document.getElementById('arNote').textContent.includes('已归档')", timeout=15000)
+            if shot:
+                phone.screenshot(path=f"{shot}/商机总览_已归档说明_手机.png", full_page=False)
+            browser.close()
+            assert not errors, errors
+    finally:
+        srv.shutdown()
+        srv.assistant.shutdown()

@@ -196,7 +196,7 @@
     const PLANT = ["name", "name_zh", "kind", "status", "capacity", "pop_served", "built", "level", "process", "upgrades", "operator", "coords", "source"];
     const plantsOf = (oid) => P.has(oid, "city") ? P.records(oid, { filter: P.and(P.cond(oid, "city", "is", id)), orderBy: [{ fieldId: P.f(oid, "capacity"), order: "desc" }], props: PLANT }) : Promise.resolve(null);
     const listsP = Promise.all([  // 这几张清单只要城市编号:与读整条城市记录同时发出,不排队
-      P.has("opportunity", "city") ? P.records("opportunity", { filter: P.and(P.cond("opportunity", "city", "is", id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "size_value", "currency", "size_cny"] }) : Promise.resolve([]),
+      P.has("opportunity", "city") ? P.records("opportunity", { filter: P.and(P.cond("opportunity", "city", "is", id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "size_value", "currency", "size_cny"].concat(P.OPP_ARC) }) : Promise.resolve([]),
       P.has("lead", "city") ? P.records("lead", { filter: P.and(P.cond("lead", "city", "is", id)), take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }],
         props: ["key", "title", "url", "category", "published", "found_at", "nearest_deadline", "summary_zh", "project_name", "opportunity", "status"] }) : Promise.resolve([]),
       plantsOf("supply_plant"), plantsOf("sewage_plant"),
@@ -213,7 +213,8 @@
     P.backLink($("back"), iso ? "city.html?" + new URLSearchParams({ c: iso }) : "city.html", iso ? cnm + "全部城市" : "全部城市");
     $("rel").innerHTML = P.marketLinks(iso, cnm);
     $("openRow").innerHTML = P.open("city", id, "在表格里打开城市 ↗");
-    const [opps, leads, supply, sewage] = await listsP;
+    const [oppsAll, leads, supply, sewage] = await listsP;
+    const opps = oppsAll.filter((o) => !P.isArchived(o)), nArc = P.archivedOpps(oppsAll).length;  // 已归档(放弃跟踪)的商机不列(glossary.archived_opp)
     /* 水厂:规模从大到小;改造扩建一行一次,原样分行显示 */
     const plantTable = (oid, list, empty) => {
       if (list === null) return '<p class="empty">「' + empty + '」表还没建(跑一次建表命令后这里就有)。</p>';
@@ -238,9 +239,9 @@
     $("info").innerHTML = P.factsHtml(kv.map(([k, v]) => [k, v, { html: true }])) +
       (P.riskFacts("city", ct, iso) ? '<h3>水风险与经济(趋势参考)</h3>' + P.riskFacts("city", ct, iso) : "") +
       '<p class="muted small">面积、地区生产总值、水价公开数据里没有,在城市表里补上就显示,密度随后自动算。线索、商机的「城市」一栏由人选,选上了就出现在这里。</p>';
-    $("opps").innerHTML = !opps.length ? '<p class="empty">还没有商机关联到这座城市。</p>' :
+    $("opps").innerHTML = (nArc ? '<p class="muted small">已归档(放弃跟踪)的 ' + nArc + ' 个商机没列出来,在 <a href="opps.html?stage=*&ar=1">商机总览</a> 点「显示」看。</p>' : "") + (!opps.length ? '<p class="empty">还没有商机关联到这座城市。</p>' :
       P.tableHtml(["编号", "名称", "我方阶段", "投资规模", "负责人", "公开进度", "下一节点", ""], opps.map((o) => { const q = (p) => P.get("opportunity", o, p);
-        return [P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(q("code") || "") + "</a>"), q("name_zh"), q("stage") || "建议", P.sizeText("opportunity", o), P.text(q("owner")), q("public_stage"), q("next_milestone"), P.raw(P.open("opportunity", o.id))]; }));
+        return [P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(q("code") || "") + "</a>"), q("name_zh"), q("stage") || "建议", P.sizeText("opportunity", o), P.text(q("owner")), q("public_stage"), q("next_milestone"), P.raw(P.open("opportunity", o.id))]; })));
     $("leads").innerHTML = !leads.length ? '<p class="empty">还没有线索关联到这座城市。</p>' :
       P.tableHtml(["标题", "类别", "发布", "最近截止", "所属商机", "处理状态", ""], leads.slice(0, 100).map((l) => { const q = (p) => P.get("lead", l, p);
         return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), q("nearest_deadline"), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));

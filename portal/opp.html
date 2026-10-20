@@ -13,6 +13,7 @@
 <script>document.getElementById("nav").innerHTML = P.nav("opps.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
   <div id="head"><p class="muted">读取中…</p></div>
+  <div id="arc"></div>
   <div class="two">
     <div class="col">
       <div class="panel form" id="fuForm">
@@ -60,7 +61,7 @@
 (async function () {
   const $ = (id) => document.getElementById(id);
   const rid = new URLSearchParams(location.search).get("id");
-  let opp = null, me = null, countryName = "";
+  let opp = null, me = null, countryName = "", canWrite = false;
   const g = (p) => P.get("opportunity", opp, p);
   const lines = (v) => String(v || "").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
   let numOf = {}, cinfo = {};  // 出处角标:[8位线索号] → 序号 + 可点开的线索
@@ -80,13 +81,14 @@
     const stage = g("stage") || "建议";
     document.title = "全球水务开源情报 · " + (g("code") || "") + " " + (g("name_zh") || "");
     $("head").innerHTML = '<div class="opphead"><div><a href="opps.html" class="muted">‹ 商机总览</a><h1>' + P.esc(g("code") || "") + " " + P.esc(g("name_zh") || "") +
-      " " + P.stageTag(stage) + "</h1>" +
+      " " + P.stageTag(stage) + (P.isArchived(opp) ? " " + P.tagHtml("已归档", "", "放弃跟踪") : "") + "</h1>" +
       '<p class="muted">' + [g("name_local"), countryName ? '<a href="country.html?iso=' + encodeURIComponent(countryName.iso) + '">' + P.esc(countryName.zh) + "</a>" : "", P.text(g("city")) ? P.esc(P.text(g("city"))) : "", g("location"), g("priority") ? "优先级 " + P.esc(g("priority")) : "", P.text(g("owner")) ? "负责人 " + P.esc(P.text(g("owner"))) : "未定负责人"].filter(Boolean).join(" · ") + "</p></div>" +
       P.factsHtml([["公开进度", g("public_stage") || "—", { note: g("public_stage_note") || "" }], ["下一节点", g("next_milestone") || "—"],
         ["下一步", (g("next_step") || "—") + (g("next_due") ? " · 到期 " + P.day(g("next_due")) : "")], ["当前判断", g("judgment") || "—"],
         ["投资规模", P.sizeText("opportunity", r) || (g("size_usd") ? "≈ " + Number(g("size_usd")).toLocaleString() + " 美元" : "—")],
         ["投标资格", g("eligibility") || "—", { note: g("eligibility_basis") || "" }], ["最晚启动", P.day(g("latest_start")) || "—"]]) +
       '<p class="muted">' + P.open("opportunity", rid, "在表格里打开这个商机 ↗") + "</p></div>";
+    renderArchive();
     $("ownerNow").textContent = P.text(g("owner")) || "(未定)";
     $("prio").value = g("priority") || "";
     $("note").value = g("internal_note") || "";
@@ -95,6 +97,45 @@
     $("facts").innerHTML = sec("建设内容与规模", g("scope") ? "<p>" + cites(g("scope")) + "</p>" : "", true) + sec("资金", list(g("financing")), true) + sec("标段", list(g("packages")), false) +
       sec("业主与执行机构", g("owner_org") ? "<p>" + cites(g("owner_org")) + "</p>" : "", false) + sec("参与方", list(g("parties")), false) + sec("建议理由(机器)", g("ai_reason") ? "<p>" + cites(g("ai_reason")) + "</p>" : "", false) +
       sec("待核实", list(g("pending")), false) + sec("别名与外部编号", list(g("aliases")) + list(g("external_ids")), false) + P.citeNote(numOf, cinfo);
+  }
+
+  /* 放弃跟踪 / 归档(本体 A50,glossary.archived_opp):在跟踪的四档 → 「放弃跟踪」(阶段改「放弃」+ 勾已归档);已结束的未中标、放弃 → 「归档」(只勾已归档);
+     已归档的顶上一条说明(日期、原因)和「恢复跟踪」(去掉已归档,「放弃」的改回「跟踪中」)。每次都留一条跟进,不删、所属线索不动。表里还没这几个字段(没跑建表)时不显示 */
+  function renderArchive() {
+    const el = $("arc"); el.innerHTML = "";
+    if (!P.has("opportunity", "archived") || !canWrite) return;
+    const stage = g("stage") || "建议", tracked = P.TRACKED.includes(stage), decided = P.DECIDED.includes(stage);
+    if (P.isArchived(opp)) {
+      el.innerHTML = '<div class="note n-warn arc-box"><div><b>这个商机已归档</b>(放弃跟踪' + (P.day(g("archived_at")) ? " · " + P.day(g("archived_at")) : "") + ")" + (g("archive_reason") ? ":" + P.esc(g("archive_reason")) : "") +
+        '<br><span class="muted small">商机总览、日历、首页与助手默认不算它;所属线索、跟进、报告都还在。</span></div><button type="button" class="btn primary" id="arcUndo">恢复跟踪</button></div>';
+      $("arcUndo").onclick = () => archive(false);
+      return;
+    }
+    if (!decided) return;  // AI 推荐、不跟进的在「线索处理」那一步定,这里不归档
+    el.innerHTML = '<div class="arc-act"><button type="button" class="btn ' + (tracked ? "danger" : "primary") + '" id="arcGo">' + (tracked ? "放弃跟踪" : "归档这个商机") + "</button>" +
+      '<span class="muted small">' + (tracked ? "阶段改为「放弃」并归档:商机总览、日历、首页默认不再算它;不删,所属线索、跟进都还在,可以恢复。" : "已结束的商机归档后商机总览默认不再列它;不删,可以恢复。") + "</span></div>";
+    $("arcGo").onclick = () => {
+      el.innerHTML = '<div class="note n-warn arc-box"><div><b>确定' + (tracked ? "放弃跟踪" : "归档") + "「" + P.esc(g("code") || "") + " " + P.esc(g("name_zh") || "") + '」?</b><br><label class="small">原因(可不写)<br><input id="arcWhy" placeholder="比如:业主改为本国预算建设,不再国际招标"></label></div>' +
+        '<span class="arc-btns"><button type="button" class="btn danger" id="arcYes">确定' + (tracked ? "放弃" : "归档") + '</button><button type="button" class="btn" id="arcNo">取消</button></span></div>';
+      $("arcWhy").focus();
+      $("arcNo").onclick = renderArchive;
+      $("arcYes").onclick = () => archive(true, $("arcWhy").value.trim(), tracked);
+    };
+  }
+  async function archive(on, why, wasTracked) {
+    const btns = [...$("arc").querySelectorAll("button")]; btns.forEach((b) => { b.disabled = true; });
+    try {
+      const stage = g("stage") || "建议", today = P.today();
+      const values = on ? { archived: true, archive_reason: why || "", archived_at: today } : { archived: false };
+      let newStage = "";
+      if (on && wasTracked) newStage = "放弃";
+      if (!on && stage === "放弃") newStage = P.TRACKED[0];
+      if (newStage) values.stage = newStage;
+      await P.patch("opportunity", rid, values);
+      await P.create("followup", { opportunity: rid, day: today, author: me && me.id, content: on ? "放弃跟踪,归档" + (why ? ":" + why : "") : "恢复跟踪(取消归档)", stage_change: newStage || "" });
+      P.toast(on ? "已归档" + (newStage ? ",阶段改为「放弃」" : "") : "已恢复" + (newStage ? ",阶段改回「" + newStage + "」" : ""));
+      await Promise.all([loadOpp(), loadLists()]);
+    } catch (e) { P.toast(e.message, true); btns.forEach((b) => { b.disabled = false; }); }
   }
 
   async function loadLists() {
@@ -165,7 +206,8 @@
   try {
     await P.load();
     if (P.isPartner) return P.partnerOnly();  // 伙伴帐号不开放商机跟进
-    if (!(await P.canWrite())) P.guest();  // 游客帐号(查看者)只能看
+    canWrite = await P.canWrite();
+    if (!canWrite) P.guest();  // 游客帐号(查看者)只能看
     if (!rid) { $("head").innerHTML = '<div class="note n-bad">网址里没有商机编号,从 <a href="opps.html">商机总览</a> 点进来。</div>'; return; }
     P.choices("followup", "judgment").forEach((s) => { const op = document.createElement("option"); op.textContent = s; $("fuJudg").appendChild(op); });
     P.choices("opportunity", "stage").forEach((s) => { const op = document.createElement("option"); op.textContent = s; $("fuStage").appendChild(op); });

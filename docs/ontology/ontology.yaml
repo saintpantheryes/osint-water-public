@@ -16,7 +16,7 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.34
+version: 2.35
 date: 2026-10-20
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
@@ -155,6 +155,13 @@ changes_v2_16:   # 已中标项目补数据源(2026-10-13):使用方看到摩洛
   - 世行数据把几家韩国公司(也有刚果本地单位)的国别录成了朝鲜:世行不与朝鲜往来,导入时改回韩国(刚果的按借款国)
   - 要跑一次建表命令(新字段)
 
+changes_v2_35:   # 商机放弃跟踪与归档(2026-10-20):使用方问「现在的商机可以放弃跟踪吗?然后这条商机也存到归档商机里面去」,并要「系统内的关键操作按钮做醒目一点」
+  - 以前放弃只能在「记一笔跟进」里把阶段改成「放弃」,商机仍留在商机总览的「全部已立项」里,没有归档。现在商机加三个人写的属性:已归档、归档原因、归档时间
+  - 商机工作台加「放弃跟踪」按钮(A50,二次确认、可写一句原因):阶段改「放弃」(已结束的不改)、勾「已归档」、记原因与日期,自动留一条跟进;不删、所属线索不动。
+    已归档的商机页顶上一条说明(日期、原因),按钮变「恢复跟踪」:去掉已归档,「放弃」的改回「跟踪中」,再留一条跟进
+  - 商机总览、日历、报告页选商机、国别概况、首页与助手默认不算已归档的商机,说明行「已归档 N 个商机 · 显示」(网址 ar=1,同过期线索归档的样式);点开已归档商机仍看全部内容。
+    口径 tracked / decided 都不含已归档(glossary.archived_opp);后台日报、周报月报、日历订阅同一口径
+  - 主按钮改醒目(更大、更深、带阴影),危险操作(放弃跟踪)用红色主按钮;各处关键操作都用主按钮
 changes_v2_34:   # 过期线索归档(2026-10-20):使用方问「线索是否有有效期?…所有过期线索标个归档,以免数据越堆越多影响读取速度」
   - 线索加三个机器写的属性:已归档、归档原因、归档时间。后台每天零点后(E8)把过期线索标「已归档」(A49):截止日已过的,或发布(没有发布日期按发现时间)超过一年且没归入商机的;
     不删、不改处理状态;人手工取消归档(勾掉「已归档」)的不再打回(归档时间还在即不再碰)。R2 的例外(机器维护的运行状态),同 A19
@@ -441,6 +448,8 @@ objects:
         - {from: 跟踪中, to: 放弃, by: human}
         - {from: 准备投标, to: 放弃, by: human}
         - {from: 已投标, to: 放弃, by: human}
+        - {from: 中标, to: 放弃, by: human, note: 履约期放弃(少见);「放弃跟踪」按钮对在跟踪的四档都可用}
+        - {from: 放弃, to: 跟踪中, by: human, note: 「恢复跟踪」}
     properties:
       - {id: code, name: 商机编号, type: text, by: ai, required: true, format: "ISO3-三位序号;序号 = 该国已有最大序号 + 1，只增不复用(见 glossary.opp_code)", example: AZE-003}
       - {id: name_zh, name: 名称, type: text, by: ai, required: true}
@@ -482,6 +491,9 @@ objects:
       - {id: priority, name: 优先级, type: enum, enum: [A, B, C], by: human, taxonomy: priority}
       - {id: owner, name: 负责人, type: "link:member", by: human}
       - {id: internal_note, name: 内部备注, type: longtext, by: human}
+      - {id: archived, name: 已归档, type: bool, by: human, note: "放弃跟踪(A50)时勾上;商机跟进各页、首页与助手默认不算已归档的商机(glossary.archived_opp),点开仍看全部。「恢复跟踪」去掉"}
+      - {id: archive_reason, name: 归档原因, type: text, by: human, example: 业主改为本国预算建设, note: 放弃跟踪时写的一句原因(可不写)}
+      - {id: archived_at, name: 归档时间, type: date, by: human, note: 点「放弃跟踪」那天}
       - {id: lead_count, name: 所属线索数, type: number, by: derived, where: teable 汇总(关联「所属线索」计数)}
       - {id: next_milestone, name: 下一时间节点, type: text, by: derived, where: "teable 条件查找(未发生、日期 ≥ 今天的最早一个);含今天，隔天不重算，页面与报告自己算(R12)"}
       - {id: latest_start, name: 最晚启动, type: date, by: derived, note: 下一节点日期 − 内部流程周期, where: "teable 汇总(时间节点的「最晚启动(辅助)」最小值);周期来自 profile 的 lead_times，只对采购截止类节点算;含今天(R12)"}
@@ -1527,6 +1539,15 @@ actions:
     writes: [lead.archived, lead.archive_reason, lead.archived_at]
     note: "没标归档、也没归档时间的线索里:最近截止 < 今天的记「截止已过」;发布日期(没有按发现时间)早于一年前且所属商机为空的记「超过一年」。只标记,不删、不改处理状态(R13)。人勾掉「已归档」后归档时间还在,机器不再打回。R2 的例外(机器维护的运行状态),同 A19。"
     rules: [R2, R13]
+  - id: A50
+    name: 放弃跟踪(归档商机)
+    actor: human
+    trigger: 商机工作台点「放弃跟踪」(二次确认,可写一句原因)
+    reads: [opportunity]
+    writes: [opportunity.stage, opportunity.archived, opportunity.archive_reason, opportunity.archived_at, followup.stage_change]
+    note: "在跟踪的改阶段为「放弃」(已结束的未中标 / 放弃不改),勾「已归档」,记原因与当天日期,留一条跟进「放弃跟踪:原因」(阶段变更 = 放弃)。不删,所属线索不动,点开仍看全部。
+      「恢复跟踪」反过来:去掉已归档,「放弃」的改回「跟踪中」,再留一条跟进。已归档的商机在商机跟进各页、首页、助手、后台报告默认不算(glossary.archived_opp)"
+    rules: [R5, R6]
 rules:
   - id: R1
     name: 一个对象只存一处
@@ -2418,16 +2439,22 @@ glossary:
     used_in: [趋势机会]
   tracked:
     term: 跟踪中的商机(在跟踪)
-    means: 我方阶段 ∈ 跟踪中、准备投标、已投标、中标;即不是 建议、不跟进、未中标、放弃，也不是空
+    means: 我方阶段 ∈ 跟踪中、准备投标、已投标、中标;即不是 建议、不跟进、未中标、放弃，也不是空;且没勾「已归档」(archived_opp)
     stages: [跟踪中, 准备投标, 已投标, 中标]
     used_in: [线索总览卡片「跟踪中的商机」, 漏斗第四级, 日历缺省范围, 商机总览缺省, 周报月报的「未来 N 天时间节点」范围, 「商机总览 · 下一步已逾期」]
     code: portal.js P.tracked;core/jobs/reports.py build_periodic 的 tracked
   decided:
     term: 已立项的商机(人定过的)
-    means: 我方阶段 ∉ 未立项(建议、不跟进)，即人确认跟踪过的:跟踪中、准备投标、已投标、中标，加上已结束的未中标、放弃。「商机跟进」各页只算这些;AI 推荐的在人确认之前不进这一步(使用方 2026-10-16)
+    means: 我方阶段 ∉ 未立项(建议、不跟进)，即人确认跟踪过的:跟踪中、准备投标、已投标、中标，加上已结束的未中标、放弃;且没勾「已归档」(archived_opp)。「商机跟进」各页只算这些;AI 推荐的在人确认之前不进这一步(使用方 2026-10-16)
     stages: [跟踪中, 准备投标, 已投标, 中标, 未中标, 放弃]
     used_in: [「商机总览」三页与其筛选数字、新线索提醒]
     code: portal.js P.decided
+  archived_opp:
+    term: 已归档的商机
+    means: 商机勾了「已归档」(人点「放弃跟踪」,A50)。tracked、decided 两个口径都不含它;商机总览、日历、报告页选商机、国别概况、首页与助手默认不算,说明行「已归档 N 个商机 · 显示」(网址 ar=1)点开才算;商机工作台点开仍看全部,并有「恢复跟踪」(使用方 2026-10-20)
+    stages: []
+    used_in: [商机总览说明行, 商机工作台顶上的说明与「恢复跟踪」]
+    code: portal.js P.isArchived / P.oppArcNote;core/jobs/brief.py、reports.py、calendar_feed.py 的 is_archived
   ai_suggested:
     term: AI 推荐的商机
     means: 我方阶段 = 建议;机器新建的、人还没定跟不跟的商机。表格视图名仍是「建议商机」，页面统一叫 AI 推荐

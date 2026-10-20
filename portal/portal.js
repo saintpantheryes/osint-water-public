@@ -1322,10 +1322,22 @@
     toast(msg, bad) { let el = document.getElementById("toast"); if (!el) { el = document.createElement("div"); el.id = "toast"; document.body.appendChild(el); } el.textContent = msg; el.className = bad ? "bad show" : "show"; clearTimeout(this._tt); this._tt = setTimeout(() => { el.className = ""; }, bad ? 6000 : 2500); },
     /* 跟踪中的商机 = 我方阶段 ∈ 跟踪中、准备投标、已投标、中标(本体 glossary.tracked):线索总览的卡片与漏斗、日历、商机总览都用这一个口径 */
     get TRACKED() { return this.glossary("tracked").stages; },
-    tracked(opps) { const t = this.TRACKED; return opps.filter((o) => t.includes(this.get("opportunity", o, "stage"))); },
-    /* 已立项的商机(glossary.decided):人定过跟不跟的;AI 推荐、不跟进的留在「线索处理」那一步 */
+    tracked(opps) { const t = this.TRACKED; return opps.filter((o) => t.includes(this.get("opportunity", o, "stage")) && !this.isArchived(o)); },
+    /* 已立项的商机(glossary.decided):人定过跟不跟的;AI 推荐、不跟进的留在「线索处理」那一步。两个口径都不含已归档的(glossary.archived_opp) */
     get DECIDED() { return this.glossary("decided").stages; },
-    decided(opps) { const t = this.DECIDED; return opps.filter((o) => t.includes(this.get("opportunity", o, "stage"))); },
+    decided(opps) { const t = this.DECIDED; return opps.filter((o) => t.includes(this.get("opportunity", o, "stage")) && !this.isArchived(o)); },
+    /* 已归档的商机(本体 opportunity.archived,A50 放弃跟踪):商机跟进各页、首页与助手默认不算,说明行「已归档 N 个商机 · 显示」(网址 ar=1)点开才算;
+       商机工作台点开仍看全部。表里还没这个字段(没跑建表)时谁都不算已归档、不显示说明行。读商机时 props 带上 OPP_ARC 才认得出来 */
+    OPP_ARC: ["archived", "archive_reason", "archived_at"],
+    isArchived(o) { return this.get("opportunity", o, "archived") === true; },
+    archivedOpps(opps) { return opps.filter((o) => this.isArchived(o)); },
+    oppArcNote(el, n, shown, toggle) {
+      if (!el) return;
+      if (!n || !this.has("opportunity", "archived")) { el.innerHTML = ""; return; }
+      el.innerHTML = (shown ? "已显示归档(放弃跟踪)的 " + n + " 个商机。" : "已归档(放弃跟踪)的 " + n + " 个商机没算进来。") +
+        ' <button type="button" class="btn quiet">' + (shown ? "不显示" : "显示") + "</button>";
+      el.querySelector("button").onclick = toggle;
+    },
     /* 线索 → 商机(线索处理、线索总览共用一套):归入已有商机,线索记为「已处理」;或用这条线索新建商机(编号 国别ISO-序号,阶段取「跟踪中的商机」口径的第一档即跟踪中、负责人是登录人、出处挂这条线索)再归入 */
     nextOppCode(opps, iso) { let m = 0; opps.forEach((o) => { const x = String(this.get("opportunity", o, "code") || "").match(new RegExp("^" + iso + "-(\\d+)$")); if (x) m = Math.max(m, Number(x[1])); }); return iso + "-" + String(m + 1).padStart(3, "0"); },
     leadToOpp(leadId, oppId) { return this.patch("lead", leadId, { opportunity: oppId, status: "已处理" }); },
@@ -1337,7 +1349,7 @@
       return rec;
     },
     async opps() {
-      return this.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "next_milestone", "public_stage", "priority", "next_step", "next_due", "last_followup", "lead_count"] });
+      return this.records("opportunity", { props: ["code", "name_zh", "stage", "country", "owner", "next_milestone", "public_stage", "priority", "next_step", "next_due", "last_followup", "lead_count"].concat(this.OPP_ARC) });
     },
     /* 线索的中文名称(与 core/zh_name.py 同一规则,词表共用 zh_terms.json):项目名 → 中文摘要首行 → 从原题挑认得的词拼成「要点」→ 都没有为空。
        要点不是翻译,只说明这条线索讲什么;原题照样给出。 */
