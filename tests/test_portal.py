@@ -567,9 +567,8 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             assert page.locator(".hero-title").inner_text() == "全球水务开源情报" and page.locator(".hero-en").inner_text() == "Global Water OSINT" and page.locator(".hero-card #q").count() == 1
             assert (PORTAL / "fonts" / "huiwen-title.woff2").exists() and (PORTAL / "fonts" / "truetypewriter-latin.woff2").exists() and (PORTAL / "fonts" / "OFL.txt").exists() and 'url("fonts/huiwen-title.woff2")' in (PORTAL / "portal.css").read_text(encoding="utf-8")  # 站名字体随页面一起托管
             assert page.evaluate("document.fonts.check('20px \"Huiwen Mincho\"') && document.fonts.check('20px \"Typewriter Title\"')")  # 两个字体真的加载上了
-            # 首屏背景是字符动画(使用方 2026-10-20 参考 ascii-sharks 提出,替掉 10 MB 的视频):有帧图(私有配置仓 media/hero_ascii.jpg,原视频转的)就画原片的字符版,
-            # 没有(这里)就画字符世界地图;两种都不用浏览器放视频,一打开就有画面
-            assert page.locator("#heroFrame > canvas#heroAscii.hero-bg").count() == 1 and page.locator("#heroVideo").count() == 0 and "hero.mp4" not in (PORTAL / "index.html").read_text(encoding="utf-8")
+            # 提问框下是「ASCII 水面世界」动画(使用方 2026-10-20 参考 ascii-sharks 提出,替掉 10 MB 的视频):脚本自己画,不取任何文件,一打开就有画面
+            assert page.locator(".hero-card canvas#heroAscii").count() == 1 and page.locator("#heroVideo").count() == 0 and "media/hero" not in (PORTAL / "index.html").read_text(encoding="utf-8")
             page.wait_for_function("(() => { const c = document.getElementById('heroAscii'); return c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v > 80); })()", timeout=15000)  # 真的画上了字符(不只是底色)
             page.wait_for_selector("#menu", state="attached", timeout=15000)  # 顶栏与菜单卡片一打开就画好(读完配置补上帐号区)
             assert page.locator("#nav .menu-btn").count() == 1 and not page.locator("#menu").is_visible() and not page.locator("#menuVeil").is_visible()  # 首页只有「菜单」按钮
@@ -1119,9 +1118,9 @@ def test_phone_layout_uses_menu_bar_and_collapsed_filters():
 
 
 @pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
-def test_home_fits_one_screen_with_the_animation_as_background():
-    """首页首屏:整屏深蓝底,字符动画画布铺满整块首屏当背景(使用方 2026-10-20:「整个背景」,不限于一个卡片),顶栏、标题、提问框、示例与说明浮在上面;
-    1920×1080、1366×768 这类屏幕(浏览器里实际可见约 950、657 高)一屏放下,手机也是。"""
+def test_home_fits_one_screen_and_keeps_the_whole_animation():
+    """首页首屏(仿 america.gov 的大圆角面板):1920×1080、1366×768 这类屏幕(浏览器里实际可见约 950、657 高)一屏放下顶栏、标题、
+    提问框、动画卡、示例与说明;动画卡按「剩下的高度 × 16:10」定宽,画布铺满卡片(动画按画布实际大小画,不裁)。"""
     from playwright.sync_api import Error as PWError, sync_playwright
     fake, admin = _fake_with_schema()
     _seed(admin, fake)
@@ -1141,13 +1140,13 @@ def test_home_fits_one_screen_with_the_animation_as_background():
                 page.wait_for_timeout(300)
                 box = page.evaluate("""() => {
                   const r = (s) => document.querySelector(s).getBoundingClientRect();
-                  const f = r('#heroFrame'), c = r('#heroAscii');
-                  return { doc: f.bottom, vh: innerHeight, card: r('.hero-card').bottom, ex: r('#examples').bottom, note: r('#llmNote').bottom,
-                           fw: f.width, fh: f.height, cw: c.width, chh: c.height, title: getComputedStyle(document.querySelector('.hero-title')).color };
+                  const m = r('.hero-media'), c = r('#heroAscii');
+                  return { doc: r('#heroFrame').bottom, vh: innerHeight, card: r('.hero-card').bottom, ex: r('#examples').bottom, note: r('#llmNote').bottom,
+                           mw: m.width, mh: m.height, cw: c.width, chh: c.height };
                 }""")
-                assert box["doc"] <= box["vh"] + 1 and max(box["card"], box["ex"], box["note"]) <= box["vh"], (w, h, box)  # 首屏一屏放下(简介在首屏下面,往下滚才看到)
-                assert abs(box["fw"] - w) < 1 and box["fh"] >= h - 1 and abs(box["cw"] - box["fw"]) < 1 and abs(box["chh"] - box["fh"]) < 1, (w, h, box)  # 首屏铺满整个窗口,画布铺满首屏
-                assert box["title"] == "rgb(255, 255, 255)", box  # 深底白字
+                assert box["doc"] <= box["vh"] + 1 and max(box["card"], box["ex"], box["note"]) <= box["vh"], (w, h, box)  # 首屏面板一屏放下(简介在面板下面,往下滚才看到)
+                assert abs(box["mw"] / box["mh"] - 1.6) < 0.01 and abs(box["cw"] - box["mw"]) < 1 and abs(box["chh"] - box["mh"]) < 1, (w, h, box)  # 卡片 16:10,画布铺满
+                assert box["mw"] >= (300 if w < 640 else 340), (w, h, box)
                 page.close()
             browser.close()
     finally:

@@ -11,10 +11,9 @@
 <script src="ascii-water.js"></script>
 </head>
 <body class="hero-page">
-<!-- 首屏:整块深蓝底,背景是原首页视频转成的字符动画(ascii-water.js 画在 #heroAscii 上,铺满首屏、居中裁边;帧图在私有配置仓 portal/media/,
-     没有就画字符世界地图),顶栏、标题、提问框、示例浮在上面;1920×1080、1366×768 这类屏幕一屏放下。提问后首屏收起,换成对话模式 -->
+<!-- 仿 america.gov:顶栏与首屏放在一整块大圆角浅色面板里;动画卡的宽度按「屏幕剩下的高度 × 卡片宽高比」算(脚本写 --hero-used、--hero-ratio),
+     1920×1080、1366×768 这类屏幕一屏就能看全,片子照旧整幅显示不裁。提问后面板收起,换成对话模式 -->
 <div class="hero-frame" id="heroFrame">
-<canvas class="hero-bg" id="heroAscii" aria-hidden="true"></canvas>
 <!-- 顶栏与菜单紧跟着就画(不等读表,读完 load 补上帐号区);放在页尾的大脚本里的话,慢手机上会先画出没有顶栏的一帧,标题再被推下去 -->
 <div id="nav"></div>
 <script>document.getElementById("nav").innerHTML = P.nav("index.html", true);</script>
@@ -32,6 +31,10 @@
         <input id="q" type="text" autocomplete="off" placeholder="试试「最近 7 天埃及有哪些新线索」" maxlength="6000" aria-label="向助手提问">
         <button type="submit" class="go" id="go" aria-label="提问">→</button>
       </form>
+      <div class="hero-media" id="heroMedia">
+        <!-- 原视频转成的字符动画(帧图在私有配置仓 portal/media/hero_ascii.jpg,约 1 MB;ascii-water.js 按格子写彩色字符,整幅放进卡片不裁;没有帧图就画字符世界地图) -->
+        <canvas id="heroAscii" aria-hidden="true" data-look="ascii"></canvas>
+      </div>
     </div>
     <div class="frow hero-examples" id="examples"></div>
     <div class="frow hero-examples hero-recent" id="recent" hidden></div>
@@ -1167,6 +1170,23 @@
     });
   }
 
+  /* 首屏一屏放下:量出动画卡以外的东西(顶栏、标题、提问框、示例、说明、面板留白)一共占多高,写进 --hero-used;
+     CSS 拿「屏幕高度 − 这个数」当动画的高,再乘卡片的宽高比(--hero-ratio,16:10)得出动画卡的宽,太宽、太窄各有上下限 */
+  function sizeHero() {
+    if (document.body.classList.contains("asked")) return;
+    const hero = $("hero"), media = $("heroMedia"), frame = $("heroFrame");
+    if (!hero || !media || !frame) return;
+    const cs = getComputedStyle(frame);
+    const top = hero.getBoundingClientRect().top + window.scrollY;
+    const used = Math.ceil(top + hero.offsetHeight - media.offsetHeight + parseFloat(cs.paddingBottom || 0) + parseFloat(cs.marginBottom || 0));
+    const root = document.documentElement.style;
+    if (root.getPropertyValue("--hero-used") !== used + "px") root.setProperty("--hero-used", used + "px");
+  }
+  sizeHero();
+  if (window.ResizeObserver) new ResizeObserver(() => sizeHero()).observe($("hero"));
+  window.addEventListener("resize", sizeHero);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeHero);
+
   /* 提问后切成对话模式:标题、动画、示例全部收起(动画画布不在视野里自动停),问题靠右、答案靠左,提问框与说明固定在页面底部;点左上角站名回到完整首页 */
   function asked() {
     if (document.body.classList.contains("asked")) return;
@@ -1306,18 +1326,21 @@
   const over = '<a href="overview.html">看线索总览(漏斗、地图、最新报告)→</a> ';
   $("llmNote").innerHTML = over;
   $("askForm").onsubmit = (ev) => { ev.preventDefault(); submit($("q").value); };
+  sizeHero();
   fetch("api/assistant/health", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((health) => {  // 没起也能问,规则在后台
     if (health && Array.isArray(health.examples) && health.examples.length && health.examples.join("\n") !== EXAMPLES.join("\n")) showExamples(health.examples);
     if (health) $("llmNote").innerHTML = over + P.esc(health.llm ? "问题由模型(" + health.llm + ")翻成条件;模型看不到表里的数据,只看到你的问题。" : "当前按词表解析(" + (health.note || "未配置模型密钥") + "):能认国名、领域、类别、出资方、时间、阶段这些词,中标记录还认合同类型、中标单位国别与规模,自由发挥的问法可能听不懂。");
     else $("llmNote").innerHTML = over + "助手服务未就绪(后台任务没起来或还没更新到这一版);其余页面照常可用。";
+    sizeHero();
   });
 
-  /* 首屏背景动画:原视频的字符版(帧图 media/hero_ascii.jpg,约 0.6 MB;没有就画字符世界地图),不等读表;切到对话模式后首屏收起,画布不在视野里自动停 */
-  window.asciiWater($("heroAscii"), { src: "media/hero_ascii" });
+  /* 首屏动画:字符画的世界地图(ascii-water.js),不取文件、不等读表,一打开就画;切到对话模式后标题与动画收起,画布不在视野里自动停 */
+  window.asciiWater($("heroAscii"), { src: "media/hero_ascii", fit: "contain", look: new URLSearchParams(location.search).get("look") || $("heroAscii").dataset.look });
 
   /* 读表:配置、登录角色、词表、国别读完才能答题;提问在这之前就点了的,等它读完再答 */
   ready = (async function () {
     await P.load();
+    sizeHero();
     let bl;
     [countries, , bl] = await Promise.all([P.countries(), P.zhTerms(), P.ignored()]);  // 几样互不依赖,同时取
     igIds = new Set(countries.filter((c) => bl.has(P.get("country", c, "key"))).map((c) => c.id));

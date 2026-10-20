@@ -3,7 +3,7 @@
    1. 有「帧图」时(私有配置仓 portal/media/hero_ascii.jpg + .json,由 scripts/ascii_sheet.py 从原来的首页视频转成:每帧缩成 112×49 个格子,所有帧拼成一张图,
       约 0.6 MB,原视频 10 MB):按格子取原片的颜色与亮度,亮的地方字符密、暗的地方留空,颜色沿用原片,10 帧/秒循环——就是原视频的字符版,铺满整块背景(居中裁边)。
    2. 没有帧图时(公开仓自己跑、测试里):画一张字符世界地图,海面波纹流动,陆地上冒一圈圈「信号」;陆地轮廓是 world.geo.json 按 1° 算好的位图(scripts/landmask.py),随脚本带着。
-   用法:window.asciiWater(canvas, { src: "media/hero_ascii" }) → { stop }。系统设了「减少动态效果」只画一帧;标签页不可见、画布滚出视野时暂停。 */
+   用法:window.asciiWater(canvas, { src: "media/hero_ascii", fit: "contain", look: "ascii" }) → { stop }。look 可选 ascii / dense / blocks / dots;fit 为 cover(铺满裁边)或 contain(整幅)。系统设了「减少动态效果」只画一帧;标签页不可见、画布滚出视野时暂停。 */
 (function () {
   "use strict";
   var MASK_W = 360, MASK_H = 140, LAT_TOP = 80;  // 位图:经度 -180…180、纬度 80…-60,每格 1°
@@ -25,7 +25,13 @@
   function miller(lat) { var r = lat * Math.PI / 180; return 1.25 * Math.log(Math.tan(Math.PI / 4 + 0.4 * r)); }
   function unmiller(y) { return (Math.atan(Math.exp(y / 1.25)) - Math.PI / 4) / 0.4 * 180 / Math.PI; }
 
-  var RAMP = [" ", " ", ".", ":", "-", "=", "+", "*", "#", "%", "@"];  // 按亮度从暗到亮挑字符,最暗的两档留空
+  // 几种「画法」(参考 ascii-magic.com 的 Look):按亮度从暗到亮挑字符
+  var LOOKS = {
+    ascii: [" ", " ", ".", ":", "-", "=", "+", "*", "#", "%", "@"],          // 最暗的两档留空
+    dense: [".", ":", "-", "=", "+", "*", "#", "%", "@", "@"],              // 密:每格都有字
+    blocks: [" ", "\u2591", "\u2591", "\u2592", "\u2592", "\u2593", "\u2593", "\u2588", "\u2588"],  // 方块 ░▒▓█
+    dots: [" ", "\u00b7", "\u00b7", "\u2022", "\u2022", "\u25cf", "\u25cf", "\u25cf"]   // 点阵 ·•●
+  };
 
   /* 取帧图:说明 JSON + 整张图读进内存(像素数组);任一步失败就回退到世界地图 */
   function loadSheet(src) {
@@ -53,6 +59,7 @@
     var fps = opts.fps || 24, cols = 0, rows = 0, cw = 0, ch = 0, dpr = 1;
     var kind = null, edge = null, pings = [], last = 0, t0 = performance.now(), raf = 0, visible = true, onscreen = true, stopped = false;
     var sheet = null, sc = null;  // 帧图及其在画布上的摆法(格子大小、裁掉多少)
+    var RAMP = LOOKS[opts.look] || LOOKS.ascii, cover = opts.fit !== "contain", sat = opts.saturate || 1.35, lift = opts.lift || 0.12;  // 画法、铺法(cover 裁边铺满 / contain 整幅放进去)、颜色加浓、整体提亮
 
     function build() {
       var W = canvas.clientWidth, H = canvas.clientHeight;
@@ -81,8 +88,8 @@
       ctx.font = "600 " + (ch * 0.92).toFixed(1) + "px ui-monospace, Menlo, Consolas, \"Courier New\", monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       if (sheet) {
-        /* 帧图铺满画布(像 background-size: cover):格子放大到宽、高都盖住,多出来的部分居中裁掉 */
-        var cw2 = Math.max(W / sheet.cols, H * 0.6 / sheet.rows), ch2 = cw2 / 0.6;
+        /* 帧图摆进画布:cover = 格子放大到宽、高都盖住,多出来的居中裁掉;contain = 整幅放进去,四边留底色 */
+        var cw2 = (cover ? Math.max : Math.min)(W / sheet.cols, H * 0.6 / sheet.rows), ch2 = cw2 / 0.6;
         sc = { cw: cw2, ch: ch2, c0: Math.max(0, Math.floor((sheet.cols - W / cw2) / 2)), r0: Math.max(0, Math.floor((sheet.rows - H / ch2) / 2)),
                nc: Math.min(sheet.cols, Math.ceil(W / cw2) + 1), nr: Math.min(sheet.rows, Math.ceil(H / ch2) + 1),
                ox: (W - sheet.cols * cw2) / 2, oy: (H - sheet.rows * ch2) / 2 };
@@ -103,9 +110,10 @@
         for (var c = sc.c0; c < sc.c0 + sc.nc && c < sheet.cols; c++) {
           var i = (row + fx + c) * 4, R = px[i], G = px[i + 1], B = px[i + 2];
           var lum = (0.299 * R + 0.587 * G + 0.114 * B) / 255;
-          var chr = RAMP[Math.min(RAMP.length - 1, Math.floor(lum * RAMP.length))];
+          var chr = RAMP[Math.min(RAMP.length - 1, Math.floor(Math.min(0.999, lum + lift * 0.5) * RAMP.length))];
           if (chr === " ") continue;
-          var k = ((R + 40) >> 4) + "," + ((G + 40) >> 4) + "," + ((B + 60) >> 4);  // 颜色量化成 16 级,同色一批写,少换画笔
+          var g = lum * 255, R2 = g + (R - g) * sat + lift * 255, G2 = g + (G - g) * sat + lift * 255, B2 = g + (B - g) * sat + lift * 255 + 20;  // 颜色加浓、提亮,深蓝底上看得清
+          var k = (Math.max(0, R2) >> 4) + "," + (Math.max(0, G2) >> 4) + "," + (Math.max(0, B2) >> 4);  // 颜色量化成 16 级,同色一批写,少换画笔
           (buckets[k] || (buckets[k] = [])).push(sc.ox + (c + 0.5) * sc.cw, y, chr);
         }
       }
