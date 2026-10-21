@@ -428,6 +428,10 @@
        采集不再涉及它们由后台按所有账号的忽略合起来做(A01)。没设过(字段空着)默认忽略中国;一个都不忽略时存「-」,和没设过分开。
        游客 → 默认;表或字段还没建 → 空集合。 */
     IGNORE_DEFAULT: ["CHN"],
+    /* 对比参照国别(glossary.compare_country,使用方 2026-10-20):中国不是市场,只在城市概况里作城市化进程的参照——国别筛选里叫「中国(对比)」,默认不列不计数,
+       选了才列;城市详情的「历史影像」自动挑一座人口相近的中国城市并排看。不受忽略国别影响;别的页面照旧不算它 */
+    COMPARE: new Set(["CHN"]),
+    cmpLabel(name) { return name + "(对比)"; },
     parseIsos(text) { return new Set(String(text || "").split(/[\s,;,;、]+/).filter((x) => /^[A-Za-z]{3}$/.test(x)).map((x) => x.toUpperCase())); },
     ignored() {
       if (!this._ignored) this._ignored = (async () => {

@@ -26,6 +26,7 @@
       <div class="frow"><b>搜索</b><input id="fText" placeholder="搜城市中文名、英文名或行政区" size="30" aria-label="搜城市"><span class="muted push" id="fNote"></span></div>
     </div>
     <p class="muted small ig-note" id="igNote"></p>
+    <p class="muted small ig-note" id="cmpNote"></p>
     <div id="cards"><div class="kpis"><div class="kpi"><div class="kv"><span class="kn">…</span></div><div class="kl">读取中</div></div></div></div>
     <h2>分布(拖左下角滑块按<span id="byName">人口</span>筛城市,清单跟着变;颜色越深数越大,红圈是有线索或商机;点圆点看这座城市;滚轮缩放,<a href="#" id="mapReset">复位</a>)</h2>
     <div class="panel"><div id="map" class="chart tall"></div></div>
@@ -44,7 +45,9 @@
         <div class="frow"><b>看法</b><span class="frow" id="imgMode"><button type="button" class="chip-btn on" data-m="play">逐年播放</button><button type="button" class="chip-btn" data-m="cmp">两图对比</button></span><span class="muted small push" id="imgPos"></span></div>
         <div id="playBox">
           <div class="frow playbar"><button type="button" class="btn primary" id="play">▶ 播放</button><input type="range" id="yr" min="0" max="0" value="0" aria-label="年份"><b class="yrLbl" id="yrLbl"></b><span class="muted small" id="yrSrc"></span></div>
-          <div class="mapbox"><div id="imgMap" class="chart tall"></div><span class="imglbl l" id="lblP"></span></div>
+          <!-- 右边(手机下面)并排一座人口相近的中国城市,同年份、同比例尺(glossary.compare_country);本身是中国城市时没有 -->
+          <div id="playGrid"><div><div class="mapbox"><div id="imgMap" class="chart tall"></div><span class="imglbl l" id="lblP"></span></div></div>
+            <div id="cnBox" hidden><div class="frow"><b>对比</b><select id="cnSel" aria-label="对比的中国城市"></select><span class="muted small">人口相近的中国城市,同年份、同比例尺,可换</span></div><div class="mapbox"><div id="mapC" class="chart tall"></div><span class="imglbl l" id="lblC"></span></div></div></div>
         </div>
         <div id="cmpBox" class="cmp" hidden>
           <div><div class="frow"><b id="sideL">左图</b><select id="imgL" aria-label="左图年份"></select></div><div class="mapbox"><div id="mapL" class="chart tall"></div><span class="imglbl l" id="lblL"></span></div></div>
@@ -125,28 +128,32 @@
        直接选了一个忽略的国别(比如从它的国别概况点过来)就照常列它的城市 */
     bl = await P.ignored();
     const isoOf = (ct) => { const c = countryOf(ct); return c ? P.get("country", c, "key") : ""; };
-    const ign = (ct) => bl.has(isoOf(ct));
-    const nIgn = all.filter(ign).length;
-    const showIg = () => !!state.ig || bl.has(state.c);
+    /* 对比参照国别(中国,P.COMPARE):它的城市只在选了「中国(对比)」时列出,不算进统计,也不算在忽略国别的数里 */
+    const cmp = (ct) => P.COMPARE.has(isoOf(ct));
+    const ign = (ct) => bl.has(isoOf(ct)) && !cmp(ct);
+    const nIgn = all.filter(ign).length, nCmp = all.filter(cmp).length;
+    const showIg = () => !!state.ig || (bl.has(state.c) && !P.COMPARE.has(state.c));
     const fillSel = () => {
-      const used = new Set(all.filter((ct) => showIg() || !ign(ct)).map((ct) => P.linkId(P.get("city", ct, "country"))));
-      P.fillCountrySelect($("fCountry"), countries.filter((c) => used.has(c.id)).map((c) => [P.get("country", c, "key"), P.get("country", c, "name_zh") || P.get("country", c, "key")]));
+      const used = new Set(all.filter((ct) => cmp(ct) || showIg() || !ign(ct)).map((ct) => P.linkId(P.get("city", ct, "country"))));
+      P.fillCountrySelect($("fCountry"), countries.filter((c) => used.has(c.id)).map((c) => { const iso = P.get("country", c, "key"), nm = P.get("country", c, "name_zh") || iso; return [iso, P.COMPARE.has(iso) ? P.cmpLabel(nm) : nm]; }));
       $("fCountry").value = state.c;
     };
     fillSel();
-    let map = null, hiddenN = 0;
+    let map = null, hiddenN = 0, cmpHit = 0;
     const draw = () => {
       const iso = state.c, words = state.q.toLowerCase();
+      const hit = (ct) => !words || [cname(ct), P.get("city", ct, "name_en"), P.get("city", ct, "admin")].some((x) => String(x || "").toLowerCase().includes(words));
       const pass = all.filter((ct) => {
         const c = countryOf(ct);
         if (iso && (!c || P.get("country", c, "key") !== iso)) return false;
+        if (!iso && cmp(ct)) return false;  // 对比参照国别的城市:只有直接选了它才列
         if (state.h === "lead" && !(Number(P.get("city", ct, "lead_count")) > 0)) return false;
         if (state.h === "opp" && !(Number(P.get("city", ct, "opp_count")) > 0)) return false;
-        if (words && ![cname(ct), P.get("city", ct, "name_en"), P.get("city", ct, "admin")].some((x) => String(x || "").toLowerCase().includes(words))) return false;
-        return true;
+        return hit(ct);
       });
       const base = showIg() ? pass : pass.filter((ct) => !ign(ct));
       hiddenN = pass.length - base.length;
+      cmpHit = !iso && words ? all.filter((ct) => cmp(ct) && hit(ct)).length : 0;  // 搜到的只在中国(对比)里:空清单时指过去
       /* 滑块的两端:这批城市里有数的最小、最大值(对数);生产总值大多还没填,没填的不在范围里 */
       const logs = base.map(metric).filter((v) => v > 0).map((v) => Math.log10(v));
       const range = logs.length ? { min: Math.floor(Math.min(...logs) * 10) / 10, max: Math.ceil(Math.max(...logs) * 10) / 10 } : null;
@@ -184,12 +191,17 @@
         .map(([v, l]) => ({ label: l, value: String(v) })));
       const zh = (n) => n.toLocaleString("zh-CN");
       const cOne = state.c && bl.has(state.c) && countries.find((c) => P.get("country", c, "key") === state.c);
-      $("fNote").textContent = all.length ? "共 " + zh(showIg() ? all.length : all.length - nIgn) + " 座" : "";
-      /* 筛选框下面一行(手机上筛选收起时也看得见):忽略国别的城市没算进来几座、点「显示」露出来 */
-      if (cOne) $("igNote").textContent = (P.get("country", cOne, "name_zh") || state.c) + "是你忽略的国别(地图上灰色,不再采集),这里照常列出它的城市。";
+      const cCmp = P.COMPARE.has(state.c) && countries.find((c) => P.get("country", c, "key") === state.c);
+      $("fNote").textContent = all.length ? "共 " + zh(cCmp ? nCmp : (showIg() ? all.length : all.length - nIgn) - nCmp) + " 座" : "";
+      /* 筛选框下面一行(手机上筛选收起时也看得见):忽略国别的城市没算进来几座、点「显示」露出来;中国只作对比参照,另一行说明 */
+      if (cCmp) $("igNote").textContent = "";
+      else if (cOne) $("igNote").textContent = (P.get("country", cOne, "name_zh") || state.c) + "是你忽略的国别(地图上灰色,不再采集),这里照常列出它的城市。";
       else P.igNote($("igNote"), nIgn ? [zh(nIgn) + " 座城市"] : [], !!state.ig, () => { state.ig = state.ig ? "" : "1"; fillSel(); draw(); });
+      $("cmpNote").innerHTML = cCmp ? P.esc(P.get("country", cCmp, "name_zh") || state.c) + "只作城市化进程的对比参照,不是市场:这里列出它的城市,市场统计、线索、商机都不算它们。" :
+        nCmp ? "中国 " + zh(nCmp) + " 座城市只作对比参照,没算进来。<a href=\"city.html?" + new URLSearchParams({ c: Array.from(P.COMPARE)[0] }) + "\">看中国城市 →</a>" : "";
       $("listTitle").textContent = "城市清单(" + ($("rangeNote").dataset.sel && (state.lo || state.hi) ? ($("byName").textContent + " " + $("rangeNote").dataset.sel + ",") : "") + "按人口从多到少" + (rows.length > SHOW ? ",列出前 " + SHOW + " 座,筛选或搜索看其余的" : "") + ")";
-      $("rows").innerHTML = !rows.length ? '<p class="empty">没有符合条件的城市' + (hiddenN ? "(忽略的国别里有 " + zh(hiddenN) + " 座符合,没列出;要看点筛选框下面的「显示」)" : "") + "。</p>" :
+      $("rows").innerHTML = !rows.length ? '<p class="empty">没有符合条件的城市' + (hiddenN ? "(忽略的国别里有 " + zh(hiddenN) + " 座符合,没列出;要看点筛选框下面的「显示」)" : "") +
+        (cmpHit ? "(中国(对比)里有 " + zh(cmpHit) + " 座符合,它只作对比参照;<a href=\"city.html?" + new URLSearchParams({ c: Array.from(P.COMPARE)[0], q: state.q }) + "\">到中国城市里看 →</a>)" : "") + "。</p>" :
         P.tableHtml(["城市", "国别", "行政区", "人口", "面积(km²)", "密度", "生产总值(亿美元)", "线索", "商机"].concat(plantCols ? ["自来水厂", "污水厂"] : []), rows.slice(0, SHOW).map((ct) => { const g = (p) => P.get("city", ct, p);
           return [nameCell(ct), countryCell(ct), g("admin") || "", num(g("population")), num(g("area_km2")), num(g("density")),
             P.raw(P.esc(num(g("gdp"))) + (g("gdp") && g("gdp_year") ? ' <span class="muted small">' + P.esc(String(g("gdp_year"))) + "</span>" : "")), String(g("lead_count") || 0), String(g("opp_count") || 0)]
@@ -327,7 +339,7 @@
     const SOURCES = EPOCHS.map(([y, fn, label]) => ({ k: "gls" + y, y, label, group: "Landsat 30 米(1975–2010)", make: () => new Gls({ epoch: y, fn, attribution: "Landsat: Esri, USGS, NASA" }) }))
       .concat(WAYBACK.map(([y, r]) => ({ k: "wb" + y, y: String(y), label: y + " · 高清", group: "高清影像(2014 起)",
         make: () => L.tileLayer("https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/" + r + "/{z}/{y}/{x}", { maxNativeZoom: 18, maxZoom: 18, attribution: "Esri Wayback" }) })));
-    let maps = null, playing = null;  // maps:{P, L, R} 三张 Leaflet 图,页签第一次打开时建
+    let maps = null, playing = null, mapC = null, cnReady = Promise.resolve(null), renderUrban = null;  // maps:{P, L, R} 三张 Leaflet 图,mapC 对比的中国城市;页签第一次打开时建
     const drawImagery = () => {
       if (maps) { Object.values(maps).forEach((m) => m.invalidateSize()); return; }
       const xy = latlon(g("coords"));
@@ -336,11 +348,11 @@
       let bad = 0;
       const onBad = () => { if (++bad === 6) $("imgNote").textContent = "影像加载不出来:影像来自国外服务器(Esri),可能是网络限制;换个网络或稍后再试。"; };
       /* 一张图的底子:缩放钮、比例尺、城市中心、经纬网、鼠标处坐标 */
-      const build = (el) => {
-        const m = L.map(el, { center, zoom: 11, worldCopyJump: false });
+      const build = (el, ctr, name) => {
+        const m = L.map(el, { center: ctr || center, zoom: 11, worldCopyJump: false });
         m.zoomControl.setPosition("topright"); m.attributionControl.setPrefix(false);
         L.control.scale({ metric: true, imperial: false }).addTo(m);
-        L.circleMarker(center, { radius: 5, color: "#fff", weight: 2, fillColor: "#ef4444", fillOpacity: 1 }).addTo(m).bindTooltip(cname(ct));
+        m.dot = L.circleMarker(ctr || center, { radius: 5, color: "#fff", weight: 2, fillColor: "#ef4444", fillOpacity: 1 }).addTo(m).bindTooltip(name || cname(ct));
         const grat = L.layerGroup().addTo(m);
         const drawGrat = () => { grat.clearLayers(); const z = m.getZoom(), step = z >= 14 ? 0.01 : z >= 12 ? 0.05 : z >= 10 ? 0.1 : z >= 8 ? 0.5 : 1, b = m.getBounds(), d = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
           const lab = (ll, txt) => L.marker(ll, { icon: L.divIcon({ className: "grat", html: txt, iconSize: null, iconAnchor: [-3, -2] }), interactive: false, keyboard: false });
@@ -366,7 +378,7 @@
       /* 逐年播放:进度条一格一个时点,按钮从当前位置往后放到最后;拖进度条看某一年 */
       let at = SOURCES.findIndex((o) => o.k === "gls1990");
       $("yr").max = String(SOURCES.length - 1); $("yr").value = String(at);
-      const showAt = (i) => { at = i; $("yr").value = String(i); $("yrLbl").textContent = SOURCES[i].y; $("yrSrc").textContent = SOURCES[i].label.replace(/^\d{4} ?/, ""); return maps.P.show(SOURCES[i].k); };
+      const showAt = (i) => { at = i; $("yr").value = String(i); $("yrLbl").textContent = SOURCES[i].y; $("yrSrc").textContent = SOURCES[i].label.replace(/^\d{4} ?/, ""); if (mapC) mapC.show(SOURCES[i].k); return maps.P.show(SOURCES[i].k); };
       const stop = () => { if (playing) clearTimeout(playing.t); playing = null; $("play").textContent = "▶ 播放"; };
       const play = () => { if (at >= SOURCES.length - 1) at = -1; playing = { t: 0 }; $("play").textContent = "❚❚ 暂停";
         const step = async () => { if (!playing) return; await showAt(at + 1); if (!playing) return; if (at >= SOURCES.length - 1) { stop(); return; } playing.t = setTimeout(step, 1500); };
@@ -383,12 +395,37 @@
       const narrow = () => window.matchMedia("(max-width: 600px)").matches;
       const sides = () => { $("sideL").textContent = narrow() ? "上图" : "左图"; $("sideR").textContent = narrow() ? "下图" : "右图"; };
       sides(); window.addEventListener("resize", sides);
+      /* 中国对比城市(glossary.compare_country):人口最接近的一座放右边(手机下面),同年份、同比例尺(只同步缩放,不同步位置);下拉可换,曲线图跟着换 */
+      cnReady = (async () => {
+        if (!c || P.COMPARE.has(iso)) return null;
+        const china = countries.find((x) => P.COMPARE.has(P.get("country", x, "key")));
+        if (!china) return null;
+        const list = (await P.records("city", { filter: P.and(P.cond("city", "country", "is", china.id)), props: ["key", "name_zh", "coords", "population"] }))
+          .filter((x) => latlon(P.get("city", x, "coords"))).sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0));
+        if (!list.length) return null;
+        const pop0 = Math.log10(Math.max(1, Number(g("population")) || 1));
+        const pick = list.reduce((best, x) => (Math.abs(Math.log10(Math.max(1, Number(P.get("city", x, "population")) || 1)) - pop0) < Math.abs(Math.log10(Math.max(1, Number(P.get("city", best, "population")) || 1)) - pop0) ? x : best), list[0]);
+        $("cnSel").innerHTML = list.map((x) => '<option value="' + x.id + '"' + (x === pick ? " selected" : "") + ">" + P.esc(cname(x)) + " · " + people(Number(P.get("city", x, "population")) || 0) + "</option>").join("");
+        $("cnBox").hidden = false; $("playGrid").classList.add("cmp");
+        const xy0 = latlon(P.get("city", pick, "coords"));
+        mapC = build($("mapC"), [xy0[1], xy0[0]], cname(pick)); mapC.lbl = $("lblC");
+        maps.P.invalidateSize();
+        let zs = false;
+        const zoomTo = (from, to) => { if (zs) return; zs = true; to.setZoom(from.getZoom(), { animate: false }); zs = false; };
+        mapC.on("zoomend", () => zoomTo(mapC, maps.P)); maps.P.on("zoomend", () => zoomTo(maps.P, mapC));
+        mapC.show(SOURCES[at].k);
+        const cnById = Object.fromEntries(list.map((x) => [x.id, x]));
+        $("cnSel").onchange = () => { const x = cnById[$("cnSel").value], xy = latlon(P.get("city", x, "coords")); mapC.setView([xy[1], xy[0]], maps.P.getZoom(), { animate: false });
+          mapC.dot.setLatLng([xy[1], xy[0]]).bindTooltip(cname(x)); mapC.show(SOURCES[at].k); if (renderUrban) renderUrban(x); };
+        return pick;
+      })().catch((e) => { console.warn("对比城市没取到", e); return null; });
       /* 看法切换 */
       $("imgMode").querySelectorAll("button").forEach((b) => { b.onclick = () => { const cmp = b.dataset.m === "cmp"; stop();
         $("imgMode").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
         $("playBox").hidden = cmp; $("cmpBox").hidden = !cmp;
         const from = cmp ? maps.P : maps.L;  // 露出来的图接着原来的位置看
-        Object.values(maps).forEach((m) => { m.invalidateSize({ animate: false }); m.setView(from.getCenter(), from.getZoom(), { animate: false }); }); }; });
+        Object.values(maps).forEach((m) => { m.invalidateSize({ animate: false }); m.setView(from.getCenter(), from.getZoom(), { animate: false }); });
+        if (mapC) { mapC.invalidateSize({ animate: false }); mapC.setZoom(from.getZoom(), { animate: false }); } }; });
       /* 各时点实际拍摄日期:问一次影像服务,写进下拉与播放说明(问不到就只写「前后」) */
       fetch(GLS + "/query?" + new URLSearchParams({ where: "Category=1", outFields: "dataset_id,AcquisitionDate", returnGeometry: "false", geometry: xy[0] + "," + xy[1], geometryType: "esriGeometryPoint", inSR: 4326, spatialRel: "esriSpatialRelIntersects", f: "json" }))
         .then((r) => r.json()).then((d) => { const when = {}; (d.features || []).forEach((f) => { const a = f.attributes; if (a.AcquisitionDate) when[a.dataset_id] = new Date(a.AcquisitionDate).toISOString().slice(0, 10); });
@@ -404,15 +441,24 @@
       try { const r = await fetch("media/city_urban.json"); if (r.ok) d = await r.json(); } catch (e) { d = null; }
       const s = d && d.cities && d.cities[String(g("key") || "")];
       if (!s) { $("urbBox").innerHTML = '<p class="empty">这座城市还没有城镇化数据' + (d ? "(数据算到 2023 年;后来新建的城市要重跑一次脚本才有)" : "(私有配置仓的 portal/media/ 里还没放 city_urban.json)") + "。</p>"; return; }
-      const ys = d.years, at = (y) => s[ys.indexOf(y)], a23 = at(2023), a90 = at(1990), a10 = at(2010);
-      const times = a90 > 0 ? a23 / a90 : null, pct = a10 > 0 ? (a23 / a10 - 1) * 100 : null;
-      $("urbCards").innerHTML = P.kpiHtml([{ value: a23 >= 10 ? Math.round(a23).toLocaleString("zh-CN") : a23.toFixed(1), label: "建成区面积(km²,2023)" }, { value: times ? times.toFixed(1) + " 倍" : "—", label: "1990 → 2023" },
-        { value: pct !== null ? (pct >= 0 ? "+" : "") + Math.round(pct) + "%" : "—", label: "2010 → 2023 增幅" }]);
-      const ch = echarts.init($("urbChart"));
-      ch.setOption({ animation: false, grid: { left: 56, right: 16, top: 28, bottom: 28 }, tooltip: { trigger: "axis", formatter: (ps) => ps[0].axisValue + " 年:建成区 " + Number(ps[0].value).toLocaleString("zh-CN") + " km²" },
-        xAxis: { type: "category", data: ys.map(String) }, yAxis: { type: "value", name: "km²", nameTextStyle: { color: "#64748b" } },
-        series: [{ type: "line", data: s, symbol: "circle", symbolSize: 6, lineStyle: { color: "#2563eb" }, itemStyle: { color: "#2563eb" }, areaStyle: { color: "rgba(37,99,235,.12)" },
-          markLine: { silent: true, symbol: "none", lineStyle: { color: "#94a3b8", type: "dashed" }, label: { formatter: "{b}", color: "#64748b" }, data: [{ xAxis: "1990", name: "Landsat 影像起" }, { xAxis: "2015", name: "高清影像起(2014)" }] } }] });
+      const ys = d.years, ch = echarts.init($("urbChart"));
+      const stat = (ser) => { const at = (y) => ser[ys.indexOf(y)], a23 = at(2023), a90 = at(1990), a10 = at(2010);
+        return { a23, times: a90 > 0 ? a23 / a90 : null, pct: a10 > 0 ? (a23 / a10 - 1) * 100 : null }; };
+      const fmtA = (a) => (a >= 10 ? Math.round(a).toLocaleString("zh-CN") : a.toFixed(1)), fmtT = (t) => (t ? t.toFixed(1) + " 倍" : "—"), fmtP = (p) => (p !== null ? (p >= 0 ? "+" : "") + Math.round(p) + "%" : "—");
+      /* 曲线与卡片:本城一条;有对比的中国城市时再画一条(红色虚线),卡片多两张 */
+      renderUrban = (cn) => {
+        const s2 = cn && d.cities[String(P.get("city", cn, "key") || "")], me = stat(s), other = s2 ? stat(s2) : null, nm = cname(ct), nm2 = cn ? cname(cn) : "";
+        $("urbCards").innerHTML = P.kpiHtml([{ value: fmtA(me.a23), label: "建成区面积(km²,2023)" }, { value: fmtT(me.times), label: "1990 → 2023" }, { value: fmtP(me.pct), label: "2010 → 2023 增幅" }]
+          .concat(other ? [{ value: fmtT(other.times), label: nm2 + " 1990 → 2023" }, { value: fmtP(other.pct), label: nm2 + " 2010 → 2023" }] : []));
+        ch.setOption({ animation: false, grid: { left: 56, right: 16, top: 34, bottom: 28 }, legend: s2 ? { top: 0, left: 60, data: [nm, nm2 + "(对比)"] } : { show: false },
+          tooltip: { trigger: "axis", formatter: (ps) => ps[0].axisValue + " 年:" + ps.map((p) => p.seriesName + " " + Number(p.value).toLocaleString("zh-CN") + " km²").join(",") },
+          xAxis: { type: "category", data: ys.map(String) }, yAxis: { type: "value", name: "km²", nameTextStyle: { color: "#64748b" } },
+          series: [{ name: nm, type: "line", data: s, symbol: "circle", symbolSize: 6, lineStyle: { color: "#2563eb" }, itemStyle: { color: "#2563eb" }, areaStyle: { color: "rgba(37,99,235,.12)" },
+            markLine: { silent: true, symbol: "none", lineStyle: { color: "#94a3b8", type: "dashed" }, label: { formatter: "{b}", color: "#64748b" }, data: [{ xAxis: "1990", name: "Landsat 影像起" }, { xAxis: "2015", name: "高清影像起(2014)" }] } }]
+            .concat(s2 ? [{ name: nm2 + "(对比)", type: "line", data: s2, symbol: "circle", symbolSize: 5, lineStyle: { color: "#dc2626", type: "dashed" }, itemStyle: { color: "#dc2626" } }] : []) }, { replaceMerge: ["series"] });
+      };
+      renderUrban(null);
+      cnReady.then((cn) => { if (cn) renderUrban(cn); });
       $("urbNote").textContent = "周边 " + d.radius_km + " 公里范围内的建成区面积,按 HLUH-5km 全球土地利用格网(北师大,2026,CC BY 4.0)推算,属公开资料、待核实;1950–1995 由统计数反推,2000 年起逐年更新。" +
         "曲线上的年份不都有影像:1975、1990、2000、2005、2010 前后有 Landsat 30 米影像,2014 年起有高清影像,其余年份只有数、没有图可佐证。";
     };
