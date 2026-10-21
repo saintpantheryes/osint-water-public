@@ -24,7 +24,7 @@
   </div>
   <!-- 订阅说明:点「订阅到日历」展开;链接由后台给(含整个团队共用的订阅令牌),不经登录检查,所以只含日历里本来就有的公开节点与到期 -->
   <div class="panel subbox" id="subbox" hidden></div>
-  <p class="legend"><span><i class="sw-c1"></i>跟踪中商机的时间节点</span><span><i class="sw-c6"></i>未归商机的线索截止(勾选才显示)</span><span><i class="sw-c5"></i>跟进</span><span><i class="sw-c4"></i>下一步到期</span><span><i class="sw-c3"></i>报告</span></p>
+  <p class="legend"><span><i class="sw-c1"></i>跟踪中商机的时间节点</span><span><i class="sw-c6"></i>未归商机的线索截止(勾选才显示)</span><span><i class="sw-c5"></i>跟进</span><span><i class="sw-c4"></i>下一步到期</span><span><i class="sw-c3"></i>报告(国别 / 项目 / 招标监测;日报、周报、月报不上日历)</span></p>
   <div id="cal" class="cal">读取中…</div>
   <h2>本月清单</h2>
   <div class="panel" id="list"></div>
@@ -38,6 +38,9 @@
   const pad = (n) => String(n).padStart(2, "0");
   const monthRange = (y, m) => { const first = y + "-" + pad(m) + "-01"; const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); return [first, last]; };
 
+  /* 本体 report_kind 里编码为 daily / weekly / monthly 的三种(日报、周报、月报)是机器定期自建的,不上日历 */
+  let periodic = null;
+  const isPeriodic = (kind) => { if (!periodic) periodic = new Set(P.valueDefs("report_kind").filter((v) => ["daily", "weekly", "monthly"].includes(v.code)).map((v) => v.v)); return periodic.has(kind); };
   async function loadMonth() {
     const [from, to] = monthRange(state.y, state.m);
     $("title").textContent = state.y + " 年 " + state.m + " 月";
@@ -63,9 +66,12 @@
     fu2.forEach((r) => { const oid = P.linkId(P.get("followup", r, "opportunity"));
       items.push({ kind: "due", day: P.day(P.get("followup", r, "next_due")), opp: oid, owner: P.text(P.get("followup", r, "author")),
         text: "到期 · " + (state.oppOf[oid]?.code || "") + " · " + (P.get("followup", r, "next_step") || ""), detail: P.text(P.get("followup", r, "author")), oid: "followup", rid: r.id }); });
-    rp.forEach((r) => { const oid = P.linkId(P.get("report", r, "opportunity"));
+    /* 报告:只上人发起的那几种(国别报告、项目报告、招标监测);机器每天/每周/每月自建的日报、周报、月报不上日历(用户 10-21),到「报告」页看。
+       没填类型的(报告页点生成没成功留下的空行)标成「报告(未填类型)」,并带上生成状态,别只剩一个国别名。 */
+    rp.forEach((r) => { const oid = P.linkId(P.get("report", r, "opportunity")), kind = P.text(P.get("report", r, "kind")), st = P.text(P.get("report", r, "gen_status"));
+      if (isPeriodic(kind)) return;
       items.push({ kind: "rp", day: P.day(P.get("report", r, "day")), opp: oid, country: P.linkId(P.get("report", r, "country")),
-        text: P.text(P.get("report", r, "kind")) + " · " + [P.text(P.get("report", r, "country")), P.text(P.get("report", r, "opportunity")), P.get("report", r, "period")].filter(Boolean).join(" "), detail: P.text(P.get("report", r, "gen_status")), oid: "report", rid: r.id }); });
+        text: (kind || "报告(未填类型)") + " · " + [P.text(P.get("report", r, "country")), P.text(P.get("report", r, "opportunity")), P.get("report", r, "period")].filter(Boolean).join(" ") + (st && st !== "完成" ? " · " + st : ""), detail: st, oid: "report", rid: r.id }); });
     state.items = items;
     render();
   }

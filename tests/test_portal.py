@@ -347,6 +347,9 @@ def _seed(admin: tstore.Client, fake: FakeTeable):
     ctx = common.connect(load_profile(prof_dir / "profile.yaml"), today, use_llm=False, api=admin, base=b, cache_dir=prof_dir / "cache", log=lambda *a: None)
     md, _, _, _ = brief_mod.build_daily(ctx, today)
     d = b.create("report", [{"kind": "日报", "day": today.isoformat(), "period": today.isoformat(), "gen_status": "完成", "key": f"日报_{today}.docx", "summary": md}])[0]
+    # 日历要看的:人发起的国别报告上日历,机器自建的日报、周报不上;没填类型的失败行标成「报告(未填类型)」
+    b.create("report", [{"kind": "国别报告", "day": today.isoformat(), "country": c["id"], "edition": "内部版", "gen_status": "完成", "key": "国别报告_AZE.docx"},
+                        {"day": today.isoformat(), "country": c["id"], "edition": "内部版", "gen_status": "失败"}])
     admin.upload_attachment(b.t["report"], d["id"], b.fid("report", "file"), f"日报_{today}.docx", b"PK fake")
     return c, o, ld
 
@@ -491,6 +494,9 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             kinds = {page.locator(".chip").nth(i).get_attribute("class") for i in range(page.locator(".chip").count())}
             assert {"chip ms", "chip fu", "chip due", "chip rp"} <= kinds, kinds
             assert "chip ld" not in kinds  # 没归商机的线索截止缺省不上日历
+            chips = page.inner_text("#cal")
+            assert "国别报告 · 阿塞拜疆" in chips and "报告(未填类型) · 阿塞拜疆 · 失败" in chips  # 人发起的报告上日历;没填类型的说明白
+            assert "周报" not in chips and "日报" not in chips  # 机器定期自建的日报、周报、月报不上日历
             assert "AZE-001" in page.inner_text("#list")
             page.select_option("#fOpp", label="AZE-001 甘贾污水厂")
             assert page.locator(".chip").count() >= 3
@@ -758,13 +764,13 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             first = page.locator("#list tbody tr").first
             assert first.locator(".tag.t-info").inner_text() == "国别报告" and first.locator("td").nth(3).locator(".tag").get_attribute("class") == "tag" and first.locator("td").nth(3).inner_text() == "内部版" and "待生成" in first.locator("td").nth(4).inner_text()
             assert first.locator(".tag").count() == 3 and page.locator("#list tbody tr:has-text('2026-W40') .tag").first.get_attribute("class") == "tag"  # 日报、周报是灰标签
-            assert "全部 4" in page.inner_text("#fKind") and "国别报告 1" in page.inner_text("#fKind") and "待生成 2" in page.inner_text("#fSt")
+            assert "全部 6" in page.inner_text("#fKind") and "国别报告 2" in page.inner_text("#fKind") and "待生成 2" in page.inner_text("#fSt")  # 6 = 周报、日报、国别报告 ×2(日历那份 + 刚要的)、没填类型的失败行、项目报告
             page.click("#fEd .chip-btn:has-text('公开版')")
             assert page.locator("#list .empty").count() == 1 and "版本 公开版" in page.inner_text("#list .empty") and "全部 0" in page.inner_text("#fKind")
             page.click("#list #fClear")
-            assert page.locator("#list tbody tr").count() == 4 and "4 份" in page.inner_text("#count")
-            rc = [r for r in b.rows("report", props=["kind", "gen_status", "country", "requested_by"]) if b.get("report", r, "kind") == "国别报告"]
-            assert len(rc) == 1 and b.get("report", rc[0], "gen_status") == "待生成" and tstore.link_id(b.get("report", rc[0], "country")) == c["id"] and tstore.link_id(b.get("report", rc[0], "requested_by")) == "usrADM"
+            assert page.locator("#list tbody tr").count() == 6 and "6 份" in page.inner_text("#count")
+            rc = [r for r in b.rows("report", props=["kind", "gen_status", "country", "requested_by"]) if b.get("report", r, "kind") == "国别报告" and b.get("report", r, "gen_status") == "待生成"]
+            assert len(rc) == 1 and tstore.link_id(b.get("report", rc[0], "country")) == c["id"] and tstore.link_id(b.get("report", rc[0], "requested_by")) == "usrADM"
             # 报告模板:页面上传一个(新行 + 文件)、设为缺省;再要一份项目报告时能选它,报告行记下模板
             assert "还没有模板" in page.inner_text("#tpls")
             page.fill("#tpName", "集团版式")
