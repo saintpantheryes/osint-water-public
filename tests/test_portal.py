@@ -2108,10 +2108,19 @@ def test_city_page_lists_cities_and_opens_one():
             assert page.locator("#imgL option").count() == 5 + 13 and page.input_value("#imgL") == "gls1990" and page.input_value("#imgR").startswith("wb")
             page.select_option("#imgL", "gls2000")
             page.wait_for_function("document.querySelector('#lblL').textContent === '2000'", timeout=15000)
+            # 与中国城市对比(使用方 2026-10-21):第三项看法,上面本城前后两张,下面人口最接近的中国城市同样年份前后两张
+            page.wait_for_selector("#imgMode button[data-m='cn']:not([hidden])", timeout=15000)
+            assert page.is_hidden("#cnBox") and page.locator("#mapA1.leaflet-container").count() == 0
+            page.click("#imgMode button[data-m='cn']")
+            page.wait_for_selector("#mapB2.leaflet-container", timeout=15000)
+            assert page.is_visible("#cnBox") and page.is_hidden("#cmpBox") and page.is_hidden("#playBox") and page.input_value("#cnSel") and "上海市" in page.inner_text("#cnName2")
+            assert page.inner_text("#cnName1") == "甘贾" and page.input_value("#imgA") == "gls1990" and page.input_value("#imgB").startswith("wb")
+            page.wait_for_function("document.querySelector('#lblA2').textContent === '1990' && document.querySelector('#lblB2').textContent === document.querySelector('#lblB1').textContent", timeout=15000)
+            page.select_option("#imgA", "gls2005")
+            page.wait_for_function("document.querySelector('#lblA1').textContent === '2005' && document.querySelector('#lblA2').textContent === '2005'", timeout=15000)
+            assert page.evaluate("document.querySelectorAll('#cnBox .leaflet-container').length") == 4
             page.click("#imgMode button[data-m='play']")
-            page.wait_for_selector("#cnBox:not([hidden])", timeout=15000)  # 并排的中国对比城市:人口最接近的一座,同年份
-            assert "上海市" in page.inner_text("#cnSel") and page.locator("#mapC.leaflet-container").count() == 1 
-            page.wait_for_function("document.querySelector('#lblC').textContent === document.querySelector('#lblP').textContent", timeout=15000)
+            assert page.is_hidden("#cnBox") and page.is_visible("#playBox")
             page.wait_for_function("document.querySelector('#urbBox .empty')", timeout=15000)
             assert "还没有城镇化数据" in page.inner_text("#urbBox") and "t=imagery" in page.url
             page.click("#tabs button[data-t='opps']")
