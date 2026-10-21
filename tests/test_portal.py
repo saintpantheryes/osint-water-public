@@ -2037,6 +2037,8 @@ def test_city_page_lists_cities_and_opens_one():
                               "tariff": 0.7, "tariff_currency": "AZN", "tariff_changed": "2024-03-01", "tariff_note": "居民价\n非居民 2.0"}])[0]
     b.update("opportunity", o["id"], {"city": city["id"]})
     b.update("lead", ld["id"], {"city": city["id"]})
+    cn = b.create("country", [{"name_zh": "中国", "ISO3": "CHN"}])[0]  # 对比参照国别(glossary.compare_country):城市只在选了「中国(对比)」时列,详情页并排对比
+    b.create("city", [{"key": "1796236", "name_zh": "上海市", "name_en": "Shanghai", "country": cn["id"], "coords": "31.2222,121.4581", "population": 22315474}])
     b.create("sewage_plant", [{"key": "WT-1", "name": "Ganja WWTP", "name_zh": "甘贾污水厂", "kind": "污水厂", "status": "运行", "country": c["id"], "city": city["id"],
                                "capacity": 12, "pop_served": 300000, "built": "1985", "level": "二级", "upgrades": "2012 扩建 6 万吨/日\n2024 提标改造", "coords": "40.70000,46.40000"}])
     cfg = schema.read_config(admin, NEW, ONTO)
@@ -2059,6 +2061,13 @@ def test_city_page_lists_cities_and_opens_one():
             rows = page.locator("#rows tbody tr").all_inner_texts()
             assert len(rows) == 2 and rows[0].startswith("巴库") and "阿塞拜疆" in rows[0] and rows[1].startswith("甘贾")  # 人口多的在前
             assert page.locator("#map canvas").count() >= 1 and "2\n城市" in page.inner_text("#cards")
+            # 中国只作对比参照:默认不列不计数,下拉里叫「中国(对比)」,选了才列,说明行写明不是市场
+            assert "中国(对比)" in page.locator("#fCountry option").all_inner_texts() and "中国 1 座城市只作对比参照" in page.inner_text("#cmpNote") and page.inner_text("#fNote") == "共 2 座"
+            page.select_option("#fCountry", "CHN")
+            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 1")
+            assert page.inner_text("#rows tbody").startswith("上海市") and "不是市场" in page.inner_text("#cmpNote") and page.inner_text("#igNote") == ""
+            page.select_option("#fCountry", "")
+            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 2")
             # 地图左下角的滑块(和国别地图一样)按人口筛:拖到 100 万以上,清单与卡片跟着变,范围记在网址里
             sel = "(s) => echarts.getInstanceByDom(document.getElementById('map')).dispatchAction({ type: 'selectDataRange', visualMapIndex: 0, selected: s })"
             page.evaluate(sel, [6, 7])
@@ -2099,6 +2108,19 @@ def test_city_page_lists_cities_and_opens_one():
             assert page.locator("#imgL option").count() == 5 + 13 and page.input_value("#imgL") == "gls1990" and page.input_value("#imgR").startswith("wb")
             page.select_option("#imgL", "gls2000")
             page.wait_for_function("document.querySelector('#lblL').textContent === '2000'", timeout=15000)
+            # 与中国城市对比(使用方 2026-10-21):第三项看法,上面本城前后两张,下面人口最接近的中国城市同样年份前后两张
+            page.wait_for_selector("#imgMode button[data-m='cn']:not([hidden])", timeout=15000)
+            assert page.is_hidden("#cnBox") and page.locator("#mapA1.leaflet-container").count() == 0
+            page.click("#imgMode button[data-m='cn']")
+            page.wait_for_selector("#mapB2.leaflet-container", timeout=15000)
+            assert page.is_visible("#cnBox") and page.is_hidden("#cmpBox") and page.is_hidden("#playBox") and page.input_value("#cnSel") and "上海市" in page.inner_text("#cnName2")
+            assert page.inner_text("#cnName1") == "甘贾" and page.input_value("#imgA") == "gls1990" and page.input_value("#imgB").startswith("wb")
+            page.wait_for_function("document.querySelector('#lblA2').textContent === '1990' && document.querySelector('#lblB2').textContent === document.querySelector('#lblB1').textContent", timeout=15000)
+            page.select_option("#imgA", "gls2005")
+            page.wait_for_function("document.querySelector('#lblA1').textContent === '2005' && document.querySelector('#lblA2').textContent === '2005'", timeout=15000)
+            assert page.evaluate("document.querySelectorAll('#cnBox .leaflet-container').length") == 4
+            page.click("#imgMode button[data-m='play']")
+            assert page.is_hidden("#cnBox") and page.is_visible("#playBox")
             page.wait_for_function("document.querySelector('#urbBox .empty')", timeout=15000)
             assert "还没有城镇化数据" in page.inner_text("#urbBox") and "t=imagery" in page.url
             page.click("#tabs button[data-t='opps']")
@@ -2144,7 +2166,8 @@ def test_city_page_lists_cities_and_opens_one():
 
 def test_city_and_trend_pages_leave_out_cities_of_ignored_countries():
     """使用方 2026-10-15:灰色(忽略)的国别不再采集,城市概况却还列着中国的城市、算进卡片。忽略国别的城市默认不进卡片、地图、清单和国别下拉,
-    筛选框下面说没算进来几座,点「显示」能临时露出(网址 ig=1);直接选了忽略的国别照常列;搜到的只在忽略国别里时空清单说清楚。趋势机会同样不算。"""
+    筛选框下面说没算进来几座,点「显示」能临时露出(网址 ig=1);直接选了忽略的国别照常列;搜到的只在忽略国别里时空清单说清楚。趋势机会同样不算。
+    2026-10-21 改:中国只作城市化进程的对比参照(「中国(对比)」),不走忽略那条线:默认不列、不算,国别下拉里有「中国(对比)」,选了才列并说明不是市场。"""
     from playwright.sync_api import Error as PWError, sync_playwright
     fake, admin = _fake_with_schema()
     c, o, ld = _seed(admin, fake)
@@ -2167,31 +2190,24 @@ def test_city_and_trend_pages_leave_out_cities_of_ignored_countries():
             page = browser.new_page(viewport={"width": 1366, "height": 900})
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            # 没设过忽略 = 默认忽略中国:东莞不列、不算
+            # 中国只作对比参照:东莞不列、不算,没有「忽略」那行,另一行说中国没算进来;下拉里是「中国(对比)」
             page.goto(base + "/city.html")
             page.wait_for_selector("#rows table", timeout=15000)
-            assert names(page) == ["伊斯坦布尔", "巴库", "甘贾"] and "3\n城市" in page.inner_text("#cards")
-            assert "忽略国别(地图上灰色,不再采集)的 1 座城市没算进" in page.inner_text("#igNote") and "中国" not in page.inner_text("#fCountry")
+            assert names(page) == ["伊斯坦布尔", "巴库", "甘贾"] and "3\n城市" in page.inner_text("#cards") and "共 3 座" in page.inner_text("#fNote")
+            assert page.inner_text("#igNote") == "" and "中国 1 座城市只作对比参照" in page.inner_text("#cmpNote") and "中国(对比)" in page.inner_text("#fCountry")
             pts = "() => echarts.getInstanceByDom(document.getElementById('map')).getOption().series[0].data.map((d) => d.name)"
             assert "东莞市" not in page.evaluate(pts)
             if shots:
                 page.screenshot(path=str(shots / "city_ignored.png"), full_page=True)
-            # 「显示」临时露出,再点收起
-            page.click("#igNote button")
-            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 4")
-            assert names(page)[:2] == ["伊斯坦布尔", "东莞市"] and "ig=1" in page.url and "4\n城市" in page.inner_text("#cards") and "中国" in page.inner_text("#fCountry")
-            assert "东莞市" in page.evaluate(pts)
-            page.click("#igNote button")
-            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 3")
-            assert "ig=" not in page.url
-            # 搜到的只在忽略国别里:空清单说为什么
+            # 搜到的只在中国(对比)里:空清单说为什么,并指到中国城市
             page.fill("#fText", "dongguan")
             page.wait_for_function("!document.querySelector('#rows tbody')")
-            assert "忽略的国别里有 1 座符合" in page.inner_text("#rows")
-            # 直接点名忽略的国别(比如从它的国别概况点过来):照常列,并说明
+            assert "中国(对比)里有 1 座符合" in page.inner_text("#rows") and "忽略的国别" not in page.inner_text("#rows")
+            # 直接选「中国(对比)」:列它的城市,说明不是市场
             page.goto(base + "/city.html?c=CHN")
             page.wait_for_selector("#rows table", timeout=15000)
-            assert names(page) == ["东莞市"] and "中国是你忽略的国别" in page.inner_text("#igNote") and page.eval_on_selector("#fCountry", "e => e.value") == "CHN"
+            assert names(page) == ["东莞市"] and "不是市场" in page.inner_text("#cmpNote") and page.inner_text("#igNote") == "" and page.eval_on_selector("#fCountry", "e => e.value") == "CHN"
+            assert "东莞市" in page.evaluate(pts) and "共 1 座" in page.inner_text("#fNote")
             # 「我的」里再忽略土耳其:城市概况、趋势机会都不再算伊斯坦布尔
             page.goto(base + "/me.html")
             page.wait_for_function("document.querySelector('#iConts button') && !document.querySelector('#iList').innerText.includes('读取')", timeout=15000)
@@ -2200,7 +2216,18 @@ def test_city_and_trend_pages_leave_out_cities_of_ignored_countries():
             page.wait_for_function("document.querySelector('#iList').innerText.includes('土耳其')", timeout=15000)
             page.goto(base + "/city.html")
             page.wait_for_selector("#rows table", timeout=15000)
-            assert names(page) == ["巴库", "甘贾"] and "的 2 座城市没算进" in page.inner_text("#igNote")
+            assert names(page) == ["巴库", "甘贾"] and "忽略国别(地图上灰色,不再采集)的 1 座城市没算进" in page.inner_text("#igNote") and "土耳其" not in page.inner_text("#fCountry")
+            assert "中国 1 座城市只作对比参照" in page.inner_text("#cmpNote")
+            # 「显示」临时露出伊斯坦布尔(东莞仍不列),再点收起
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 3")
+            assert names(page) == ["伊斯坦布尔", "巴库", "甘贾"] and "ig=1" in page.url and "土耳其" in page.inner_text("#fCountry")
+            page.click("#igNote button")
+            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 2")
+            assert "ig=" not in page.url
+            page.fill("#fText", "istanbul")
+            page.wait_for_function("!document.querySelector('#rows tbody')")
+            assert "忽略的国别里有 1 座符合" in page.inner_text("#rows")
             page.goto(base + "/trend.html")
             page.wait_for_selector("#rows table", timeout=15000)
             assert "伊斯坦布尔" not in page.inner_text("#rows") and "土耳其" not in page.inner_text("#crows") and "土耳其" not in page.inner_text("#fCountry")
