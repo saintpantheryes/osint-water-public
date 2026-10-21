@@ -878,6 +878,13 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             page.click("#iEcon button:has-text('忽略发达国家')")
             page.wait_for_function("document.querySelector('#iList').innerText.includes('发达国家(全部)')", timeout=15000)
             assert {"USA", "DEU", "JPN", "KOR", "AUS"} <= set(ign().split(",")) and not {"SAU", "ARE", "BRA"} & set(ign().split(","))
+            # 新账号的默认(使用方 2026-10-21):所有者点「把我的忽略范围设为新账号的默认」→ 个人设置多一行「默认」(账号空着)、忽略国别同登录人的;说明行写明和我的一样
+            assert "还没设过" in page.inner_text("#iDefault") and page.locator("#iDefBtn").count() == 1
+            page.click("#iDefBtn")
+            page.wait_for_function("document.querySelector('#iDefText').innerText.includes('和我的一样')", timeout=15000)
+            dft = [r for r in b.rows("preference", props=["name", "user", "ignored"]) if b.get("preference", r, "name") == "默认"]
+            assert len(dft) == 1 and not b.get("preference", dft[0], "user") and b.get("preference", dft[0], "ignored") == ign() and page.locator("#iDefBtn[disabled]").count() == 1
+            assert b.rows("preference", props=["name"])[0]["id"] != dft[0]["id"]  # 登录人自己的行还是第一行(下面的 ign() 照旧读它)
             page.click("#iList button[data-g='adv']")
             page.wait_for_function("document.querySelector('#iList').innerText.includes('没有忽略')", timeout=15000)
             page.select_option("#iPick", label="阿塞拜疆")

@@ -92,12 +92,20 @@ def parse_ids(text: object) -> dict[str, str]:
     return out
 
 
-IGNORE_DEFAULT = frozenset({"CHN"})  # 「忽略国别」没设过(空着)默认忽略中国;一个都不忽略的存「-」
+IGNORE_DEFAULT = frozenset({"CHN"})  # 「忽略国别」没设过(空着)、库里也没有「默认」行时,默认忽略中国;一个都不忽略的存「-」
+IGNORE_DEFAULT_ROW = "默认"  # 个人设置里名称为「默认」、账号空着的一行 = 新账号(没设过忽略国别的账号)的默认忽略国别(使用方 2026-10-21:默认只看清单国别)
 
 
 def parse_isos(text: object) -> set[str]:
     """「USA, CAN;mex」→ {"USA", "CAN", "MEX"}:逗号、分号、空白都算分隔,只认三个字母的码。"""
     return {x.upper() for x in re.split(r"[\s,;,;、]+", str(text or "")) if re.fullmatch(r"[A-Za-z]{3}", x)}
+
+
+def is_ignore_default_row(b, rec: dict) -> bool:
+    """个人设置的「默认」行:名称是「默认」且账号空着(页面建的账号行都带账号)。"""
+    if str(b.get("preference", rec, "name") or "").strip() != IGNORE_DEFAULT_ROW:
+        return False
+    return not b.has("preference", "user") or not b.get("preference", rec, "user")
 
 
 @dataclass
@@ -168,17 +176,26 @@ class Ctx:
 
     def ignored(self) -> set[str]:
         """个人设置里任何一个账号忽略的国别(ISO3,「忽略国别」存逗号分隔的国别码):采集不再涉及(A01)。
-        没设过的账号(空着)、还没有个人设置的,按默认忽略中国;表或字段还没建 → 空。"""
+        没设过的账号(空着)、还没有个人设置的,按「默认」行算(名称「默认」、账号空着;管理员在「我的」页设),
+        没有「默认」行则按默认忽略中国;表或字段还没建 → 空。「默认」行本身不算一个账号(有人明确恢复了的国别,默认不拦它)。"""
         if self._ignored is None:
             b = self.base
             out: set[str] = set()
             if "preference" not in b.missing and b.has("preference", "ignored"):
-                rows = b.rows("preference", props=["ignored"])
+                rows = b.rows("preference", props=["name", "user", "ignored"])
+                default: set[str] = set(IGNORE_DEFAULT)
+                accounts = []
                 for r in rows:
+                    if is_ignore_default_row(b, r):
+                        v = b.get("preference", r, "ignored")
+                        default = parse_isos(v) if v else set(IGNORE_DEFAULT)
+                    else:
+                        accounts.append(r)
+                for r in accounts:
                     v = b.get("preference", r, "ignored")
-                    out |= parse_isos(v) if v else IGNORE_DEFAULT
-                if not rows:
-                    out |= IGNORE_DEFAULT
+                    out |= parse_isos(v) if v else default
+                if not accounts:
+                    out |= default
             self._ignored = out
         return self._ignored
 

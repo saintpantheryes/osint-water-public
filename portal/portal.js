@@ -425,9 +425,25 @@
     /* 关注国家的排前面,其余顺序不变 */
     followFirst(rows, oid) { if (!this.follow.ids.size) return rows; const a = [], b = []; rows.forEach((r) => (this.isFollowed(oid, r) ? a : b).push(r)); return a.concat(b); },
     /* 忽略的国别(个人设置「忽略国别」,存逗号分隔的国别码):登录人自己忽略的 → ISO3 集合(读一次,各页共用)。地图上这些国别涂成灰色(hatch*);
-       采集不再涉及它们由后台按所有账号的忽略合起来做(A01)。没设过(字段空着)默认忽略中国;一个都不忽略时存「-」,和没设过分开。
-       游客 → 默认;表或字段还没建 → 空集合。 */
+       采集不再涉及它们由后台按所有账号的忽略合起来做(A01)。没设过(字段空着)的账号按「默认」行算(个人设置里名称「默认」、账号空着的一行,
+       库的所有者 / 创建者在「我的」页点「设为新账号的默认」写它;使用方 2026-10-21:默认只看清单国别);没有「默认」行时默认忽略中国。
+       一个都不忽略时存「-」,和没设过分开。游客 → 默认;表或字段还没建 → 空集合。 */
     IGNORE_DEFAULT: ["CHN"],
+    IGNORE_DEFAULT_ROW: "默认",
+    /* 「默认」行(没有则 null):名称「默认」且账号空着 */
+    async ignoreDefaultRec() {
+      if (this.isGuest || !this.cfg.tables || !this.cfg.tables.preference || !this.has("preference", "ignored")) return null;
+      const rows = await this.records("preference", { filter: this.and(this.cond("preference", "name", "is", this.IGNORE_DEFAULT_ROW)) });
+      return rows.find((r) => !this.get("preference", r, "user")) || null;
+    },
+    /* 新账号的默认忽略国别:「默认」行的集合;没有「默认」行 → 只忽略中国。{ set, custom: 是不是「默认」行定的 } */
+    ignoreDefault() {
+      if (!this._ignDef) this._ignDef = (async () => {
+        const rec = await this.ignoreDefaultRec(), v = rec && this.get("preference", rec, "ignored");
+        return v ? { set: this.parseIsos(v), custom: true } : { set: new Set(this.IGNORE_DEFAULT), custom: false };
+      })().catch((e) => { console.warn("默认忽略国别没读到", e); return { set: new Set(this.IGNORE_DEFAULT), custom: false }; });
+      return this._ignDef;
+    },
     /* 对比参照国别(glossary.compare_country,使用方 2026-10-20):中国不是市场,只在城市概况里作城市化进程的参照——国别筛选里叫「中国(对比)」,默认不列不计数,
        选了才列;城市详情的「历史影像」自动挑一座人口相近的中国城市并排看。不受忽略国别影响;别的页面照旧不算它 */
     COMPARE: new Set(["CHN"]),
@@ -438,7 +454,7 @@
         if (this.isGuest) return new Set(this.IGNORE_DEFAULT);
         if (!this.cfg.tables || !this.cfg.tables.preference || !this.has("preference", "ignored")) return new Set();
         const rec = await this.myPref(false), v = rec && this.get("preference", rec, "ignored");
-        return v ? this.parseIsos(v) : new Set(this.IGNORE_DEFAULT);
+        return v ? this.parseIsos(v) : new Set((await this.ignoreDefault()).set);
       })().catch((e) => { console.warn("忽略的国别没读到", e); return new Set(); });
       return this._ignored;
     },
@@ -447,6 +463,14 @@
       await this.send("PATCH", "/table/" + this.t("preference").id + "/record", { fieldKeyType: "id", typecast: true,
         records: [{ id: rec.id, fields: { [this.f("preference", "ignored")]: Array.from(set).sort().join(",") || "-" } }] });
       this._ignored = Promise.resolve(new Set(set));
+    },
+    /* 把一个集合写成「默认」行(没有就建):所有者 / 创建者在「我的」页点「设为新账号的默认」 */
+    async saveIgnoreDefault(set) {
+      const val = Array.from(set).sort().join(",") || "-";
+      const rec = await this.ignoreDefaultRec();
+      if (rec) await this.send("PATCH", "/table/" + this.t("preference").id + "/record", { fieldKeyType: "id", typecast: true, records: [{ id: rec.id, fields: { [this.f("preference", "ignored")]: val } }] });
+      else await this.create("preference", { name: this.IGNORE_DEFAULT_ROW, ignored: val });
+      this._ignDef = Promise.resolve({ set: new Set(set), custom: true });
     },
     /* 忽略国别涂灰:直接给这几项填底色(areaColor),不用 echarts 的花纹(decal)。花纹是画布图案,有的浏览器拖动地图时整张图画不出来。
        有 visualMap(线索多少的蓝色)的地图,visualMap 会盖掉单项底色,所以忽略的国别 value 写「-」(不参与配色),线索数挪到 leads,提示框照常显示。
