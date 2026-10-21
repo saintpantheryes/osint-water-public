@@ -858,25 +858,29 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             # 忽略国别:没设过默认忽略中国;「我的」地图上点一个国家 → 个人设置「忽略国别」写国别码;再点恢复;按大洲、按经济水平一键忽略,
             # 清单里整组合成一项;一个都不忽略存「-」;国别概况、线索总览的地图上忽略的国家涂成灰色,地图下有说明
             page.wait_for_function("document.querySelector('#iConts button') && !document.querySelector('#iList').innerText.includes('读取')", timeout=15000)
-            assert page.inner_text("#iList").strip().startswith("中国") and page.locator("#iConts button").count() == 6 and page.locator("#iEcon button").count() == 5
+            # 清单分「采集中」「已忽略」两组(使用方 2026-10-21),每国一个开关:默认只有中国在「已忽略」里
+            off, on = "#iList .ig-group[data-on='0']", "#iList .ig-group[data-on='1']"
+            assert "中国" in page.inner_text(off) and page.locator(off + " input.sw").count() == 1 and page.locator(on + " input.sw").count() > 200
+            assert page.locator(on + " h4").first.inner_text().startswith("亚洲") and page.locator("#iConts button").count() == 6 and page.locator("#iEcon button").count() == 5
             click = "(iso) => { const c = echarts.getInstanceByDom(document.getElementById('iMap')); c.getZr().handler.dispatch('click', {}); c.trigger('click', {name: iso}); }"
             page.evaluate(click, "CHN")  # 中国点掉
             page.wait_for_function("document.querySelector('#iList').innerText.includes('没有忽略')", timeout=15000)
             ign = lambda: b.get("preference", b.rows("preference", props=["ignored"])[0], "ignored")
             assert ign() == "-"
             page.evaluate(click, "AZE")
-            page.wait_for_function("document.querySelector('#iList').innerText.includes('阿塞拜疆')", timeout=15000)
+            page.wait_for_function("document.querySelector(\"#iList .ig-group[data-on='0']\").innerText.includes('阿塞拜疆')", timeout=15000)
             assert ign() == "AZE" and page.inner_text("#iCount") == "1 个"
             page.evaluate(click, "AZE")  # 再点恢复
             page.wait_for_function("document.querySelector('#iList').innerText.includes('没有忽略')", timeout=15000)
             assert ign() == "-"
             page.click("#iConts button:has-text('忽略北美洲')")
-            page.wait_for_function("document.querySelector('#iList').innerText.includes('北美洲(全部)')", timeout=15000)
+            page.wait_for_function("document.querySelector(\"#iList .ig-group[data-on='0']\").innerText.includes('美国')", timeout=15000)
             assert {"USA", "CAN", "MEX", "CUB"} <= set(ign().split(",")) and "BRA" not in ign() and page.locator("#iConts button:has-text('恢复北美洲')").count() == 1
-            page.click("#iList button[data-g='北美洲']")
+            assert "北美洲" in page.inner_text(off) and page.locator(off + " h4").count() == 1  # 已忽略组里只有北美洲这一个大洲
+            page.click("#iConts button:has-text('恢复北美洲')")
             page.wait_for_function("document.querySelector('#iList').innerText.includes('没有忽略')", timeout=15000)
             page.click("#iEcon button:has-text('忽略发达国家')")
-            page.wait_for_function("document.querySelector('#iList').innerText.includes('发达国家(全部)')", timeout=15000)
+            page.wait_for_function("document.querySelector(\"#iList .ig-group[data-on='0']\").innerText.includes('日本')", timeout=15000)
             assert {"USA", "DEU", "JPN", "KOR", "AUS"} <= set(ign().split(",")) and not {"SAU", "ARE", "BRA"} & set(ign().split(","))
             # 新账号的默认(使用方 2026-10-21):所有者点「把我的忽略范围设为新账号的默认」→ 个人设置多一行「默认」(账号空着)、忽略国别同登录人的;说明行写明和我的一样
             assert "还没设过" in page.inner_text("#iDefault") and page.locator("#iDefBtn").count() == 1
@@ -885,11 +889,16 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             dft = [r for r in b.rows("preference", props=["name", "user", "ignored"]) if b.get("preference", r, "name") == "默认"]
             assert len(dft) == 1 and not b.get("preference", dft[0], "user") and b.get("preference", dft[0], "ignored") == ign() and page.locator("#iDefBtn[disabled]").count() == 1
             assert b.rows("preference", props=["name"])[0]["id"] != dft[0]["id"]  # 登录人自己的行还是第一行(下面的 ign() 照旧读它)
-            page.click("#iList button[data-g='adv']")
+            page.click("#iEcon button:has-text('恢复发达国家')")
             page.wait_for_function("document.querySelector('#iList').innerText.includes('没有忽略')", timeout=15000)
-            page.select_option("#iPick", label="阿塞拜疆")
-            page.wait_for_function("document.querySelector('#iList').innerText.includes('阿塞拜疆')", timeout=15000)
-            assert ign() == "AZE"
+            page.fill("#iFind", "阿塞")  # 找国家:只列匹配的,计数写「找到」
+            page.wait_for_function("document.querySelector(\"#iList .ig-group[data-on='1']\").innerText.includes('找到 1')", timeout=15000)
+            assert page.locator(on + " input.sw").count() == 1
+            page.click(on + " input.sw[data-i='AZE']")  # 拨开关 → 换到「已忽略」组
+            page.wait_for_function("document.querySelector(\"#iList .ig-group[data-on='0']\").innerText.includes('阿塞拜疆')", timeout=15000)
+            assert ign() == "AZE" and page.locator(on + " input.sw").count() == 0 and "没有找到" in page.inner_text(on)
+            page.fill("#iFind", "")
+            page.wait_for_function("document.querySelectorAll(\"#iList .ig-group[data-on='1'] input.sw\").length > 200", timeout=15000)
             hatched = "(() => { const o = echarts.getInstanceByDom(document.getElementById('map')).getOption(); const s = o.series[0]; return s.data.filter((d) => d.itemStyle && d.itemStyle.areaColor === P.IGNORED_COLOR && d.value === '-').map((d) => d.name); })()"
             for url in ("/country.html?iso=AZE", "/overview.html"):
                 page.goto(base + url)
@@ -2220,7 +2229,7 @@ def test_city_and_trend_pages_leave_out_cities_of_ignored_countries():
             page.wait_for_function("document.querySelector('#iConts button') && !document.querySelector('#iList').innerText.includes('读取')", timeout=15000)
             click = "(iso) => { const c = echarts.getInstanceByDom(document.getElementById('iMap')); c.getZr().handler.dispatch('click', {}); c.trigger('click', {name: iso}); }"
             page.evaluate(click, "TUR")
-            page.wait_for_function("document.querySelector('#iList').innerText.includes('土耳其')", timeout=15000)
+            page.wait_for_function("document.querySelector(\"#iList .ig-group[data-on='0']\").innerText.includes('土耳其')", timeout=15000)
             page.goto(base + "/city.html")
             page.wait_for_selector("#rows table", timeout=15000)
             assert names(page) == ["巴库", "甘贾"] and "忽略国别(地图上灰色,不再采集)的 1 座城市没算进" in page.inner_text("#igNote") and "土耳其" not in page.inner_text("#fCountry")

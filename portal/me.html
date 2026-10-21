@@ -39,14 +39,14 @@
     </div>
   </div>
   <h2>忽略的国别 <span class="muted" id="iCount"></span></h2>
-  <p class="muted small">忽略的国家在各页地图上涂成灰色,后台也不再采集这些国家的新线索(已有的线索保留)。在地图上点一个国家忽略,再点一下恢复;也可以按大洲、按经济水平一键忽略或恢复。没改过的账号按「新账号的默认」算(管理员在下面设;没设过默认时只忽略中国)。</p>
+  <p class="muted small">忽略的国家在各页地图上涂成灰色,后台也不再采集这些国家的新线索(已有的线索保留)。下面的清单分「采集中」「已忽略」两组、组内按大洲排,拨一下开关就换组;也可以在地图上点一个国家、或按大洲、按经济水平一键忽略或恢复。没改过的账号按「新账号的默认」算(管理员在下面设;没设过默认时只忽略中国)。</p>
   <div class="panel" id="ignoreBox">
     <div class="frow" id="iConts"></div>
     <div class="frow" id="iEcon"></div>
     <p class="muted small">发达国家按国际货币基金组织(IMF)的「发达经济体」,美国、加拿大、欧洲大部、日本、韩国、澳新、新加坡、以色列等 38 个;收入组按世界银行的人均国民收入分组,高收入里也有沙特、阿联酋、卡塔尔等海湾国家。</p>
     <div id="iMap" class="chart tall"></div>
-    <div id="iList"></div>
-    <div class="frow"><select id="iPick" class="inline"><option value="">+ 忽略一个国别</option></select></div>
+    <div class="frow"><input id="iFind" class="inline" type="search" placeholder="找国家(中文名或国别码)" aria-label="找国家"></div>
+    <div id="iList" class="ig-list"></div>
     <div class="frow" id="iDefault"></div>
   </div>
 </main>
@@ -76,6 +76,7 @@
   }
   /* ---------- 忽略的国别:地图点选、按大洲一键、下拉;存进个人设置「忽略国别」(国别码,逗号分隔) ---------- */
   const CONTS = ["北美洲", "南美洲", "欧洲", "亚洲", "非洲", "大洋洲"];
+  const LIST_CONTS = ["亚洲", "非洲", "欧洲", "南美洲", "北美洲", "大洋洲", "其他"];  // 清单里大洲的顺序:公司主要市场在前
   const ECON = [["adv", "发达国家"], ["HIC", "高收入国家"], ["UMC", "中等偏上收入国家"], ["LMC", "中等偏下收入国家"], ["LIC", "低收入国家"]];
   async function ignoreSection() {
     if (!P.has("preference", "ignored")) { $("ignoreBox").innerHTML = '<p class="empty">个人设置表里还没有「忽略国别」(管理员跑一次建表命令就有)。</p>'; return; }
@@ -83,6 +84,11 @@
     echarts.registerMap("world", geo);
     const zh = {}, ct = {}, eco = {};
     geo.features.forEach((f) => { const p = f.properties; if (p.kind === "line") return; zh[p.name] = p.zh || p.name; ct[p.name] = p.ct || ""; eco[p.name] = [p.inc, p.adv ? "adv" : ""]; });
+    /* 国别表里有、地图上没有画的国家(如科索沃)也列进来,大洲取「大洲与区域」的前半;这样清单的数目和存的国别码对得上 */
+    try {
+      (await P.records("country", { props: ["key", "name_zh", "region"] })).forEach((r) => { const iso = String(P.get("country", r, "key") || "").toUpperCase();
+        if (/^[A-Z]{3}$/.test(iso) && !zh[iso]) { zh[iso] = P.get("country", r, "name_zh") || iso; ct[iso] = String(P.get("country", r, "region") || "").split(/\s*[·・]\s*/)[0]; eco[iso] = ["", ""]; } });
+    } catch (e) { console.warn("国别表没读到", e); }
     const all = Object.keys(zh);
     /* 一键分组:大洲、经济水平(地图要素上写好的 ct、inc、adv) */
     const groups = CONTS.map((c) => ({ key: c, label: c, xs: all.filter((i) => ct[i] === c) }))
@@ -108,17 +114,20 @@
       $("iEcon").innerHTML = '<span class="muted small">按经济水平</span>' + btns(groups.slice(CONTS.length));
       document.querySelectorAll("#iConts button, #iEcon button").forEach((b) => { b.onclick = () => { const g = grp(b.dataset.g), on = g.xs.every((i) => ign.has(i));
         const nx = new Set(ign); g.xs.forEach((i) => (on ? nx.delete(i) : nx.add(i))); save(nx, (on ? "已恢复" : "已忽略") + g.label); }; });
-      /* 清单:整组忽略的合成一项(大洲在前),其余一国一项,点 × 恢复 */
-      const whole = groups.filter((g) => g.xs.length && g.xs.every((i) => ign.has(i)));
-      const inWhole = new Set(whole.flatMap((g) => g.xs));
-      const singles = Array.from(ign).filter((i) => !inWhole.has(i)).sort((a, b) => P.zhCmp(zh[a] || a, zh[b] || b));
-      const chip = (label, attr, title) => '<span class="chip-btn blk static">' + P.esc(label) + ' <button class="chip-x" type="button" ' + attr + ' title="' + title + '">×</button></span>';
-      $("iList").innerHTML = n ? '<div class="frow">' + whole.map((g) => chip(g.label + "(全部)", 'data-g="' + g.key + '"', "恢复全部" + g.label)).concat(singles.map((i) => chip(zh[i] || i, 'data-i="' + i + '"', "恢复"))).join("") + "</div>"
-        : '<p class="empty">没有忽略的国别。</p>';
-      $("iList").querySelectorAll("button").forEach((b) => { b.onclick = () => { const nx = new Set(ign);
-        if (b.dataset.g) grp(b.dataset.g).xs.forEach((i) => nx.delete(i)); else nx.delete(b.dataset.i);
-        save(nx, "已恢复"); }; });
-      $("iPick").querySelectorAll("option").forEach((op) => { if (op.value) op.disabled = ign.has(op.value); });
+      /* 清单(使用方 2026-10-21):分「采集中」「已忽略」两组,组内按大洲、拼音排;每国一个开关(开 = 采集中),拨一下就换到另一组。可按名字、国别码找 */
+      const q = ($("iFind").value || "").trim().toLowerCase();
+      const hit = (i) => !q || (zh[i] || "").toLowerCase().includes(q) || i.toLowerCase().includes(q);
+      const group = (on) => {
+        const xs = all.filter((i) => ign.has(i) !== on);
+        const shown = xs.filter(hit);
+        const byCont = LIST_CONTS.map((c) => [c, shown.filter((i) => (ct[i] || "其他") === c).sort((a, b) => P.zhCmp(zh[a] || a, zh[b] || b))]).filter(([, l]) => l.length);
+        const body = byCont.length ? byCont.map(([c, l]) => '<h4>' + P.esc(c) + ' <span class="muted">' + l.length + '</span></h4><div class="ig-items">' + l.map((i) =>
+          '<label class="ig-item"><input type="checkbox" class="sw" data-i="' + i + '"' + (on ? " checked" : "") + ' aria-label="' + P.esc(zh[i] || i) + '"><span>' + P.esc(zh[i] || i) + "</span></label>").join("") + "</div>").join("")
+          : '<p class="empty">' + (xs.length ? "没有找到。" : on ? "一个都不采集:全部忽略了。" : "没有忽略的国别。") + "</p>";
+        return '<section class="ig-group" data-on="' + (on ? 1 : 0) + '"><h3>' + (on ? "采集中" : "已忽略") + ' <span class="muted">' + xs.length + " 国" + (q && shown.length !== xs.length ? ",找到 " + shown.length : "") + "</span></h3>" + body + "</section>";
+      };
+      $("iList").innerHTML = group(true) + group(false);
+      $("iList").querySelectorAll("input.sw").forEach((cb) => { cb.onchange = () => { const i = cb.dataset.i, nx = new Set(ign); const on = cb.checked; on ? nx.delete(i) : nx.add(i); save(nx, (on ? "已恢复 " : "已忽略 ") + (zh[i] || i)); }; });
       drawDefault();
     };
     /* 新账号的默认(个人设置的「默认」行):所有者 / 创建者能把自己现在的忽略范围设为默认;其他人只看到一句说明 */
@@ -137,8 +146,7 @@
       try { await P.saveIgnored(nx); ign = nx; draw(); P.toast(msg); } catch (e) { P.toast(e.message, true); } finally { busy = false; }
     };
     mc.on("click", (p) => { if (!zh[p.name]) return; const nx = new Set(ign); const on = nx.has(p.name); on ? nx.delete(p.name) : nx.add(p.name); save(nx, (on ? "已恢复 " : "已忽略 ") + zh[p.name]); });
-    P.fillCountrySelect($("iPick"), all.map((i) => [i, zh[i]]), true);
-    $("iPick").onchange = () => { const v = $("iPick").value; $("iPick").value = ""; if (v && !ign.has(v)) { const nx = new Set(ign); nx.add(v); save(nx, "已忽略 " + zh[v]); } };
+    let ft = 0; $("iFind").oninput = () => { clearTimeout(ft); ft = setTimeout(draw, 120); };
     draw();
   }
   async function reload() { pref = await P.myPref(false); renderCountries(); renderSubs(); }
