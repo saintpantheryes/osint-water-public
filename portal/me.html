@@ -84,6 +84,11 @@
     echarts.registerMap("world", geo);
     const zh = {}, ct = {}, eco = {};
     geo.features.forEach((f) => { const p = f.properties; if (p.kind === "line") return; zh[p.name] = p.zh || p.name; ct[p.name] = p.ct || ""; eco[p.name] = [p.inc, p.adv ? "adv" : ""]; });
+    /* 国别表里有、地图上没有画的国家(如科索沃)也列进来,大洲取「大洲与区域」的前半;这样清单的数目和存的国别码对得上 */
+    try {
+      (await P.records("country", { props: ["key", "name_zh", "region"] })).forEach((r) => { const iso = String(P.get("country", r, "key") || "").toUpperCase();
+        if (/^[A-Z]{3}$/.test(iso) && !zh[iso]) { zh[iso] = P.get("country", r, "name_zh") || iso; ct[iso] = String(P.get("country", r, "region") || "").split(/\s*[·・]\s*/)[0]; eco[iso] = ["", ""]; } });
+    } catch (e) { console.warn("国别表没读到", e); }
     const all = Object.keys(zh);
     /* 一键分组:大洲、经济水平(地图要素上写好的 ct、inc、adv) */
     const groups = CONTS.map((c) => ({ key: c, label: c, xs: all.filter((i) => ct[i] === c) }))
