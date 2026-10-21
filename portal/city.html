@@ -96,7 +96,7 @@
     return P.raw('<a href="country.html?' + new URLSearchParams({ iso: P.get("country", c, "key"), t: "cities" }) + '">' + P.esc(P.get("country", c, "name_zh") || P.get("country", c, "key")) + "</a>"); };
 
   function world() {  // 世界地图底图只注册一次
-    geoReady = geoReady || Promise.all([fetch("world.geo.json").then((r) => r.json()).then((geo) => echarts.registerMap("world", geo)),
+    geoReady = geoReady || Promise.all([fetch("world.geo.json").then((r) => r.json()).then((geo) => { echarts.registerMap("world", geo); P.geoBoxes(geo); }),
       P.ignored().then((s) => { bl = s; })]);  // 忽略的国别:底图涂灰
     return geoReady;
   }
@@ -146,7 +146,7 @@
       $("fCountry").value = state.c;
     };
     fillSel();
-    let map = null, hiddenN = 0, cmpHit = 0;
+    let map = null, hiddenN = 0, cmpHit = 0, mapIso = null;
     const draw = () => {
       const iso = state.c, words = state.q.toLowerCase();
       const hit = (ct) => !words || [cname(ct), P.get("city", ct, "name_en"), P.get("city", ct, "admin")].some((x) => String(x || "").toLowerCase().includes(words));
@@ -171,12 +171,13 @@
       }
       $("byName").textContent = state.by === "gdp" ? "生产总值" : "人口";
       $("rangeNote").textContent = state.by === "gdp" ? "(生产总值在城市表里人补,现有 " + logs.length + " 座城市填了)" : "";
+      /* 地图重画时先停在原来的视角;国别变了(下拉选的、网址带的)再平滑缩放到这个国家并居中,别的筛选只换点、不动图 */
+      const prev = map ? P.mapView(map.mc, "geo") : null;
       if (map) map.mc.dispose();
       const one = iso && countries.find((c) => P.get("country", c, "key") === iso);
       $("lrel").innerHTML = one ? P.marketLinks(iso, P.get("country", one, "name_zh") || iso, "city.html") : "";
-      const pts = base.map((ct) => latlon(P.get("city", ct, "coords"))).filter(Boolean);
-      const center = one && pts.length ? [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length] : undefined;
-      map = onMap($("map"), base, { click: true, center, zoom: center ? 4 : 1.1, range });
+      map = onMap($("map"), base, { click: true, center: prev && prev.center, zoom: prev ? prev.zoom : 1.1, range });
+      if (iso !== mapIso) { mapIso = iso; P.mapFly(map.mc, "geo", P.geoView(map.mc, one ? iso : "")); }
       let rt = 0;
       map.mc.on("datarangeselected", (e) => { clearTimeout(rt); rt = setTimeout(() => {
         const a = Math.max(range.min, e.selected[0]), b = Math.min(range.max, e.selected[1]), full = range && a <= range.min + 1e-9 && b >= range.max - 1e-9;
@@ -219,7 +220,7 @@
     $("fCountry").onchange = () => { state.c = $("fCountry").value; fillSel(); draw(); };
     $("fText").value = state.q;
     let tt = 0; $("fText").oninput = () => { clearTimeout(tt); tt = setTimeout(() => { state.q = $("fText").value.trim(); draw(); }, 250); };
-    $("mapReset").onclick = (e) => { e.preventDefault(); if (map) { map.mc.clear(); map.mc.setOption(map.option); } };
+    $("mapReset").onclick = (e) => { e.preventDefault(); if (map) P.mapFly(map.mc, "geo", P.geoView(map.mc, "")); };  /* 复位:飞回全图 */
     if (!all.length) {
       $("cards").innerHTML = ""; $("map").parentNode.style.display = "none";
       $("rows").innerHTML = '<p class="empty">城市表已经建好,还没有数据:后台每月按 GeoNames 公开数据把人口 10 万以上的城市建进来,第一次在下一轮自动任务里补上(最晚第二天早上)。</p>';
