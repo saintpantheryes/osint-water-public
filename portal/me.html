@@ -39,7 +39,7 @@
     </div>
   </div>
   <h2>忽略的国别 <span class="muted" id="iCount"></span></h2>
-  <p class="muted small">忽略的国家在各页地图上涂成灰色,后台也不再采集这些国家的新线索(已有的线索保留)。在地图上点一个国家忽略,再点一下恢复;也可以按大洲、按经济水平一键忽略或恢复。没改过的默认只忽略中国。</p>
+  <p class="muted small">忽略的国家在各页地图上涂成灰色,后台也不再采集这些国家的新线索(已有的线索保留)。在地图上点一个国家忽略,再点一下恢复;也可以按大洲、按经济水平一键忽略或恢复。没改过的账号按「新账号的默认」算(管理员在下面设;没设过默认时只忽略中国)。</p>
   <div class="panel" id="ignoreBox">
     <div class="frow" id="iConts"></div>
     <div class="frow" id="iEcon"></div>
@@ -47,6 +47,7 @@
     <div id="iMap" class="chart tall"></div>
     <div id="iList"></div>
     <div class="frow"><select id="iPick" class="inline"><option value="">+ 忽略一个国别</option></select></div>
+    <div class="frow" id="iDefault"></div>
   </div>
 </main>
 <script>
@@ -118,6 +119,18 @@
         if (b.dataset.g) grp(b.dataset.g).xs.forEach((i) => nx.delete(i)); else nx.delete(b.dataset.i);
         save(nx, "已恢复"); }; });
       $("iPick").querySelectorAll("option").forEach((op) => { if (op.value) op.disabled = ign.has(op.value); });
+      drawDefault();
+    };
+    /* 新账号的默认(个人设置的「默认」行):所有者 / 创建者能把自己现在的忽略范围设为默认;其他人只看到一句说明 */
+    const drawDefault = async () => {
+      const def = await P.ignoreDefault(), role = await P.role();
+      const same = def.set.size === ign.size && Array.from(ign).every((i) => def.set.has(i));
+      const txt = def.custom ? "新账号的默认:忽略 " + def.set.size + " 个国别" + (same ? "(和我的一样)" : "(和我的不一样)") : "新账号的默认还没设过:只忽略中国";
+      $("iDefault").innerHTML = '<span class="muted small" id="iDefText">' + P.esc(txt) + "</span>"
+        + (role === "owner" || role === "creator" ? ' <button type="button" class="chip-btn" id="iDefBtn"' + (same ? " disabled" : "") + ">把我的忽略范围设为新账号的默认</button>" : "");
+      const btn = $("iDefBtn");
+      if (btn) btn.onclick = async () => { if (busy) return; busy = true;
+        try { await P.saveIgnoreDefault(ign); drawDefault(); P.toast("已设为新账号的默认:忽略 " + ign.size + " 个国别"); } catch (e) { P.toast(e.message, true); } finally { busy = false; } };
     };
     const save = async (nx, msg) => {
       if (busy) return; busy = true;

@@ -225,6 +225,13 @@ def test_ignored_parsing(env):
     abase.update("preference", abase.rows("preference")[0]["id"], {"ignored": "-"})
     ctx._ignored = None
     assert ctx.ignored() == set()  # 都明确不忽略
+    # 「默认」行(名称「默认」、账号空着):没设过的账号按它算;它本身不算一个账号(甲明确恢复了的国别,默认不拦)
+    abase.create("preference", [{"name": "默认", "ignored": "usa,can"}, {"name": "丙"}])
+    ctx._ignored = None
+    assert ctx.ignored() == {"USA", "CAN"}  # 甲、乙都是「-」,丙没设过 → 按默认
+    abase.update("preference", [r for r in abase.rows("preference") if abase.get("preference", r, "name") == "丙"][0]["id"], {"ignored": "-"})
+    ctx._ignored = None
+    assert ctx.ignored() == set()  # 都明确不忽略了,「默认」行不参与
     assert common.parse_isos("USA,CAN; mex、 bra\nxx 1234") == {"USA", "CAN", "MEX", "BRA"}
 
 
