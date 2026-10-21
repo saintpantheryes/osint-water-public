@@ -109,7 +109,7 @@
     $("rel").addEventListener("click", (e) => { if (e.target.id === "allC") { e.preventDefault(); pickCountry(""); } });
     const isoSet = new Set(countries.filter((c) => used.has(c.id)).map((c) => P.get("country", c, "key")));
     const zhOf = {};
-    let mc = null;
+    let mc = null, mapIso = null;
     const draw = () => {
       const qs = new URLSearchParams(Object.entries(state).filter(([k, v]) => v && v !== DEFAULT[k])).toString();
       history.replaceState(null, "", "trend.html" + (qs ? "?" + qs : ""));
@@ -130,8 +130,8 @@
         data: base.filter((x) => x.k === k && (k === "none" || want.includes(k))).map((x) => { const xy = latlon(P.get("city", x.ct, "coords")); return xy && { name: P.get("city", x.ct, "name_zh") || P.get("city", x.ct, "name_en") || "", id: x.ct.id, kind: k,
           value: xy.concat([Number(P.get("city", x.ct, "population")) || 0, val("city", x.ct, state.r), val("city", x.ct, "gdp_pc")]) }; }).filter(Boolean),
         symbolSize: (v) => (k === "none" ? 3 : 5 + 16 * Math.sqrt(v[2] / maxPop)), itemStyle: { color: paint(k), opacity: k === "none" ? 0.5 : 0.85 } }));
-      const pts = base.map((x) => latlon(P.get("city", x.ct, "coords"))).filter(Boolean);
-      const center = one && pts.length ? [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length] : undefined;
+      /* 地图先留在原来的视角;国别变了(下拉、清单里点的、地图上点的)再平滑缩放到这个国家并居中,别的筛选只换点、不动图 */
+      const prev = mc ? P.mapView(mc, "geo") : null;
       if (!mc) {
         mc = echarts.init($("map"));
         mc.on("click", (p) => {
@@ -145,11 +145,12 @@
           " · " + rname() + " " + (p.data.value[3] === null ? "无数据" : p.data.value[3].toFixed(1)) + " · 人均 GDP " + (p.data.value[4] ? num(p.data.value[4]) + " 美元" : "无数据") : "";
       mc.setOption({ animation: false,
         tooltip: { trigger: "item", formatter: tipFmt },
-        geo: { map: "world", roam: true, center, zoom: center ? 4 : 1.1, triggerEvent: true, tooltip: { show: true, formatter: tipFmt },  // 有 regions 时 geo 用自己的提示框设置,要再给一次
+        geo: { map: "world", roam: true, center: prev && prev.center, zoom: prev ? prev.zoom : 1.1, triggerEvent: true, tooltip: { show: true, formatter: tipFmt },  // 有 regions 时 geo 用自己的提示框设置,要再给一次
           itemStyle: { areaColor: "#f1f5f9", borderColor: "#cbd5e1" },
           emphasis: { itemStyle: { areaColor: "#e2e8f0" }, label: { show: false } }, label: { show: false },
           regions: P.hatchRegions(bl).concat(regions) },
         series }, true);
+      if (state.c !== mapIso) { mapIso = state.c; P.mapFly(mc, "geo", P.geoView(mc, one ? state.c : "")); }
       /* 城市清单:按水风险从高到低,再按人口 */
       const rows = base.filter((x) => want.includes(x.k)).sort((a, b) => (val("city", b.ct, state.r) || -1) - (val("city", a.ct, state.r) || -1) ||
         (Number(P.get("city", b.ct, "population")) || 0) - (Number(P.get("city", a.ct, "population")) || 0));
@@ -178,7 +179,7 @@
     P.chips($("fShow"), SHOWS, state, "s", draw);
     $("fCountry").onchange = () => { state.c = $("fCountry").value; draw(); };
     P.hatchNote($("map"), bl);
-    await fetch("world.geo.json").then((r) => r.json()).then((geo) => { geo.features.forEach((f) => { zhOf[f.properties.name] = f.properties.zh || f.properties.name; }); echarts.registerMap("world", geo); });
+    await fetch("world.geo.json").then((r) => r.json()).then((geo) => { geo.features.forEach((f) => { zhOf[f.properties.name] = f.properties.zh || f.properties.name; }); echarts.registerMap("world", geo); P.geoBoxes(geo); });
     draw();
   } catch (e) { P.fail($("rows"), e); }
 })();

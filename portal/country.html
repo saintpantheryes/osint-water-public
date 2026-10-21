@@ -79,7 +79,7 @@
   /* 世界地图:颜色深浅是线索数,当前国别描红边;点国家就切到它 */
   async function drawMap() {
     const [geo, bl] = await Promise.all([fetch("world.geo.json").then((r) => r.json()), P.ignored()]);
-    echarts.registerMap("world", geo);
+    echarts.registerMap("world", geo); P.geoBoxes(geo);
     const zh = {}; geo.features.forEach((f) => { zh[f.properties.name] = f.properties.zh || f.properties.name; });
     const has = {}; countries.forEach((c) => { has[P.get("country", c, "key")] = c; });
     const raw = countries.map((c) => ({ name: P.get("country", c, "key"), value: Number(P.get("country", c, "lead_count")) || 0,
@@ -88,6 +88,7 @@
     const max = Math.max(1, ...raw.map((d) => d.value || 0));
     mc = echarts.init($("map"));
     mapOption = {
+      animation: false,
       tooltip: { trigger: "item", formatter: (p) => { const d = p.data || {}; return "<b>" + (d.zh || zh[p.name] || p.name) + "</b><br>" + (has[p.name] ? "线索 " + ((d.leads ?? d.value) || 0) + " · 商机 " + (d.opps || 0) + "<br><span class=\"muted\">点一下看这个国家</span>" : "国别表里没有") + P.hatchTip(p.name, bl); } },
       visualMap: { min: 0, max, text: ["线索多", "少"], calculable: true, inRange: { color: ["#dbeafe", "#1d4ed8"] }, left: 10, bottom: 10 },
       series: [{ type: "map", map: "world", roam: true, nameProperty: "name", data, emphasis: { label: { show: false } }, selectedMode: "single",
@@ -96,10 +97,11 @@
     mc.setOption(mapOption);
     P.hatchNote($("map"), bl);
     mc.on("click", (p) => { if (has[p.name]) { $("pick").value = p.name; show(p.name).catch((e) => P.fail($("info"), e)); } });
-    $("mapReset").onclick = (e) => { e.preventDefault(); mc.clear(); mc.setOption(mapOption); markMap($("pick").value); };
+    $("mapReset").onclick = (e) => { e.preventDefault(); P.mapFly(mc, "series", P.geoView(mc, "")); };  /* 复位:飞回全图 */
     let rt = 0; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => mc.resize(), 150); });
   }
-  function markMap(iso) { if (mc) mc.dispatchAction({ type: "select", seriesIndex: 0, name: iso }); }
+  /* 当前国别描红,并把地图平滑缩放到它、居中(下拉选的、地图上点的都一样) */
+  function markMap(iso) { if (mc) { mc.dispatchAction({ type: "select", seriesIndex: 0, name: iso }); P.mapFly(mc, "series", P.geoView(mc, iso)); } }
 
   async function show(iso) {
     const c = countries.find((x) => P.get("country", x, "key") === iso);

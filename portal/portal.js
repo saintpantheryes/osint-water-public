@@ -487,6 +487,53 @@
         ' <button type="button" class="btn quiet">' + (shown ? "不显示" : "显示") + "</button>";
       el.querySelector("button").onclick = toggle;
     },
+    /* 地图联动(2026-10-21,使用方:选国别或城市时地图缩放并居中当前选择项):
+       每个国家的经纬度范围从 world.geo.json 算一次;一国有好几块(岛)时取面积最大的那块,免得跨 180° 经线的俄罗斯、斐济算成整个地球 */
+    _geoBox: null,
+    geoBoxes(geo) {
+      const box = {}, W = [180, -180, 90, -90];
+      const ring = (r) => { let a = 0; const b = [180, -180, 90, -90];
+        for (let i = 0; i < r.length; i++) { const [x, y] = r[i], [px, py] = r[(i + 1) % r.length]; a += x * py - px * y;
+          if (x < b[0]) b[0] = x; if (x > b[1]) b[1] = x; if (y < b[2]) b[2] = y; if (y > b[3]) b[3] = y; }
+        return { a: Math.abs(a), b }; };
+      (geo.features || []).forEach((f) => {
+        const g = f.geometry, polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+        let best = null;
+        polys.forEach((p) => { const r = ring(p[0] || []); if (!best || r.a > best.a) best = r; W[0] = Math.min(W[0], r.b[0]); W[1] = Math.max(W[1], r.b[1]); W[2] = Math.min(W[2], r.b[2]); W[3] = Math.max(W[3], r.b[3]); });
+        if (best) box[f.properties.name] = best.b;
+      });
+      this._geoBox = { box, world: W };
+    },
+    /* 某个国家在这张图上该用的视角 {center, zoom}:整个国家刚好放进图里、居中;iso 空 = 全图 */
+    geoView(mc, iso) {
+      const gb = this._geoBox; if (!gb || !mc) return null;
+      const W = gb.world, w = mc.getWidth(), h = mc.getHeight();
+      if (!iso) return { center: [(W[0] + W[1]) / 2, (W[2] + W[3]) / 2], zoom: 1.1 };
+      const b = gb.box[iso]; if (!b || !w || !h) return null;
+      const s = Math.min(w / (W[1] - W[0]), h / ((W[3] - W[2]) * 0.75));  // zoom 1 时整幅世界地图的比例(像素/度;纬度按 0.75 压扁)
+      const z = Math.min(w / (Math.max(0.5, b[1] - b[0]) * s), h / (Math.max(0.5, b[3] - b[2]) * 0.75 * s)) * 0.8;  // 四周留两成空
+      return { center: [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2], zoom: Math.max(1.3, Math.min(40, z)) };
+    },
+    /* 现在的视角(拖过、滚过轮之后的):kind = "geo"(底图上叠散点)或 "series"(type: "map" 的系列) */
+    mapView(mc, kind) {
+      const o = mc && mc.getOption(), m = o && (kind === "geo" ? o.geo && o.geo[0] : o.series && o.series[0]);
+      const d = this.geoView(mc, "");
+      return { center: (m && m.center) || (d && d.center) || [0, 0], zoom: (m && m.zoom) || 1.1 };
+    },
+    /* 平滑地飞到一个视角(半秒多;缩放按对数插值,远近看着匀速);再来一次就中断上一次 */
+    mapFly(mc, kind, to, ms) {
+      if (!mc || !to) return;
+      const from = this.mapView(mc, kind), dur = ms || 650, t0 = performance.now();
+      const put = (v) => mc.setOption(kind === "geo" ? { geo: { center: v.center, zoom: v.zoom } } : { series: [{ center: v.center, zoom: v.zoom }] });
+      if (mc._fly) cancelAnimationFrame(mc._fly);
+      const step = (now) => {
+        const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+        put({ center: [from.center[0] + (to.center[0] - from.center[0]) * e, from.center[1] + (to.center[1] - from.center[1]) * e],
+          zoom: Math.exp(Math.log(from.zoom) + (Math.log(to.zoom) - Math.log(from.zoom)) * e) });
+        mc._fly = k < 1 ? requestAnimationFrame(step) : 0;
+      };
+      mc._fly = requestAnimationFrame(step);
+    },
     hatchNote(mapEl, set) {
       if (!mapEl || !set || !set.size || (mapEl.nextElementSibling && mapEl.nextElementSibling.classList.contains("hatch-note"))) return;
       const p = document.createElement("p");
