@@ -2109,14 +2109,40 @@ def test_city_page_lists_cities_and_opens_one():
                 page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 2")
                 page.screenshot(path=str(shots / "city_list.png"), full_page=True)
             # 一座城市:卡片、概况,商机与线索各在自己的页签里
+            # 街区(使用方 2026-10-25):数据在私有配置仓 media/blocks/;目录里有这座城市才有「街区」页签。这里假装甘贾有两块(1 级 1 块、2 级 2 块),巴库没有
+            sq = lambda x, y, d: {"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[x, y], [x + d, y], [x + d, y + d], [x, y + d], [x, y]]]}}  # noqa: E731
+            blocks = {"index.json": {"source": "MSDCW", "cities": {"586523": {"name": "Ganja", "country": "Azerbaijan", "levels": {"1": 1, "2": 2}}}},
+                      "586523_L1.geojson": {"type": "FeatureCollection", "features": [sq(46.35, 40.67, 0.02)]},
+                      "586523_L2.geojson": {"type": "FeatureCollection", "features": [sq(46.35, 40.67, 0.01), sq(46.36, 40.68, 0.01)]}}
+            def blk(route):
+                name = route.request.url.rsplit("/", 1)[-1]
+                return route.fulfill(status=200, content_type="application/json", body=json.dumps(blocks[name])) if name in blocks else route.fulfill(status=404, body="")
+            page.route("**/media/blocks/*", blk)
             page.goto(base + f"/city.html?id={city['id']}")
-            page.wait_for_function("document.querySelectorAll('#tabs button').length === 5", timeout=15000)
+            page.wait_for_function("document.querySelectorAll('#tabs button').length === 6", timeout=15000)
             assert page.inner_text("#cname") == "甘贾" and "阿塞拜疆" in page.inner_text("#info") and "34\n万" in page.inner_text("#ccards")
             info = page.inner_text("#info")
             assert "0.7 AZN/立方米" in info and "2024-03-01" in info and "居民价\n非居民 2.0" in info  # 水价挂城市(人填)
-            assert page.locator("#tabs button").all_inner_texts() == ["概况", "历史影像", "商机 1", "线索 1", "水厂 1"]
+            assert page.locator("#tabs button").all_inner_texts() == ["概况", "历史影像", "街区", "商机 1", "线索 1", "水厂 1"]
             if shots:
                 page.screenshot(path=str(shots / "city_one.png"), full_page=True)
+            # 街区页签:粗细按钮只列有数据的层级,缺省取中间一级;黄色块一块一个 path,卡片有街区数与面积;换层级卡片跟着变
+            page.click("#tabs button[data-t='blocks']")
+            page.wait_for_selector("#blkMap.leaflet-container path.leaflet-interactive", timeout=15000)
+            assert page.locator("#blkLv button").all_inner_texts() == ["粗·只按高速与主干道切", "中·加上次干道"] and page.locator("#blkLv button.on").get_attribute("data-lv") == "2"
+            assert page.locator("#blkMap path.blk").count() == 2 and "2\n街区数(中)" in page.inner_text("#blkCards") and "km²" in page.inner_text("#blkCards") and "CC BY 4.0" in page.inner_text("#blkNote")
+            page.click("#blkLv button[data-lv='1']")
+            page.wait_for_function("document.querySelectorAll('#blkMap path.blk').length === 1")
+            assert "1\n街区数(粗)" in page.inner_text("#blkCards") and page.locator("#blkLv button.on").get_attribute("data-lv") == "1"
+            page.goto(base + f"/city.html?id={city['id']}&t=blocks")  # 网址里带 t=blocks 直接打开
+            page.wait_for_selector("#blkMap.leaflet-container path.leaflet-interactive", timeout=15000)
+            assert page.locator("#tabs button.on").inner_text() == "街区"
+            baku = next(r for r in b.rows("city", props=["key"]) if b.get("city", r, "key") == "587084")  # 目录里没有的城市就没有这一页签
+            page.goto(base + f"/city.html?id={baku['id']}")
+            page.wait_for_function("document.querySelectorAll('#tabs button').length === 5", timeout=15000)
+            assert "街区" not in page.locator("#tabs button").all_inner_texts()
+            page.goto(base + f"/city.html?id={city['id']}")
+            page.wait_for_function("document.querySelectorAll('#tabs button').length === 6", timeout=15000)
             # 历史影像(使用方 2026-10-20):缺省逐年播放(播放按钮、进度条一格一个时点、年份角标);「两图对比」是两张同步地图(电脑左右、手机上下);
             # 城镇化数据文件没放时说清楚
             page.click("#tabs button[data-t='imagery']")
