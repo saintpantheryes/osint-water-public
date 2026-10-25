@@ -65,6 +65,15 @@
       <h2>城镇化(周边建成区面积)</h2>
       <div class="panel" id="urbBox"><div id="urbCards"></div><div id="urbChart" class="chart"></div><p class="muted small" id="urbNote"></p></div>
     </div>
+    <div class="tab" data-t="blocks">
+      <!-- 街区(使用方 2026-10-25):MSDCW 街区划分叠在高清影像上,看建成区怎么被道路切成块;数据在私有配置仓 portal/media/blocks/,只有人口 50 万以上、数据集收了的城市有这一页签 -->
+      <div class="panel" id="blkBox">
+        <div class="frow"><b>粗细</b><span class="frow" id="blkLv"></span><span class="lgd" id="blkLgd"><i class="lg-outline"></i>城市轮廓<i class="lg-block"></i>街区</span><span class="muted small push" id="blkPos"></span></div>
+        <div id="blkCards"></div>
+        <div class="mapbox"><div id="blkMap" class="chart tall"></div></div>
+        <p class="muted small" id="blkNote"></p>
+      </div>
+    </div>
     <div class="tab" data-t="opps"><div class="panel" id="opps">读取中…</div></div>
     <div class="tab" data-t="leads"><div class="panel" id="leads">读取中…</div></div>
     <div class="tab" data-t="plants"><div class="panel" id="pmapBox"><div id="pmap" class="chart"></div><p class="muted small" id="pmapNote"></p></div><h2>自来水厂</h2><div class="panel" id="supply">读取中…</div><h2>污水厂</h2><div class="panel" id="sewage">读取中…</div></div>
@@ -239,6 +248,7 @@
       P.has("lead", "city") ? P.records("lead", { filter: P.and(P.cond("lead", "city", "is", id)), take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }],
         props: ["key", "title", "url", "category", "published", "found_at", "nearest_deadline", "summary_zh", "project_name", "opportunity", "status"] }) : Promise.resolve([]),
       plantsOf("supply_plant"), plantsOf("sewage_plant"),
+      fetch("media/blocks/index.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),  // 街区数据目录(私有配置仓 media/blocks/,没有就没有「街区」页签)
     ]);
     P.chronicle($("chron"), "city", id).catch((e) => P.fail($("chron"), e));  /* 水务大事记(在已中标项目上面) */
     P.awards($("awBox"), "city", id).catch((e) => P.fail($("awBox"), e));  /* 已中标项目(页面最下面) */
@@ -252,7 +262,8 @@
     P.backLink($("back"), iso ? "city.html?" + new URLSearchParams({ c: iso }) : "city.html", iso ? cnm + "全部城市" : "全部城市");
     $("rel").innerHTML = P.marketLinks(iso, cnm);
     $("openRow").innerHTML = P.open("city", id, "在表格里打开城市 ↗");
-    const [oppsAll, leads, supply, sewage] = await listsP;
+    const [oppsAll, leads, supply, sewage, blkIdx] = await listsP;
+    const blk = blkIdx && blkIdx.cities && blkIdx.cities[String(g("key") || "")];  // 这座城市有街区数据才有页签
     const opps = oppsAll.filter((o) => !P.isArchived(o)), nArc = P.archivedOpps(oppsAll).length;  // 已归档(放弃跟踪)的商机不列(glossary.archived_opp)
     /* 水厂:规模从大到小;改造扩建一行一次,原样分行显示 */
     const plantTable = (oid, list, empty) => {
@@ -284,7 +295,7 @@
     $("leads").innerHTML = !leads.length ? '<p class="empty">还没有线索关联到这座城市。</p>' :
       P.tableHtml(["标题", "类别", "发布", "最近截止", "所属商机", "处理状态", ""], leads.slice(0, 100).map((l) => { const q = (p) => P.get("lead", l, p);
         return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), q("nearest_deadline"), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
-    const TABS = [["info", "概况"], ["imagery", "历史影像"], ["opps", "商机 <b>" + opps.length + "</b>"], ["leads", "线索 <b>" + leads.length + (leads.length >= 200 ? "+" : "") + "</b>"], ["plants", "水厂 <b>" + nPlants + "</b>"]];
+    const TABS = [["info", "概况"], ["imagery", "历史影像"]].concat(blk ? [["blocks", "街区"]] : []).concat([["opps", "商机 <b>" + opps.length + "</b>"], ["leads", "线索 <b>" + leads.length + (leads.length >= 200 ? "+" : "") + "</b>"], ["plants", "水厂 <b>" + nPlants + "</b>"]]);
     let tab = TABS.some(([k]) => k === q0.get("t")) ? q0.get("t") : "info";
     const showTab = (k) => {
       tab = k;
@@ -484,7 +495,57 @@
       $("urbNote").textContent = "周边 " + d.radius_km + " 公里范围内的建成区面积,按 HLUH-5km 全球土地利用格网(北师大,2026,CC BY 4.0)推算,属公开资料、待核实;1950–1995 由统计数反推,2000 年起逐年更新。" +
         "曲线上的年份不都有影像:1975、1990、2000、2005、2010 前后有 Landsat 30 米影像,2014 年起有高清影像,其余年份只有数、没有图可佐证。";
     };
-    const onTab = (k) => { if (k === "plants") { if (pmap) pmap.resize(); else drawPlants(); } if (k === "imagery") { drawImagery(); drawUrban(); } };
+    /* 街区:一个层级一个 GeoJSON(media/blocks/<城市码>_L<层级>.geojson),底图是最新一年的高清影像;1 级只按高速、主干道切(块最大),2 级加次干道,3 级加支路。
+       切换层级只换面,地图不动;卡片算街区数、合计面积、中位面积(球面近似)。图只在页签第一次打开时建 */
+    const LVS = [["1", "粗", "只按高速与主干道切"], ["2", "中", "加上次干道"], ["3", "细", "加上支路"]];
+    let bmap = null, blay = null;
+    const ringArea = (ring) => { let a = 0; for (let i = 0; i < ring.length - 1; i++) { const [x1, y1] = ring[i], [x2, y2] = ring[i + 1]; a += (x2 - x1) * Math.PI / 180 * (2 + Math.sin(y1 * Math.PI / 180) + Math.sin(y2 * Math.PI / 180)); }
+      return Math.abs(a * 6371.0088 * 6371.0088 / 2); };  // 经纬度环 → km²
+    const featArea = (gm) => (gm.type === "Polygon" ? [gm.coordinates] : gm.type === "MultiPolygon" ? gm.coordinates : []).reduce((t, poly) => t + poly.reduce((u, ring, i) => u + (i ? -1 : 1) * ringArea(ring), 0), 0);
+    const drawBlocks = async () => {
+      if (bmap) { bmap.invalidateSize(); return; }
+      const xy = latlon(g("coords"));
+      const lvs = LVS.filter(([k]) => blk.levels && blk.levels[k]);
+      if (!lvs.length) { $("blkBox").innerHTML = '<p class="empty">这座城市的街区数据还没转出来(重跑一次脚本就有)。</p>'; return; }
+      const r = WAYBACK[WAYBACK.length - 1];
+      bmap = L.map($("blkMap"), { center: xy ? [xy[1], xy[0]] : [0, 0], zoom: 12, worldCopyJump: false });
+      bmap.zoomControl.setPosition("topright"); bmap.attributionControl.setPrefix(false);
+      L.control.scale({ metric: true, imperial: false }).addTo(bmap);
+      L.tileLayer("https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/" + r[1] + "/{z}/{y}/{x}", { maxNativeZoom: 18, maxZoom: 18, attribution: "影像 Esri Wayback " + r[0] + " · 街区 MSDCW(CC BY 4.0)" }).addTo(bmap);
+      if (xy) L.circleMarker([xy[1], xy[0]], { radius: 5, color: "#fff", weight: 2, fillColor: "#ef4444", fillOpacity: 1 }).addTo(bmap).bindTooltip(cname(ct));
+      const pos = (ll) => ll.lat.toFixed(4) + ", " + ll.lng.toFixed(4);
+      bmap.on("mousemove", (e) => { $("blkPos").textContent = "鼠标处 " + pos(e.latlng); });
+      bmap.on("moveend", () => { $("blkPos").textContent = "中心 " + pos(bmap.getCenter()); });
+      /* 城市轮廓(1 级街区合并的外边界)蓝色虚线,与橙色街区分开;轮廓文件没有也不碍事 */
+      let oline = null;
+      if (blk.outline) fetch("media/blocks/" + encodeURIComponent(String(g("key"))) + "_outline.geojson").then((r) => (r.ok ? r.json() : null)).then((fc) => {
+        if (fc) oline = L.geoJSON(fc, { style: { color: "#2563eb", weight: 3, dashArray: "8 6", fill: false, className: "blk-outline" }, interactive: false }).addTo(bmap); }).catch(() => {});
+      const cache = {};
+      let cur = "", fitted = false;
+      const show = async (lv) => {
+        cur = lv;
+        $("blkLv").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.lv === lv));
+        $("blkNote").textContent = "读取中…";
+        try {
+          if (!cache[lv]) { const res = await fetch("media/blocks/" + encodeURIComponent(String(g("key"))) + "_L" + lv + ".geojson"); if (!res.ok) throw new Error("HTTP " + res.status); cache[lv] = await res.json(); }
+        } catch (e) { $("blkNote").textContent = "这一级的街区数据读不出来:" + e.message; return; }
+        if (cur !== lv) return;
+        const fc = cache[lv], areas = fc.features.map((f) => featArea(f.geometry)).sort((a, b) => a - b), tot = areas.reduce((a, b) => a + b, 0), med = areas.length ? areas[Math.floor(areas.length / 2)] : 0;
+        if (blay) bmap.removeLayer(blay);
+        blay = L.geoJSON(fc, { style: { color: "#f97316", weight: 1.2, fillColor: "#fb923c", fillOpacity: 0.22, className: "blk" },
+          onEachFeature: (f, l) => { const a = featArea(f.geometry); l.bindTooltip("街区 · " + (a >= 1 ? a.toFixed(2) + " km²" : Math.round(a * 100) + " 公顷")); l.on("mouseover", () => l.setStyle({ fillOpacity: 0.4 })); l.on("mouseout", () => l.setStyle({ fillOpacity: 0.18 })); } }).addTo(bmap);
+        if (oline) oline.bringToFront();
+        if (!fitted && fc.features.length) { bmap.fitBounds(blay.getBounds(), { padding: [10, 10] }); fitted = true; }
+        const nm = lvs.find(([k]) => k === lv);
+        $("blkCards").innerHTML = P.kpiHtml([{ value: fc.features.length.toLocaleString("zh-CN"), label: "街区数(" + nm[1] + ")" }, { value: tot >= 10 ? Math.round(tot).toLocaleString("zh-CN") : tot.toFixed(1), label: "合计面积(km²)" },
+          { value: med >= 1 ? med.toFixed(1) + " km²" : Math.round(med * 100) + " 公顷", label: "街区面积中位数" }]);
+        $("blkNote").textContent = (blk.outline ? "蓝色虚线是城市轮廓(数据集收录的范围);" : "") + "橙色块是街区:" + nm[2] + "围出来的地块,块与块之间的缝就是道路;滚轮缩放、拖动平移,鼠标移到块上看面积。街区按 2022 年 5 月的 OpenStreetMap 道路切出,只收人口 50 万以上的城市;数据集 MSDCW(Tang 等 2025,CC BY 4.0),公开资料,待核实。";
+      };
+      $("blkLv").innerHTML = lvs.map(([k, l, t]) => '<button type="button" class="chip-btn" data-lv="' + k + '" title="' + t + '">' + l + "·" + t + "</button>").join("");
+      $("blkLv").querySelectorAll("button").forEach((b) => { b.onclick = () => show(b.dataset.lv); });
+      show(lvs.length > 1 ? lvs[1][0] : lvs[0][0]);
+    };
+    const onTab = (k) => { if (k === "plants") { if (pmap) pmap.resize(); else drawPlants(); } if (k === "imagery") { drawImagery(); drawUrban(); } if (k === "blocks") drawBlocks(); };
     $("tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => onTab(b.dataset.t)));
     showTab(tab);
     onTab(tab);

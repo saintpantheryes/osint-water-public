@@ -704,3 +704,9 @@ li.rv-off > .rv-item { text-decoration: line-through; color: var(--muted); }
 .sw:checked { background: var(--brand); }
 .sw:checked::after { left: 15px; }
 .sw:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* 城市页「街区」页签的图例:蓝虚线 = 城市轮廓,橙块 = 街区 */
+.lgd { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-left: 8px; }
+.lgd i { display: inline-block; width: 22px; height: 12px; box-sizing: border-box; }
+.lgd .lg-outline { height: 0; border-top: 3px dashed #2563eb; }
+.lgd .lg-block { background: rgba(251, 146, 60, .35); border: 1.5px solid #f97316; margin-left: 6px; }
