@@ -33,9 +33,9 @@ def data_files() -> list[Path]:
     return sorted(DATA.parent.glob("awards*.csv.gz"))
 OID = "award"
 COLS = ["key", "iso3", "name", "sector", "contract_type", "price", "currency", "awarded", "quantity", "winner", "winner_country",
-        "project", "funder", "method", "source", "url", "winners", "buyer", "place", "estimate", "eval_days", "bidders", "asset"]
+        "project", "funder", "method", "source", "url", "winners", "buyer", "place", "estimate", "eval_days", "bidders", "asset", "note"]
 TEXT = ("name", "sector", "contract_type", "currency", "awarded", "quantity", "winner", "winner_country", "project", "funder", "method", "buyer",
-        "source", "url")
+        "source", "url", "note")  # note(备注):手工整理的来源只有这一列能写「待核实」与出处说明,有就填空
 
 # 类别(lead_sectors):按合同名称里的词归,先中先得(海水淡化 → 污水 → 雨水排涝 → 供水 → 水利 → 水环境);英、法、西、葡、越南文都认。
 # 只有泛泛的「水」字样的算其他;一个都不中的不是水务合同(fetch 时丢掉)。
