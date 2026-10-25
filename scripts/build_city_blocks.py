@@ -1,5 +1,5 @@
 """把 MSDCW 街区数据(figshare 10.6084/m9.figshare.26021314,Tang 等 2025《Scientific Data》,CC BY 4.0)转成城市页「街区」页签能直接读的小文件:
-每座城市每个层级一个 GeoJSON(media/blocks/<城市码>_L<层级>.geojson),外加一张目录 media/blocks/index.json({城市码: {name, levels: {层级: 街区数}}}),
+每座城市每个层级一个 GeoJSON(media/blocks/<城市码>_L<层级>.geojson),一个城市轮廓(<城市码>_outline.geojson,1 级街区合并后的外边界,页面上用另一种颜色画),外加一张目录 media/blocks/index.json({城市码: {name, levels: {层级: 街区数}}}),
 页面按目录决定要不要显示「街区」页签。一次性离线跑;原始数据是 2022 年 5 月 OpenStreetMap 道路切出来的,只收人口 50 万以上的城市。
 
     python scripts/build_city_blocks.py --shp-dir <解压后的 shp 目录> --from-base --out private/portal/media/blocks
@@ -76,6 +76,19 @@ def convert(shp: Path, tol: float) -> tuple[dict, tuple[float, float]]:
     return {"type": "FeatureCollection", "features": feats}, (ys / n, xs / n)
 
 
+def outline(shp: Path) -> dict:
+    """1 级街区合并成城市轮廓(外边界,只留外环;小缝先用正负缓冲填平),简化到约 20 米"""
+    import shapefile
+    from shapely.geometry import shape, mapping, Polygon, MultiPolygon
+    from shapely.ops import unary_union
+
+    rd = shapefile.Reader(str(shp))
+    u = unary_union([shape(sr.__geo_interface__).buffer(0) for sr in rd.iterShapes()]).buffer(0.0004).buffer(-0.0004)
+    polys = [u] if isinstance(u, Polygon) else [p for p in u.geoms if isinstance(p, Polygon)] if isinstance(u, MultiPolygon) else []
+    g = MultiPolygon([Polygon(p.exterior) for p in polys]).simplify(0.0002, preserve_topology=True)
+    return {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": json.loads(json.dumps(mapping(g)), parse_float=lambda x: round(float(x), 5))}]}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--shp-dir", type=Path, required=True)
@@ -116,7 +129,8 @@ def main() -> int:
             unmatched.append(f"{country}_{city}")
             continue
         key = str(row["key"])
-        ent = {"name": city, "country": country, "levels": {}}
+        ent = {"name": city, "country": country, "levels": {}, "outline": True}
+        (a.out / f"{key}_outline.geojson").write_text(json.dumps(outline(shp), separators=(",", ":")), "utf-8")
         for lv in levels:
             src = shp.with_name(f"{shp.stem[:-1]}{lv}.shp")
             if not src.exists():

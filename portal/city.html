@@ -68,7 +68,7 @@
     <div class="tab" data-t="blocks">
       <!-- 街区(使用方 2026-10-25):MSDCW 街区划分叠在高清影像上,看建成区怎么被道路切成块;数据在私有配置仓 portal/media/blocks/,只有人口 50 万以上、数据集收了的城市有这一页签 -->
       <div class="panel" id="blkBox">
-        <div class="frow"><b>粗细</b><span class="frow" id="blkLv"></span><span class="muted small push" id="blkPos"></span></div>
+        <div class="frow"><b>粗细</b><span class="frow" id="blkLv"></span><span class="lgd" id="blkLgd"><i class="lg-outline"></i>城市轮廓<i class="lg-block"></i>街区</span><span class="muted small push" id="blkPos"></span></div>
         <div id="blkCards"></div>
         <div class="mapbox"><div id="blkMap" class="chart tall"></div></div>
         <p class="muted small" id="blkNote"></p>
@@ -516,6 +516,10 @@
       const pos = (ll) => ll.lat.toFixed(4) + ", " + ll.lng.toFixed(4);
       bmap.on("mousemove", (e) => { $("blkPos").textContent = "鼠标处 " + pos(e.latlng); });
       bmap.on("moveend", () => { $("blkPos").textContent = "中心 " + pos(bmap.getCenter()); });
+      /* 城市轮廓(1 级街区合并的外边界)蓝色虚线,与橙色街区分开;轮廓文件没有也不碍事 */
+      let oline = null;
+      if (blk.outline) fetch("media/blocks/" + encodeURIComponent(String(g("key"))) + "_outline.geojson").then((r) => (r.ok ? r.json() : null)).then((fc) => {
+        if (fc) oline = L.geoJSON(fc, { style: { color: "#2563eb", weight: 3, dashArray: "8 6", fill: false, className: "blk-outline" }, interactive: false }).addTo(bmap); }).catch(() => {});
       const cache = {};
       let cur = "", fitted = false;
       const show = async (lv) => {
@@ -528,13 +532,14 @@
         if (cur !== lv) return;
         const fc = cache[lv], areas = fc.features.map((f) => featArea(f.geometry)).sort((a, b) => a - b), tot = areas.reduce((a, b) => a + b, 0), med = areas.length ? areas[Math.floor(areas.length / 2)] : 0;
         if (blay) bmap.removeLayer(blay);
-        blay = L.geoJSON(fc, { style: { color: "#f59e0b", weight: 1.5, fillColor: "#f59e0b", fillOpacity: 0.18, className: "blk" },
+        blay = L.geoJSON(fc, { style: { color: "#f97316", weight: 1.2, fillColor: "#fb923c", fillOpacity: 0.22, className: "blk" },
           onEachFeature: (f, l) => { const a = featArea(f.geometry); l.bindTooltip("街区 · " + (a >= 1 ? a.toFixed(2) + " km²" : Math.round(a * 100) + " 公顷")); l.on("mouseover", () => l.setStyle({ fillOpacity: 0.4 })); l.on("mouseout", () => l.setStyle({ fillOpacity: 0.18 })); } }).addTo(bmap);
+        if (oline) oline.bringToFront();
         if (!fitted && fc.features.length) { bmap.fitBounds(blay.getBounds(), { padding: [10, 10] }); fitted = true; }
         const nm = lvs.find(([k]) => k === lv);
         $("blkCards").innerHTML = P.kpiHtml([{ value: fc.features.length.toLocaleString("zh-CN"), label: "街区数(" + nm[1] + ")" }, { value: tot >= 10 ? Math.round(tot).toLocaleString("zh-CN") : tot.toFixed(1), label: "合计面积(km²)" },
           { value: med >= 1 ? med.toFixed(1) + " km²" : Math.round(med * 100) + " 公顷", label: "街区面积中位数" }]);
-        $("blkNote").textContent = "黄色块是街区:" + nm[2] + "围出来的地块;滚轮缩放、拖动平移,鼠标移到块上看面积。街区按 2022 年 5 月的 OpenStreetMap 道路切出,只收人口 50 万以上的城市;数据集 MSDCW(Tang 等 2025,CC BY 4.0),公开资料,待核实。";
+        $("blkNote").textContent = (blk.outline ? "蓝色虚线是城市轮廓(数据集收录的范围);" : "") + "橙色块是街区:" + nm[2] + "围出来的地块,块与块之间的缝就是道路;滚轮缩放、拖动平移,鼠标移到块上看面积。街区按 2022 年 5 月的 OpenStreetMap 道路切出,只收人口 50 万以上的城市;数据集 MSDCW(Tang 等 2025,CC BY 4.0),公开资料,待核实。";
       };
       $("blkLv").innerHTML = lvs.map(([k, l, t]) => '<button type="button" class="chip-btn" data-lv="' + k + '" title="' + t + '">' + l + "·" + t + "</button>").join("");
       $("blkLv").querySelectorAll("button").forEach((b) => { b.onclick = () => show(b.dataset.lv); });

@@ -2111,7 +2111,8 @@ def test_city_page_lists_cities_and_opens_one():
             # 一座城市:卡片、概况,商机与线索各在自己的页签里
             # 街区(使用方 2026-10-25):数据在私有配置仓 media/blocks/;目录里有这座城市才有「街区」页签。这里假装甘贾有两块(1 级 1 块、2 级 2 块),巴库没有
             sq = lambda x, y, d: {"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[x, y], [x + d, y], [x + d, y + d], [x, y + d], [x, y]]]}}  # noqa: E731
-            blocks = {"index.json": {"source": "MSDCW", "cities": {"586523": {"name": "Ganja", "country": "Azerbaijan", "levels": {"1": 1, "2": 2}}}},
+            blocks = {"index.json": {"source": "MSDCW", "cities": {"586523": {"name": "Ganja", "country": "Azerbaijan", "levels": {"1": 1, "2": 2}, "outline": True}}},
+                      "586523_outline.geojson": {"type": "FeatureCollection", "features": [sq(46.34, 40.66, 0.04)]},
                       "586523_L1.geojson": {"type": "FeatureCollection", "features": [sq(46.35, 40.67, 0.02)]},
                       "586523_L2.geojson": {"type": "FeatureCollection", "features": [sq(46.35, 40.67, 0.01), sq(46.36, 40.68, 0.01)]}}
             def blk(route):
@@ -2130,6 +2131,8 @@ def test_city_page_lists_cities_and_opens_one():
             page.click("#tabs button[data-t='blocks']")
             page.wait_for_selector("#blkMap.leaflet-container path.leaflet-interactive", timeout=15000)
             assert page.locator("#blkLv button").all_inner_texts() == ["粗·只按高速与主干道切", "中·加上次干道"] and page.locator("#blkLv button.on").get_attribute("data-lv") == "2"
+            page.wait_for_selector("#blkMap path.blk-outline", state="attached", timeout=15000)  # 城市轮廓(蓝虚线)与街区(橙)分开画,图例两项
+            assert page.locator("#blkMap path.blk-outline").count() == 1 and page.inner_text("#blkLgd").split() == ["城市轮廓", "街区"] and page.inner_text("#blkNote").startswith("蓝色虚线是城市轮廓")
             assert page.locator("#blkMap path.blk").count() == 2 and "2\n街区数(中)" in page.inner_text("#blkCards") and "km²" in page.inner_text("#blkCards") and "CC BY 4.0" in page.inner_text("#blkNote")
             page.click("#blkLv button[data-lv='1']")
             page.wait_for_function("document.querySelectorAll('#blkMap path.blk').length === 1")
