@@ -13,7 +13,7 @@
 <div id="nav"></div>
 <script>document.getElementById("nav").innerHTML = P.nav("country.html");  /* 顶栏紧跟着就画,不等读表 */</script>
 <main>
-  <div class="toolbar"><h1>国别概况</h1><select id="pick"></select><span id="rel"></span><span id="openRow"></span><span class="muted push">在地图上点国家也行(滚轮缩放,<a href="#" id="mapReset">复位</a>)</span></div>
+  <div class="toolbar"><h1>国别概况</h1><select id="pick"></select><span id="cwiki"></span><span id="rel"></span><span id="openRow"></span><span class="muted push">在地图上点国家也行(滚轮缩放,<a href="#" id="mapReset">复位</a>)</span></div>
   <div class="panel"><div id="map" class="chart"></div></div>
   <div id="cards"></div>
   <div class="tabs grouped" id="tabs"></div>
@@ -36,7 +36,7 @@
   </div>
   <div class="tab" data-t="cities">
     <h2>规模以上城市</h2>
-    <p class="muted small">人口达到门槛(缺省 10 万)的城市,后台每月按 GeoNames 公开数据维护;面积、地区生产总值公开数据里没有,在城市表里补,密度随后自动算。</p>
+    <p class="muted small">人口达到门槛(缺省 10 万)的城市,后台每月按 GeoNames 公开数据维护;面积按维基数据自动补(公开资料,待核实),地区生产总值公开数据里没有,在城市表里补,密度随后自动算。</p>
     <div class="panel" id="cities"></div>
   </div>
   <div class="tab" data-t="areas">
@@ -112,6 +112,7 @@
     document.title = "全球水务开源情报 · " + (g("name_zh") || iso);
     $("openRow").innerHTML = P.open("country", c.id, "在表格里打开国别 ↗");
     $("rel").innerHTML = P.marketLinks(iso, "", "country.html");
+    $("cwiki").innerHTML = "";
     const since = P.addDays(P.today(), -90), until = P.addDays(P.today(), 30), today = P.today();
     const hasCity = !!(P.cfg.tables && P.cfg.tables.city);  /* 「城市」表建了才有(表结构没更新时页签显示「未建表」) */
     const hasArea = !!(P.cfg.tables && P.cfg.tables.water_area) && P.has("opportunity", "area");
@@ -131,6 +132,7 @@
       P.studies($("studies"), c.id).catch((e) => { P.fail($("studies"), e); return 0; })]);
     const full = await P.api("/table/" + P.t("country").id + "/record/" + c.id, { fieldKeyType: "id" });
     const f = (p) => (full && full.fields || {})[P.f("country", p)];
+    if (full && full.fields) $("cwiki").innerHTML = P.wikiLinks("country", full);  /* 维基百科:一个链接,中文条目(字段由 A11 按 reference/country_basics.yaml 填) */
     /* 长文本按后台写入的格式整理:一行一条;「名称:数值(来源 网址)」→ 事实表;「· 」分隔 → 表格;[备注]/[情报]/[建议动作] → 标签;[8位引用键]、〔R012〕→ 小角标 */
     const lines = (v) => String(v || "").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
     const long = ["note", "indicators", "basics", "access", "laws", "water_agencies", "water_soes", "market", "presence"];

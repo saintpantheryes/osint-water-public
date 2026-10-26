@@ -318,7 +318,7 @@ def _seed(admin: tstore.Client, fake: FakeTeable):
     from datetime import timedelta
     b = tstore.Base(admin)
     today = _today()
-    c = b.create("country", [{"name_zh": "阿塞拜疆", "ISO3": "AZE", "tier": "重点", "market": "示例甲区域", "indicators": "GDP:720 亿美元(2025)(世行 WDI https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=AZ)", "note": "[备注] 甲城项目采购已启动 [aaaaaaaa]\n2026-09 [建议动作] 在 ECEPP 注册(到期 2026-10-10,待定)",
+    c = b.create("country", [{"name_zh": "阿塞拜疆", "ISO3": "AZE", "tier": "重点", "market": "示例甲区域", "wiki_zh": "https://zh.wikipedia.org/zh-cn/%E9%98%BF%E5%A1%9E%E6%8B%9C%E7%96%86", "wiki_en": "https://en.wikipedia.org/wiki/Azerbaijan", "indicators": "GDP:720 亿美元(2025)(世行 WDI https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=AZ)", "note": "[备注] 甲城项目采购已启动 [aaaaaaaa]\n2026-09 [建议动作] 在 ECEPP 注册(到期 2026-10-10,待定)",
                                     "bready_total": 66.0, "bready_water": 79.3, "bready_procure": 45.7, "bready_dispute": 65.3, "water_tariff": 2, "water_tariff_cur": "AZN", "water_tariff_usd": 1.18,
                                     "water_reliable": 97.1, "water_conn_days": 5, "foreign_bid": "部分招标有限制", "award_days": 365, "gov_pay_days": 7,
                                     "bready_items": "[供水] 法规设了降低漏损的目标:是\n[供水] 有独立于水司的投诉渠道:否\n[采购] 外企参标或授标受限:部分招标有\n[采购] 外企须与本地企业联合才能投标:否",
@@ -508,6 +508,7 @@ def test_pages_open_in_a_browser_against_the_fake_table():
             txt = page.inner_text("main")
             assert "阿塞拜疆" in txt and "GDP\n720 亿美元" in txt and "甲城项目采购已启动" in txt  # 默认页签「概况」:备注与指标
             assert page.locator(".facts a.src").count() >= 1 and "AI 推荐" in txt and "待人定" not in txt  # 指标成了「名称 / 数值 / 来源链接」,不再是一坨原文
+            assert page.locator("#cwiki a").all_inner_texts() == ["维基百科 ↗"] and page.get_attribute("#cwiki a.wiki", "href") == "https://zh.wikipedia.org/zh-cn/%E9%98%BF%E5%A1%9E%E6%8B%9C%E7%96%86"  # 标题旁只一个维基百科链接(2026-10-26)
             # 页签切换:商机 / 线索 / 节点各在自己的页签里,页签上带条数;其他页签的内容藏着
             assert page.locator("#tabs button").count() == 9 and page.locator("#tabs button.on").inner_text() == "概况" and "AZE-001" not in txt
             # 页签分三组:基本信息 → 历史信息 → 动态信息(使用方 2026-10-13 要的)
@@ -2056,7 +2057,8 @@ def test_city_page_lists_cities_and_opens_one():
     c, o, ld = _seed(admin, fake)
     b = tstore.Base(admin)
     city = b.create("city", [{"key": "586523", "name_zh": "甘贾", "name_en": "Ganja", "country": c["id"], "admin": "Ganja", "coords": "40.6828,46.3606", "population": 335600,
-                              "tariff": 0.7, "tariff_currency": "AZN", "tariff_changed": "2024-03-01", "tariff_note": "居民价\n非居民 2.0"}])[0]
+                              "tariff": 0.7, "tariff_currency": "AZN", "tariff_changed": "2024-03-01", "tariff_note": "居民价\n非居民 2.0",
+                              "area_km2": 110, "area_source": "维基数据 P2046(公开资料,待核实)", "wiki_zh": "https://zh.wikipedia.org/zh-cn/%E7%94%98%E8%B4%BE", "wiki_en": "https://en.wikipedia.org/wiki/Ganja,_Azerbaijan"}])[0]
     b.update("opportunity", o["id"], {"city": city["id"]})
     b.update("lead", ld["id"], {"city": city["id"]})
     cn = b.create("country", [{"name_zh": "中国", "ISO3": "CHN"}])[0]  # 对比参照国别(glossary.compare_country):城市只在选了「中国(对比)」时列,详情页并排对比
@@ -2124,6 +2126,9 @@ def test_city_page_lists_cities_and_opens_one():
             assert page.inner_text("#cname") == "甘贾" and "阿塞拜疆" in page.inner_text("#info") and "34\n万" in page.inner_text("#ccards")
             info = page.inner_text("#info")
             assert "0.7 AZN/立方米" in info and "2024-03-01" in info and "居民价\n非居民 2.0" in info  # 水价挂城市(人填)
+            # 维基百科链接(使用方 2026-10-26,「只保留中文的维基百科链接」):标题旁只一个「维基百科 ↗」,开中文条目;面积卡片下注来源;概况里不再重复列
+            assert page.locator("#cwiki a").all_inner_texts() == ["维基百科 ↗"] and page.get_attribute("#cwiki a.wiki", "href").endswith("/zh-cn/%E7%94%98%E8%B4%BE")
+            assert "110\n面积(km²)\n维基数据 P2046(公开资料,待核实)" in page.inner_text("#ccards") and "English" not in info and "维基百科" not in info.split("面积按")[0]
             assert page.locator("#tabs button").all_inner_texts() == ["概况", "历史影像", "街区", "商机 1", "线索 1", "水厂 1"]
             if shots:
                 page.screenshot(path=str(shots / "city_one.png"), full_page=True)

@@ -1,6 +1,6 @@
 """国别信息(A11):每月 1 日按期刷新;线索、商机里出现了新国别时补建、补填。
 
-国别表一国一行(ISO3 作标识)。机器字段:国名、大洲与区域(只填空);宏观与水务指标、收入组与贷款类别(按期替换——指标就是要新的);
+国别表一国一行(ISO3 作标识)。机器字段:国名、大洲与区域、中英文维基百科链接(只填空);宏观与水务指标、收入组与贷款类别(按期替换——指标就是要新的);
 基础信息、水务管理机构、水务国企、相关法律法规(列表只追加)。人管的市场分级(「重点」由人标)、经营区域、我方在当地、国别备注不动。
 数据:世行国别元数据与 IMF 数据映射接口(core.sources 的两个适配器),快照写在本机缓存目录(不写进程序检出);抓不到时用 profile
 数据目录里最近一期快照;两处都没有就只写 reference 里的基础与水务资料。
@@ -8,9 +8,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import quote
 
 from core import geo, storage, tstore
-from core.country_facts import METRICS, SRC_ZH, load_facts, water_desc
+from core.country_facts import METRICS, SRC_ZH, load_basics, load_facts, water_desc
 from core.markets import MarketsError, load_markets
 
 from .common import Ctx
@@ -55,6 +56,7 @@ def fetch_snapshots(ctx: Ctx, data_dir: Path) -> bool:
 
 _fetch = fetch_snapshots  # 测试里换掉
 _facts = load_facts
+_basics = load_basics
 
 
 def _has_snapshot(d: Path) -> bool:
@@ -89,15 +91,33 @@ def scope(ctx: Ctx) -> list[str]:
     return sorted(i for i in isos if i in geo.countries() or any(c.iso3 == i for c in ctx.profile.countries))
 
 
+def fill_wiki(b: tstore.Base, rows: dict[str, dict]) -> int:
+    """中英文维基百科链接:按 reference/country_basics.yaml 记的条目名只填空(没记的国别留空,搜索链接不算出处);表里还没建字段时跳过。不联网,每次运行都做。→ 填了几处。"""
+    props = [p for p in ("wiki_zh", "wiki_en") if b.has("country", p)]
+    if not props:
+        return 0
+    basics = _basics()
+    n = 0
+    for iso, rec in rows.items():
+        bz = basics.get(iso) or {}
+        want = {"wiki_zh": f"https://zh.wikipedia.org/zh-cn/{quote(str(bz['wiki_zh']))}" if bz.get("wiki_zh") else None,
+                "wiki_en": f"https://en.wikipedia.org/wiki/{quote(str(bz['wiki_en']))}" if bz.get("wiki_en") else None}
+        want = {k: v for k, v in want.items() if v and k in props and tstore.is_empty(b.get("country", rec, k))}
+        if want:
+            n += len(b.fill("country", rec, want)[0])
+    return n
+
+
 def run(ctx: Ctx, refresh: bool = False, only_missing: bool = False) -> dict:
-    """refresh:按期刷新全部(每月 1 日);only_missing:只补「宏观与水务指标」还空着的(新国别出现时,每天跑一次很便宜)。→ 计数。"""
+    """refresh:按期刷新全部(每月 1 日);only_missing:只补「宏观与水务指标」还空着的(新国别出现时,每天跑一次很便宜)。维基百科链接每次都只填空。→ 计数。"""
     b = ctx.base
     isos = scope(ctx)
     rows = {str(b.get("country", r, "key")): r for r in b.rows("country") if b.get("country", r, "key")}
+    n_wiki = fill_wiki(b, rows)
     if only_missing and not refresh:
         isos = [i for i in isos if i in rows and tstore.is_empty(b.get("country", rows[i], "indicators"))]
     if not isos:
-        return {}
+        return {"维基链接": n_wiki} if n_wiki else {}
     facts = facts_for(ctx, isos, refresh)
     n_fill = n_rep = n_app = 0
     for iso in isos:
@@ -133,5 +153,5 @@ def run(ctx: Ctx, refresh: bool = False, only_missing: bool = False) -> dict:
                 n_app += 1
         if upd:
             b.update("country", rec["id"], upd)
-    ctx.log(f"  ▸ 国别信息:{len(isos)} 国,填空 {n_fill} 处、替换 {n_rep} 处、追加 {n_app} 处")
-    return {"国别": len(isos), "填空": n_fill, "替换": n_rep, "追加": n_app}
+    ctx.log(f"  ▸ 国别信息:{len(isos)} 国,填空 {n_fill} 处、替换 {n_rep} 处、追加 {n_app} 处" + (f"、维基链接 {n_wiki} 处" if n_wiki else ""))
+    return {"国别": len(isos), "填空": n_fill, "替换": n_rep, "追加": n_app, **({"维基链接": n_wiki} if n_wiki else {})}

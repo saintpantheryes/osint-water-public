@@ -136,16 +136,18 @@ def test_country_info_fills_replaces_and_appends(env, monkeypatch):  # noqa: F81
     monkeypatch.setattr(countries, "_fetch", lambda ctx, d: False)
     monkeypatch.setattr(countries, "_facts", lambda d, m, isos: {i: _F(i) for i in isos})
     monkeypatch.setattr(countries, "METRICS", tuple(m for m in METRICS if m.key == "gdp"))
+    monkeypatch.setattr(countries, "_basics", lambda: {"AZE": {"wiki_zh": "阿塞拜疆", "wiki_en": "Azerbaijan"}})
     c = abase.rows("country")[0]
     abase.update("country", c["id"], {"basics": "首都:巴库(维基)", "water_agencies": "旧机构 · https://old.example"})
     out = countries.run(ctx, refresh=True)
-    assert out["国别"] == 1 and out["替换"] == 2 and out["追加"] == 1  # 指标与收入组替换;机构追加;基础信息已有同一条不重复
+    assert out["国别"] == 1 and out["替换"] == 2 and out["追加"] == 1 and out["维基链接"] == 2  # 指标与收入组替换;机构追加;基础信息已有同一条不重复;维基百科链接填上
     c = abase.record("country", c["id"])
     assert _val(abase, "country", c, "region") and _val(abase, "country", c, "tier") == "重点"  # 人管的不动
     assert "GDP:720 亿美元(2024)(世行 WDI https://data.worldbank.org/x)" in _val(abase, "country", c, "indicators")
     assert _val(abase, "country", c, "income_group") == "中高收入;IBRD"
     assert _val(abase, "country", c, "water_agencies") == "旧机构 · https://old.example\n阿塞拜疆水务局 · https://water.gov.az"
     assert _val(abase, "country", c, "basics") == "首都:巴库(维基)"
+    assert _val(abase, "country", c, "wiki_zh").endswith("%E7%96%86") and _val(abase, "country", c, "wiki_en") == "https://en.wikipedia.org/wiki/Azerbaijan"  # 维基百科链接(2026-10-26)
     # 只补空着的:都填了就什么也不做
     assert countries.run(ctx, only_missing=True) == {}
     # 新国别出现(线索建了国别行)→ only_missing 补它
@@ -153,7 +155,11 @@ def test_country_info_fills_replaces_and_appends(env, monkeypatch):  # noqa: F81
     out = countries.run(ctx, only_missing=True)
     assert out["国别"] == 1
     m = next(r for r in abase.rows("country") if _val(abase, "country", r, "key") == "MAR")
-    assert _val(abase, "country", m, "name_zh") == "摩洛哥" and _val(abase, "country", m, "indicators")
+    assert _val(abase, "country", m, "name_zh") == "摩洛哥" and _val(abase, "country", m, "indicators") and not _val(abase, "country", m, "wiki_zh")  # 资料里没记条目名的不填搜索链接
+    # 维基百科链接每次运行都只填空(不等每月 1 日):资料里补了摩洛哥的条目名 → 下次只补它,别的不动
+    monkeypatch.setattr(countries, "_basics", lambda: {"AZE": {"wiki_zh": "阿塞拜疆", "wiki_en": "Azerbaijan"}, "MAR": {"wiki_zh": "摩洛哥", "wiki_en": "Morocco"}})
+    assert countries.run(ctx, only_missing=True) == {"维基链接": 2}
+    assert _val(abase, "country", abase.record("country", m["id"]), "wiki_zh") == "https://zh.wikipedia.org/zh-cn/%E6%91%A9%E6%B4%9B%E5%93%A5"
 
 
 def test_report_uses_the_default_template_from_the_template_table(env, monkeypatch):  # noqa: F811

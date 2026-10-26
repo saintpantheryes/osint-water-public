@@ -1,7 +1,9 @@
 """A22 维护城市:按 GeoNames 公开数据把人口 ≥ 门槛(profile.city_min_population,缺省 10 万)的城市建进「城市」表,一国一批;
 已有的只填空(R2),去重按城市码(GeoNames 编号)。
 中文名取 reference/city_zh.tsv(维基数据的简体名,scripts/build_city_zh.py 生成),表里没有的取 GeoNames 中文别名转简体;
-以前按旧规则自动填的名字(GeoNames 第一个中文别名,常是繁体或港台译名;没有中文时的英文名)换成新名字,人改过的不动。人口与面积都有、密度为空的算密度。每月 1 日全量(refresh),其余日子只补还没有城市的国别。
+以前按旧规则自动填的名字(GeoNames 第一个中文别名,常是繁体或港台译名;没有中文时的英文名)换成新名字,人改过的不动。每月 1 日全量(refresh),其余日子只补还没有城市的国别。
+每次都做的两步:面积与维基百科链接按 reference/city_wiki.tsv(维基数据的面积 P2046 与中英文条目,scripts/build_city_wiki.py 生成)只填空,面积来源记「维基数据」;
+人口与面积都有、密度为空的算密度。
 数据文件(cities15000.zip 约 2 MB、admin1CodesASCII.txt)一月取一次存本机缓存;取不到就用上次的,再没有就跳过。库里还没建「城市」表时跳过。"""
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import httpx
+from urllib.parse import quote
 
 from core import geo, tstore
 from core.ledger import ROOT
@@ -25,6 +28,8 @@ MAX_AGE = 30 * 86400
 _CJK = re.compile("[㐀-鿿]")
 SOURCE = "GeoNames cities15000"
 ZH_TABLE = ROOT / "reference" / "city_zh.tsv"
+WIKI_TABLE = ROOT / "reference" / "city_wiki.tsv"
+AREA_SOURCE = "维基数据 P2046(公开资料,待核实)"
 
 
 def _fresh(fp: Path) -> bool:
@@ -92,6 +97,44 @@ def load_zh_table(path: Path) -> dict[str, str]:
     return out
 
 
+@lru_cache(maxsize=1)
+def wiki_table() -> dict[str, dict]:
+    return load_wiki_table(WIKI_TABLE)
+
+
+def load_wiki_table(path: Path) -> dict[str, dict]:
+    """reference/city_wiki.tsv → {GeoNames 编号: {area_km2, wiki_zh, wiki_en}}(没有的键不出现)。链接按条目名拼:中文 zh-cn 变体、英文 /wiki/。"""
+    out: dict[str, dict] = {}
+    if not path.exists():
+        return out
+    for line in path.read_text(encoding="utf-8").splitlines():
+        c = line.split("\t")
+        if len(c) < 5 or not c[0].isdigit():
+            continue
+        d: dict = {}
+        try:
+            if c[2].strip() and float(c[2]) > 0:
+                d["area_km2"] = float(c[2])
+        except ValueError:
+            pass
+        if c[3].strip():
+            d["wiki_zh"] = "https://zh.wikipedia.org/zh-cn/" + quote(c[3].strip().replace(" ", "_"))
+        if c[4].strip():
+            d["wiki_en"] = "https://en.wikipedia.org/wiki/" + quote(c[4].strip().replace(" ", "_"))
+        if d:
+            out[c[0]] = d
+    return out
+
+
+def wiki_values(key: str) -> dict:
+    """某城市按维基表能补的值:面积(带来源)、中英文维基百科链接。"""
+    d = wiki_table().get(key) or {}
+    out = {k: d[k] for k in ("wiki_zh", "wiki_en") if k in d}
+    if "area_km2" in d:
+        out["area_km2"], out["area_source"] = d["area_km2"], AREA_SOURCE
+    return out
+
+
 def legacy_zh(alternatenames: str) -> str | None:
     """旧规则:GeoNames 第一个中文别名,原样(不分简繁)。只用来认出以前自动填的名字。"""
     for alt in (alternatenames or "").split(","):
@@ -130,7 +173,7 @@ def parse_cities(text: str, iso2: str, min_population: int, admin: dict[str, str
             continue
         rows.append({"key": c[0], "name_zh": zh_of(c[3], c[0]) or c[1], "legacy_zh": legacy_zh(c[3]) or c[1], "name_en": c[1], "admin": admin.get(f"{iso2}.{c[10]}") or None,
                      "coords": f"{float(c[4]):.4f},{float(c[5]):.4f}", "population": pop,
-                     "pop_year": int(c[18][:4]) if re.match(r"\d{4}-", c[18] or "") else None, "source": f"{SOURCE}({(c[18] or '')[:7]})"})
+                     "pop_year": int(c[18][:4]) if re.match(r"\d{4}-", c[18] or "") else None, "source": f"{SOURCE}({(c[18] or '')[:7]})", **wiki_values(c[0])})
     rows.sort(key=lambda r: -r["population"])
     return rows
 
@@ -156,6 +199,7 @@ def run(ctx: Ctx, refresh: bool = False, only_missing: bool = False, client: htt
             return {"跳过": "没有 GeoNames 数据"}
         cities_txt, admin = data[0], parse_admin1(data[1])
         have = {str(b.get("city", r, "key")): r for r in b.rows("city") if b.get("city", r, "key")}
+        extra = [p for p in ("area_km2", "area_source", "wiki_zh", "wiki_en") if not b.has("city", p)]  # 表里还没建的字段不写
         n_new = n_fill = 0
         renames = []
         for iso in isos:
@@ -168,6 +212,8 @@ def run(ctx: Ctx, refresh: bool = False, only_missing: bool = False, client: htt
             for row in parse_cities(cities_txt, iso2, ctx.profile.city_min_population, admin):
                 row["country"] = crid
                 legacy = row.pop("legacy_zh")
+                for p in extra:
+                    row.pop(p, None)
                 rec = have.get(row["key"])
                 if rec is not None and b.get("city", rec, "name_zh") == legacy != row["name_zh"]:
                     renames.append((rec["id"], {"name_zh": row["name_zh"]}))  # 旧规则自动填的,换成简体名
@@ -186,6 +232,20 @@ def run(ctx: Ctx, refresh: bool = False, only_missing: bool = False, client: htt
             out["改简体名"] = len(renames)
         if n_fill:
             out["补空"] = n_fill
+    # 面积与维基百科链接:按维基表只填空(表里还没建这些字段时跳过);面积这次填上的才记来源
+    props = [p for p in ("area_km2", "wiki_zh", "wiki_en") if b.has("city", p)]
+    if props and wiki_table():
+        rows = b.rows("city", filter=b.filter(*[b.cond("city", p, "isEmpty") for p in props], conjunction="or"), props=props + ["key"])
+        n_wiki = 0
+        for r in rows:
+            vals = wiki_values(str(b.get("city", r, "key") or ""))
+            src = vals.pop("area_source", None)
+            changes, _ = b.fill("city", r, {k: v for k, v in vals.items() if k in props})
+            if "area_km2" in changes and src and b.has("city", "area_source"):
+                changes.update(b.fill("city", r, {"area_source": src})[0])
+            n_wiki += len(changes)
+        if n_wiki:
+            out["面积与维基"] = n_wiki
     # 密度:人口与面积都有、密度为空
     if b.has("city", "density") and b.has("city", "area_km2"):
         rows = b.rows("city", filter=b.filter(b.cond("city", "population", "isNotEmpty"), b.cond("city", "area_km2", "isNotEmpty"), b.cond("city", "density", "isEmpty")),
