@@ -34,7 +34,7 @@
     <div class="panel" id="rows">读取中…</div>
   </section>
   <section id="one" style="display:none">
-    <div class="toolbar"><a href="city.html" id="back">← 全部城市</a><h1 id="cname"></h1><span class="muted" id="cname2"></span><span class="push" id="openRow"></span></div>
+    <div class="toolbar"><a href="city.html" id="back">← 全部城市</a><h1 id="cname"></h1><span class="muted" id="cname2"></span><span id="cwiki"></span><span class="push" id="openRow"></span></div>
     <div class="backbar" id="rel"></div>
     <div id="ccards"></div>
     <div class="tabs" id="tabs"></div>
@@ -257,6 +257,7 @@
     const ct = full, g = (p) => P.get("city", ct, p), c = countryOf(ct);
     $("cname").textContent = cname(ct);
     if (g("name_en") && g("name_en") !== cname(ct)) $("cname2").textContent = g("name_en");
+    $("cwiki").innerHTML = P.wikiLinks("city", ct);  /* 维基百科:中文条目优先 */
     document.title = "全球水务开源情报 · " + cname(ct);
     const iso = c ? P.get("country", c, "key") : "", cnm = c ? P.get("country", c, "name_zh") || iso : "";
     P.backLink($("back"), iso ? "city.html?" + new URLSearchParams({ c: iso }) : "city.html", iso ? cnm + "全部城市" : "全部城市");
@@ -279,16 +280,17 @@
     $("supply").innerHTML = plantTable("supply_plant", supply, "自来水厂");
     $("sewage").innerHTML = plantTable("sewage_plant", sewage, "污水厂");
     const nPlants = (supply || []).length + (sewage || []).length;
-    $("ccards").innerHTML = P.kpiHtml([[people(Number(g("population")) || 0), "人口" + (g("pop_year") ? "(" + g("pop_year") + ")" : "")], [num(g("area_km2")) || "—", "面积(km²)"], [num(g("density")) || "—", "密度(人/km²)"],
+    $("ccards").innerHTML = P.kpiHtml([[people(Number(g("population")) || 0), "人口" + (g("pop_year") ? "(" + g("pop_year") + ")" : "")], [num(g("area_km2")) || "—", "面积(km²)", g("area_km2") ? g("area_source") || "" : ""], [num(g("density")) || "—", "密度(人/km²)"],
       [num(g("gdp")) || "—", "生产总值(亿美元)" + (g("gdp_year") ? "(" + g("gdp_year") + ")" : "")], [opps.length, "商机"], [leads.length + (leads.length >= 200 ? "+" : ""), "线索"]]
-      .map(([v, l]) => ({ label: l, value: String(v) })));
+      .map(([v, l, note]) => ({ label: l, value: String(v), note: note || "" })));  /* 面积卡片下注来源(维基数据 / 人补的写的来源) */
     const kv = [["所属国别", c ? countryCell(ct).__html : P.esc(P.text(g("country")))], ["所在行政区", P.esc(g("admin") || "")], ["坐标", P.esc(g("coords") || "")],
       ["现行水价", g("tariff") != null && g("tariff") !== "" ? P.esc(String(g("tariff")) + " " + (g("tariff_currency") || "") + "/立方米") : ""], ["最近调价", P.esc(P.day(g("tariff_changed")) || "")],
       ["水价说明", P.esc(g("tariff_note") || "").replace(/\r?\n/g, "<br>")], ["水价来源", P.esc(g("tariff_source") || "")],
-      ["数据来源", P.esc(g("source") || "")], ["备注", P.esc(g("note") || "")]].filter(([, v]) => v);
+      ["数据来源", P.esc(g("source") || "")], ["维基百科", [["中文", g("wiki_zh")], ["English", g("wiki_en")]].filter(([, u]) => u).map(([l, u]) => '<a href="' + P.esc(u) + '" target="_blank" rel="noopener">' + l + " ↗</a>").join(" · ")],
+      ["备注", P.esc(g("note") || "")]].filter(([, v]) => v);
     $("info").innerHTML = P.factsHtml(kv.map(([k, v]) => [k, v, { html: true }])) +
       (P.riskFacts("city", ct, iso) ? '<h3>水风险与经济(趋势参考)</h3>' + P.riskFacts("city", ct, iso) : "") +
-      '<p class="muted small">面积、地区生产总值、水价公开数据里没有,在城市表里补上就显示,密度随后自动算。线索、商机的「城市」一栏由人选,选上了就出现在这里。</p>';
+      '<p class="muted small">面积按维基数据(维基百科的结构化数据)自动补,没有的和地区生产总值、水价一样在城市表里补上就显示,密度随后自动算;维基数据的数与维基百科页面偶有出入,点链接可核。线索、商机的「城市」一栏由人选,选上了就出现在这里。</p>';
     $("opps").innerHTML = (nArc ? '<p class="muted small">已归档(放弃跟踪)的 ' + nArc + ' 个商机没列出来,在 <a href="opps.html?stage=*&ar=1">商机总览</a> 点「显示」看。</p>' : "") + (!opps.length ? '<p class="empty">还没有商机关联到这座城市。</p>' :
       P.tableHtml(["编号", "名称", "我方阶段", "投资规模", "负责人", "公开进度", "下一节点", ""], opps.map((o) => { const q = (p) => P.get("opportunity", o, p);
         return [P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(q("code") || "") + "</a>"), q("name_zh"), q("stage") || "建议", P.sizeText("opportunity", o), P.text(q("owner")), q("public_stage"), q("next_milestone"), P.raw(P.open("opportunity", o.id))]; })));

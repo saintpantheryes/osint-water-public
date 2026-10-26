@@ -493,6 +493,8 @@ details.sec.panel summary { margin: -4px 0; }
 /* 市场背景三页之间的互链:国别名加粗,后面跟要去的页 */
 .mlinks { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
 .mlinks a { white-space: nowrap; }
+.wikis { display: inline-flex; gap: 10px; align-items: baseline; }  /* 标题旁的维基百科链接(国别概况、城市概况) */
+.wikis a.wiki { white-space: nowrap; font-size: var(--fs-sm); }
 .backbar { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin: 4px 0 6px; }
 
 /* 助手「看一条链接」:建议放最前、加粗加大;不入库红、先核实琥珀、入库绿、已在库品牌蓝 */

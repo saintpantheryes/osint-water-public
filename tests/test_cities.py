@@ -43,6 +43,43 @@ def _client(ok=True, hits=None, text=CITIES):
 @pytest.fixture(autouse=True)
 def no_table(monkeypatch):
     monkeypatch.setattr(cities, "zh_table", lambda: {})  # 测试只看规则,不用 reference/city_zh.tsv
+    monkeypatch.setattr(cities, "wiki_table", lambda: {})  # 也不用 reference/city_wiki.tsv
+
+
+def test_wiki_table_parses_area_and_links(tmp_path):
+    """reference/city_wiki.tsv:编号、维基数据号、面积、中文条目、英文条目;链接按条目名拼(中文 zh-cn 变体、空格变下划线),没面积、没中文条目的键不出现。"""
+    f = tmp_path / "w.tsv"
+    f.write_text("# 头\n587084\tQ9248\t2140\t巴库\tBaku\tBaku\n586523\tQ131315\t\t\tGanja, Azerbaijan\tGanja\n9\tQ1\t0\t\t\tx\n", encoding="utf-8")
+    t = cities.load_wiki_table(f)
+    assert t["587084"] == {"area_km2": 2140.0, "wiki_zh": "https://zh.wikipedia.org/zh-cn/%E5%B7%B4%E5%BA%93", "wiki_en": "https://en.wikipedia.org/wiki/Baku"}
+    assert t["586523"] == {"wiki_en": "https://en.wikipedia.org/wiki/Ganja%2C_Azerbaijan"} and "9" not in t
+    shipped = cities.load_wiki_table(cities.WIKI_TABLE)  # 随程序发布的表:巴库在里面,带面积与中英文条目
+    assert shipped["587084"]["area_km2"] > 2000 and shipped["587084"]["wiki_zh"].endswith("%E5%B7%B4%E5%BA%93") and shipped["587084"]["wiki_en"].endswith("/Baku")
+
+
+def test_area_and_wiki_links_fill_blanks_only(env, monkeypatch):
+    """面积与维基百科链接(使用方 2026-10-26「巴库市的维基百科就有面积数据,为什么现在的城市页上反而没有」):按维基表只填空,面积这次填上的才记来源;
+    人补过的面积不动、也不给它记维基来源;每次运行都补(不只每月 1 日);密度随后算出来。"""
+    fake, admin, abase, ctx = env
+    b = abase
+    cities.run(ctx, refresh=True, client=_client())  # 先按老样子建了两座城市,都没面积
+    rows = {b.get("city", r, "key"): r for r in b.rows("city")}
+    b.update("city", rows["586523"]["id"], {"area_km2": 110, "area_source": "市政府网站"})  # 甘贾的面积是人补的
+    monkeypatch.setattr(cities, "wiki_table", lambda: {"587084": {"area_km2": 2140, "wiki_zh": "https://zh.wikipedia.org/zh-cn/%E5%B7%B4%E5%BA%93", "wiki_en": "https://en.wikipedia.org/wiki/Baku"},
+                                                       "586523": {"area_km2": 1700, "wiki_en": "https://en.wikipedia.org/wiki/Ganja%2C_Azerbaijan"}})
+    out = cities.run(ctx, only_missing=True, client=_client())
+    assert out == {"面积与维基": 5, "密度": 2}  # 巴库:面积、来源、中、英;甘贾:只有英文链接
+    baku, ganja = b.record("city", rows["587084"]["id"]), b.record("city", rows["586523"]["id"])
+    assert b.get("city", baku, "area_km2") == 2140 and b.get("city", baku, "area_source") == cities.AREA_SOURCE and b.get("city", baku, "density") == round(2300000 / 2140)
+    assert b.get("city", baku, "wiki_zh").endswith("/zh-cn/%E5%B7%B4%E5%BA%93") and b.get("city", baku, "wiki_en") == "https://en.wikipedia.org/wiki/Baku"
+    assert b.get("city", ganja, "area_km2") == 110 and b.get("city", ganja, "area_source") == "市政府网站" and b.get("city", ganja, "wiki_en").endswith("Ganja%2C_Azerbaijan") and not b.get("city", ganja, "wiki_zh")
+    assert cities.run(ctx, only_missing=True, client=_client()) == {}  # 再跑没东西可填
+    # 新建的城市一并带上:摩洛哥出现 → 拉巴特建行时就有面积与链接
+    monkeypatch.setattr(cities, "wiki_table", lambda: {"2538475": {"area_km2": 117, "wiki_zh": "https://zh.wikipedia.org/zh-cn/%E6%8B%89%E5%B7%B4%E7%89%B9", "wiki_en": "https://en.wikipedia.org/wiki/Rabat"}})
+    ctx.country_rid("MAR")
+    assert cities.run(ctx, only_missing=True, client=_client()) == {"新建": 1, "密度": 1}
+    rabat = next(r for r in b.rows("city") if b.get("city", r, "key") == "2538475")
+    assert b.get("city", rabat, "area_km2") == 117 and b.get("city", rabat, "area_source") == cities.AREA_SOURCE and b.get("city", rabat, "wiki_zh").endswith("%E7%89%B9")
 
 
 def test_zh_name_prefers_table_then_simplified_hanzi(monkeypatch):
