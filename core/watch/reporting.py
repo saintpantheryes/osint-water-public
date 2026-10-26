@@ -412,6 +412,58 @@ def _page_number_footer(section) -> None:
         run._r.append(el)
 
 
+def _three_sections(doc) -> bool:
+    """成稿分三节(使用方 10-26):封面一节不带页码;目录一节页码用罗马数字从 i 起;正文(摘要起)一节页码从 1 起。
+    在封面最后一段、目录最后一段的段属性里各放一个「下一页」分节符(抄正文那节的页面尺寸与边距),三节页脚各自独立。
+    找不到「目　录」段或第一个一级标题就不分,沿用单节带页码。"""
+    from copy import deepcopy
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    paras = doc.paragraphs
+    at = next((i for i, p in enumerate(paras) if p.text.strip() in TOC_TITLE and not p.style.name.startswith("Heading")), None)
+    first_h1 = next((i for i, p in enumerate(paras) if p.style.name == "Heading 1"), None)
+    if at is None or first_h1 is None or not (0 < at < first_h1):
+        return False
+    body = doc.sections[-1]._sectPr
+    for fmt, end in (("decimal", paras[at - 1]), ("lowerRoman", paras[first_h1 - 1])):  # 封面末段、目录末段
+        sp = deepcopy(body)
+        for el in list(sp):
+            if el.tag in (qn("w:headerReference"), qn("w:footerReference"), qn("w:pgNumType"), qn("w:titlePg")):
+                sp.remove(el)
+        t = sp.find(qn("w:type"))
+        if t is None:
+            t = OxmlElement("w:type")
+            (sp.find(qn("w:pgSz")).addprevious if sp.find(qn("w:pgSz")) is not None else sp.append)(t)
+        t.set(qn("w:val"), "nextPage")
+        ppr = end._p.get_or_add_pPr()
+        for old in ppr.findall(qn("w:sectPr")):
+            ppr.remove(old)
+        chg = ppr.find(qn("w:pPrChange"))
+        (chg.addprevious if chg is not None else ppr.append)(sp)
+    # 分节后段首不再另加「段前分页」,否则会多出空白页
+    for p in (paras[at], paras[first_h1]):
+        p.paragraph_format.page_break_before = None
+    secs = doc.sections
+    for i, sec in enumerate(secs):
+        sec.footer.is_linked_to_previous = False
+        for p in sec.footer.paragraphs:
+            for r in list(p.runs):
+                r._r.getparent().remove(r._r)
+        if i == 0:
+            continue
+        _page_number_footer(sec)
+        sp = sec._sectPr
+        for old in sp.findall(qn("w:pgNumType")):
+            sp.remove(old)
+        pn = OxmlElement("w:pgNumType")
+        pn.set(qn("w:fmt"), "lowerRoman" if i == 1 else "decimal")
+        pn.set(qn("w:start"), "1")
+        nxt = next((c for c in sp if c.tag in {qn(f"w:{t}") for t in ("cols", "formProt", "vAlign", "noEndnote", "titlePg", "textDirection", "bidi", "rtlGutter", "docGrid", "printerSettings")}), None)
+        (nxt.addprevious if nxt is not None else sp.append)(pn)
+    return True
+
+
 TOC_TITLE = ("目　录", "目录")
 # 封面照阿塞拜疆成稿:空 5 行,标题(黑体 26 号加粗居中),空 18 行,底部编制单位(12 号加粗)、年月(11 号)、「内部资料　仅供参考」(9.5 号),都居中
 COVER = {"blank_above": 5, "blank_below": 20, "title_size": 26, "title_east": "SimHei", "org_size": 12, "date_size": 11, "edition_size": 9.5, "gap": 3}
@@ -582,7 +634,7 @@ def _toc(doc, spec: dict) -> bool:
 
 
 def toc_pages(path: Path, timeout: int = 180) -> dict[str, int]:
-    """目录各条的页码:本机装了 LibreOffice(soffice)才算得出:转成 PDF,从目录页之后找每个一级标题单独成行的第一页。
+    """目录各条的页码:本机装了 LibreOffice(soffice)才算得出:转成 PDF,从目录页之后找每个一级标题单独成行的第一页,按正文从 1 起计。
     没装或转不成就返回空(页码留给 Word 打开时更新)。"""
     import shutil
     import subprocess
@@ -623,6 +675,9 @@ def toc_pages(path: Path, timeout: int = 180) -> dict[str, int]:
                 found[name] = i + 1
                 cur = i
                 break
+    if found:  # 正文那节页码从 1 起(封面、目录不计):第一条(摘要)所在页 = 第 1 页
+        first = min(found.values())
+        found = {k: v - first + 1 for k, v in found.items()}
     return found
 
 
@@ -725,7 +780,6 @@ def _polish(path: Path, spec: dict) -> None:
             for k in ("left_margin", "right_margin", "top_margin", "bottom_margin"):  # pandoc 的版面不带页边距
                 if getattr(sec, k) is None:
                     setattr(sec, k, Cm(2.5))
-        _page_number_footer(sec)
     first_h1 = next((p for p in doc.paragraphs if p.style.name == "Heading 1"), None)
     if first_h1 is not None:  # 封面(标题、副标题、日期)单独一页
         first_h1.paragraph_format.page_break_before = True
@@ -734,6 +788,9 @@ def _polish(path: Path, spec: dict) -> None:
             p.paragraph_format.page_break_before = True
     _cover(doc, spec)
     has_toc = _toc(doc, spec)
+    if not _three_sections(doc):  # 没有封面+目录的短报告:单节,每页带页码
+        for sec in doc.sections:
+            _page_number_footer(sec)
     sec = doc.sections[-1]
     text_cm = (sec.page_width - sec.left_margin - sec.right_margin) / 360000
     after_borders = {qn(f"w:{t}") for t in ("shd", "tblLayout", "tblCellMar", "tblLook", "tblCaption", "tblDescription")}
