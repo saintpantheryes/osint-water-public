@@ -2122,14 +2122,19 @@ def test_city_page_lists_cities_and_opens_one():
                 return route.fulfill(status=200, content_type="application/json", body=json.dumps(blocks[name])) if name in blocks else route.fulfill(status=404, body="")
             page.route("**/media/blocks/*", blk)
             page.goto(base + f"/city.html?id={city['id']}")
-            page.wait_for_function("document.querySelectorAll('#tabs button').length === 6", timeout=15000)
+            page.wait_for_function("document.querySelectorAll('#tabs button').length === 8", timeout=15000)
             assert page.inner_text("#cname") == "甘贾" and "阿塞拜疆" in page.inner_text("#info") and "34\n万" in page.inner_text("#ccards")
             info = page.inner_text("#info")
             assert "0.7 AZN/立方米" in info and "2024-03-01" in info and "居民价\n非居民 2.0" in info  # 水价挂城市(人填)
             # 维基百科链接(使用方 2026-10-26,「只保留中文的维基百科链接」):标题旁只一个「维基百科 ↗」,开中文条目;面积卡片下注来源;概况里不再重复列
             assert page.locator("#cwiki a").all_inner_texts() == ["维基百科 ↗"] and page.get_attribute("#cwiki a.wiki", "href").endswith("/zh-cn/%E7%94%98%E8%B4%BE")
             assert "110\n面积(km²)\n维基数据 P2046(公开资料,待核实)" in page.inner_text("#ccards") and "English" not in info and "维基百科" not in info.split("面积按")[0]
-            assert page.locator("#tabs button").all_inner_texts() == ["概况", "历史影像", "街区", "商机 1", "线索 1", "水厂 1"]
+            # 水务大事记、已中标项目各自一个页签(使用方 2026-10-26),条数读出来补到页签上;这座城市两样都还没有
+            page.wait_for_function("document.querySelector('#tabs button[data-t=awards] b') && document.querySelector('#tabs button[data-t=chron] b')", timeout=15000)
+            # 页签分三组,和国别概况一样(使用方 2026-10-26):基本信息 / 历史信息 / 动态信息
+            assert page.locator("#tabs button").all_inner_texts() == ["概况", "水厂 1", "历史影像", "街区", "大事记 0", "已中标项目 0", "商机 1", "线索 1"]
+            assert page.locator("#tabs .tg").all_inner_texts() == ["基本信息", "历史信息", "动态信息"]
+            assert page.is_hidden("#awBox") and page.is_hidden("#chron")
             if shots:
                 page.screenshot(path=str(shots / "city_one.png"), full_page=True)
             # 街区页签:粗细按钮只列有数据的层级,缺省取中间一级;黄色块一块一个 path,卡片有街区数与面积;换层级卡片跟着变
@@ -2147,10 +2152,10 @@ def test_city_page_lists_cities_and_opens_one():
             assert page.locator("#tabs button.on").inner_text() == "街区"
             baku = next(r for r in b.rows("city", props=["key"]) if b.get("city", r, "key") == "587084")  # 目录里没有的城市就没有这一页签
             page.goto(base + f"/city.html?id={baku['id']}")
-            page.wait_for_function("document.querySelectorAll('#tabs button').length === 5", timeout=15000)
+            page.wait_for_function("document.querySelectorAll('#tabs button').length === 7", timeout=15000)
             assert "街区" not in page.locator("#tabs button").all_inner_texts()
             page.goto(base + f"/city.html?id={city['id']}")
-            page.wait_for_function("document.querySelectorAll('#tabs button').length === 6", timeout=15000)
+            page.wait_for_function("document.querySelectorAll('#tabs button').length === 8", timeout=15000)
             # 历史影像(使用方 2026-10-20):缺省逐年播放(播放按钮、进度条一格一个时点、年份角标);「两图对比」是两张同步地图(电脑左右、手机上下);
             # 城镇化数据文件没放时说清楚
             page.click("#tabs button[data-t='imagery']")
@@ -2897,10 +2902,11 @@ def test_awards_tab_on_country_page_and_table_on_city_page():
             page.wait_for_function("document.querySelectorAll('#awBox tbody tr').length === 3")
             if shots:
                 page.locator("#awBox").screenshot(path=str(shots / "awards_country.png"))
-            # 城市页:只列挂在这座城市的
-            page.goto(base + f"/city.html?id={city['id']}")
+            # 城市页:在「已中标项目」页签里(使用方 2026-10-26),只列挂在这座城市的,页签上带条数
+            page.goto(base + f"/city.html?id={city['id']}&t=awards")
             page.wait_for_selector("#awBox table", timeout=15000)
             assert page.locator("#awBox tbody tr").count() == 1 and "甘贾供水管网" in page.inner_text("#awBox tbody")
+            assert page.locator("#tabs button.on").inner_text() == "已中标项目 1" and page.is_hidden("#chron")
             phone = browser.new_page(viewport={"width": 390, "height": 760})
             phone.goto(base + "/country.html?iso=AZE&t=awards")
             phone.wait_for_selector("#awBox table", timeout=15000)
@@ -2996,9 +3002,10 @@ def test_water_history_tab_and_city_chronicle():
             assert "水务历史资料 3" in page.inner_text("#tabs")
             if shots:
                 page.locator(".tab.on").screenshot(path=str(shots / "history_country.png"))
-            page.goto(base + f"/city.html?id={city['id']}")
+            page.goto(base + f"/city.html?id={city['id']}&t=chron")  # 城市页的大事记在自己的页签里(使用方 2026-10-26)
             page.wait_for_selector("#chron .chron", timeout=15000)
             assert page.locator("#chron .cyl").all_inner_texts() == ["2016"] and page.locator("#chron li").count() == 2
+            assert page.locator("#tabs button.on").inner_text() == "大事记 2" and page.is_hidden("#awBox")
             phone = browser.new_page(viewport={"width": 390, "height": 760})
             phone.goto(base + "/country.html?iso=AZE&t=docs")
             phone.wait_for_selector("#studies table", timeout=15000)
