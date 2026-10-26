@@ -2131,7 +2131,9 @@ def test_city_page_lists_cities_and_opens_one():
             assert "110\n面积(km²)\n维基数据 P2046(公开资料,待核实)" in page.inner_text("#ccards") and "English" not in info and "维基百科" not in info.split("面积按")[0]
             # 水务大事记、已中标项目各自一个页签(使用方 2026-10-26),条数读出来补到页签上;这座城市两样都还没有
             page.wait_for_function("document.querySelector('#tabs button[data-t=awards] b') && document.querySelector('#tabs button[data-t=chron] b')", timeout=15000)
-            assert page.locator("#tabs button").all_inner_texts() == ["概况", "历史影像", "街区", "大事记 0", "已中标项目 0", "商机 1", "线索 1", "水厂 1"]
+            # 页签分三组,和国别概况一样(使用方 2026-10-26):基本信息 / 历史信息 / 动态信息
+            assert page.locator("#tabs button").all_inner_texts() == ["概况", "水厂 1", "历史影像", "街区", "大事记 0", "已中标项目 0", "商机 1", "线索 1"]
+            assert page.locator("#tabs .tg").all_inner_texts() == ["基本信息", "历史信息", "动态信息"]
             assert page.is_hidden("#awBox") and page.is_hidden("#chron")
             if shots:
                 page.screenshot(path=str(shots / "city_one.png"), full_page=True)

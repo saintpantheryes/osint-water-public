@@ -37,7 +37,7 @@
     <div class="toolbar"><a href="city.html" id="back">← 全部城市</a><h1 id="cname"></h1><span class="muted" id="cname2"></span><span id="cwiki"></span><span class="push" id="openRow"></span></div>
     <div class="backbar" id="rel"></div>
     <div id="ccards"></div>
-    <div class="tabs" id="tabs"></div>
+    <div class="tabs grouped" id="tabs"></div>
     <div class="tab" data-t="info"><div class="panel" id="info"></div><div class="panel"><div id="cmap" class="chart"></div></div></div>
     <div class="tab" data-t="imagery">
       <!-- 历史影像(使用方 2026-10-20):按年份逐年播放看城市化进程;要细看就两张图对比(电脑左右、手机上下,同步拖动缩放) -->
@@ -298,17 +298,22 @@
     $("leads").innerHTML = !leads.length ? '<p class="empty">还没有线索关联到这座城市。</p>' :
       P.tableHtml(["标题", "类别", "发布", "最近截止", "所属商机", "处理状态", ""], leads.slice(0, 100).map((l) => { const q = (p) => P.get("lead", l, p);
         return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), q("nearest_deadline"), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
-    const TABS = [["info", "概况"], ["imagery", "历史影像"]].concat(blk ? [["blocks", "街区"]] : []).concat([["chron", "大事记"], ["awards", "已中标项目"],
-      ["opps", "商机 <b>" + opps.length + "</b>"], ["leads", "线索 <b>" + leads.length + (leads.length >= 200 ? "+" : "") + "</b>"], ["plants", "水厂 <b>" + nPlants + "</b>"]]);
+    /* 页签分三组,和国别概况一样(使用方 2026-10-26):基本信息(概况、水厂、历史影像、街区)→ 历史信息(大事记、已中标项目)→ 动态信息(商机、线索) */
+    const GROUPS = [["基本信息", [["info", "概况"], ["plants", "水厂 <b>" + nPlants + "</b>"], ["imagery", "历史影像"]].concat(blk ? [["blocks", "街区"]] : [])],
+      ["历史信息", [["chron", "大事记"], ["awards", "已中标项目"]]],
+      ["动态信息", [["opps", "商机 <b>" + opps.length + "</b>"], ["leads", "线索 <b>" + leads.length + (leads.length >= 200 ? "+" : "") + "</b>"]]]];
+    const TABS = GROUPS.flatMap(([, ts]) => ts);
     let tab = TABS.some(([k]) => k === q0.get("t")) ? q0.get("t") : "info";
     const showTab = (k) => {
       tab = k;
       $("tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.t === k));
       document.querySelectorAll(".tab").forEach((d) => d.classList.toggle("on", d.dataset.t === k));
       history.replaceState(null, "", "city.html?" + new URLSearchParams({ id, t: k }));
+      const bar = $("tabs"), on = bar.querySelector("button.on");  // 窗口窄、页签横着滑时,把选中的那个滑进来
+      if (on && bar.scrollWidth > bar.clientWidth) { const l = on.offsetLeft - bar.offsetLeft; if (l < bar.scrollLeft || l + on.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = l - 24; }
       if (k === "info" && cmap) cmap.mc.resize();
     };
-    $("tabs").innerHTML = TABS.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + "</button>").join("");
+    $("tabs").innerHTML = GROUPS.map(([g, ts]) => '<div class="tgrp"><span class="tg">' + g + '</span><div class="tb">' + ts.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + "</button>").join("") + "</div></div>").join("");
     $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
     [["chron", "大事记", chronP], ["awards", "已中标项目", awardP]].forEach(([k, l, pr]) => pr.then((n) => { $("tabs").querySelector('button[data-t="' + k + '"]').innerHTML = l + " <b>" + (n || 0) + "</b>"; }));
     let cmap = null, pmap = null;
