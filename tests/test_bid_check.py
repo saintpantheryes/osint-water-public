@@ -154,7 +154,7 @@ def test_single_report_has_conclusion_first_and_superscript_links(scope, tmp_pat
     assert md.index("## 核心结论") < md.index("## 1. 项目基本情况") < md.index("## 2. 八项检查") < md.index("## 3. 招标要求与我方资格对照") < md.index("## 7. 信源与依据")
     assert "USD 200 million(≈ 140,000 万元人民币)" in md and "2026-11-20(剩 33 天)" in md and "| 联合体 | 允许 |" in md
     assert f"^[1](<{URL}>)^" in md and f"1. [塔什干苏鲁姆污水厂招标](<{URL}>)  expo.example.uz" in md and "2. [Request for Bids: NRWWP-7 Namangan wastewater networks](<https://projects.worldbank.org/notice/7>)  projects.worldbank.org" in md  # 角标 + 文末依据
-    assert "| 单个类似合同金额 | 50 万美元 |" in md and "年均营业额要 1,000 万美元:系统里没有营业额数据,要财务部出数" in md and "日处理 10 万吨以上" in md
+    assert "| 单个类似合同金额 | 50 万美元 |" in md and "年均营业额要 1,000 万美元:公司资料里没有近三年审计数据行,要财务部出数" in md and "日处理 10 万吨以上" in md
     assert "- 资金已落实" in md and "- 工期紧" in md and "| UZB-001 | 塔什干 Surum 污水厂 | 跟踪中 |" in md
     # 不建议的:结论里写原因,下一步是不投
     bad = B.assess(_facts(url=URL, deadline="2026-10-01"), TODAY, RECORDS, scope, {})

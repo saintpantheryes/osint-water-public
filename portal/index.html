@@ -891,11 +891,11 @@
 
   /* 清单型材料(2026-10-16 使用方:同事发来的、像是 AI 整理的商机清单):每一条写明 已在库 / 建议入库(找到原公告) / 先核实(没找到),
      原公告、库里同编号的线索都给链接;没在库的每条一个勾,建议入库的默认勾上,人点「收进选中的」才入库;按原公告入库的网址就是原公告 */
-  /* 附言问「我们的业绩能满足吗」:后台拿公告的门槛对照公司资料里本单位的业绩(只比单个类似合同金额;营业额、财务要财务部出数) */
+  /* 附言问「我们的业绩能满足吗」:后台拿公告的门槛对照公司资料里本单位的业绩(只比单个类似合同金额)与近三年审计数据(营业额、财务资源;没录的要财务部出数) */
   const QUAL_TAG = { "满足": "t-ok", "不满足": "t-bad", "不确定": "t-warn" };
   function qualifyHtml(q, summary) {
     const recs = (q.records || []).map((x) => P.esc(x.name) + (x.year ? "(" + x.year + ")" : "") + (x.usd ? " " + Math.round(x.usd / 1e4).toLocaleString() + " 万美元" : "")).join("、");
-    return '<div class="lk-qual"><span class="tag ' + (QUAL_TAG[q.verdict] || "") + '">业绩' + P.esc(q.verdict) + "</span> " + P.esc(q.why) +
+    return '<div class="lk-qual"><span class="tag ' + (QUAL_TAG[q.verdict] || "") + '">资格' + P.esc(q.verdict) + "</span> " + P.esc(q.why) +
       (recs ? '<div class="muted small">对照用的本单位业绩:' + recs + "</div>" : "") +
       ((q.gaps || []).length ? '<div class="muted small">' + q.gaps.map(P.esc).join(";") + "</div>" : "") +
       (summary ? '<div class="small">' + P.esc(summary) + "</div>" : "") + "</div>";
