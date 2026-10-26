@@ -77,8 +77,9 @@
     <div class="tab" data-t="opps"><div class="panel" id="opps">读取中…</div></div>
     <div class="tab" data-t="leads"><div class="panel" id="leads">读取中…</div></div>
     <div class="tab" data-t="plants"><div class="panel" id="pmapBox"><div id="pmap" class="chart"></div><p class="muted small" id="pmapNote"></p></div><h2>自来水厂</h2><div class="panel" id="supply">读取中…</div><h2>污水厂</h2><div class="panel" id="sewage">读取中…</div></div>
-    <section id="chron"></section>
-    <section id="awBox"></section>
+    <!-- 水务大事记、已中标项目各自一个页签(使用方 2026-10-26:原来钉在页面最下面,不管看哪个页签都拖着,改成页签和国别概况一样) -->
+    <div class="tab" data-t="chron"><section id="chron"></section></div>
+    <div class="tab" data-t="awards"><section id="awBox"></section></div>
   </section>
   <script>document.getElementById(/[?&]id=/.test(location.search) ? "one" : "list").style.display = "";  /* 先露出要的那一种,不等读表 */</script>
 </main>
@@ -250,8 +251,9 @@
       plantsOf("supply_plant"), plantsOf("sewage_plant"),
       fetch("media/blocks/index.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),  // 街区数据目录(私有配置仓 media/blocks/,没有就没有「街区」页签)
     ]);
-    P.chronicle($("chron"), "city", id).catch((e) => P.fail($("chron"), e));  /* 水务大事记(在已中标项目上面) */
-    P.awards($("awBox"), "city", id).catch((e) => P.fail($("awBox"), e));  /* 已中标项目(页面最下面) */
+    /* 水务大事记、已中标项目:各自一个页签,条数算出来再补到页签上(两样都返回条数) */
+    const chronP = P.chronicle($("chron"), "city", id).catch((e) => { P.fail($("chron"), e); return 0; });
+    const awardP = P.awards($("awBox"), "city", id).catch((e) => { P.fail($("awBox"), e); return 0; });
     const full = await P.api("/table/" + P.t("city").id + "/record/" + id, { fieldKeyType: "id" });
     if (!full || !full.fields) { $("info").innerHTML = '<div class="note n-bad">没有这座城市</div>'; return; }
     const ct = full, g = (p) => P.get("city", ct, p), c = countryOf(ct);
@@ -296,7 +298,8 @@
     $("leads").innerHTML = !leads.length ? '<p class="empty">还没有线索关联到这座城市。</p>' :
       P.tableHtml(["标题", "类别", "发布", "最近截止", "所属商机", "处理状态", ""], leads.slice(0, 100).map((l) => { const q = (p) => P.get("lead", l, p);
         return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), q("nearest_deadline"), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
-    const TABS = [["info", "概况"], ["imagery", "历史影像"]].concat(blk ? [["blocks", "街区"]] : []).concat([["opps", "商机 <b>" + opps.length + "</b>"], ["leads", "线索 <b>" + leads.length + (leads.length >= 200 ? "+" : "") + "</b>"], ["plants", "水厂 <b>" + nPlants + "</b>"]]);
+    const TABS = [["info", "概况"], ["imagery", "历史影像"]].concat(blk ? [["blocks", "街区"]] : []).concat([["chron", "大事记"], ["awards", "已中标项目"],
+      ["opps", "商机 <b>" + opps.length + "</b>"], ["leads", "线索 <b>" + leads.length + (leads.length >= 200 ? "+" : "") + "</b>"], ["plants", "水厂 <b>" + nPlants + "</b>"]]);
     let tab = TABS.some(([k]) => k === q0.get("t")) ? q0.get("t") : "info";
     const showTab = (k) => {
       tab = k;
@@ -307,6 +310,7 @@
     };
     $("tabs").innerHTML = TABS.map(([k, l]) => '<button type="button" data-t="' + k + '">' + l + "</button>").join("");
     $("tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => showTab(b.dataset.t); });
+    [["chron", "大事记", chronP], ["awards", "已中标项目", awardP]].forEach(([k, l, pr]) => pr.then((n) => { $("tabs").querySelector('button[data-t="' + k + '"]').innerHTML = l + " <b>" + (n || 0) + "</b>"; }));
     let cmap = null, pmap = null;
     /* 水厂地图:城市为灰点,自来水厂蓝、污水厂绿,点大小按规模;范围按这些水厂的坐标自动放大 */
     const drawPlants = async () => {
