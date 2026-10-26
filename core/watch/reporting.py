@@ -413,7 +413,7 @@ def _page_number_footer(section) -> None:
 
 
 def _three_sections(doc) -> bool:
-    """成稿分三节(使用方 10-26):封面一节不带页码;目录一节页码用罗马数字从 i 起;正文(摘要起)一节页码从 1 起。
+    """成稿分三节(使用方 10-26):封面一节不带页码;目录一节页码用大写罗马数字从 I 起;正文(摘要起)一节页码从 1 起。
     在封面最后一段、目录最后一段的段属性里各放一个「下一页」分节符(抄正文那节的页面尺寸与边距),三节页脚各自独立。
     找不到「目　录」段或第一个一级标题就不分,沿用单节带页码。"""
     from copy import deepcopy
@@ -457,7 +457,7 @@ def _three_sections(doc) -> bool:
         for old in sp.findall(qn("w:pgNumType")):
             sp.remove(old)
         pn = OxmlElement("w:pgNumType")
-        pn.set(qn("w:fmt"), "lowerRoman" if i == 1 else "decimal")
+        pn.set(qn("w:fmt"), "upperRoman" if i == 1 else "decimal")  # 目录大写罗马数字(Ⅰ、Ⅱ),照使用方的成稿
         pn.set(qn("w:start"), "1")
         nxt = next((c for c in sp if c.tag in {qn(f"w:{t}") for t in ("cols", "formProt", "vAlign", "noEndnote", "titlePg", "textDirection", "bidi", "rtlGutter", "docGrid", "printerSettings")}), None)
         (nxt.addprevious if nxt is not None else sp.append)(pn)

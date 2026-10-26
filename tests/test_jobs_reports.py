@@ -416,7 +416,7 @@ def test_country_report_cover_and_toc_are_separate_pages_with_links(tmp_path, mo
     assert all(not s.footer.is_linked_to_previous for s in secs)
     assert "PAGE" not in footer_instr(secs[0]) and "PAGE" in footer_instr(secs[1]) and "PAGE" in footer_instr(secs[2])
     pn = [s._sectPr.find(qn("w:pgNumType")) for s in secs]
-    assert pn[0] is None and pn[1].get(qn("w:fmt")) == "lowerRoman" and pn[1].get(qn("w:start")) == "1"
+    assert pn[0] is None and pn[1].get(qn("w:fmt")) == "upperRoman" and pn[1].get(qn("w:start")) == "1"
     assert pn[2].get(qn("w:fmt")) == "decimal" and pn[2].get(qn("w:start")) == "1"
     assert toc_title.paragraph_format.alignment == 0 and toc_title.runs[0].font.size.pt == 18  # 成稿的「目　录」靠左、18 号加粗
     entries = [p for p in paras if p._p.find(qn("w:hyperlink")) is not None and p._p.find(qn("w:hyperlink")).get(qn("w:anchor"))]
