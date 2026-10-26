@@ -776,12 +776,11 @@
       if (iso !== "CHN") L.push(["trend.html?" + new URLSearchParams({ c: iso }), "趋势机会"]);
       return '<span class="mlinks">' + (name ? "<b>" + this.esc(name) + "</b>" : "") + L.filter(([u]) => !here || !u.startsWith(here)).map(([u, l]) => '<a href="' + u + '">' + l + " →</a>").join("") + "</span>";
     },
-    /* 维基百科链接(国别、城市共用):中文条目优先,没有就英文;两个都有时英文作小字第二个。字段还没建或没填时返回空串 */
+    /* 维基百科链接(国别、城市共用,使用方 2026-10-26「只保留中文的维基百科链接」):一个「维基百科 ↗」,开中文条目;没有中文条目的才开英文条目。字段还没建或没填时返回空串 */
     wikiLinks(oid, rec) {
       const zh = this.has(oid, "wiki_zh") ? this.get(oid, rec, "wiki_zh") : "", en = this.has(oid, "wiki_en") ? this.get(oid, rec, "wiki_en") : "";
       if (!zh && !en) return "";
-      const a = (u, l) => '<a class="wiki" href="' + this.esc(u) + '" target="_blank" rel="noopener">' + l + " ↗</a>";
-      return '<span class="wikis">' + a(zh || en, "维基百科") + (zh && en ? a(en, "English") : "") + "</span>";
+      return '<span class="wikis"><a class="wiki" href="' + this.esc(zh || en) + '" target="_blank" rel="noopener" title="' + (zh ? "中文维基百科" : "没有中文条目,开英文维基百科") + '">维基百科 ↗</a></span>';
     },
     riskFacts(oid, rec, iso) {
       const lv = (x) => (x >= 4 ? "极高" : x >= 3 ? "高" : x >= 2 ? "中到高" : x >= 1 ? "低到中" : "低");
