@@ -397,7 +397,7 @@ def test_country_report_cover_and_toc_are_separate_pages_with_links(tmp_path, mo
     md = tmp_path / "r.md"
     md.write_text("---\ntitle: \"X 水务市场分析报告\"\nsubtitle: \"内部资料　仅供参考\"\ndate: \"2026 年 10 月\"\n---\n\n目　录\n\n# 摘要\n\n要点。\n\n"
                   "# 第 1 章 研究背景\n\n## 1.1 目的\n\n正文。\n\n# 第 2 章 国家概况\n\n正文。\n\n# 附录\n\n## 附录 A 数据来源登记\n\n来源。\n", encoding="utf-8")
-    monkeypatch.setattr(reporting, "toc_pages", lambda path: {"_Toc001": 3, "_Toc002": 4, "_Toc003": 5, "_Toc004": 6})  # 像本机装了排版软件
+    monkeypatch.setattr(reporting, "toc_pages", lambda path: {"_Toc001": 1, "_Toc002": 2, "_Toc003": 3, "_Toc004": 4})  # 像本机装了排版软件;正文从 1 起计
     monkeypatch.setattr(reporting, "_org_of", lambda path: "能源环保事业部")  # 像项目报告模板写了编制单位
     out = reporting.to_docx_styled(md, tmp_path / "r.docx", template=tmp_path / "none.docx")
     d = docx.Document(str(out))
@@ -411,15 +411,28 @@ def test_country_report_cover_and_toc_are_separate_pages_with_links(tmp_path, mo
     assert title_run.font.size.pt == 26 and title_run.font.bold and cover[5].paragraph_format.alignment == 1
     assert cover[-3].runs[0].font.bold and cover[-3].runs[0].font.size.pt == 12 and cover[-1].runs[0].font.size.pt == 9.5
     assert all(p.paragraph_format.alignment == 1 for p in cover[-3:]) and all(p.text == "" for p in cover[6:-3]) and len(cover) == 6 + 20 + 3
-    assert toc_title.paragraph_format.page_break_before and toc_title.style.name != "Heading 1"  # 目录自己不进目录
+    assert toc_title.style.name != "Heading 1"  # 目录自己不进目录
+    # 使用方 10-26:封面、目录、正文分三节;封面无页码,目录页码罗马数字,正文页码从 1 起
+    secs = d.sections
+    assert len(secs) == 3 and cover[-1]._p.pPr.find(qn("w:sectPr")) is not None and paras[paras.index(toc_title) + 1:][0]._p.pPr is not None
+    toc_last = paras[[i for i, p in enumerate(paras) if p.style.name == "Heading 1"][0] - 1]
+    assert toc_last._p.pPr.find(qn("w:sectPr")) is not None and toc_title.paragraph_format.page_break_before is None
+    def footer_instr(sec):
+        return " ".join(t.text or "" for t in sec.footer._element.iter(qn("w:instrText")))
+    assert all(not s.footer.is_linked_to_previous for s in secs)
+    assert "PAGE" not in footer_instr(secs[0]) and "PAGE" in footer_instr(secs[1]) and "PAGE" in footer_instr(secs[2])
+    pn = [s._sectPr.find(qn("w:pgNumType")) for s in secs]
+    assert pn[0] is None and pn[1].get(qn("w:fmt")) == "upperRoman" and pn[1].get(qn("w:start")) == "1"
+    assert pn[2].get(qn("w:fmt")) == "decimal" and pn[2].get(qn("w:start")) == "1"
     assert toc_title.paragraph_format.alignment == 0 and toc_title.runs[0].font.size.pt == 18  # 成稿的「目　录」靠左、18 号加粗
     entries = [p for p in paras if p._p.find(qn("w:hyperlink")) is not None and p._p.find(qn("w:hyperlink")).get(qn("w:anchor"))]
-    assert [e.text for e in entries] == ["摘要\t3", "第 1 章 研究背景\t4", "第 2 章 国家概况\t5", "附录\t6"]  # 一级标题各一条(节不列),制表到行末接页码
+    assert [e.text for e in entries] == ["摘要\t1", "第 1 章 研究背景\t2", "第 2 章 国家概况\t3", "附录\t4"]  # 一级标题各一条(节不列),制表到行末接页码
     anchors = [e._p.find(qn("w:hyperlink")).get(qn("w:anchor")) for e in entries]
     marks = {b.get(qn("w:name")): b for b in d.element.body.iter(qn("w:bookmarkStart"))}
     assert all(a in marks for a in anchors)
     heads = [p for p in paras if p.style.name == "Heading 1"]
-    assert [h.text for h in heads] == ["摘要", "第 1 章 研究背景", "第 2 章 国家概况", "附录"] and all(h.paragraph_format.page_break_before for h in heads)
+    assert [h.text for h in heads] == ["摘要", "第 1 章 研究背景", "第 2 章 国家概况", "附录"] and all(h.paragraph_format.page_break_before for h in heads[1:])
+    assert heads[0].paragraph_format.page_break_before is None  # 摘要靠分节符起新页,不再另加分页
     assert all(h._p.find(qn("w:bookmarkStart")) is not None for h in heads)  # 书签打在标题上,点目录就跳过去
     instr = " ".join(t.text or "" for t in d.element.body.iter(qn("w:instrText")))
     assert 'TOC \\o "1-1"' in instr and "PAGEREF _Toc001" in instr
