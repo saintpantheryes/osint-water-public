@@ -637,18 +637,62 @@ def usd_of(text: object) -> float | None:
     return float(m.group(2).replace(",", "")) * {"亿": 1e8, "万": 1e4}.get(m.group(3) or "", 1)
 
 
-def our_records(db) -> dict[str, list[dict]]:
-    """公司资料里的业绩 → {"本单位": [...], "兄弟单位": [...]}(合作方不算);每条 {name, year, usd, amount, sectors}。
-    兄弟单位的只能另列作参考,不能当本单位业绩(使用方 2026-10-15)。"""
-    out: dict[str, list[dict]] = {"本单位": [], "兄弟单位": []}
+FIN_FX = 7.1  # 公司资料里的财务数是人民币万元;折美元按 1 美元≈7.1 元(与资料行里写的折算说明一致),只作参考
+_FIN_KEY = re.compile(r"营业收入|营业额")
+_FIN_NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _last_num(line: str) -> float | None:
+    """「流动资产合计:2023 248,797.77;2024 258,570.57;2025 339,111.83」→ 最后一个数(最新年)。"""
+    xs = [x for x in _FIN_NUM.findall(line.split(":", 1)[-1].split(":", 1)[-1]) if "," in x or "." in x or len(x) > 4]
+    return float(xs[-1].replace(",", "")) if xs else None
+
+
+def finance_of(name: str, content: str, amount: str, year: object) -> dict | None:
+    """公司资料「其他」类里的近三年审计数据行 → {name, year, turnover_usd, turnover_text, current_assets_usd, net_current_usd};不是财务行给 None。
+    年均营业额取「金额」里的美元数(如「近三年平均年营业收入约 294,418.88 万元人民币(≈4.15亿美元)」),金额里没有就找内容里「平均」那一句;
+    流动资产、流动负债取内容里「流动资产合计」「流动负债合计」两行的最后一个数(最新年,万元),折美元。"""
+    text = f"{name}\n{content}"
+    if not _FIN_KEY.search(text):
+        return None
+    turnover = usd_of(amount)
+    if not turnover:
+        m = next((ln for ln in content.splitlines() if "平均" in ln and _FIN_KEY.search(ln)), "")
+        turnover = usd_of(" ".join(m.split()).replace(" 亿", "亿").replace(" 万", "万"))
+    ca = cl = None
+    for ln in content.splitlines():
+        if ln.startswith("流动资产合计"):
+            ca = _last_num(ln)
+        elif ln.startswith("流动负债合计"):
+            cl = _last_num(ln)
+    if not turnover and ca is None:
+        return None
+    ca_usd = ca * 1e4 / FIN_FX if ca else None
+    net_usd = (ca - cl) * 1e4 / FIN_FX if ca and cl is not None else ca_usd
+    try:
+        yr = int(year) if year else None
+    except (TypeError, ValueError):
+        yr = None
+    return {"name": name, "year": yr, "turnover_usd": turnover, "turnover_text": f"近三年平均约 {_wan(turnover)}" if turnover else "",
+            "current_assets_usd": ca_usd, "net_current_usd": net_usd}
+
+
+def our_records(db) -> dict[str, Any]:
+    """公司资料里的业绩 → {"本单位": [...], "兄弟单位": [...], "财务": {...} | None}(合作方不算);每条业绩 {name, year, usd, amount, sectors}。
+    兄弟单位的只能另列作参考,不能当本单位业绩(使用方 2026-10-15)。「财务」= 本单位「其他」类里的近三年审计数据行(finance_of),用来对照营业额、财务资源门槛(2026-10-26)。"""
+    out: dict[str, Any] = {"本单位": [], "兄弟单位": [], "财务": None}
     if db is None or "company" not in db.t:
         return out
-    props = [p for p in ("name", "kind", "owner", "year", "amount", "sectors") if db.has("company", p)]
+    props = [p for p in ("name", "kind", "owner", "year", "amount", "sectors", "content") if db.has("company", p)]
     for r in db.rows("company", props=props):
         g = lambda p: db.get("company", r, p) if p in props else None  # noqa: E731
-        if str(g("kind") or "") != "业绩":
-            continue
+        kind = str(g("kind") or "")
         owner = str(g("owner") or "本单位")
+        if kind == "其他" and owner == "本单位" and out["财务"] is None:
+            out["财务"] = finance_of(str(g("name") or ""), str(g("content") or ""), str(g("amount") or ""), g("year"))
+            continue
+        if kind != "业绩":
+            continue
         if owner not in out:
             continue
         try:
@@ -664,9 +708,10 @@ def _wan(x: float) -> str:
     return f"{x / 1e4:,.0f} 万美元"
 
 
-def qualify(req: dict | None, sectors: list[str], records: dict[str, list[dict]], today: date) -> dict:
-    """一条公告的门槛 vs 我方业绩 → {verdict, why, records(本单位同领域前几条), siblings(兄弟单位够门槛的), gaps(系统答不了的)}。
-    只比「单个类似合同金额」(有年限的只看年限内的;年份不详的算在内但注明);营业额、财务资源系统里没有,写明要财务部出数。"""
+def qualify(req: dict | None, sectors: list[str], records: dict[str, Any], today: date) -> dict:
+    """一条公告的门槛 vs 我方业绩 → {verdict, why, records(本单位同领域前几条), siblings(兄弟单位够门槛的), finance([{item, ok, text}]), gaps(系统答不了的)}。
+    业绩只比「单个类似合同金额」(有年限的只看年限内的;年份不详的算在内但注明);营业额、财务资源按公司资料里的近三年审计数据行对照(records["财务"]),
+    没录这行的写明要财务部出数。财务不够时 verdict 也是「不满足」。"""
     want = {x for x in sectors if x in WATER}
     fit = lambda r: not want or not r["sectors"] or bool(set(r["sectors"]) & want)  # noqa: E731
     years = req.get("years") if req else None
@@ -688,14 +733,29 @@ def qualify(req: dict | None, sectors: list[str], records: dict[str, list[dict]]
         verdict = "不满足"
         why = (f"类似合同要 {_wan(need)}以上{win}" + (f",我方同领域最大的「{top[0]['name']}」只有 {_wan(top[0]['usd'])}{yr(top[0])}" if top else ",我方资料里没有同领域(或年限内)的业绩") + "。"
                + (f"兄弟单位有够门槛的(仅供参考,不能当本单位业绩):{'、'.join(r['name'] for r in sibs)}。" if sibs else ""))
-    gaps = []
+    gaps, finance = [], []
+    fin = records.get("财务") or {}
     if req and req.get("turnover_usd"):
-        gaps.append(f"年均营业额要 {_wan(req['turnover_usd'])}:系统里没有营业额数据,要财务部出数")
+        if fin.get("turnover_usd"):
+            ok = fin["turnover_usd"] >= req["turnover_usd"]
+            finance.append({"item": "年均营业额", "ok": ok, "text": f"年均营业额要 {_wan(req['turnover_usd'])},我方{fin['turnover_text']}(公司资料「{fin['name']}」),{'够' if ok else '不够'}"})
+        else:
+            gaps.append(f"年均营业额要 {_wan(req['turnover_usd'])}:公司资料里没有近三年审计数据行,要财务部出数")
     if req and req.get("financial_usd"):
-        gaps.append(f"财务资源要 {_wan(req['financial_usd'])}:系统里没有,要财务部出数")
+        if fin.get("current_assets_usd"):
+            ok = (fin.get("net_current_usd") or 0) >= req["financial_usd"]
+            yr = f" {fin['year']} 年" if fin.get("year") else "最新年"
+            finance.append({"item": "财务资源", "ok": ok, "text": f"财务资源要 {_wan(req['financial_usd'])},我方{yr}流动资产 {_wan(fin['current_assets_usd'])}、扣除流动负债后 {_wan(fin['net_current_usd'])}"
+                                                                 f"(公司资料「{fin['name']}」,人民币按 {FIN_FX} 折算),{'够' if ok else '不够'};以招标文件对财务资源的口径为准"})
+        else:
+            gaps.append(f"财务资源要 {_wan(req['financial_usd'])}:公司资料里没有近三年审计数据行,要财务部出数")
     if req and req.get("specific"):
         gaps.append(f"特定资格要对照招标文件:{req['specific']}")
-    return {"verdict": verdict, "why": why, "records": top, "siblings": sibs, "gaps": gaps}
+    if finance:
+        why += "".join(f["text"] + "。" for f in finance)
+        if any(not f["ok"] for f in finance):
+            verdict = "不满足"
+    return {"verdict": verdict, "why": why, "records": top, "siblings": sibs, "finance": finance, "gaps": gaps}
 
 
 def answer_question(q: dict | None, a: dict | None, items: list[dict] | None, db, today: date) -> dict | None:
@@ -714,8 +774,9 @@ def answer_question(q: dict | None, a: dict | None, items: list[dict] | None, db
             it["qualify"] = qualify(it.get("requirements"), it.get("sectors") or [], records, today)
             counts[it["qualify"]["verdict"]] += 1
         judged = sum(counts.values())
-        summary = (f"按我方资料里 {n_ours} 条本单位业绩对照(只比单个类似合同金额):{judged} 条水务项目里,业绩够门槛的 {counts['满足']} 条、不够的 {counts['不满足']} 条、"
-                   f"材料没写门槛的 {counts['不确定']} 条。营业额、财务资源系统里没有,要财务部出数;特定资格要对照招标文件。")
+        summary = (f"按我方资料里 {n_ours} 条本单位业绩对照(业绩只比单个类似合同金额):{judged} 条水务项目里,业绩够门槛的 {counts['满足']} 条、不够的 {counts['不满足']} 条、"
+                   f"材料没写门槛的 {counts['不确定']} 条。" + ("营业额、财务资源按公司资料里的近三年审计数据对照;" if records.get("财务") else "营业额、财务资源公司资料里没有,要财务部出数;")
+                   + "特定资格要对照招标文件。")
         return {"kind": q["kind"], "text": q.get("text") or "", "summary": summary, "per_item": True}
     qa = qualify(a.get("requirements"), a.get("sectors") or [], records, today)
     return {"kind": q["kind"], "text": q.get("text") or "", "summary": f"按我方资料里 {n_ours} 条本单位业绩对照:{qa['verdict']}。{qa['why']}", "per_item": False, "qualify": qa}

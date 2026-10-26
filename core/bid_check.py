@@ -365,9 +365,11 @@ def _quals_chapter(bid: dict, facts: dict | None = None) -> str:
     else:
         parts.append("公告正文里没有写资格门槛(或没抽到),以招标文件为准。\n")
     if qa:
-        parts.append(f"**对照结果:业绩{qa['verdict']}。**{_md(qa['why'])}\n")
+        parts.append(f"**对照结果:{qa['verdict']}。**{_md(qa['why'])}\n")
         if qa.get("records"):
             parts.append("对照用的本单位业绩(只比单个类似合同金额):\n\n" + _table(["业绩", "年份", "金额"], [[_md(r["name"]), r["year"] or "年份不详", f"{r['usd'] / 1e4:,.0f} 万美元"] for r in qa["records"]]))
+        if qa.get("finance"):
+            parts.append("营业额、财务资源(按公司资料里的近三年审计数据):\n\n" + _table(["门槛", "对照"], [[f["item"], ("够。" if f["ok"] else "不够。") + _md(f["text"])] for f in qa["finance"]]))
         if qa.get("siblings"):
             parts.append("兄弟单位够门槛的(仅供参考,不能当本单位业绩):" + "、".join(_md(r["name"]) for r in qa["siblings"]) + "\n")
         if qa.get("gaps"):
@@ -388,7 +390,7 @@ def _actions(bid: dict, f: dict) -> str:
         for c in bid["checks"]:
             if c["status"] in ("有条件", "不明") and c["key"] in KEY_CHECKS:
                 steps.append({"source": "拿到原公告或招标文件,核对发布方、编号、截止日。", "scope": "确认国别归口(是否本单位主责)。", "stage": "入库跟踪,等采购公告发布。",
-                              "time": "马上决定是否投,确定备标人手与时间表。", "quals": "按招标文件逐条对照资格;营业额、财务资源请财务部出数。",
+                              "time": "马上决定是否投,确定备标人手与时间表。", "quals": "按招标文件逐条对照资格;营业额、财务资源以财务部出具的数为准。",
                               "sector": "确认工程内容是否水务。"}[c["key"]])
         steps.append("在线索库里收进这一条并挂到商机,指定跟进人;" + ("参加标前会、购买招标文件。" if v == "建议投标" else "条件落实后再投。"))
         steps.append("金额、汇率按投标当日复核;报告里的折算只是参考。")
@@ -439,7 +441,7 @@ def report_markdown(result: dict, today: date) -> str:
     parts.append("## 5. 库里相关线索与商机\n\n" + _library_chapter(result))
     parts.append("## 6. 下一步\n\n" + _actions(bid, f))
     parts.append("## 7. 信源与依据\n\n" + refs.chapter())
-    parts.append("## 说明\n\n结论按八项检查的规则给出,只依据原文、线索库和公开渠道查到的内容;资格对照只比单个类似合同金额,营业额、财务资源要财务部出数;"
+    parts.append("## 说明\n\n结论按八项检查的规则给出,只依据原文、线索库和公开渠道查到的内容;资格对照:业绩只比单个类似合同金额,营业额、财务资源按公司资料里的近三年审计数据(没录的要财务部出数);"
                  "金额折算按当日汇率,仅供参考。投标与否由人决定。\n")
     return "\n".join(parts)
 
@@ -474,7 +476,7 @@ def list_report_markdown(result: dict, today: date) -> str:
         parts.append(f"## {i + 1}. {i}. {_md(it.get('title_zh') or it.get('title') or '')}\n\n" + "\n".join(x for x in body if x))
     parts.append(f"## {len(items) + 2}. 信源与依据\n\n" + refs.chapter())
     parts.append("## 说明\n\n清单由模型从材料里拆出,原公告先在世界银行采购网找,没找到的再整国核对、查新闻;结论按八项检查的规则给出,只依据查到的内容;"
-                 "资格对照只比单个类似合同金额,营业额、财务资源要财务部出数。投标与否由人决定。\n")
+                 "资格对照:业绩只比单个类似合同金额,营业额、财务资源按公司资料里的近三年审计数据(没录的要财务部出数)。投标与否由人决定。\n")
     return "\n".join(parts)
 
 

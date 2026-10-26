@@ -419,6 +419,12 @@ def _company(db):
     ])
 
 
+FIN_ROW = {"kind": "其他", "owner": "本单位", "name": "近三年审计报告与主要财务数据(2023—2025)", "year": 2025,
+           "amount": "近三年平均年营业收入约 294,418.88 万元人民币(≈4.15亿美元)",
+           "content": "合并口径,单位:人民币万元。\n营业收入:2023 193,598.67;2024 277,288.89;2025 412,369.08(三年平均约 294,418.88,≈4.15 亿美元)\n"
+                      "流动资产合计:2023 248,797.77;2024 258,570.57;2025 339,111.83\n流动负债合计:2023 136,069.66;2024 155,688.57;2025 226,383.66\n流动比率:2023 1.83;2024 1.66;2025 1.50"}
+
+
 def test_qualify_compares_tender_thresholds_with_our_own_records(db):
     """2026-10-16 使用方:上传清单问「我们的业绩能满足吗」,回答的却是线索——要按问题答:拿公告的门槛对照公司资料里本单位的业绩。
     只比单个类似合同金额(有年限的只看年限内);兄弟单位的只能另列参考;营业额、财务资源系统里没有,写明要财务部出数。"""
@@ -427,13 +433,34 @@ def test_qualify_compares_tender_thresholds_with_our_own_records(db):
     assert [r["name"][:5] for r in rec["本单位"]] == ["尼泊尔Bh", "摩洛哥西迪"] and rec["本单位"][0]["usd"] == 107330000 and [r["usd"] for r in rec["兄弟单位"]] == [90000000]
     canal = L.qualify({"similar_usd": 8000000, "turnover_usd": 10000000, "financial_usd": 1250000, "years": 10, "specific": "土方 150 000 m³"}, ["水利"], rec, TODAY)
     assert canal["verdict"] == "满足" and "「尼泊尔Bheri Babai引水隧道项目」10,733 万美元(2020),够" in canal["why"] and canal["records"][0]["year"] == 2020
-    assert canal["gaps"] == ["年均营业额要 1,000 万美元:系统里没有营业额数据,要财务部出数", "财务资源要 125 万美元:系统里没有,要财务部出数", "特定资格要对照招标文件:土方 150 000 m³"]
+    assert canal["gaps"] == ["年均营业额要 1,000 万美元:公司资料里没有近三年审计数据行,要财务部出数", "财务资源要 125 万美元:公司资料里没有近三年审计数据行,要财务部出数", "特定资格要对照招标文件:土方 150 000 m³"]
+    assert canal["finance"] == [] and rec["财务"] is None
     recent = L.qualify({"similar_usd": 8000000, "turnover_usd": None, "financial_usd": None, "years": 3, "specific": None}, ["水利"], rec, TODAY)
     assert recent["verdict"] == "不满足" and "近 3 年内" in recent["why"] and "没有同领域(或年限内)的业绩" in recent["why"] and recent["gaps"] == []  # 2020 的不在近三年
     sewer = L.qualify({"similar_usd": 12000000, "turnover_usd": None, "financial_usd": None, "years": 5, "specific": None}, ["污水"], rec, TODAY)
     assert sewer["verdict"] == "不满足" and "只有 65 万美元(2023)" in sewer["why"] and "兄弟单位有够门槛的(仅供参考,不能当本单位业绩):中铁一局某市污水厂" in sewer["why"]
     assert L.qualify(None, ["污水"], rec, TODAY)["verdict"] == "不确定" and "没写单个类似合同的金额门槛" in L.qualify(None, ["污水"], rec, TODAY)["why"]
-    assert L.usd_of("1.2亿美元") == 120000000 and L.usd_of("5,000万元") is None and L.our_records(None) == {"本单位": [], "兄弟单位": []}
+    assert L.usd_of("1.2亿美元") == 120000000 and L.usd_of("5,000万元") is None and L.our_records(None) == {"本单位": [], "兄弟单位": [], "财务": None}
+
+
+def test_qualify_reads_turnover_and_liquidity_from_the_audit_row(db):
+    """2026-10-26 使用方把近三年审计数据录进公司资料(「其他」类一行)后说「做」:营业额、财务资源门槛不再一律推给财务部,按这一行对照。
+    年均营业额取金额里的美元数;财务资源比最新年「流动资产 − 流动负债」(人民币按 7.1 折),并写明以招标文件口径为准;不够时结论是不满足。"""
+    _company(db)
+    db.create("company", [FIN_ROW, {"kind": "其他", "owner": "本单位", "name": "公司章程(2025 年公证本)", "content": "正文 29 页"}])
+    rec = L.our_records(db)
+    fin = rec["财务"]
+    assert fin["name"].startswith("近三年审计") and fin["year"] == 2025 and round(fin["turnover_usd"]) == 415_000_000
+    assert round(fin["current_assets_usd"] / 1e4) == 47_762 and round(fin["net_current_usd"] / 1e4) == 15_877  # (339,111.83 − 226,383.66) 万元 ÷ 7.1
+    assert len(rec["本单位"]) == 2  # 「其他」行不算业绩
+    ok = L.qualify({"similar_usd": 8000000, "turnover_usd": 100_000_000, "financial_usd": 50_000_000, "years": 10, "specific": None}, ["水利"], rec, TODAY)
+    assert ok["verdict"] == "满足" and ok["gaps"] == [] and [f["ok"] for f in ok["finance"]] == [True, True]
+    assert "年均营业额要 10,000 万美元,我方近三年平均约 41,500 万美元(公司资料「近三年审计报告与主要财务数据(2023—2025)」),够。" in ok["why"]
+    assert "财务资源要 5,000 万美元,我方 2025 年流动资产 47,762 万美元、扣除流动负债后 15,877 万美元" in ok["why"] and "以招标文件对财务资源的口径为准" in ok["why"]
+    bad = L.qualify({"similar_usd": 8000000, "turnover_usd": 500_000_000, "financial_usd": None, "years": 10, "specific": None}, ["水利"], rec, TODAY)
+    assert bad["verdict"] == "不满足" and "10,733 万美元(2020),够。年均营业额要 50,000 万美元,我方近三年平均约 41,500 万美元" in bad["why"] and "不够" in bad["why"]
+    assert L.finance_of("公司章程", "正文 29 页", "", None) is None
+    assert L.finance_of("财务数据", "营业收入:2023 1,000.00;2024 2,000.00(两年平均 1,500.00,≈ 0.21 亿美元)", "", 2024)["turnover_usd"] == 21_000_000
 
 
 def test_list_file_with_a_question_answers_the_question_first(db, monkeypatch):
@@ -446,7 +473,7 @@ def test_list_file_with_a_question_answers_the_question_first(db, monkeypatch):
     out = L.check("", "我们的业绩能满足吗?", TODAY, _clf({**MODEL, "items": ITEMS, "question": q}, []), db, fetch=lambda u: (_ for _ in ()).throw(AssertionError()),
                   outside=lambda q, iso: ([], []), upload=b"%PDF-1.4", find_original=lambda q, iso: WB_HITS.get(q, []), verify=lambda it, iso: CHECKED, progress=stages.append)
     assert out["question"]["kind"] == "资格对照" and out["question"]["per_item"] and "对照我方业绩" in stages
-    assert out["question"]["summary"].startswith("按我方资料里 2 条本单位业绩对照(只比单个类似合同金额):4 条水务项目里,业绩够门槛的 0 条、不够的 2 条、材料没写门槛的 2 条。")
+    assert out["question"]["summary"].startswith("按我方资料里 2 条本单位业绩对照(业绩只比单个类似合同金额):4 条水务项目里,业绩够门槛的 0 条、不够的 2 条、材料没写门槛的 2 条。营业额、财务资源公司资料里没有,要财务部出数")
     assert out["advice"]["reason"].startswith("按我方资料里 2 条本单位业绩对照")
     by = {it["ref"] or it["title"]: it for it in out["list"]["items"]}
     assert by["CAWRMP-ICW-08"]["qualify"]["verdict"] == "不满足" and "近 3 年内" in by["CAWRMP-ICW-08"]["qualify"]["why"]  # 门槛 800 万、近 3 年:2020 的不算
