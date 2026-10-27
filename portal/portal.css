@@ -712,3 +712,8 @@ li.rv-off > .rv-item { text-decoration: line-through; color: var(--muted); }
 .lgd i { display: inline-block; width: 22px; height: 12px; box-sizing: border-box; }
 .lgd .lg-outline { height: 0; border-top: 3px dashed #2563eb; }
 .lgd .lg-block { background: rgba(251, 146, 60, .35); border: 1.5px solid #f97316; margin-left: 6px; }
+/* 城市页「建筑与人口」页签:热力图一格一个像素,放大时不糊;色标条的渐变由脚本按当前层写进 --gh-ramp */
+.gh-img { image-rendering: pixelated; image-rendering: crisp-edges; }
+.lgd.gh-lgd { margin-left: 0; gap: 8px; }
+.lgd .gh-bar { width: 160px; height: 12px; border-radius: 3px; background: var(--gh-ramp, var(--line)); }
+#ghLpd { width: 80px; font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; }
