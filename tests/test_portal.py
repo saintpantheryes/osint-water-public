@@ -2178,7 +2178,7 @@ def test_city_page_lists_cities_and_opens_one():
             page.wait_for_function("!document.querySelector('#ghMode button[data-m=cn]').hidden", timeout=15000)
             page.click("#ghMode button[data-m='cn']")
             page.wait_for_selector("#ghMapB.leaflet-container img.gh-img", state="attached", timeout=15000)
-            assert page.locator("#ghCnSel option").all_inner_texts() == ["上海市 · 2,232 万"] and page.inner_text("#ghNameB") == "上海市(对比)" and page.inner_text("#ghNameA") == "甘贾"
+            assert page.locator("#ghCnSel option").all_inner_texts() == ["上海市 · 框内 5000"]  # 下拉写格网的框内人口,和卡片一个口径,不写城市表的人口(使用方 2026-10-27) and page.inner_text("#ghNameB") == "上海市(对比)" and page.inner_text("#ghNameA") == "甘贾"
             assert "5000\n框内人口(2020)" in page.inner_text("#ghCardsBIn") and "30.0\n建筑平均高度(米)" in page.inner_text("#ghCardsBIn") and page.locator("#ghMapB img.gh-img").count() == 1
             assert "上海市 同口径供水需求" in page.inner_text("#ghDemandCards") and page.inner_text("#ghMax") == "40.0+ 米"  # 色标取两城的大者(上海 40 米)
             page.click("#ghMode button[data-m='one']")

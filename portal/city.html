@@ -81,7 +81,7 @@
           <b>看</b><span class="frow" id="ghLayer"><button type="button" class="chip-btn on" data-l="p">人口密度</button><button type="button" class="chip-btn" data-l="h">建筑高度</button><button type="button" class="chip-btn" data-l="v">建筑体量</button></span>
           <b>底图</b><span class="frow" id="ghBase"><button type="button" class="chip-btn on" data-b="terrain">地形</button><button type="button" class="chip-btn" data-b="imagery">影像</button></span><span class="muted small push" id="ghPos"></span></div>
         <!-- 与中国城市对比(使用方 2026-10-27,参照历史影像的做法):缺省人口最接近、且转了格网的中国城市,右图(手机:下图)同一层同一色标,卡片并排 -->
-        <div class="frow" id="ghCnRow" hidden><b>对比城市</b><select id="ghCnSel" aria-label="对比的中国城市"></select><span class="muted small">缺省人口最接近的中国城市,可换;中国城市只作对比参照</span></div>
+        <div class="frow" id="ghCnRow" hidden><b>对比城市</b><select id="ghCnSel" aria-label="对比的中国城市"></select><span class="muted small">缺省框内人口最接近的中国城市,可换;框内人口 = 同样范围格网里的常住人口,和卡片一个口径;中国城市只作对比参照</span></div>
         <div id="ghCardsWrap"><div><b class="city" id="ghNameA" hidden></b><div id="ghCardsA"></div></div><div id="ghCardsB" hidden><b class="city" id="ghNameB"></b><div id="ghCardsBIn"></div></div></div>
         <div id="ghMaps"><div class="mapbox"><div id="ghMap" class="chart tall"></div></div><div class="mapbox" id="ghBoxB" hidden><div id="ghMapB" class="chart tall"></div></div></div>
         <div class="frow"><span class="lgd gh-lgd"><span id="ghMin"></span><i class="gh-bar" id="ghBar"></i><span id="ghMax"></span></span><span class="muted small" id="ghHover"></span></div>
@@ -663,9 +663,12 @@
         const list = (await P.records("city", { filter: P.and(P.cond("city", "country", "is", china.id)), props: ["key", "name_zh", "coords", "population"] }))
           .filter((x) => latlon(P.get("city", x, "coords")) && ghIdx.cities[String(P.get("city", x, "key") || "")]).sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0));
         if (!list.length) return null;
-        const pop0 = Math.log10(Math.max(1, Number(g("population")) || 1)), lp = (x) => Math.log10(Math.max(1, Number(P.get("city", x, "population")) || 1));
+        /* 挑城市、下拉里的数都用格网的「框内人口」(目录里的 pop),和卡片一个口径(使用方 2026-10-27:下拉写市区人口、卡片写框内人口,两个数对不上);不用城市表的人口 */
+        const boxPop = (x) => Number((ghIdx.cities[String(P.get("city", x, "key") || "")] || {}).pop) || 0;
+        list.sort((x, y) => boxPop(y) - boxPop(x));
+        const pop0 = Math.log10(Math.max(1, ghS.A.data.stats.pop || 1)), lp = (x) => Math.log10(Math.max(1, boxPop(x)));
         const pick = list.reduce((best, x) => (Math.abs(lp(x) - pop0) < Math.abs(lp(best) - pop0) ? x : best), list[0]);
-        $("ghCnSel").innerHTML = list.map((x) => '<option value="' + x.id + '"' + (x === pick ? " selected" : "") + ">" + P.esc(cname(x)) + " · " + people(Number(P.get("city", x, "population")) || 0) + "</option>").join("");
+        $("ghCnSel").innerHTML = list.map((x) => '<option value="' + x.id + '"' + (x === pick ? " selected" : "") + ">" + P.esc(cname(x)) + " · 框内 " + people(boxPop(x)) + "</option>").join("");
         $("ghMode").querySelector('[data-m="cn"]').hidden = false;
         const byId = Object.fromEntries(list.map((x) => [x.id, x]));
         const showB = async () => {
