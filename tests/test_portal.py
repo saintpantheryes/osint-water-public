@@ -2122,7 +2122,10 @@ def test_city_page_lists_cities_and_opens_one():
                 return route.fulfill(status=200, content_type="application/json", body=json.dumps(blocks[name])) if name in blocks else route.fulfill(status=404, body="")
             page.route("**/media/blocks/*", blk)
             # 建筑与人口(使用方 2026-10-27):数据在私有配置仓 media/ghsl/;目录里有这座城市才有页签。这里假装甘贾有一张 3×3 的格网(中间一格 900 人、楼高 18 米)
-            ghsl = {"index.json": {"source": "GHSL", "cities": {"586523": {"name": "Ganja", "pop": 1200, "radius_km": 20}}},
+            ghsl = {"index.json": {"source": "GHSL", "cities": {"586523": {"name": "Ganja", "pop": 1200, "radius_km": 20}, "1796236": {"name": "Shanghai", "pop": 5000, "radius_km": 20}}},
+                    "1796236.json": {"key": "1796236", "name": "Shanghai", "radius_km": 20, "rle": True, "grid": {"lat0": 31.23, "lon0": 121.45, "dlat": 0.0009, "dlon": 0.00105, "rows": 3, "cols": 3, "cell_km2": 0.01},
+                                     "scale": {"h": 0.1, "v": 100, "p": 1}, "stats": {"pop": 5000, "pop_src": 5000, "built_km2": 0.05, "volume_mm3": 1.2, "mean_h": 30, "dense_km2": 0.05, "dense_pop": 5000, "tall_pop": 5000, "max_dens": 200000, "max_h": 40},
+                                     "h": [-4, 400, -4], "v": [-4, 12000, -4], "p": [-2, 1000, 0, 2000, 1000, -3]},
                     "586523.json": {"key": "586523", "name": "Ganja", "radius_km": 20, "grid": {"lat0": 40.70, "lon0": 46.34, "dlat": 0.0009, "dlon": 0.0012, "rows": 3, "cols": 3, "cell_km2": 0.01},
                                     "scale": {"h": 0.1, "v": 100, "p": 1}, "stats": {"pop": 1200, "pop_src": 1200, "built_km2": 0.03, "volume_mm3": 0.3, "mean_h": 12.5, "dense_km2": 0.02, "dense_pop": 1100, "tall_pop": 900, "max_dens": 90000, "max_h": 18},
                                     "h": [0, 0, 0, 0, 180, 60, 0, 0, 0], "v": [0, 0, 0, 0, 2000, 500, 0, 0, 0], "p": [0, 0, 0, 0, 900, 200, 0, 100, 0]}}
@@ -2160,7 +2163,7 @@ def test_city_page_lists_cities_and_opens_one():
             page.click("#tabs button[data-t='ghsl']")
             page.wait_for_selector("#ghMap.leaflet-container img.gh-img", state="attached", timeout=15000)
             assert page.locator("#ghLayer button.on").get_attribute("data-l") == "p" and page.inner_text("#ghMin").startswith("人口密度") and "人/km²" in page.inner_text("#ghMax")
-            cards = page.inner_text("#ghCards")
+            cards = page.inner_text("#ghCardsA")
             assert "1200\n框内人口(2020)" in cards and "12.5\n建筑平均高度(米)" in cards and "0.02\n高密度区(km²)" in cards and "92%" in cards and "75\n%\n住在 5 层以上楼里的人" in cards and "90,000\n最高密度" in cards
             assert "GHSL" in page.inner_text("#ghNote") and "CC BY 4.0" in page.inner_text("#ghMap .leaflet-control-attribution")
             dem = page.inner_text("#ghDemandCards")  # 1200 人 × 150 升 = 0.018 万吨/日;污水 80%;甘贾没录自来水厂,只有污水厂 → 不比规模
@@ -2171,6 +2174,15 @@ def test_city_page_lists_cities_and_opens_one():
             assert page.inner_text("#ghMin").startswith("建筑平均净高") and page.inner_text("#ghMax").endswith("米") and page.locator("#ghLayer button.on").get_attribute("data-l") == "h"
             page.click("#ghBase button[data-b='imagery']")
             assert page.locator("#ghBase button.on").get_attribute("data-b") == "imagery" and "Wayback" in page.inner_text("#ghMap .leaflet-control-attribution")
+            # 与中国城市对比(使用方 2026-10-27):只列转了格网的中国城市(上海),第二张图同一层,卡片两城上下两排,压缩的 0(负数)解开后人口 5000,需求卡多一张同口径的
+            page.wait_for_function("!document.querySelector('#ghMode button[data-m=cn]').hidden", timeout=15000)
+            page.click("#ghMode button[data-m='cn']")
+            page.wait_for_selector("#ghMapB.leaflet-container img.gh-img", state="attached", timeout=15000)
+            assert page.locator("#ghCnSel option").all_inner_texts() == ["上海市 · 2,232 万"] and page.inner_text("#ghNameB") == "上海市(对比)" and page.inner_text("#ghNameA") == "甘贾"
+            assert "5000\n框内人口(2020)" in page.inner_text("#ghCardsBIn") and "30.0\n建筑平均高度(米)" in page.inner_text("#ghCardsBIn") and page.locator("#ghMapB img.gh-img").count() == 1
+            assert "上海市 同口径供水需求" in page.inner_text("#ghDemandCards") and page.inner_text("#ghMax") == "40.0+ 米"  # 色标取两城的大者(上海 40 米)
+            page.click("#ghMode button[data-m='one']")
+            assert page.is_hidden("#ghBoxB") and page.is_hidden("#ghCardsB") and "同口径" not in page.inner_text("#ghDemandCards")
             baku = next(r for r in b.rows("city", props=["key"]) if b.get("city", r, "key") == "587084")  # 目录里没有的城市就没有街区、建筑与人口这两个页签
             page.goto(base + f"/city.html?id={baku['id']}")
             page.wait_for_function("document.querySelectorAll('#tabs button').length === 7", timeout=15000)

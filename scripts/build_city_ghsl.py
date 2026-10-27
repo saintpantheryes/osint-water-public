@@ -8,7 +8,8 @@
 --from-base 直接读在线库的城市表(TEABLE_URL、TEABLE_ADMIN_TOKEN);--cities 用导出的 [{key, en, coords}, ...](coords 为「纬度, 经度」);--keys 只做这几座。
 三层:GHS_BUILT_H ANBH 2018(格内建筑平均净高,米)、GHS_BUILT_V 2020(格内建筑总体量,立方米)、GHS_POP 2020(格内常住人口)。
 原数据是等积的 Mollweide 投影,先按 --radius 公里切出正方形,再重采样到约 100 米的经纬度格网(人口、体量按「求和」重采样保总量,高度按「平均」),
-存成整数:高度 0.1 米、体量 100 立方米、人口 1 人。需要 rasterio、pyproj、numpy。"""
+存成整数:高度 0.1 米、体量 100 立方米、人口 1 人;连续的 0 压成一个负数(-n = n 个 0),页面解开。
+范围缺省按人口定(--radius auto):100 万以上 20 公里、50 万以上 12 公里、其余 8 公里;也可给固定公里数。需要 rasterio、pyproj、numpy。"""
 from __future__ import annotations
 
 import argparse
@@ -121,8 +122,21 @@ def build(city: dict, radius_km: float, cache: Path) -> dict | None:
         "tall_pop": int(round(p[h >= 15].sum())),  # 住在平均净高 15 米(约 5 层)以上格子里的人
         "max_dens": int(round(dens.max())), "max_h": round(float(h.max()), 1),
     }
-    enc = lambda a, m: [int(x) for x in np.rint(a * m).astype("int64").ravel().tolist()]
-    return {"key": str(city["key"]), "name": city.get("en") or "", "source": SOURCE, "radius_km": radius_km,
+    def enc(a, m):
+        """整数数组,连续的 0 压成负数(-n 表示 n 个 0)"""
+        out, run = [], 0
+        for x in np.rint(a * m).astype("int64").ravel().tolist():
+            if x == 0:
+                run += 1
+                continue
+            if run:
+                out.append(-run if run > 1 else 0)
+                run = 0
+            out.append(int(x))
+        if run:
+            out.append(-run if run > 1 else 0)
+        return out
+    return {"key": str(city["key"]), "name": city.get("en") or "", "source": SOURCE, "radius_km": radius_km, "rle": True,
             "grid": {"lat0": round(lat0, 6), "lon0": round(lon0, 6), "dlat": round(dlat, 8), "dlon": round(dlon, 8), "rows": nrow, "cols": ncol, "cell_km2": round(cell_km2, 5)},
             "scale": {"h": 0.1, "v": 100, "p": 1}, "stats": stats,
             "h": enc(h, LAYERS["h"][3]), "v": enc(v, LAYERS["v"][3]), "p": enc(p, LAYERS["p"][3])}
@@ -135,7 +149,8 @@ def main() -> int:
     ap.add_argument("--keys", help="只做这几座(城市码,逗号分开)")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--tiles", type=Path, default=Path("ghsl-tiles"), help="分幅缓存目录")
-    ap.add_argument("--radius", type=float, default=20, help="中心周边多少公里(正方形半边长),默认 20")
+    ap.add_argument("--radius", default="auto", help="中心周边多少公里(正方形半边长);缺省 auto = 按人口 20 / 12 / 8")
+    ap.add_argument("--skip-done", action="store_true", help="目录里已有的城市不重做")
     a = ap.parse_args()
     if a.from_base:
         import os
@@ -143,7 +158,8 @@ def main() -> int:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from core import tstore
         b = tstore.Base(tstore.Client(*tstore.credentials(admin=not os.environ.get("TEABLE_TOKEN"))))
-        cities = [{"key": b.get("city", r, "key"), "en": b.get("city", r, "name_en"), "coords": b.get("city", r, "coords")} for r in b.rows("city", props=["key", "name_en", "coords"])]
+        cities = [{"key": b.get("city", r, "key"), "en": b.get("city", r, "name_en"), "coords": b.get("city", r, "coords"), "pop": b.get("city", r, "population") or 0}
+                  for r in b.rows("city", props=["key", "name_en", "coords", "population"])]
     elif a.cities:
         cities = json.loads(a.cities.read_text("utf-8"))
     else:
@@ -156,14 +172,22 @@ def main() -> int:
     idx_path = a.out / "index.json"
     index = json.loads(idx_path.read_text("utf-8")) if idx_path.exists() else {"cities": {}}
     index["source"] = SOURCE
+    radius_of = (lambda c: 20 if (c.get("pop") or 0) >= 1e6 else 12 if (c.get("pop") or 0) >= 5e5 else 8) if a.radius == "auto" else (lambda c: float(a.radius))
     for c in cities:
-        d = build(c, a.radius, a.tiles)
+        if a.skip_done and str(c.get("key")) in index["cities"] and (a.out / f"{c['key']}.json").exists():
+            continue
+        try:
+            d = build(c, radius_of(c), a.tiles)
+        except Exception as e:  # 一座城市出错不拦下一座(多半是分幅下载断了)
+            print(c.get("key"), c.get("en"), "失败:", e)
+            continue
         if not d:
             print(c.get("key"), c.get("en"), "没坐标,跳过")
             continue
         (a.out / f"{d['key']}.json").write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")), "utf-8")
-        index["cities"][d["key"]] = {"name": d["name"], "pop": d["stats"]["pop"], "radius_km": a.radius}
-        print(d["key"], d["name"], d["stats"])
+        index["cities"][d["key"]] = {"name": d["name"], "pop": d["stats"]["pop"], "radius_km": d["radius_km"]}
+        print(d["key"], d["name"], d["radius_km"], "km", d["stats"]["pop"], "人", flush=True)
+        idx_path.write_text(json.dumps(index, ensure_ascii=False, separators=(",", ":")), "utf-8")  # 每座写一次,中途断了也能 --skip-done 接着跑
     idx_path.write_text(json.dumps(index, ensure_ascii=False, separators=(",", ":")), "utf-8")
     print(len(index["cities"]), "cities →", a.out)
     return 0
