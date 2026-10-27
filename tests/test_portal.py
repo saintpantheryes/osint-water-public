@@ -2062,7 +2062,8 @@ def test_city_page_lists_cities_and_opens_one():
     b.update("opportunity", o["id"], {"city": city["id"]})
     b.update("lead", ld["id"], {"city": city["id"]})
     cn = b.create("country", [{"name_zh": "中国", "ISO3": "CHN"}])[0]  # 对比参照国别(glossary.compare_country):城市只在选了「中国(对比)」时列,详情页并排对比
-    b.create("city", [{"key": "1796236", "name_zh": "上海市", "name_en": "Shanghai", "country": cn["id"], "coords": "31.2222,121.4581", "population": 22315474}])
+    b.create("city", [{"key": "1796236", "name_zh": "上海市", "name_en": "Shanghai", "country": cn["id"], "coords": "31.2222,121.4581", "population": 22315474},
+                      {"key": "1797353", "name_zh": "浦东新区", "name_en": "Pudong", "country": cn["id"], "coords": "31.2231,121.5397", "population": 5681512}])  # 上海的区:格网对比里不单列(离上海 25 公里以内)
     b.create("sewage_plant", [{"key": "WT-1", "name": "Ganja WWTP", "name_zh": "甘贾污水厂", "kind": "污水厂", "status": "运行", "country": c["id"], "city": city["id"],
                                "capacity": 12, "pop_served": 300000, "built": "1985", "level": "二级", "upgrades": "2012 扩建 6 万吨/日\n2024 提标改造", "coords": "40.70000,46.40000"}])
     cfg = schema.read_config(admin, NEW, ONTO)
@@ -2086,9 +2087,9 @@ def test_city_page_lists_cities_and_opens_one():
             assert len(rows) == 2 and rows[0].startswith("巴库") and "阿塞拜疆" in rows[0] and rows[1].startswith("甘贾")  # 人口多的在前
             assert page.locator("#map canvas").count() >= 1 and "2\n城市" in page.inner_text("#cards")
             # 中国只作对比参照:默认不列不计数,下拉里叫「中国(对比)」,选了才列,说明行写明不是市场
-            assert "中国(对比)" in page.locator("#fCountry option").all_inner_texts() and "中国 1 座城市只作对比参照" in page.inner_text("#cmpNote") and page.inner_text("#fNote") == "共 2 座"
+            assert "中国(对比)" in page.locator("#fCountry option").all_inner_texts() and "中国 2 座城市只作对比参照" in page.inner_text("#cmpNote") and page.inner_text("#fNote") == "共 2 座"
             page.select_option("#fCountry", "CHN")
-            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 1")
+            page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 2")  # 上海市 + 浦东新区(城市清单照城市表列,不合并)
             assert page.inner_text("#rows tbody").startswith("上海市") and "不是市场" in page.inner_text("#cmpNote") and page.inner_text("#igNote") == ""
             page.select_option("#fCountry", "")
             page.wait_for_function("document.querySelectorAll('#rows tbody tr').length === 2")
@@ -2122,7 +2123,7 @@ def test_city_page_lists_cities_and_opens_one():
                 return route.fulfill(status=200, content_type="application/json", body=json.dumps(blocks[name])) if name in blocks else route.fulfill(status=404, body="")
             page.route("**/media/blocks/*", blk)
             # 建筑与人口(使用方 2026-10-27):数据在私有配置仓 media/ghsl/;目录里有这座城市才有页签。这里假装甘贾有一张 3×3 的格网(中间一格 900 人、楼高 18 米)
-            ghsl = {"index.json": {"source": "GHSL", "cities": {"586523": {"name": "Ganja", "pop": 1200, "radius_km": 20}, "1796236": {"name": "Shanghai", "pop": 5000, "radius_km": 20}}},
+            ghsl = {"index.json": {"source": "GHSL", "cities": {"586523": {"name": "Ganja", "pop": 1200, "radius_km": 20}, "1796236": {"name": "Shanghai", "pop": 5000, "radius_km": 20}, "1797353": {"name": "Pudong", "pop": 4900, "radius_km": 20}}},
                     "1796236.json": {"key": "1796236", "name": "Shanghai", "radius_km": 20, "rle": True, "grid": {"lat0": 31.23, "lon0": 121.45, "dlat": 0.0009, "dlon": 0.00105, "rows": 3, "cols": 3, "cell_km2": 0.01},
                                      "scale": {"h": 0.1, "v": 100, "p": 1}, "stats": {"pop": 5000, "pop_src": 5000, "built_km2": 0.05, "volume_mm3": 1.2, "mean_h": 30, "dense_km2": 0.05, "dense_pop": 5000, "tall_pop": 5000, "max_dens": 200000, "max_h": 40},
                                      "h": [-4, 400, -4], "v": [-4, 12000, -4], "p": [-2, 1000, 0, 2000, 1000, -3]},
@@ -2178,7 +2179,7 @@ def test_city_page_lists_cities_and_opens_one():
             page.wait_for_function("!document.querySelector('#ghMode button[data-m=cn]').hidden", timeout=15000)
             page.click("#ghMode button[data-m='cn']")
             page.wait_for_selector("#ghMapB.leaflet-container img.gh-img", state="attached", timeout=15000)
-            assert page.locator("#ghCnSel option").all_inner_texts() == ["上海市 · 框内 5000"]  # 下拉写格网的框内人口,和卡片一个口径,不写城市表的人口(使用方 2026-10-27) and page.inner_text("#ghNameB") == "上海市(对比)" and page.inner_text("#ghNameA") == "甘贾"
+            assert page.locator("#ghCnSel option").all_inner_texts() == ["上海市 · 框内 5000"]  # 下拉写格网的框内人口,和卡片一个口径,不写城市表的人口(使用方 2026-10-27);浦东新区离上海 25 公里以内,不单列 and page.inner_text("#ghNameB") == "上海市(对比)" and page.inner_text("#ghNameA") == "甘贾"
             assert "5000\n框内人口(2020)" in page.inner_text("#ghCardsBIn") and "30.0\n建筑平均高度(米)" in page.inner_text("#ghCardsBIn") and page.locator("#ghMapB img.gh-img").count() == 1
             assert "上海市 同口径供水需求" in page.inner_text("#ghDemandCards") and page.inner_text("#ghMax") == "40.0+ 米"  # 色标取两城的大者(上海 40 米)
             page.click("#ghMode button[data-m='one']")

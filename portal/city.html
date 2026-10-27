@@ -390,7 +390,11 @@
     const SOURCES = EPOCHS.map(([y, fn, label]) => ({ k: "gls" + y, y, label, group: "Landsat 30 米(1975–2010)", make: () => new Gls({ epoch: y, fn, attribution: "Landsat: Esri, USGS, NASA" }) }))
       .concat(WAYBACK.map(([y, r]) => ({ k: "wb" + y, y: String(y), label: y + " · 高清", group: "高清影像(2014 起)",
         make: () => L.tileLayer("https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/" + r + "/{z}/{y}/{x}", { maxNativeZoom: 18, maxZoom: 18, attribution: "Esri Wayback" }) })));
-    let maps = null, playing = null, cnMaps = null, cnReady = Promise.resolve(null), renderUrban = null;  // maps:{P, L, R} 三张 Leaflet 图;cnMaps 与中国城市对比的四张(A1 B1 本城,A2 B2 中国城市);页签第一次打开时建
+    let maps = null, playing = null, cnMaps = null, cnReady = Promise.resolve(null), renderUrban = null;
+    /* 对比用的中国城市清单去掉区:城市表里的中国城市夹着区(浦东、闵行、宝山、南海、宝安…),和本市是同一片城区(使用方 2026-10-27:「浦东浦西都是 1900 万?」)。
+       清单已按人口从大到小,离已留下的城市 25 公里以内的不再列 */
+    const kmBetween = (a, b) => Math.hypot((a[1] - b[1]) * 111.2, (a[0] - b[0]) * 111.2 * Math.cos((a[1] + b[1]) / 2 * Math.PI / 180));  // [经, 纬]
+    const dedupeCn = (list) => { const kept = []; list.forEach((x) => { const xy = latlon(P.get("city", x, "coords")); if (kept.every((y) => kmBetween(xy, latlon(P.get("city", y, "coords"))) > 25)) kept.push(x); }); return kept; };  // maps:{P, L, R} 三张 Leaflet 图;cnMaps 与中国城市对比的四张(A1 B1 本城,A2 B2 中国城市);页签第一次打开时建
     const drawImagery = () => {
       if (maps) { Object.values(maps).forEach((m) => m.invalidateSize()); if (cnMaps) Object.values(cnMaps).forEach((m) => m.invalidateSize()); return; }
       const xy = latlon(g("coords"));
@@ -453,8 +457,8 @@
         if (!c || P.COMPARE.has(iso)) return null;
         const china = countries.find((x) => P.COMPARE.has(P.get("country", x, "key")));
         if (!china) return null;
-        const list = (await P.records("city", { filter: P.and(P.cond("city", "country", "is", china.id)), props: ["key", "name_zh", "coords", "population"] }))
-          .filter((x) => latlon(P.get("city", x, "coords"))).sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0));
+        const list = dedupeCn((await P.records("city", { filter: P.and(P.cond("city", "country", "is", china.id)), props: ["key", "name_zh", "coords", "population"] }))
+          .filter((x) => latlon(P.get("city", x, "coords"))).sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0)));
         if (!list.length) return null;
         const pop0 = Math.log10(Math.max(1, Number(g("population")) || 1));
         const pick = list.reduce((best, x) => (Math.abs(Math.log10(Math.max(1, Number(P.get("city", x, "population")) || 1)) - pop0) < Math.abs(Math.log10(Math.max(1, Number(P.get("city", best, "population")) || 1)) - pop0) ? x : best), list[0]);
@@ -660,12 +664,13 @@
         if (!c || P.COMPARE.has(iso) || !ghIdx) return null;
         const china = countries.find((x) => P.COMPARE.has(P.get("country", x, "key")));
         if (!china) return null;
-        const list = (await P.records("city", { filter: P.and(P.cond("city", "country", "is", china.id)), props: ["key", "name_zh", "coords", "population"] }))
+        let list = (await P.records("city", { filter: P.and(P.cond("city", "country", "is", china.id)), props: ["key", "name_zh", "coords", "population"] }))
           .filter((x) => latlon(P.get("city", x, "coords")) && ghIdx.cities[String(P.get("city", x, "key") || "")]).sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0));
         if (!list.length) return null;
         /* 挑城市、下拉里的数都用格网的「框内人口」(目录里的 pop),和卡片一个口径(使用方 2026-10-27:下拉写市区人口、卡片写框内人口,两个数对不上);不用城市表的人口 */
         const boxPop = (x) => Number((ghIdx.cities[String(P.get("city", x, "key") || "")] || {}).pop) || 0;
         list.sort((x, y) => boxPop(y) - boxPop(x));
+        list = dedupeCn(list);  // 去掉区(浦东、宝安…):按框内人口从大到小,离已留下的城市 25 公里以内的不列(框 20 公里半边长,两框大半重叠,数几乎一样)
         const pop0 = Math.log10(Math.max(1, ghS.A.data.stats.pop || 1)), lp = (x) => Math.log10(Math.max(1, boxPop(x)));
         const pick = list.reduce((best, x) => (Math.abs(lp(x) - pop0) < Math.abs(lp(best) - pop0) ? x : best), list[0]);
         $("ghCnSel").innerHTML = list.map((x) => '<option value="' + x.id + '"' + (x === pick ? " selected" : "") + ">" + P.esc(cname(x)) + " · 框内 " + people(boxPop(x)) + "</option>").join("");
