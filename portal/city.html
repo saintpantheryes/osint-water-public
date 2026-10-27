@@ -77,10 +77,13 @@
     <div class="tab" data-t="ghsl">
       <!-- 建筑与人口(使用方 2026-10-27):建筑高度→人口密度→供排水需求。GHSL 100 米格网的建筑高度、建筑体量、人口三层热力图叠在地形底图上;数据在私有配置仓 portal/media/ghsl/,目录里有这座城市才有这一页签 -->
       <div class="panel" id="ghBox">
-        <div class="frow"><b>看</b><span class="frow" id="ghLayer"><button type="button" class="chip-btn on" data-l="p">人口密度</button><button type="button" class="chip-btn" data-l="h">建筑高度</button><button type="button" class="chip-btn" data-l="v">建筑体量</button></span>
+        <div class="frow"><b>看法</b><span class="frow" id="ghMode"><button type="button" class="chip-btn on" data-m="one">单城</button><button type="button" class="chip-btn" data-m="cn" hidden>与中国城市对比</button></span>
+          <b>看</b><span class="frow" id="ghLayer"><button type="button" class="chip-btn on" data-l="p">人口密度</button><button type="button" class="chip-btn" data-l="h">建筑高度</button><button type="button" class="chip-btn" data-l="v">建筑体量</button></span>
           <b>底图</b><span class="frow" id="ghBase"><button type="button" class="chip-btn on" data-b="terrain">地形</button><button type="button" class="chip-btn" data-b="imagery">影像</button></span><span class="muted small push" id="ghPos"></span></div>
-        <div id="ghCards"></div>
-        <div class="mapbox"><div id="ghMap" class="chart tall"></div></div>
+        <!-- 与中国城市对比(使用方 2026-10-27,参照历史影像的做法):缺省人口最接近、且转了格网的中国城市,右图(手机:下图)同一层同一色标,卡片并排 -->
+        <div class="frow" id="ghCnRow" hidden><b>对比城市</b><select id="ghCnSel" aria-label="对比的中国城市"></select><span class="muted small">缺省人口最接近的中国城市,可换;中国城市只作对比参照</span></div>
+        <div id="ghCardsWrap"><div><b class="city" id="ghNameA" hidden></b><div id="ghCardsA"></div></div><div id="ghCardsB" hidden><b class="city" id="ghNameB"></b><div id="ghCardsBIn"></div></div></div>
+        <div id="ghMaps"><div class="mapbox"><div id="ghMap" class="chart tall"></div></div><div class="mapbox" id="ghBoxB" hidden><div id="ghMapB" class="chart tall"></div></div></div>
         <div class="frow"><span class="lgd gh-lgd"><span id="ghMin"></span><i class="gh-bar" id="ghBar"></i><span id="ghMax"></span></span><span class="muted small" id="ghHover"></span></div>
         <p class="muted small" id="ghNote"></p>
       </div>
@@ -580,73 +583,137 @@
     const GH_LAYERS = { p: ["人口密度", "人/km²", [[255, 255, 204], [254, 196, 79], [236, 112, 20], [153, 0, 13]]], h: ["建筑平均净高", "米", [[222, 235, 247], [107, 174, 214], [33, 113, 181], [8, 48, 107]]], v: ["建筑体量", "万 m³/格", [[229, 245, 224], [116, 196, 118], [35, 139, 69], [0, 68, 27]]] };
     const GH_BASES = { terrain: ["https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}", "地形 Esri World Hillshade", 16],
       imagery: ["https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/" + WAYBACK[WAYBACK.length - 1][1] + "/{z}/{y}/{x}", "影像 Esri Wayback " + WAYBACK[WAYBACK.length - 1][0], 18] };
-    let ghMap = null, ghData = null, ghLayerOn = "p", ghOverlay = null, ghBaseLayer = null;
+    /* 两张图:A = 本城(单城看法也用它),B = 对比的中国城市(「与中国城市对比」看法才建,glossary.compare_country);同一层、同一色标 */
+    const ghS = { A: { el: "ghMap", map: null, data: null, overlay: null, base: null, dot: null, name: "" }, B: { el: "ghMapB", map: null, data: null, overlay: null, base: null, dot: null, name: "" } };
+    let ghLayerOn = "p", ghBaseOn = "terrain", ghMode = "one", ghTop = 1;
     const ghRamp = (stops, t) => { const n = stops.length - 1, i = Math.min(n - 1, Math.floor(t * n)), f = t * n - i, a = stops[i], b = stops[i + 1]; return a.map((x, k) => Math.round(x + (b[k] - x) * f)); };
-    const ghVal = (k, i) => { const d = ghData; return k === "p" ? d.p[i] * d.scale.p / d.grid.cell_km2 : k === "h" ? d.h[i] * d.scale.h : d.v[i] * d.scale.v / 1e4; };  // 像素值 → 展示值
+    const ghVal = (d, k, i) => k === "p" ? d.p[i] * d.scale.p / d.grid.cell_km2 : k === "h" ? d.h[i] * d.scale.h : d.v[i] * d.scale.v / 1e4;  // 像素值 → 展示值
     const ghFmt = (k, x) => k === "p" ? Math.round(x).toLocaleString("zh-CN") : x >= 100 ? Math.round(x).toLocaleString("zh-CN") : x.toFixed(1);
-    const ghPaint = () => {
-      const d = ghData, gd = d.grid, k = ghLayerOn, [nm, unit, stops] = GH_LAYERS[k];
-      const vals = []; for (let i = 0; i < d.p.length; i++) { const x = ghVal(k, i); if (x > 0) vals.push(x); }
-      vals.sort((a, b) => a - b);
-      const top = vals.length ? vals[Math.floor(vals.length * 0.98)] : 1;  // 色标封顶在 98 分位,免得几格极值把全图压暗
+    const ghLoad = async (key) => {  // 读一座城市的格网文件,解开压缩的 0
+      const res = await fetch("media/ghsl/" + encodeURIComponent(String(key)) + ".json"); if (!res.ok) throw new Error("HTTP " + res.status);
+      const d = await res.json();
+      if (d.rle) ["h", "v", "p"].forEach((k) => { const out = []; d[k].forEach((x) => { if (x < 0) for (let i = 0; i < -x; i++) out.push(0); else out.push(x); }); d[k] = out; });  // 负数 = 这么多个 0(脚本压过)
+      return d;
+    };
+    const ghCap = (d, k) => { const vals = []; for (let i = 0; i < d.p.length; i++) { const x = ghVal(d, k, i); if (x > 0) vals.push(x); } vals.sort((a, b) => a - b); return vals.length ? vals[Math.floor(vals.length * 0.98)] : 1; };  // 色标封顶在 98 分位,免得几格极值把全图压暗
+    const ghPaintOne = (S) => {
+      const d = S.data, gd = d.grid, k = ghLayerOn, stops = GH_LAYERS[k][2];
       const cv = document.createElement("canvas"); cv.width = gd.cols; cv.height = gd.rows;
       const ctx = cv.getContext("2d"), img = ctx.createImageData(gd.cols, gd.rows);
-      for (let i = 0; i < d.p.length; i++) { const x = ghVal(k, i); if (x <= 0) continue; const t = Math.min(1, Math.sqrt(x / top)), c = ghRamp(stops, t); img.data.set([c[0], c[1], c[2], 150 + Math.round(90 * t)], i * 4); }
+      for (let i = 0; i < d.p.length; i++) { const x = ghVal(d, k, i); if (x <= 0) continue; const t = Math.min(1, Math.sqrt(x / ghTop)), c = ghRamp(stops, t); img.data.set([c[0], c[1], c[2], 150 + Math.round(90 * t)], i * 4); }
       ctx.putImageData(img, 0, 0);
-      const bounds = [[gd.lat0 - gd.rows * gd.dlat, gd.lon0], [gd.lat0, gd.lon0 + gd.cols * gd.dlon]];
-      if (ghOverlay) ghMap.removeLayer(ghOverlay);
-      ghOverlay = L.imageOverlay(cv.toDataURL(), bounds, { opacity: 0.85, className: "gh-img", interactive: false }).addTo(ghMap);
+      if (S.overlay) S.map.removeLayer(S.overlay);
+      S.overlay = L.imageOverlay(cv.toDataURL(), [[gd.lat0 - gd.rows * gd.dlat, gd.lon0], [gd.lat0, gd.lon0 + gd.cols * gd.dlon]], { opacity: 0.85, className: "gh-img", interactive: false }).addTo(S.map);
+    };
+    const ghPaint = () => {
+      const k = ghLayerOn, [nm, unit, stops] = GH_LAYERS[k];
+      ghTop = Math.max(ghCap(ghS.A.data, k), ghMode === "cn" && ghS.B.data ? ghCap(ghS.B.data, k) : 0);  // 对比时两城共用一个色标(取两边 98 分位的大者)
+      ghPaintOne(ghS.A); if (ghMode === "cn" && ghS.B.map && ghS.B.data) ghPaintOne(ghS.B);
       $("ghBar").style.setProperty("--gh-ramp", "linear-gradient(90deg," + stops.map((c, i) => "rgb(" + c.join(",") + ") " + Math.round(100 * Math.pow(i / (stops.length - 1), 2)) + "%").join(",") + ")");
-      $("ghMin").textContent = nm + " 0"; $("ghMax").textContent = ghFmt(k, top) + "+ " + unit;
+      $("ghMin").textContent = nm + " 0"; $("ghMax").textContent = ghFmt(k, ghTop) + "+ " + unit;
       $("ghLayer").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.l === k));
       $("ghHover").textContent = "鼠标移到图上看每格的数";
     };
     const ghSetBase = (b) => {
+      ghBaseOn = b;
       const [url, attr, mz] = GH_BASES[b];
-      if (ghBaseLayer) ghMap.removeLayer(ghBaseLayer);
-      ghBaseLayer = L.tileLayer(url, { maxNativeZoom: mz, maxZoom: 18, attribution: attr + " · GHSL(欧盟 JRC,CC BY 4.0)" }).addTo(ghMap);
-      if (ghOverlay) ghOverlay.bringToFront();
+      ["A", "B"].forEach((s) => { const S = ghS[s]; if (!S.map) return; if (S.base) S.map.removeLayer(S.base);
+        S.base = L.tileLayer(url, { maxNativeZoom: mz, maxZoom: 18, attribution: attr + " · GHSL(欧盟 JRC,CC BY 4.0)" }).addTo(S.map); if (S.overlay) S.overlay.bringToFront(); });
       $("ghBase").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.b === b));
     };
+    const ghMakeMap = (S, xy, name, zoom) => {  // 建一张图:地形底图、比例尺、红点、鼠标读数
+      S.name = name;
+      S.map = L.map($(S.el), { center: [xy[1], xy[0]], zoom, worldCopyJump: false });
+      S.map.zoomControl.setPosition("topright"); S.map.attributionControl.setPrefix(false);
+      L.control.scale({ metric: true, imperial: false }).addTo(S.map);
+      S.dot = L.circleMarker([xy[1], xy[0]], { radius: 5, color: "#fff", weight: 2, fillColor: "#ef4444", fillOpacity: 1 }).addTo(S.map).bindTooltip(name);
+      const pos = (ll) => ll.lat.toFixed(4) + ", " + ll.lng.toFixed(4);
+      S.map.on("mousemove", (e) => {
+        $("ghPos").textContent = "鼠标处 " + pos(e.latlng);
+        const d = S.data, gd = d.grid, r = Math.floor((gd.lat0 - e.latlng.lat) / gd.dlat), c = Math.floor((e.latlng.lng - gd.lon0) / gd.dlon);
+        if (r < 0 || c < 0 || r >= gd.rows || c >= gd.cols) { $("ghHover").textContent = S.name + ":框外"; return; }
+        const i = r * gd.cols + c;
+        $("ghHover").textContent = S.name + " 这一格(100 米见方):人口 " + d.p[i] + " 人(" + ghFmt("p", ghVal(d, "p", i)) + " 人/km²) · 楼高 " + ghFmt("h", ghVal(d, "h", i)) + " 米 · 体量 " + ghFmt("v", ghVal(d, "v", i)) + " 万 m³";
+      });
+      S.map.on("moveend", () => { $("ghPos").textContent = S.name + " 中心 " + pos(S.map.getCenter()); });
+    };
+    const ghCards = (S) => {  // 一座城市的指标卡
+      const d = S.data, st = d.stats;
+      return P.kpiHtml([{ value: people(st.pop), label: "框内人口(2020)", note: "中心周边 " + d.radius_km + " 公里(" + 2 * d.radius_km + " 公里见方的框)" }, { value: st.built_km2.toLocaleString("zh-CN"), label: "建成区(km²)", note: "每公顷建筑 1 万 m³ 以上" },
+        { value: st.mean_h.toFixed(1), label: "建筑平均高度(米)", note: "按体量加权,最高 " + st.max_h + " 米" }, { value: st.dense_km2.toLocaleString("zh-CN"), label: "高密度区(km²)", note: "每 km² 1 万人以上,住 " + Math.round(100 * st.dense_pop / Math.max(1, st.pop)) + "% 的人" },
+        { value: Math.round(100 * st.tall_pop / Math.max(1, st.pop)) + "%", label: "住在 5 层以上楼里的人", note: "格内平均净高 15 米以上" }, { value: st.max_dens.toLocaleString("zh-CN"), label: "最高密度(人/km²)" }]);
+    };
     const ghDemand = () => {
-      const st = ghData.stats, lpd = Math.max(0, Number($("ghLpd").value) || 0);
+      const st = ghS.A.data.stats, lpd = Math.max(0, Number($("ghLpd").value) || 0);
       const wan = (pop) => pop * lpd / 1000 / 1e4;  // 人 × 升/日 → 万吨/日
       const cap = (supply || []).reduce((t, x) => t + (Number(P.get("supply_plant", x, "capacity")) || 0), 0), need = wan(st.pop), gap = cap - need;
       $("ghDemandCards").innerHTML = P.kpiHtml([{ value: need.toFixed(1), label: "供水需求(万吨/日)", note: "框内 " + people(st.pop) + " 人 × " + lpd + " 升" }, { value: (need * 0.8).toFixed(1), label: "污水量(万吨/日)", note: "按供水的 80%" },
         { value: wan(st.dense_pop).toFixed(1), label: "高密度区供水需求(万吨/日)", note: "每平方公里 1 万人以上的 " + st.dense_km2 + " km²" }]
-        .concat(cap ? [{ value: cap.toLocaleString("zh-CN"), label: "现有自来水厂合计(万吨/日)", note: (supply || []).length + " 座" }, { value: (gap >= 0 ? "+" : "") + gap.toFixed(1), label: gap >= 0 ? "富余(万吨/日)" : "缺口(万吨/日)", tone: gap >= 0 ? false : "bad", why: gap >= 0 ? "" : "现有水厂规模不够,按人均用水算差这么多" }] : []));
+        .concat(cap ? [{ value: cap.toLocaleString("zh-CN"), label: "现有自来水厂合计(万吨/日)", note: (supply || []).length + " 座" }, { value: (gap >= 0 ? "+" : "") + gap.toFixed(1), label: gap >= 0 ? "富余(万吨/日)" : "缺口(万吨/日)", tone: gap >= 0 ? false : "bad", why: gap >= 0 ? "" : "现有水厂规模不够,按人均用水算差这么多" }] : [])
+        .concat(ghMode === "cn" && ghS.B.data ? [{ value: wan(ghS.B.data.stats.pop).toFixed(1), label: ghS.B.name + " 同口径供水需求(万吨/日)", note: "框内 " + people(ghS.B.data.stats.pop) + " 人 × " + lpd + " 升" }] : []));
       $("ghDemandNote").textContent = "按 2020 年框内常住人口乘人均综合用水量粗算,只作市场规模的量级参考,属推算、待核实;" + (cap ? "现有水厂规模来自本库「水厂」页签(人填),缺口为负时红字。" : "这座城市还没录自来水厂,录了就和现有规模对比。");
     };
+    /* 与中国城市对比:人口最接近、且有格网数据的中国城市,右(手机:下)图同一层同一色标,只同步缩放;卡片两城并排;下拉可换 */
+    let ghCnReady = Promise.resolve(null);
+    const ghCnSetup = () => {
+      ghCnReady = (async () => {
+        if (!c || P.COMPARE.has(iso) || !ghIdx) return null;
+        const china = countries.find((x) => P.COMPARE.has(P.get("country", x, "key")));
+        if (!china) return null;
+        const list = (await P.records("city", { filter: P.and(P.cond("city", "country", "is", china.id)), props: ["key", "name_zh", "coords", "population"] }))
+          .filter((x) => latlon(P.get("city", x, "coords")) && ghIdx.cities[String(P.get("city", x, "key") || "")]).sort((x, y) => (Number(P.get("city", y, "population")) || 0) - (Number(P.get("city", x, "population")) || 0));
+        if (!list.length) return null;
+        const pop0 = Math.log10(Math.max(1, Number(g("population")) || 1)), lp = (x) => Math.log10(Math.max(1, Number(P.get("city", x, "population")) || 1));
+        const pick = list.reduce((best, x) => (Math.abs(lp(x) - pop0) < Math.abs(lp(best) - pop0) ? x : best), list[0]);
+        $("ghCnSel").innerHTML = list.map((x) => '<option value="' + x.id + '"' + (x === pick ? " selected" : "") + ">" + P.esc(cname(x)) + " · " + people(Number(P.get("city", x, "population")) || 0) + "</option>").join("");
+        $("ghMode").querySelector('[data-m="cn"]').hidden = false;
+        const byId = Object.fromEntries(list.map((x) => [x.id, x]));
+        const showB = async () => {
+          const x = byId[$("ghCnSel").value], xy = latlon(P.get("city", x, "coords")), nm = cname(x);
+          $("ghNameB").textContent = nm + "(对比)"; $("ghCardsBIn").innerHTML = '<p class="muted small">读取中…</p>';
+          let d; try { d = await ghLoad(P.get("city", x, "key")); } catch (e) { $("ghCardsBIn").innerHTML = '<p class="empty">' + P.esc(nm) + " 的格网数据读不出来:" + P.esc(e.message) + "</p>"; return; }
+          if (byId[$("ghCnSel").value] !== x) return;
+          const B = ghS.B;
+          B.data = d;
+          if (!B.map) { ghMakeMap(B, xy, nm, ghS.A.map.getZoom()); ghSetBase(ghBaseOn);
+            let busy = false;  // 两城只同步缩放(比例尺一致),各看各的中心
+            const zoomTo = (from, to) => { if (busy) return; busy = true; if (to.getZoom() !== from.getZoom()) to.setZoom(from.getZoom(), { animate: false }); busy = false; };
+            ghS.A.map.on("zoomend", () => zoomTo(ghS.A.map, B.map)); B.map.on("zoomend", () => zoomTo(B.map, ghS.A.map)); }
+          else { B.name = nm; B.map.setView([xy[1], xy[0]], ghS.A.map.getZoom(), { animate: false }); B.dot.setLatLng([xy[1], xy[0]]).bindTooltip(nm); }
+          ghPaint(); $("ghCardsBIn").innerHTML = ghCards(B); ghDemand();
+        };
+        $("ghCnSel").onchange = showB;
+        return { pick, showB };
+      })().catch((e) => { console.warn("对比城市没取到", e); return null; });
+    };
+    const ghSetMode = async (m) => {
+      ghMode = m;
+      $("ghMode").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.m === m));
+      $("ghCnRow").hidden = m !== "cn"; $("ghBoxB").hidden = m !== "cn"; $("ghNameA").hidden = m !== "cn"; $("ghCardsB").hidden = m !== "cn";
+      $("ghMaps").classList.toggle("cmp", m === "cn");  // 两张图左右(手机上下);卡片两城上下两排,不挤
+      ghS.A.map.invalidateSize({ animate: false });
+      if (m === "cn") { const cn = await ghCnReady; if (!cn) return; if (!ghS.B.data) await cn.showB(); else { ghS.B.map.invalidateSize({ animate: false }); ghPaint(); ghDemand(); } }
+      else { ghPaint(); ghDemand(); }
+    };
     const drawGhsl = async () => {
-      if (ghMap) { ghMap.invalidateSize(); return; }
+      if (ghS.A.map) { ghS.A.map.invalidateSize(); if (ghS.B.map) ghS.B.map.invalidateSize(); return; }
       const xy = latlon(g("coords"));
       $("ghNote").textContent = "读取中…";
-      try { const res = await fetch("media/ghsl/" + encodeURIComponent(String(g("key"))) + ".json"); if (!res.ok) throw new Error("HTTP " + res.status); ghData = await res.json(); }
+      try { ghS.A.data = await ghLoad(g("key")); }
       catch (e) { $("ghBox").innerHTML = '<p class="empty">这座城市的建筑与人口数据读不出来:' + P.esc(e.message) + "(重跑一次脚本就有)。</p>"; $("ghDemand").parentNode.style.display = "none"; return; }
-      const d = ghData, gd = d.grid, st = d.stats;
-      ghMap = L.map($("ghMap"), { center: xy ? [xy[1], xy[0]] : [gd.lat0 - gd.rows * gd.dlat / 2, gd.lon0 + gd.cols * gd.dlon / 2], zoom: 11, worldCopyJump: false });
-      ghMap.zoomControl.setPosition("topright"); ghMap.attributionControl.setPrefix(false);
-      L.control.scale({ metric: true, imperial: false }).addTo(ghMap);
+      const d = ghS.A.data, gd = d.grid;
+      ghMakeMap(ghS.A, xy || [gd.lon0 + gd.cols * gd.dlon / 2, gd.lat0 - gd.rows * gd.dlat / 2], cname(ct), d.radius_km >= 20 ? 11 : 12);
       ghSetBase("terrain");
       ghPaint();
-      if (xy) L.circleMarker([xy[1], xy[0]], { radius: 5, color: "#fff", weight: 2, fillColor: "#ef4444", fillOpacity: 1 }).addTo(ghMap).bindTooltip(cname(ct));
-      const pos = (ll) => ll.lat.toFixed(4) + ", " + ll.lng.toFixed(4);
-      ghMap.on("mousemove", (e) => {
-        $("ghPos").textContent = "鼠标处 " + pos(e.latlng);
-        const r = Math.floor((gd.lat0 - e.latlng.lat) / gd.dlat), c = Math.floor((e.latlng.lng - gd.lon0) / gd.dlon);
-        if (r < 0 || c < 0 || r >= gd.rows || c >= gd.cols) { $("ghHover").textContent = "框外"; return; }
-        const i = r * gd.cols + c;
-        $("ghHover").textContent = "这一格(100 米见方):人口 " + d.p[i] + " 人(" + ghFmt("p", ghVal("p", i)) + " 人/km²) · 楼高 " + ghFmt("h", ghVal("h", i)) + " 米 · 体量 " + ghFmt("v", ghVal("v", i)) + " 万 m³";
-      });
-      ghMap.on("moveend", () => { $("ghPos").textContent = "中心 " + pos(ghMap.getCenter()); });
       $("ghLayer").querySelectorAll("button").forEach((b) => { b.onclick = () => { ghLayerOn = b.dataset.l; ghPaint(); }; });
       $("ghBase").querySelectorAll("button").forEach((b) => { b.onclick = () => ghSetBase(b.dataset.b); });
-      $("ghCards").innerHTML = P.kpiHtml([{ value: people(st.pop), label: "框内人口(2020)", note: "中心周边 " + d.radius_km + " 公里(" + 2 * d.radius_km + " 公里见方的框)" }, { value: st.built_km2.toLocaleString("zh-CN"), label: "建成区(km²)", note: "每公顷建筑 1 万 m³ 以上" },
-        { value: st.mean_h.toFixed(1), label: "建筑平均高度(米)", note: "按体量加权,最高 " + st.max_h + " 米" }, { value: st.dense_km2.toLocaleString("zh-CN"), label: "高密度区(km²)", note: "每 km² 1 万人以上,住 " + Math.round(100 * st.dense_pop / Math.max(1, st.pop)) + "% 的人" },
-        { value: Math.round(100 * st.tall_pop / Math.max(1, st.pop)) + "%", label: "住在 5 层以上楼里的人", note: "格内平均净高 15 米以上" }, { value: st.max_dens.toLocaleString("zh-CN"), label: "最高密度(人/km²)" }]);
-      $("ghNote").textContent = "颜色越深数越大;人口密度与建筑体量高的地方,供排水需求集中。三层都是欧盟联合研究中心 GHSL(全球人居图层)R2023A 的 100 米格网:建筑平均净高按 2018 年卫星影像推算,建筑体量与常住人口按 2020 年;人口是统计数按建筑分摊的推算值,属公开资料、待核实。底图可换地形晕渲或高清影像;滚轮缩放、拖动平移。";
+      $("ghMode").querySelectorAll("button").forEach((b) => { b.onclick = () => ghSetMode(b.dataset.m); });
+      $("ghNameA").textContent = cname(ct);
+      $("ghCardsA").innerHTML = ghCards(ghS.A);
+      $("ghNote").textContent = "颜色越深数越大;人口密度与建筑体量高的地方,供排水需求集中。三层都是欧盟联合研究中心 GHSL(全球人居图层)R2023A 的 100 米格网:建筑平均净高按 2018 年卫星影像推算,建筑体量与常住人口按 2020 年;人口是统计数按建筑分摊的推算值,属公开资料、待核实。底图可换地形晕渲或高清影像;滚轮缩放、拖动平移。与中国城市对比时两张图同一色标、同步缩放,中国城市只作参照。";
       $("ghLpd").oninput = ghDemand;
       ghDemand();
+      ghCnSetup();
     };
     const onTab = (k) => { if (k === "plants") { if (pmap) pmap.resize(); else drawPlants(); } if (k === "imagery") { drawImagery(); drawUrban(); } if (k === "blocks") drawBlocks(); if (k === "ghsl") drawGhsl(); };
     $("tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => onTab(b.dataset.t)));
