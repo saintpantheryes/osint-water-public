@@ -3499,3 +3499,86 @@ def test_opportunity_can_be_abandoned_and_archived_then_restored():
     finally:
         srv.shutdown()
         srv.assistant.shutdown()
+
+
+@pytest.mark.skipif(pytest.importorskip("playwright.sync_api", reason="没有 Playwright") is None, reason="没有 Playwright")
+def test_lead_lists_show_chinese_title_deadline_convert_and_fullscreen():
+    """使用方 2026-10-28:(1) 标题逻辑乱——有的原文、有的中文还夹着模型判断:清单一律「中文标题」(原题直译)在前,原题与线索号小字,
+    模型的判断只在「判定说明」;(2) 线索分析的清单也要有「转为商机」(与线索总览同一套);(3) 弹出的清单能放大到全屏;
+    (4) 招标等要动作的线索有「截止」列,过了标红「已过」,新闻类为空。电脑与手机都看。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    today = _today()
+    # 2026-10-28:中文标题(原题直译)、判定说明、截止日期——一条截止已过的招标、一条还没到期的
+    b.create("lead", [{"key": "dddddddd", "title": "Tajikistan to build 51.4-km road along Rogun reservoir", "url": "https://example.org/d", "relevant": False, "category": "项目动态", "country": c["id"],
+                       "found_at": today.isoformat() + "T05:00:00.000Z", "status": "待处理", "origin": "机器采集", "title_zh": "塔吉克斯坦拟修建沿罗贡水库的 51.4 公里道路",
+                       "summary_zh": "塔吉克斯坦拟修建沿罗贡水库的51.4公里道路,不属于阿塞拜疆水务项目机会。", "judge_reason": "道路工程,不属于阿塞拜疆水务项目机会", "deadline": (today - timedelta(days=2)).isoformat()},
+                      {"key": "eeeeeeee", "title": "Mingachevir water supply network tender", "url": "https://example.org/e", "relevant": True, "category": "招标", "country": c["id"],
+                       "found_at": today.isoformat() + "T06:00:00.000Z", "status": "待处理", "origin": "机器采集", "title_zh": "明盖恰乌尔供水管网招标", "deadline": (today + timedelta(days=20)).isoformat()}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            for width in (1366, 390):
+                errors: list[str] = []
+                page = browser.new_page(viewport={"width": width, "height": 900})
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                # 线索分析:点「线索」卡片 → 清单
+                page.goto(base + "/analysis.html?w=")
+                page.wait_for_selector("#cards .kpi", timeout=15000)
+                page.click("#cards .kpi >> nth=0")
+                page.wait_for_selector("#drill table", timeout=15000)
+                head = [h.inner_text() for h in page.locator("#drill thead th").all()]
+                assert head[:7] == ["标题", "国别", "类别", "发现", "截止", "状态", "所属商机"], head
+                row_d = page.locator("#drill tbody tr", has_text="dddddddd")
+                assert row_d.locator("td >> nth=0 >> a").inner_text() == "塔吉克斯坦拟修建沿罗贡水库的 51.4 公里道路"  # 中文标题在前,没有「不属于……」
+                assert "不属于" not in row_d.locator("td >> nth=0").inner_text() and "Tajikistan to build" in row_d.locator("td").nth(0).locator(".muted").inner_text()  # 原题小字
+                assert row_d.locator("td").nth(4).locator(".tag.t-bad").inner_text() == "已过 " + (today - timedelta(days=2)).isoformat()
+                row_e = page.locator("#drill tbody tr", has_text="eeeeeeee")
+                assert row_e.locator("td >> nth=0 >> a").inner_text() == "明盖恰乌尔供水管网招标" and row_e.locator("td >> nth=4").inner_text() == (today + timedelta(days=20)).isoformat()
+                row_b = page.locator("#drill tbody tr", has_text="bbbbbbbb")
+                assert row_b.locator("td >> nth=0 >> a").inner_text() == "苏姆盖特新污水厂主体工程招标" and row_b.locator("td >> nth=4").inner_text() == ""  # 没译名的退到摘要;新闻类没有截止
+                assert page.locator("#drill button.conv").count() == 4 and page.locator(f"#drill a[href='opp.html?id={o['id']}']").inner_text() == "AZE-001 甘贾污水厂"
+                # 全屏:面板铺满窗口,标题进面板;再点退出
+                assert page.locator("#drill .fs-btn").inner_text() == "全屏"
+                page.click("#drill .fs-btn")
+                box = page.locator("#drill").bounding_box()
+                assert page.locator("#drill.fs").count() == 1 and box["x"] == 0 and box["y"] == 0 and abs(box["width"] - width) < 2, box
+                assert page.locator("#drill .fs-btn").inner_text() == "退出全屏" and "线索 ·" in page.locator("#drill .fs-title").inner_text()
+                page.keyboard.press("Escape")
+                assert page.locator("#drill.fs").count() == 0 and page.locator("#drill .fs-btn").inner_text() == "全屏"
+                # 线索分析里转为商机(与线索总览同一套):归入已有商机
+                row_e.locator("button.conv").click()
+                page.select_option("#drill .convrow select", label="AZE-001 甘贾污水厂")
+                page.wait_for_selector("#drill tbody tr:has-text('eeeeeeee') a:has-text('AZE-001')", timeout=15000)
+                e = next(r for r in b.rows("lead", props=["key", "opportunity", "status"]) if b.get("lead", r, "key") == "eeeeeeee")
+                assert tstore.link_id(b.get("lead", e, "opportunity")) == o["id"] and b.get("lead", e, "status") == "已处理"
+                b.update("lead", e["id"], {"status": "待处理"}); admin.update_records(b.t["lead"], [(e["id"], {b.fid("lead", "opportunity"): None})])  # 给手机那轮复位
+                # 线索总览:同一套标题、截止与全屏
+                page.goto(base + "/overview.html?q=dddddddd")
+                page.wait_for_selector("#drill table", timeout=15000)
+                head = [h.inner_text() for h in page.locator("#drill thead th").all()]
+                assert head[:6] == ["标题", "国别", "类别", "发现", "截止", "所属商机"], head
+                assert page.locator("#drill tbody tr >> nth=0 >> td >> nth=0 >> a").inner_text() == "塔吉克斯坦拟修建沿罗贡水库的 51.4 公里道路"
+                assert page.locator("#drill tbody tr").nth(0).locator("td").nth(4).locator(".tag.t-bad").count() == 1 and page.locator("#drill button.conv").count() == 1
+                page.click("#drill .fs-btn")
+                assert page.locator("#drill.fs").count() == 1 and page.locator("#drill .fs-title").inner_text().startswith("搜索「dddddddd」")
+                page.click("#drill .fs-btn")
+                assert page.locator("#drill.fs").count() == 0
+                # 国别概况、商机工作台的清单也用同一个标题格与截止格
+                page.goto(base + f"/country.html?iso=AZE&t=leads")
+                page.wait_for_selector("#leads table", timeout=15000)
+                txt = page.inner_text("#leads")
+                assert "明盖恰乌尔供水管网招标" in txt and (today + timedelta(days=20)).isoformat() in txt and "dddddddd" not in txt  # 国别页只列判为相关的
+                assert not errors, errors
+                page.close()
+            browser.close()
+    finally:
+        srv.shutdown()

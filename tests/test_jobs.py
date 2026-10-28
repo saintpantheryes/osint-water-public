@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -43,8 +44,8 @@ class StubClassifier:
         return [self.classify(system, s, t) for s, t in jobs]
 
 
-def _llm(relevant=True, category="eoi", new=False, deadlines=(), project=None, funder="虚构银行", amount=None, links=()):
-    return {"relevant": relevant, "category": category, "sectors": ["wastewater"], "country": "AZE", "summary_zh": "虚构摘要",
+def _llm(relevant=True, category="eoi", new=False, deadlines=(), project=None, funder="虚构银行", amount=None, links=(), title_zh="", why=""):
+    return {"relevant": relevant, "category": category, "sectors": ["wastewater"], "country": "AZE", "summary_zh": "虚构摘要", "title_zh": title_zh, "why": why,
             "project": project, "funder": funder, "amount": amount, "evidence": ["原文片段"], "eligibility": None,
             "deadlines": [{"type": "eoi_deadline", "date": d, "evidence": "…"} for d in deadlines],
             "ledger_links": [{"item": i, "confidence": c, "reason": "读了原文"} for i, c in links], "new_opportunity": new}
@@ -115,12 +116,16 @@ def test_collect_judges_once_and_builds_suggested_opportunity(env):
              text="Expression of interest for the wastewater plant", fields={"project": "P123456"}),
         Item(key="b", url="https://example.org/b", title="Road rehabilitation", published="2026-10-02", text="water supply mention"),
     ]
-    LLM["https://example.org/a"] = _llm(new=True, deadlines=("2026-10-20",), project="Ganja WWTP", amount={"value": 5e6, "currency": "USD"})
-    LLM["https://example.org/b"] = _llm(relevant=False)
+    LLM["https://example.org/a"] = _llm(new=True, deadlines=("2026-10-20",), project="Ganja WWTP", amount={"value": 5e6, "currency": "USD"}, title_zh="意向书:甘贾污水处理厂", why="阿塞拜疆污水项目采购")
+    LLM["https://example.org/b"] = _llm(relevant=False, why="道路工程,不属于水务项目机会")
     res = collect.run(ctx)
     assert res.leads == 2 and res.judged == 2 and res.milestones == 1 and res.suggest == {"新建商机": 1}
     leads = {_val(abase, "lead", r, "url"): r for r in _rows(abase, "lead")}
     a, b = leads["https://example.org/a"], leads["https://example.org/b"]
+    # 2026-10-28:中文标题(原题直译)、判定说明(模型的判断只在这里,不进标题与摘要)、截止日期(要动作的最早截止;新闻类为空)
+    assert _val(abase, "lead", a, "title_zh") == "意向书:甘贾污水处理厂" and _val(abase, "lead", a, "judge_reason") == "阿塞拜疆污水项目采购"
+    assert tstore.day(_val(abase, "lead", a, "deadline"), abase.tz) == "2026-10-20" and _val(abase, "lead", a, "summary_zh") == "虚构摘要"
+    assert _val(abase, "lead", b, "judge_reason") == "道路工程,不属于水务项目机会" and not _val(abase, "lead", b, "deadline") and not _val(abase, "lead", b, "title_zh")
     assert _val(abase, "lead", a, "judged_by") == "模型" and _val(abase, "lead", a, "relevant") is True
     assert _val(abase, "lead", a, "category") == "意向书" and _val(abase, "lead", a, "sectors") == ["污水"]
     assert _val(abase, "lead", a, "origin") == "机器采集" and _val(abase, "lead", a, "status") == "待处理"
@@ -338,8 +343,45 @@ def test_archive_leads_marks_expired_and_stale_unassigned_only_once(env):
     ])
     b.create("milestone", [{"lead": rows[4]["id"], "opportunity": opp["id"], "kind": "投标截止", "day": (TODAY - timedelta(days=1)).isoformat(), "status": "官方计划"}])
     out = expire.archive_leads(ctx)
-    assert out == {"过期线索归档": 3, "超过一年": 2, "截止已过": 1}, out
-    got = {b.get("lead", r, "key"): (b.get("lead", r, "archived"), b.get("lead", r, "archive_reason")) for r in b.rows("lead", props=["key", "archived", "archive_reason", "archived_at"])}
-    assert got["l-old-free"] == (True, "超过一年") and got["l-old-found"] == (True, "超过一年") and got["l-dead"] == (True, "截止已过")
+    assert out == {"过期线索归档": 3, "补截止日期": 1, "超过一年": 2, "截止已过": 1}, out  # 截止日期(2026-10-28)空着的线索先从节点补上
+    got = {b.get("lead", r, "key"): (b.get("lead", r, "archived"), b.get("lead", r, "archive_reason"), b.get("lead", r, "deadline")) for r in b.rows("lead", props=["key", "archived", "archive_reason", "archived_at", "deadline"])}
+    assert got["l-old-free"][:2] == (True, "超过一年") and got["l-old-found"][:2] == (True, "超过一年") and got["l-dead"][:2] == (True, "截止已过")
     assert not got["l-old-opp"][0] and not got["l-new"][0] and not got["l-undone"][0]
+    assert tstore.day(got["l-dead"][2], b.tz) == (TODAY - timedelta(days=1)).isoformat() and all(not got[k][2] for k in got if k != "l-dead")  # 过了的截止也写、不清空;新闻类没有
     assert expire.archive_leads(ctx) == {}
+    # 人直接填的截止日期(没有时间节点)过了,也算「截止已过」
+    r7 = b.create("lead", [{"key": "l-dl-only", "title": "deadline typed by hand", "url": "https://example.org/7", "published": TODAY.isoformat(), "deadline": (TODAY - timedelta(days=3)).isoformat()}])[0]
+    assert expire.archive_leads(ctx) == {"过期线索归档": 1, "截止已过": 1}
+    assert b.get("lead", b.record("lead", r7["id"]), "archived") is True
+
+
+def test_lead_titles_get_chinese_translations_in_batches(env):
+    """A03 补译(2026-10-28「标题逻辑很混乱」):「中文标题」空着的线索每周期补一批:原题已是中文的照抄(不花钱),外文的请便宜模式译,
+    译过的进 title_zh.json 缓存;模型没配时只抄中文的;只填空。"""
+    from core.jobs import leads_zh
+    fake, admin, abase, ctx = env
+    rows = abase.create("lead", [
+        {"key": "t-en", "title": "Sumgait WWTP tender notice", "url": "https://example.org/t1"},
+        {"key": "t-zh", "title": "同事上传:苏姆盖特污水厂招标", "url": "https://example.org/t2"},
+        {"key": "t-has", "title": "Already translated", "url": "https://example.org/t3", "title_zh": "已有译名"},
+    ])
+    ctx.clf_light = None
+    assert leads_zh.translate(ctx, log=lambda *a: None) == 1  # 没配模型:只抄中文原题
+    got = lambda: {abase.get("lead", r, "key"): abase.get("lead", r, "title_zh") for r in abase.rows("lead", props=["key", "title_zh"])}  # noqa: E731
+    assert got() == {"t-en": None, "t-zh": "同事上传:苏姆盖特污水厂招标", "t-has": "已有译名"}
+
+    class Light:
+        enabled, asked = True, []
+
+        def ask(self, system, user, schema, guide):
+            self.asked.append(user)
+            return {"items": [{"i": 0, "zh": "苏姆盖特污水厂招标公告"}]}
+    ctx.clf_light = Light()
+    assert leads_zh.translate(ctx, log=lambda *a: None) == 1 and len(ctx.clf_light.asked) == 1 and "Sumgait WWTP tender notice" in ctx.clf_light.asked[0]
+    assert got()["t-en"] == "苏姆盖特污水厂招标公告"
+    assert leads_zh.translate(ctx, log=lambda *a: None) == 0 and len(ctx.clf_light.asked) == 1  # 都有了:不再问
+    cache = json.loads((ctx.cache.root.parent / "title_zh.json").read_text(encoding="utf-8"))
+    assert cache == {"Sumgait WWTP tender notice": "苏姆盖特污水厂招标公告"}  # 与报告的译名缓存同一份
+    r = abase.create("lead", [{"key": "t-en2", "title": "Sumgait WWTP tender notice", "url": "https://example.org/t4"}])[0]
+    assert leads_zh.translate(ctx, log=lambda *a: None) == 1 and len(ctx.clf_light.asked) == 1  # 缓存里有:不花钱
+    assert abase.get("lead", abase.record("lead", r["id"]), "title_zh") == "苏姆盖特污水厂招标公告"

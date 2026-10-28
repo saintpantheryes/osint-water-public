@@ -69,8 +69,9 @@ def _title(b: tstore.Base, r: dict, zh_of: dict[str, str] | None = None, n: int 
     g = lambda p: b.get("lead", r, p)
     full = (str(g("title") or "").strip().splitlines() or [""])[0]
     pn, sz = (str(g(p) or "") for p in ("project_name", "summary_zh"))
-    name, how = zh_name(full, sz if _CJK.search(sz) else None, pn if _CJK.search(pn) else None, 1000)
-    if how != "项目名" and (zh_of or {}).get(full[:300]):  # 译名比摘要短,做标题更合适
+    tz = str(g("title_zh") or "") if b.has("lead", "title_zh") else ""  # 表里的中文标题(A03 译的)最优先
+    name, how = zh_name(full, sz if _CJK.search(sz) else None, pn if _CJK.search(pn) else None, 1000, title_zh=tz if _CJK.search(tz) else None)
+    if how not in ("译名", "项目名") and (zh_of or {}).get(full[:300]):  # 译名比摘要短,做标题更合适
         name, how = zh_of[full[:300]], "译名"
     elif how == "摘要":  # 摘要是一段话:只取第一句做名字
         name = re.split(r"[，。；;]", name)[0]
@@ -93,7 +94,7 @@ def build_daily(ctx: Ctx, today: date | None = None) -> tuple[str, set[str], set
 
     leads = b.rows("lead", props=["key", "title", "relevant", "category", "sectors", "country", "funder", "found_at", "status", "opportunity",
                                    "suggested_opp", "maybe_new", "judged_by", "source", "summary_zh", "project_name", "amount", "origin"]
-                  + (["amount_cny"] if b.has("lead", "amount_cny") else []))
+                  + [p for p in ("amount_cny", "title_zh") if b.has("lead", p)])
     g = lambda r, p: b.get("lead", r, p) if p != "amount_cny" or b.has("lead", p) else None  # noqa: E731
     day_of = {r["id"]: (tstore.day(g(r, "found_at"), tz) or "") for r in leads}
     today_leads = [r for r in leads if day_of[r["id"]] == d0]

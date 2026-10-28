@@ -30,6 +30,7 @@ def test_zh_name_order_and_limit():
     assert z.zh_name("x", summary_zh="摘要", project_name="哈卡里恰伊输水干管") == ("哈卡里恰伊输水干管", "项目名")
     assert z.zh_name("Sumgait WWTP tender notice") == ("污水处理厂、招标公告", "要点")
     assert z.zh_name("Baku city news") == ("", "")
+    assert z.zh_name("x", summary_zh="摘要", project_name="项目名", title_zh="巴库供水管网改造招标\n第二行") == ("巴库供水管网改造招标", "译名")  # 2026-10-28:中文标题最优先
     assert len(z.zh_name("x", summary_zh="甲" * 100)[0]) == 60
 
 

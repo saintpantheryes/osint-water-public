@@ -49,7 +49,9 @@ SCHEMA = {
         "category": {"type": "string", "enum": CATEGORIES},
         "sectors": {"type": "array", "items": {"type": "string", "enum": SECTORS}},
         "country": _nullable({"type": "string"}),
+        "title_zh": {"type": "string"},
         "summary_zh": {"type": "string"},
+        "why": {"type": "string"},
         "project": _nullable({"type": "string"}),
         "funder": _nullable({"type": "string"}),
         "amount": _nullable({
@@ -73,7 +75,7 @@ SCHEMA = {
         "new_opportunity": {"type": "boolean"},
         "evidence": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["relevant", "category", "sectors", "country", "summary_zh", "project", "funder", "amount", "deadlines",
+    "required": ["relevant", "category", "sectors", "country", "title_zh", "summary_zh", "why", "project", "funder", "amount", "deadlines",
                  "eligibility", "ledger_links", "new_opportunity", "evidence"],
     "additionalProperties": False,
 }
@@ -87,7 +89,9 @@ SYSTEM = """你是水务项目机会监测系统的分析员。使用方是投�
 3. sectors:所属领域,可多选:water_supply 供水(含输水、减漏、计量);wastewater 污水(含污泥、再生水);hydraulic 水利(水库、灌溉、渠道、防洪、调水);desalination 海水淡化;stormwater 雨水排涝;environment 水环境治理;other 其他。
    country:项目所在国的 ISO3 三字母代码(如 AZE、UZB);跨多国或看不出来时填 null。
 4. 抽取项目名、出资方、金额与币种、截止日(bid/eoi/pq/rfp,每个日期都要有原文依据)、国籍或资格限制(如"仅限成员国")。原文没有的填 null 或空数组,不要推测。日期写成 YYYY-MM-DD。
-5. summary_zh:一句中文,不超过 80 个字,说清是什么公告、哪个项目、关键日期或金额。
+5. title_zh:原标题的中文直译,不超过 60 个字,只译不评(原题已是中文的照抄);机构与银行用通用中文译名,项目编号、合同号保留原文。
+   summary_zh:一句中文,不超过 80 个字,只概括原文说了什么:是什么公告、哪个项目、关键日期或金额;不要写你的判断(如「不属于……」「与……无关」)。
+   why:一句话说明你判 relevant 为 true / false 的理由(如「不属于阿塞拜疆水务项目机会」),判断只写在这里。
 6. ledger_links:对照下方台账,这条线索对应哪些项目(可多个,说明理由;只填台账里存在的编号;只对应同一国的项目——别国的同类项目,如都是减漏,不算)。都不对应、且确属新的项目机会时 new_opportunity=true。
 7. evidence:支撑以上结论的原文片段,保持原语言逐字摘录,每段不超过 200 字。
 
@@ -98,7 +102,7 @@ SYSTEM = """你是水务项目机会监测系统的分析员。使用方是投�
 # DeepSeek 的 JSON 输出只保证是合法 JSON,不保证字段:提示里写明字段与取值,代码再校验
 JSON_GUIDE = """
 输出格式:只输出一个 JSON 对象,不要任何其他文字。字段与示例:
-{"relevant": true, "category": "eoi", "sectors": ["wastewater"], "country": "AZE", "summary_zh": "……", "project": "项目名或 null", "funder": "出资方或 null",
+{"relevant": true, "category": "eoi", "sectors": ["wastewater"], "country": "AZE", "title_zh": "原题中文直译", "summary_zh": "……", "why": "判定理由", "project": "项目名或 null", "funder": "出资方或 null",
  "amount": {"value": 12000000, "currency": "USD"}, "deadlines": [{"type": "eoi_deadline", "date": "2026-10-12", "evidence": "原文片段"}],
  "eligibility": "资格限制或 null", "ledger_links": [{"item": "台账编号", "confidence": "high", "reason": "理由"}],
  "new_opportunity": false, "evidence": ["原文片段"]}
@@ -229,7 +233,8 @@ def normalize(data: dict) -> dict:
     return {
         "relevant": _bool(data.get("relevant")), "category": cat if cat in CATEGORIES else "other",
         "sectors": sectors, "country": geo.iso3(_text(data.get("country"), 80)),
-        "summary_zh": _text(data.get("summary_zh"), 200) or "", "project": _text(data.get("project")),
+        "title_zh": _text(data.get("title_zh"), 200) or "", "summary_zh": _text(data.get("summary_zh"), 200) or "", "why": _text(data.get("why"), 200) or "",
+        "project": _text(data.get("project")),
         "funder": _text(data.get("funder")), "amount": amount, "deadlines": deadlines,
         "eligibility": _text(data.get("eligibility")), "ledger_links": links,
         "new_opportunity": _bool(data.get("new_opportunity")),

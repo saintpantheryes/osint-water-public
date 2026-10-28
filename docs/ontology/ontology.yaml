@@ -16,8 +16,8 @@
 #      datetime / number / bool / enum 单选 / enums 多选 / list 结构化列表 / file 文件 / link:<对象> 关联一个 / links:<对象> 关联多个
 
 schema: osint-water/ontology@1
-version: 2.40
-date: 2026-10-26
+version: 2.41
+date: 2026-10-28
 decisions:   # 使用方 2026-10-03 定
   - 唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置
   - 商机的公开事实(原台账 YAML)搬进 Teable
@@ -388,7 +388,9 @@ objects:
          note: 粗分 7 类(商机的 12 类细分是它的下级，见 taxonomies.opp_sectors);线索总览「领域」筛选按它}
       - {id: country, name: 国别, type: "link:country", by: ai}
       - {id: city, name: 城市, type: "link:city", by: human, note: 可选;与哪座规模以上城市有关(人选;机器以后可按正文匹配)}
-      - {id: summary_zh, name: 中文摘要, type: longtext, by: ai}
+      - {id: title_zh, name: 中文标题, type: text, by: ai, note: "原题的中文直译,只译不评(页面清单一律中文标题在前、原题小字在后);判定时写,老线索由后台每 2 分钟补一批(A03);原题已是中文的照抄"}
+      - {id: summary_zh, name: 中文摘要, type: longtext, by: ai, note: "只概括原文说了什么,不写模型自己的判断(判断写判定说明)"}
+      - {id: judge_reason, name: 判定说明, type: text, by: ai, note: "模型判相关 / 不相关的一句理由(如「不属于该国水务项目机会」),只在这里,不进标题与摘要"}
       - {id: funder, name: 出资方, type: text, by: ai}
       - {id: project_name, name: 项目名称, type: text, by: ai}
       - {id: amount, name: 金额, type: text, by: ai, note: "带币种，原文怎么写就怎么记", example: "EUR 25 million(EBRD 贷款)"}
@@ -407,6 +409,7 @@ objects:
       - {id: archived, name: 已归档, type: bool, by: ai, note: "过期线索由后台每天标上(A49):截止已过,或发布超过一年且没归入商机。人勾掉即取消归档,机器不再打回。页面与助手默认不算已归档的"}
       - {id: archive_reason, name: 归档原因, type: text, by: ai, example: 超过一年, note: 截止已过 / 超过一年}
       - {id: archived_at, name: 归档时间, type: date, by: ai, note: "后台标归档那天;有它而「已归档」没勾 = 人取消过,机器不再碰"}
+      - {id: deadline, name: 截止日期, type: date, by: ai, note: "要投标人动作的线索(招标、意向书、资格预审、PPP 标书等)才有:线索给出的最早一个采购截止类节点,或信源标的截止;新闻、政策类为空。判定时写,老线索由后台从时间节点补(A49);写了不清空,过了页面标红「已过」,归档也看它"}
       - {id: nearest_deadline, name: 最近截止, type: date, by: derived, note: 来自这条线索给出的时间节点, where: "teable 汇总(最早的「未过截止」);含 TODAY()，隔天不重算，页面与报告自己按当前日期算(R12)"}
       - {id: in_reports, name: 写进的报告, type: "links:report", by: derived, where: teable 关联的反向字段(报告.引用的线索)}
 
@@ -1113,8 +1116,8 @@ actions:
     trigger: 新线索入库后(含用户上传的，只补摘要、国别与日期)
     reads: [lead, opportunity]
     creates: milestone
-    writes: [lead.title, lead.excerpt, lead.published, lead.relevant, lead.category, lead.sectors, lead.country, lead.summary_zh,
-             lead.funder, lead.project_name, lead.amount, lead.amount_value, lead.currency, lead.amount_cny, lead.suggested_opp, lead.suggest_reliable, lead.maybe_new, lead.opportunity,
+    writes: [lead.title, lead.title_zh, lead.excerpt, lead.published, lead.relevant, lead.category, lead.sectors, lead.country, lead.summary_zh, lead.judge_reason,
+             lead.funder, lead.project_name, lead.deadline, lead.amount, lead.amount_value, lead.currency, lead.amount_cny, lead.suggested_opp, lead.suggest_reliable, lead.maybe_new, lead.opportunity,
              lead.judged_by,
              milestone.lead, milestone.opportunity, milestone.kind, milestone.day, milestone.status, milestone.label, milestone.source]
     note: 只判「处理状态 = 待处理且判定方式为空」的线索，一条只判一次，判完写判定方式;判过的永不回头，重判定只能在命令行显式执行——人改过、清空过的值不会被再填回来(R2)。用户上传的不判相关性，只补标题、摘要、国别与日期，判定方式写「不判定」(R8)。只有归属可靠且所属商机为空时才填所属商机(R4、R2)。时间节点按「所属(商机 / 线索 / 国别)+ 类型 + 日期原文」去重，已有的只补空着的出处线索与说明。
@@ -1570,9 +1573,9 @@ actions:
     name: 过期线索归档
     actor: ai
     trigger: 每天零点后第一个周期(后台,与 A19 同一轮)
-    reads: [lead]
-    writes: [lead.archived, lead.archive_reason, lead.archived_at]
-    note: "没标归档、也没归档时间的线索里:最近截止 < 今天的记「截止已过」;发布日期(没有按发现时间)早于一年前且所属商机为空的记「超过一年」。只标记,不删、不改处理状态(R13)。人勾掉「已归档」后归档时间还在,机器不再打回。R2 的例外(机器维护的运行状态),同 A19。"
+    reads: [lead, milestone]
+    writes: [lead.deadline, lead.archived, lead.archive_reason, lead.archived_at]
+    note: "先给「截止日期」空着的线索从它的采购截止类时间节点补上最早一个(只填空)。没标归档、也没归档时间的线索里:截止日期(或采购截止类节点)全都 < 今天的记「截止已过」;发布日期(没有按发现时间)早于一年前且所属商机为空的记「超过一年」。只标记,不删、不改处理状态(R13)。人勾掉「已归档」后归档时间还在,机器不再打回。R2 的例外(机器维护的运行状态),同 A19。"
     rules: [R2, R13]
   - id: A50
     name: 放弃跟踪(归档商机)

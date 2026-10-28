@@ -4,7 +4,7 @@
     python -m core.worker --profile private/profile.yaml --once     # 把到点的任务跑一遍就退出(调试)
 
 节奏(北京时间,profile 的 teable_map timezone):
-- 每 2 分钟:补全上传的线索(enrich)、阶段变更记跟进(stage_log)、生成待生成的报告(reports)
+- 每 2 分钟:补全上传的线索(enrich)、阶段变更记跟进(stage_log)、生成待生成的报告(reports)、线索补中文标题(leads_zh)
 - 每天 08:30:采集与判定 + 建议与更新商机(collect);当天已跑过(信源表里最近采集是今天)就不再跑——重启不重复采;
   采集完成后自建当天的日报行(reports.ensure_daily,下个周期生成,正文显示在「线索分析」页顶部);
   随后补新国别的国别信息(countries,只补空着的);每月 1 日按期刷新全部国别
@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from core import assistant_server, semantic, storage, tstore
-from core.jobs import awards, bready, cities, collect, common, countries, enrich, expire, fx, laws, plants, reports, risk, stage_log, studies
+from core.jobs import awards, bready, cities, collect, common, countries, enrich, expire, fx, laws, leads_zh, plants, reports, risk, stage_log, studies
 from core.profile import load_profile
 
 EVERY = 120  # 秒
@@ -76,6 +76,7 @@ def tick(profile, now: datetime, state: dict, use_llm: bool = True) -> None:
     for name, fn in (("enrich", lambda: enrich.run(ctx)), ("stage_log", lambda: stage_log.run(ctx)), ("fx", lambda: fx.run(ctx)), ("reports", _reports),
                      ("awards_zh", lambda: awards.translate(ctx.base, ctx.clf_light, log=log)),  # 已中标项目译中文名(A28;不思考的便宜模式,没配模型时什么也不做)
                      ("studies_zh", lambda: studies.translate(ctx.base, ctx.clf_light, log=log)),  # 研究资料译中文标题(同上)
+                     ("leads_zh", lambda: leads_zh.translate(ctx, log=log)),  # 线索补中文标题(A03;老线索一批 40 条,原题是中文的照抄)
                      ("laws_zh", lambda: laws.translate(ctx.base, ctx.clf_light, log=log)),
                      ("phrases", lambda: semantic.fill(ctx.base, log=log))):  # 语义层说法:本体里有、表里没有的指向补一行(A43)  # 法规条文译中文(A37;同上,一批约 5000 字)
         try:

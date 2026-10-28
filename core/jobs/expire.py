@@ -43,30 +43,46 @@ def archive_leads(ctx: Ctx) -> dict:
         return {}
     today = ctx.today
     cutoff = (today - timedelta(days=ARCHIVE_DAYS)).isoformat()
-    # 线索给出的截止类节点(意向书 / 资格预审 / 投标 / PPP 标书截止):全都过了才算「截止已过」。不用表里的「最近截止」:它是含 TODAY 的汇总,过了就空、隔天又不重算
+    # 线索给出的截止类节点(意向书 / 资格预审 / 投标 / PPP 标书截止,以及信源标的「截止」):全都过了才算「截止已过」。不用表里的「最近截止」:它是含 TODAY 的汇总,过了就空、隔天又不重算
     passed: dict[str, bool] = {}  # 线索编号 → 它的截止是否全过了
-    for m in b.rows("milestone", filter=b.filter(b.cond("milestone", "lead", "isNotEmpty")), props=["lead", "kind", "day"]):
-        if b.get("milestone", m, "kind") not in DEADLINE_KINDS:
+    earliest: dict[str, str] = {}  # 线索编号 → 最早的截止(给「截止日期」空着的线索补上,写了不清空)
+    for m in b.rows("milestone", filter=b.filter(b.cond("milestone", "lead", "isNotEmpty")), props=["lead", "kind", "day", "label"]):
+        if b.get("milestone", m, "kind") not in DEADLINE_KINDS and str(b.get("milestone", m, "label") or "").strip() != "截止":
             continue
         lid, d = tstore.link_id(b.get("milestone", m, "lead")), tstore.day(b.get("milestone", m, "day"), b.tz)
         if lid and d:
             passed[lid] = passed.get(lid, True) and d < today.isoformat()
+            earliest[lid] = min(earliest.get(lid, d), d)
+    has_dl = b.has("lead", "deadline")
     rows = b.rows("lead", filter=b.filter(b.cond("lead", "archived", "is", False)),
-                  props=["archived", "archived_at", "published", "found_at", "opportunity"])
+                  props=["archived", "archived_at", "published", "found_at", "opportunity"] + (["deadline"] if has_dl else []))
+    out = fill_deadlines(b, rows, earliest) if has_dl else {}
     todo = []
     for r in rows:
         g = lambda p: b.get("lead", r, p)  # noqa: E731
         if g("archived") or g("archived_at"):
             continue  # 已归档,或人取消过归档
         pub = tstore.day(g("published"), b.tz) or tstore.day(g("found_at"), b.tz)
-        if passed.get(r["id"]):
+        dl = tstore.day(g("deadline"), b.tz) if has_dl else None
+        if passed.get(r["id"]) or (dl and dl < today.isoformat() and r["id"] not in passed):  # 人填的截止日期(没有节点)过了也算
             todo.append((r["id"], REASON_DEADLINE))
         elif pub and pub < cutoff and not g("opportunity"):
             todo.append((r["id"], REASON_OLD))
     if not todo:
-        return {}
+        return out
     b.update_many("lead", [(rid, {"archived": True, "archive_reason": why, "archived_at": today.isoformat()}) for rid, why in todo])
-    out = {}
     for _, why in todo:
         out[why] = out.get(why, 0) + 1
     return {"过期线索归档": len(todo), **out}
+
+
+def fill_deadlines(b: tstore.Base, rows: list[dict], earliest: dict[str, str]) -> dict:
+    """「截止日期」空着的线索,从它的采购截止类时间节点补最早一个(只填空;过了的也补,页面标「已过」)。→ {"补截止日期": n} 或 {}"""
+    ups = [(r["id"], {"deadline": earliest[r["id"]]}) for r in rows if r["id"] in earliest and tstore.is_empty(b.get("lead", r, "deadline"))]
+    if not ups:
+        return {}
+    b.update_many("lead", ups)
+    by_id = {r["id"]: r for r in rows}
+    for rid, v in ups:
+        by_id[rid].setdefault("fields", {})[b.fid("lead", "deadline")] = v["deadline"]
+    return {"补截止日期": len(ups)}

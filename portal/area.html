@@ -85,7 +85,7 @@
     const oppIds = opps.map((o) => o.id);
     const [leads, ...plants] = await Promise.all([
       P.records("lead", { filter: P.and(P.cond("lead", "relevant", "is", true), P.or(oppIds.length ? P.cond("lead", "opportunity", "isAnyOf", oppIds) : null, anyCity("lead", "city"))),
-        take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "category", "published", "found_at", "summary_zh", "opportunity", "status"] }),
+        take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: P.leadTitleProps().concat(["category", "published", "found_at", "opportunity", "status"], P.deadlineProps()) }),
       ...["supply_plant", "sewage_plant"].map((oid) => P.cfg.tables[oid] ? P.records(oid, { filter: P.and(anyCity(oid, "city")), props: ["name", "name_zh", "kind", "status", "city", "capacity", "pop_served", "built", "operator", "note"] }) : []),
     ]);
     /* 卡片:合计人口(占全国,国别指标里有总人口时)、城市、商机(跟踪中)、线索 */
@@ -113,8 +113,8 @@
       P.tableHtml(["编号", "名称", "我方阶段", "公开进度", "资金", ""], opps.map((o) => { const q = (p) => P.get("opportunity", o, p);
         return [P.raw('<a class="nw" href="opp.html?id=' + encodeURIComponent(o.id) + '">' + P.esc(q("code") || "") + "</a>"), q("name_zh"), q("stage") || "建议", q("public_stage") || "", (q("financing") || "").split("\n")[0].replace(/\s*\[[0-9a-f]{8}\]/g, "").replace(/\s*〔R\d+〕/g, ""), P.raw(P.open("opportunity", o.id))]; }));
     $("leads").innerHTML = !leads.length ? '<p class="empty">还没有。</p>' :
-      P.tableHtml(["标题", "类别", "发布", "所属商机", "处理状态", ""], leads.slice(0, 50).map((l) => { const q = (p) => P.get("lead", l, p);
-        return [P.titleCell(l), q("category") || "", P.day(q("published")) || P.day(q("found_at")) || "", P.text(q("opportunity")), q("status") || "", P.raw(P.open("lead", l.id))]; })) +
+      P.tableHtml(["标题", "类别", "发布", "截止", "所属商机", "处理状态", ""], leads.slice(0, 50).map((l) => { const q = (p) => P.get("lead", l, p);
+        return [P.titleCell(l), q("category") || "", P.day(q("published")) || P.day(q("found_at")) || "", P.deadlineCell(l), P.text(q("opportunity")), q("status") || "", P.raw(P.open("lead", l.id))]; })) +
       (leads.length > 50 ? '<p class="muted small">列出最近 50 条,共 ' + leads.length + (leads.length >= 200 ? "+" : "") + " 条。</p>" : "");
     const pl = [].concat(...plants.map((rows, i) => rows.map((r) => ({ r, oid: i ? "sewage_plant" : "supply_plant" }))));
     pl.sort((x, y) => (Number(P.get(y.oid, y.r, "capacity")) || 0) - (Number(P.get(x.oid, x.r, "capacity")) || 0));

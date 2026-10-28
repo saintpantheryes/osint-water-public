@@ -119,7 +119,7 @@
     const listsP = Promise.all([  // 这几张清单只要国别编号:与读整条国别记录同时发出,不排队
       P.records("opportunity", { filter: P.and(P.cond("opportunity", "country", "is", c.id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "priority"].concat(P.OPP_ARC, hasArea ? ["area"] : []) }),
       P.records("lead", { filter: P.and(P.cond("lead", "country", "is", c.id), P.cond("lead", "relevant", "is", true), P.cond("lead", "found_at", "isOnOrAfter", P.onDay(since)), ...(P.arcCond() ? [P.arcCond()] : [])),  // 已归档(过期)的不列
-        take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "category", "published", "found_at", "nearest_deadline", "summary_zh", "project_name", "opportunity", "status"] }),
+        take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: P.leadTitleProps().concat(["category", "published", "found_at", "opportunity", "status"], P.deadlineProps()) }),
       P.records("milestone", { filter: P.and(...P.between("milestone", "day", today, until)), props: ["opportunity", "lead", "country", "kind", "day", "status", "label"] }),
       hasCity ? P.records("city", { filter: P.and(P.cond("city", "country", "is", c.id)), orderBy: [{ fieldId: P.f("city", "population"), order: "desc" }],
         props: ["name_zh", "name_en", "admin", "population", "area_km2", "density", "gdp", "gdp_year", "lead_count", "opp_count", "coords"] }) : Promise.resolve([]),
@@ -194,8 +194,8 @@
     const cat = {}; leads.forEach((l) => { const k = P.get("lead", l, "category") || "未分类"; cat[k] = (cat[k] || 0) + 1; });
     $("leadStats").innerHTML = "<b>按类别:</b>" + (Object.entries(cat).sort((a, b) => b[1] - a[1]).map(([k, v]) => P.esc(k) + " " + v).join("、") || "无") +
       ' · <a href="' + P.tableUrl("lead") + '" target="_blank" rel="noopener">线索表 ↗</a>';
-    $("leads").innerHTML = P.tableHtml(["标题", "类别", "发布", "最近截止", "所属商机", "处理状态", ""], leads.slice(0, 50).map((l) => { const q = (p) => P.get("lead", l, p);
-      return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), q("nearest_deadline"), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
+    $("leads").innerHTML = P.tableHtml(["标题", "类别", "发布", "截止", "所属商机", "处理状态", ""], leads.slice(0, 50).map((l) => { const q = (p) => P.get("lead", l, p);
+      return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), P.deadlineCell(l), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
     const oppIds = new Set(opps.map((o) => o.id)), code = {}; opps.forEach((o) => { code[o.id] = P.get("opportunity", o, "code"); });
     const mine = ms.filter((m) => oppIds.has(P.linkId(P.get("milestone", m, "opportunity"))) || P.linkId(P.get("milestone", m, "country")) === c.id);
     $("ms").innerHTML = P.tableHtml(["日期", "类型", "商机", "线索", "状态", "说明", ""], mine.map((m) => { const q = (p) => P.get("milestone", m, p);

@@ -36,7 +36,7 @@
     </div>
     <div class="col">
       <h2 id="drillTitle">清单</h2>
-      <div class="panel" id="drill"><p class="muted">点左边漏斗的任一级,这里列出该级的线索;上面输搜索词,这里列出搜到的线索;点地图上的国家进国别概况。</p></div>
+      <div class="panel" id="drill"><div class="drill-list"><p class="muted">点左边漏斗的任一级,这里列出该级的线索;上面输搜索词,这里列出搜到的线索;点地图上的国家进国别概况。</p></div></div>
       <h2>最新报告</h2>
       <div class="panel" id="reports">读取中…</div>
     </div>
@@ -76,7 +76,7 @@
     history.replaceState(null, "", location.pathname + (user.length || state.ig || state.ar ? "?" + new URLSearchParams({ r: state.r, c: state.c, s: state.s.join(","), k: state.k, f: state.f, w: state.w, q: state.q, ig: state.ig, ar: state.ar }) : ""));
     /* 有搜索词:右边清单直接列出搜到的线索(连同上面其余筛选);清掉搜索词,清单回到提示 */
     if (state.q) drill("搜索「" + state.q + "」", P.and(...base)).catch((e) => P.fail($("drill"), e));
-    else if (searched) { $("drillTitle").textContent = "清单"; $("drill").innerHTML = DRILL_HINT; }
+    else if (searched) { $("drillTitle").textContent = "清单"; ($("drill").querySelector(".drill-list") || $("drill")).innerHTML = DRILL_HINT; }
     searched = !!state.q;
     $("fNote").textContent = "统计中…";
     const L = [
@@ -123,52 +123,18 @@
   async function drill(name, filter) {
     const my = ++drillSeq;
     $("drillTitle").textContent = name + " · 清单";
-    $("drill").innerHTML = '<p class="muted">读取中…</p>';
-    let [rows] = await Promise.all([P.records("lead", { filter, take: 100, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "country", "category", "found_at", "opportunity", "status", "url", "project_name", "summary_zh"] }), P.zhTerms(), P.followed()]);
+    ($("drill").querySelector(".drill-list") || $("drill")).innerHTML = '<p class="muted">读取中…</p>';
+    let [rows] = await Promise.all([P.records("lead", { filter, take: 100, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: P.leadTitleProps().concat(["country", "category", "found_at", "opportunity", "status"], P.deadlineProps()) }), P.zhTerms(), P.followed()]);
     if (my !== drillSeq) return;
     rows = P.followFirst(rows, "lead");  // 关注国家的排前面
-    $("drill").innerHTML = '<p class="muted small">' + (rows.length ? "最新 " + rows.length + " 条" + (rows.length >= 100 ? "(只显示前 100)" : "") : "没有符合的线索") + "</p>" + (rows.length ? P.tableHtml(["标题", "国别", "类别", "发现", "所属商机", ""], rows.map((l) => { const g = (p) => P.get("lead", l, p);
-      return [P.titleCell(l), P.text(g("country")), g("category"), P.day(g("found_at")), P.raw(oppCell(l)), P.raw(P.open("lead", l.id))]; })) : "");
-    const byId = {}; rows.forEach((l) => { byId[l.id] = l; });
-    $("drill").querySelectorAll("button.conv").forEach((b) => { b.onclick = () => convert(b, byId[b.dataset.l]); });
+    const list = $("drill").querySelector(".drill-list") || (() => { const d = document.createElement("div"); d.className = "drill-list"; $("drill").appendChild(d); return d; })();
+    list.innerHTML = '<p class="muted small">' + (rows.length ? "最新 " + rows.length + " 条" + (rows.length >= 100 ? "(只显示前 100)" : "") : "没有符合的线索") + "</p>" + (rows.length ? P.tableHtml(["标题", "国别", "类别", "发现", "截止", "所属商机", ""], rows.map((l) => { const g = (p) => P.get("lead", l, p);
+      return [P.titleCell(l), P.text(g("country")), g("category"), P.day(g("found_at")), P.deadlineCell(l), P.convertCell(l, conv), P.raw(P.open("lead", l.id))]; })) : "");
+    P.bindConvert(list, rows, conv, 5);  // 「所属商机」是第 6 列
+    if ($("drill")._fsRefresh) $("drill")._fsRefresh();
   }
-
-  /* 所属商机:已归入的点开商机页;还没归入的,能写的帐号有「转为商机」(与线索处理同一套:归入已有商机,或新建商机并归入) */
-  const oppName = (o) => (P.get("opportunity", o, "code") || "") + " " + (P.get("opportunity", o, "name_zh") || "");
-  function oppCell(l) {
-    const oid = P.linkId(P.get("lead", l, "opportunity"));
-    if (oid) { const o = opps.find((x) => x.id === oid); return '<a href="' + P.oppUrl(oid) + '">' + P.esc(o ? oppName(o) : P.text(P.get("lead", l, "opportunity"))) + "</a>"; }
-    return canWrite ? '<button type="button" class="conv" data-l="' + P.esc(l.id) + '">转为商机</button>' : "";
-  }
-  function convert(btn, l) {
-    const tr = btn.closest("tr"), open = tr.nextElementSibling;
-    if (open && open.classList.contains("convrow")) { open.remove(); return; }
-    const cid = P.linkId(P.get("lead", l, "country")), c = countries.find((x) => x.id === cid), iso = c && P.get("country", c, "key");
-    const live = opps.filter((o) => (P.get("opportunity", o, "stage") || "建议") !== "不跟进");
-    const same = live.filter((o) => P.linkId(P.get("opportunity", o, "country")) === cid), others = live.filter((o) => P.linkId(P.get("opportunity", o, "country")) !== cid);
-    const opts = (arr) => arr.map((o) => '<option value="' + o.id + '">' + P.esc(oppName(o)) + "</option>").join("");
-    const row = document.createElement("tr"); row.className = "convrow";
-    row.innerHTML = '<td colspan="' + tr.children.length + '"><div class="convbox"><button type="button" class="primary" data-a="new">新建商机并归入</button>' +
-      '<select data-a="pick"><option value="">归入已有商机…</option>' + (same.length ? '<optgroup label="' + P.esc(c ? P.get("country", c, "name_zh") || iso : "同国") + '">' + opts(same) + "</optgroup>" : "") + (others.length ? '<optgroup label="其他国家">' + opts(others) + "</optgroup>" : "") + "</select>" +
-      '<button type="button" data-a="x">取消</button></div></td>';
-    tr.after(row);
-    const done = (o, msg) => { tr.children[4].innerHTML = '<a href="' + P.oppUrl(o.id) + '">' + P.esc(oppName(o)) + "</a>"; row.remove(); P.toast(msg); };
-    const busy = (on) => row.querySelectorAll("button, select").forEach((e) => { e.disabled = on; });
-    row.querySelector('[data-a="x"]').onclick = () => row.remove();
-    row.querySelector('[data-a="pick"]').onchange = async (e) => {
-      const o = opps.find((x) => x.id === e.target.value); if (!o) return;
-      busy(true);
-      try { await P.leadToOpp(l.id, o.id); done(o, "已归入 " + (P.get("opportunity", o, "code") || "")); } catch (err) { P.toast(err.message, true); busy(false); }
-    };
-    row.querySelector('[data-a="new"]').onclick = async () => {
-      if (!iso) { P.toast("这条线索没有国别,先在表格里填国别", true); return; }
-      const name = prompt("新商机的名称(可改):", String(P.get("lead", l, "project_name") || P.zhName(l).name || P.get("lead", l, "title") || "").split("\n")[0]);
-      if (name === null || !name.trim()) return;
-      busy(true);
-      try { const rec = await P.newOppFromLead(l.id, { name: name.trim(), cid, iso, opps }); opps.push(rec); done(rec, "已新建商机 " + (P.get("opportunity", rec, "code") || "") + " 并归入,阶段跟踪中、负责人是你"); }
-      catch (err) { P.toast(err.message, true); busy(false); }
-    };
-  }
+  /* 所属商机:已归入的点开商机页;还没归入的,能写的帐号有「转为商机」(与线索分析、线索处理同一套,P.convertCell / P.bindConvert) */
+  const conv = { opps: [], countries: [], canWrite: false };
 
   function chipRows() {
     const withLeads = countries.filter((c) => Number(P.get("country", c, "lead_count")) > 0 && (state.ig || !bl.has(P.get("country", c, "key")) || c.id === state.c));  // 忽略的国别不列(露出时才列)
@@ -202,6 +168,8 @@
   try {
     await P.load();
     [opps, countries, canWrite, bl] = await Promise.all([P.opps(), P.countries(), P.canWrite(), P.ignored()]);
+    Object.assign(conv, { opps, countries, canWrite });
+    P.fullscreenable($("drill"), $("drillTitle"));
     igIds = countries.filter((c) => bl.has(P.get("country", c, "key"))).map((c) => c.id);
     chipRows();
     await refresh();
