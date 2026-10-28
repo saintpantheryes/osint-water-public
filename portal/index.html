@@ -279,8 +279,8 @@
   /* ---------- 呈现 ---------- */
   const stageTag = (s) => P.stageTag(s);
   function leadTable(rows) {
-    return P.tableHtml(["标题", "国别", "类别", "发现", "所属商机", ""], P.followFirst(rows, "lead").map((l) => { const g = (p) => P.get("lead", l, p);
-      return [P.titleCell(l), P.text(g("country")), g("category") || "", P.day(g("found_at")), P.text(g("opportunity")), P.raw(P.open("lead", l.id))]; }));
+    return P.tableHtml(["标题", "国别", "类别", "发现", "截止", "所属商机", ""], P.followFirst(rows, "lead").map((l) => { const g = (p) => P.get("lead", l, p);
+      return [P.titleCell(l), P.text(g("country")), g("category") || "", P.day(g("found_at")), P.deadlineCell(l), P.text(g("opportunity")), P.raw(P.open("lead", l.id))]; }));
   }
   function oppTable(rows) {
     return P.tableHtml(["商机", "国别", "我方阶段", "领域", "负责人", "下一节点", "线索数"], P.followFirst(rows, "opportunity").map((o) => { const g = (p) => P.get("opportunity", o, p);
@@ -1115,7 +1115,7 @@
       return '<p class="muted small">' + (a.rows.length > limit || (!f.capacity && rows.length >= limit) ? "最新 " + rows.length + " 份(只显示前 " + limit + ")" : rows.length + " 份") + "</p>" + awTable(rows) + capNote(plan, a, true);
     }
     let rows;
-    if (oid === "lead") rows = await P.records("lead", { filter: P.and(...leadConds(f)), take: limit, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "country", "category", "found_at", "opportunity", "status", "project_name", "summary_zh"] });
+    if (oid === "lead") rows = await P.records("lead", { filter: P.and(...leadConds(f)), take: limit, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: P.leadTitleProps().concat(["country", "category", "found_at", "opportunity", "status"], P.deadlineProps()) });
     else if (oid === "milestone") rows = await P.records("milestone", { filter: P.and(...msConds(f)), take: limit, orderBy: [{ fieldId: P.f("milestone", "day"), order: "asc" }], props: ["opportunity", "lead", "country", "kind", "day", "status", "label"] });
     else if (oid === "report") rows = await P.records("report", { filter: P.and(...rpConds(f)), take: limit, orderBy: [{ fieldId: P.f("report", "day"), order: "desc" }], props: ["kind", "day", "period", "country", "opportunity", "edition", "file", "gen_status"] });
     else rows = (await oppRows(f)).slice(0, limit);

@@ -315,6 +315,7 @@ def lead_values(ctx: Ctx, sig: dict, source_rid: str | None, country_rid: str | 
         "sectors": [SECTOR_ZH[k] for k in sectors_of(sig) if k in SECTOR_ZH] if judged_by(sig) else None,
         "country": country_rid, "summary_zh": x.get("summary_zh") or None, "funder": x.get("funder"), "project_name": x.get("project"),
         "amount": amount, "judged_by": judged_by(sig), "status": "待处理", **size,
+        **{k: v for k, v in (("title_zh", title_zh_of(sig)), ("judge_reason", x.get("why") or None), ("deadline", deadline_of(sig))) if b.has("lead", k)},  # 中文标题、判定说明、截止日期:表里还没这几列时不写
     }
 
 
@@ -325,6 +326,25 @@ def deadlines_of(sig: dict) -> list[tuple[str, str, str]]:
     if fd and re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(fd)) and all(fd != d for d, _, _ in out):
         out.append((str(fd), "其他", "截止"))
     return out
+
+
+_CJK_RE = re.compile(r"[\u3400-\u9fff]")
+
+
+def title_zh_of(sig: dict) -> str | None:
+    """线索的中文标题:模型译的;原题本来就是中文的照抄;都没有为空(后台 A03 的补译再补)。"""
+    zh = ((_llm(sig) or {}).get("title_zh") or "").strip()
+    if zh:
+        return zh[:300]
+    t = (sig.get("title") or "").strip().splitlines()
+    return t[0][:300] if t and _CJK_RE.search(t[0]) else None
+
+
+def deadline_of(sig: dict) -> str | None:
+    """要投标人动作的截止日期(写进线索.截止日期):采购截止类节点(意向书 / 资格预审 / 投标 / PPP 标书截止)与信源标的截止里最早的一个;
+    新闻、政策类没有截止为空。"""
+    days = [d for d, kind, label in deadlines_of(sig) if kind in DEADLINE_KIND.values() or label == "截止"]
+    return min(days) if days else None
 
 
 def best_link(sig: dict) -> tuple[str | None, bool]:

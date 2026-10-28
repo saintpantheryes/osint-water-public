@@ -60,9 +60,11 @@ def key_points(title: str, path: str | Path = TERMS_PATH) -> str:
     return "、".join(out[:mx])
 
 
-def zh_name(title: str | None, summary_zh: str | None = None, project_name: str | None = None, n: int = 60) -> tuple[str, str]:
-    """→ (中文名称, 来源):来源是「项目名」「摘要」「要点」之一,三样都没有时 ("", "")。"""
+def zh_name(title: str | None, summary_zh: str | None = None, project_name: str | None = None, n: int = 60, title_zh: str | None = None) -> tuple[str, str]:
+    """→ (中文名称, 来源):来源是「译名」(原题的中文直译,2026-10-28 起清单一律先用它)「项目名」「摘要」「要点」之一,都没有时 ("", "")。"""
     first = lambda s: (str(s or "").strip().splitlines() or [""])[0][:n]
+    if first(title_zh):
+        return first(title_zh), "译名"
     if first(project_name):
         return first(project_name), "项目名"
     if first(summary_zh):

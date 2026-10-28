@@ -144,7 +144,7 @@
       P.records("followup", { filter: P.and(P.cond("followup", "opportunity", "is", rid)), orderBy: [{ fieldId: P.f("followup", "day"), order: "desc" }],
         props: ["day", "author", "content", "judgment", "reason", "stage_change", "next_step", "next_due", "attachments"] }),
       P.records("milestone", { filter: P.and(P.cond("milestone", "opportunity", "is", rid)), orderBy: [{ fieldId: P.f("milestone", "day"), order: "asc" }], props: ["kind", "day", "status", "label", "lead"] }),
-      P.records("lead", { filter: P.and(P.cond("lead", "opportunity", "is", rid)), take: 100, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "category", "published", "found_at", "nearest_deadline", "status", "url"].concat(P.has("lead", "archived") ? ["archived", "archive_reason"] : []) }),
+      P.records("lead", { filter: P.and(P.cond("lead", "opportunity", "is", rid)), take: 100, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: P.leadTitleProps().concat(["category", "published", "found_at", "status"], P.deadlineProps(), P.has("lead", "archived") ? ["archived", "archive_reason"] : []) }),
       P.records("report", { filter: P.and(P.cond("report", "opportunity", "is", rid)), orderBy: [{ fieldId: P.f("report", "day"), order: "desc" }], props: ["kind", "day", "edition", "gen_status", "file", "requested_by"] }),
     ]);
     const f = (r, p) => P.get("followup", r, p);
@@ -160,12 +160,11 @@
     $("ms").innerHTML = "<b>未来</b>" + P.tableHtml(["日期", "类型", "状态", "说明", "出处线索", ""], up.map(mrow)) + (past.length ? '<details class="sec"><summary>已过去的 ' + past.length + " 个</summary>" + P.tableHtml(["日期", "类型", "状态", "说明", "出处线索", ""], past.reverse().map(mrow)) + "</details>" : "");
     const l = (r, p) => P.get("lead", r, p);
     /* 所属线索全列:有效的在上;已归档(过期)的在下面单独一段,不藏(使用方 10-20:判断商机要看全貌) */
-    const lrow = (r) => [l(r, "key"), l(r, "category"),
-      P.raw(l(r, "url") ? '<a href="' + P.esc(l(r, "url")) + '" target="_blank" rel="noopener">' + P.esc((l(r, "title") || "").slice(0, 80)) + "</a>" : P.esc((l(r, "title") || "").slice(0, 80))),
-      P.day(l(r, "published")) || P.day(l(r, "found_at")), l(r, "nearest_deadline"), l(r, "status"), P.raw(P.open("lead", r.id))];
+    const lrow = (r) => [l(r, "key"), l(r, "category"), P.titleCell(r),  // 标题与各清单一致:中文在前,原题小字
+      P.day(l(r, "published")) || P.day(l(r, "found_at")), P.deadlineCell(r), l(r, "status"), P.raw(P.open("lead", r.id))];
     const live = leads.filter((r) => l(r, "archived") !== true), arc = leads.filter((r) => l(r, "archived") === true);
-    $("leads").innerHTML = (live.length || !arc.length ? P.tableHtml(["线索号", "类别", "标题", "发布", "最近截止", "处理状态", ""], live.map(lrow)) : '<p class="muted small">有效线索 0 条,都已归档。</p>') +
-      (arc.length ? '<h3 class="muted">已归档 ' + arc.length + " 条(" + P.ARC_WHY + ")</h3>" + P.tableHtml(["线索号", "类别", "标题", "发布", "最近截止", "处理状态", "归档原因"], arc.map((r) => lrow(r).slice(0, 6).concat([l(r, "archive_reason") || "已归档"]))) : "");
+    $("leads").innerHTML = (live.length || !arc.length ? P.tableHtml(["线索号", "类别", "标题", "发布", "截止", "处理状态", ""], live.map(lrow)) : '<p class="muted small">有效线索 0 条,都已归档。</p>') +
+      (arc.length ? '<h3 class="muted">已归档 ' + arc.length + " 条(" + P.ARC_WHY + ")</h3>" + P.tableHtml(["线索号", "类别", "标题", "发布", "截止", "处理状态", "归档原因"], arc.map((r) => lrow(r).slice(0, 6).concat([l(r, "archive_reason") || "已归档"]))) : "");
     const p = (r, k) => P.get("report", r, k);
     $("reports").innerHTML = P.tableHtml(["日期", "类型", "版本", "状态", "发起人", "文件", ""], rps.map((r) => [P.day(p(r, "day")), p(r, "kind"), p(r, "edition"), p(r, "gen_status"), P.text(p(r, "requested_by")),
       P.raw((p(r, "file") || []).map((a) => '<a href="' + P.esc(P.fileUrl(a)) + '" target="_blank" rel="noopener">' + P.esc(a.name) + "</a>").join("<br>")), P.raw(P.open("report", r.id))]));

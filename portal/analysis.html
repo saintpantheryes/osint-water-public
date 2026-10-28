@@ -54,7 +54,7 @@
     <div class="panel"><div id="cPies" class="chart"></div></div>
   </div>
   <h2 id="drillTitle">清单</h2>
-  <div class="panel" id="drill"><p class="muted">点上面任一张图的一柱(或饼的一块、一个卡片),这里列出那组线索,最多 200 条,按发现时间倒序。标题以中文名称为主:模型写的项目名或中文摘要;没有时从原题挑出认得的词作「要点」,原题在小字里。</p></div>
+  <div class="panel" id="drill"><div class="drill-list"><p class="muted">点上面任一张图的一柱(或饼的一块、一个卡片),这里列出那组线索,最多 200 条,按发现时间倒序。标题一律中文在前(原题的中文直译),原题与线索号在小字里;老线索的译名由后台逐批补上,没补到的先用项目名、摘要或从原题挑的「要点」。</p></div></div>
 </main>
 <script>
 (async function () {
@@ -190,13 +190,18 @@
     showTab(tab);
   }
 
+  /* 清单:中文标题在前(P.titleCell);「截止」只有招标等要动作的线索才有,过了标红;「所属商机」与线索总览同一套「转为商机」(P.convertCell) */
+  const conv = { opps: [], countries: [], canWrite: false };
   function drill(name, rows) {
     rows = P.followFirst(rows.slice().sort((a, b) => String(g(b, "found_at") || "").localeCompare(String(g(a, "found_at") || ""))).slice(0, 200), "lead");  // 关注国家的排前面
     $("drillTitle").textContent = name + " · " + rows.length + " 条";
-    $("drill").innerHTML = (rows.length >= 200 ? '<p class="muted small">只显示最新 200 条</p>' : "") + P.tableHtml(["标题", "国别", "类别", "发现", "状态", ""], rows.map((l) => [
+    const list = $("drill").querySelector(".drill-list") || $("drill");
+    list.innerHTML = (rows.length >= 200 ? '<p class="muted small">只显示最新 200 条</p>' : "") + P.tableHtml(["标题", "国别", "类别", "发现", "截止", "状态", "所属商机", ""], rows.map((l) => [
       P.titleCell(l, g(l, "funder") ? String(g(l, "funder")).slice(0, 30) : ""),
-      P.text(g(l, "country")), g(l, "category") || "", dayOf(l), P.raw(P.linkId(g(l, "opportunity")) ? '<a href="' + P.oppUrl(P.linkId(g(l, "opportunity"))) + '">' + P.esc(P.text(g(l, "opportunity"))) + "</a>" : P.esc(g(l, "status") || "")), P.raw(P.open("lead", l.id))]));
-    $("drillTitle").scrollIntoView({ block: "start", behavior: "smooth" });
+      P.text(g(l, "country")), g(l, "category") || "", dayOf(l), P.deadlineCell(l), g(l, "status") || "", P.convertCell(l, conv), P.raw(P.open("lead", l.id))]));
+    P.bindConvert(list, rows, conv, 6);  // 「所属商机」是第 7 列
+    if ($("drill")._fsRefresh) $("drill")._fsRefresh();
+    if (!$("drill").classList.contains("fs")) $("drillTitle").scrollIntoView({ block: "start", behavior: "smooth" });
   }
 
   /* 日报:报告表里最新一份完成的日报;正文在「简报正文」字段,没有该字段时读附件里的 Markdown */
@@ -252,8 +257,9 @@
   try {
     await P.load();
     catOrder = P.choices("lead", "category"); secOrder = P.choices("lead", "sectors");
-    const [cs, ls] = await Promise.all([P.countries(), P.records("lead", { props: ["key", "title", "url", "relevant", "category", "sectors", "country", "funder", "found_at", "status", "opportunity", "suggested_opp", "maybe_new", "judged_by", "source", "origin", "summary_zh", "project_name"].concat(P.has("lead", "archived") ? ["archived"] : []) }), P.zhTerms()]);
-    countries = cs; leads = ls;
+    const [cs, ls, os, cw] = await Promise.all([P.countries(), P.records("lead", { props: P.leadTitleProps().concat(["relevant", "category", "sectors", "country", "funder", "found_at", "status", "opportunity", "suggested_opp", "maybe_new", "judged_by", "source", "origin"], P.deadlineProps(), P.has("lead", "archived") ? ["archived"] : []) }), P.opps(), P.canWrite(), P.zhTerms()]);
+    countries = cs; leads = ls; Object.assign(conv, { opps: os, countries: cs, canWrite: cw });
+    P.fullscreenable($("drill"), $("drillTitle"));
     bl = await P.ignored(); igIds = new Set(cs.filter((c) => bl.has(P.get("country", c, "key"))).map((c) => c.id));
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); cregion[c.id] = P.regionOf(c); });
     chipRows(); drawTabs();

@@ -601,7 +601,8 @@ def _zh_name(ctx: Ctx, r: dict, orig: str, n: int = 80) -> tuple[str, str]:
     """core.zh_name 的取名顺序,但项目名、摘要里没有汉字(模型偶尔照抄英文原名)的不算中文名。"""
     b = ctx.base
     pn, sz = (str(b.get("lead", r, p) or "") for p in ("project_name", "summary_zh"))
-    return zh_name(orig, sz if _CJK.search(sz) else None, pn if _CJK.search(pn) else None, n)
+    tz = str(b.get("lead", r, "title_zh") or "") if b.has("lead", "title_zh") else ""  # 表里的中文标题(A03 译的)最优先
+    return zh_name(orig, sz if _CJK.search(sz) else None, pn if _CJK.search(pn) else None, n, title_zh=tz if _CJK.search(tz) else None)
 
 
 def _orig_title(ctx: Ctx, r: dict, n: int = 120) -> str:
@@ -614,7 +615,7 @@ def translate_titles(ctx: Ctx, leads: list[dict]) -> dict[str, str]:
     want = []
     for r in leads:
         t = _orig_title(ctx, r, 300)
-        if t and _zh_name(ctx, r, t)[1] not in ("项目名", "摘要"):
+        if t and _zh_name(ctx, r, t)[1] not in ("译名", "项目名", "摘要"):
             want.append(t)
     return translate_texts(ctx, want)
 
@@ -660,7 +661,7 @@ def _lead_title(ctx: Ctx, r: dict, zh_of: dict[str, str]) -> tuple[str, str]:
     b = ctx.base
     orig = _orig_title(ctx, r)
     name, how = _zh_name(ctx, r, orig, 400)
-    if how not in ("项目名", "摘要") and zh_of.get(_orig_title(ctx, r, 300)):
+    if how not in ("译名", "项目名", "摘要") and zh_of.get(_orig_title(ctx, r, 300)):
         name, how = zh_of[_orig_title(ctx, r, 300)], "译名"
     elif how == "要点":
         name = "要点:" + name

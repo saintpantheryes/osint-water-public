@@ -134,6 +134,14 @@ a.kpi { color: inherit; } a.kpi:hover { border-color: var(--brand); }
 .kpi.is-bad { border-color: var(--bad-line); background: linear-gradient(180deg, var(--card), var(--bad-soft)); }
 .kpi.is-bad .kn { color: var(--bad); }
 .kpi.is-warn .kn, .kpi.is-warn .kw { color: var(--warn); }
+/* 清单全屏(P.fullscreenable):面板右上角「全屏」,点了铺满窗口 */
+.fs-bar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-height: 0; }
+.fs-bar .fs-title { flex: 1; font-weight: 600; display: none; }
+.panel.fs { position: fixed; inset: 0; z-index: 60; margin: 0; border-radius: 0; overflow: auto; padding: 14px 18px; }
+.panel.fs .fs-bar { position: sticky; top: 0; background: var(--card); padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.panel.fs .fs-bar .fs-title { display: block; }
+body.has-fs { overflow: hidden; }
+.drill-list table td:first-child, .drill-list table th:first-child { min-width: 170px; }  /* 窄栏里的清单:标题列不挤成一字一行,放不下就在面板里横着滑(或点「全屏」) */
 .panel .kpis { margin-top: 2px; }
 .panel .kpi { background: var(--sunk); border-color: #eef2f6; }
 .panel .kpi.is-bad { background: var(--bad-soft); border-color: var(--bad-line); }
@@ -482,9 +490,9 @@ details.sec.panel summary { margin: -4px 0; }
 }
 /* 手机:宽表横向滑动,不挤成一字一行(首列照常换行,其余列不换行) */
 @media (max-width: 760px) {
-  .panel { overflow-x: auto; }
-  .panel table th, .panel table td { white-space: nowrap; }
-  .panel table td:first-child, .panel table th:first-child { white-space: normal; min-width: 150px; }
+  .panel, .answer .a-body { overflow-x: auto; }
+  .panel table th, .panel table td, .answer .a-body table th, .answer .a-body table td { white-space: nowrap; }
+  .panel table td:first-child, .panel table th:first-child, .answer .a-body table td:first-child, .answer .a-body table th:first-child { white-space: normal; min-width: 150px; }
 }
 
 /* 游客(不在库里的登录账号):表格的入口一律不显示(游客在表格里什么也看不到) */

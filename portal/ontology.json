@@ -1,7 +1,7 @@
 {
  "schema": "osint-water/ontology@1",
- "version": 2.4,
- "date": "2026-10-26",
+ "version": 2.41,
+ "date": "2026-10-28",
  "decisions": [
   "唯一业务库为 Teable(R1);机器任务直接读写它，git 只放程序与配置",
   "商机的公开事实(原台账 YAML)搬进 Teable",
@@ -444,10 +444,25 @@
      "note": "可选;与哪座规模以上城市有关(人选;机器以后可按正文匹配)"
     },
     {
+     "id": "title_zh",
+     "name": "中文标题",
+     "type": "text",
+     "by": "ai",
+     "note": "原题的中文直译,只译不评(页面清单一律中文标题在前、原题小字在后);判定时写,老线索由后台每 2 分钟补一批(A03);原题已是中文的照抄"
+    },
+    {
      "id": "summary_zh",
      "name": "中文摘要",
      "type": "longtext",
-     "by": "ai"
+     "by": "ai",
+     "note": "只概括原文说了什么,不写模型自己的判断(判断写判定说明)"
+    },
+    {
+     "id": "judge_reason",
+     "name": "判定说明",
+     "type": "text",
+     "by": "ai",
+     "note": "模型判相关 / 不相关的一句理由(如「不属于该国水务项目机会」),只在这里,不进标题与摘要"
     },
     {
      "id": "funder",
@@ -655,6 +670,13 @@
      "type": "date",
      "by": "ai",
      "note": "后台标归档那天;有它而「已归档」没勾 = 人取消过,机器不再碰"
+    },
+    {
+     "id": "deadline",
+     "name": "截止日期",
+     "type": "date",
+     "by": "ai",
+     "note": "要投标人动作的线索(招标、意向书、资格预审、PPP 标书等)才有:线索给出的最早一个采购截止类节点,或信源标的截止;新闻、政策类为空。判定时写,老线索由后台从时间节点补(A49);写了不清空,过了页面标红「已过」,归档也看它"
     },
     {
      "id": "nearest_deadline",
@@ -4700,6 +4722,7 @@
    "creates": "milestone",
    "writes": [
     "lead.title",
+    "lead.title_zh",
     "lead.excerpt",
     "lead.published",
     "lead.relevant",
@@ -4707,8 +4730,10 @@
     "lead.sectors",
     "lead.country",
     "lead.summary_zh",
+    "lead.judge_reason",
     "lead.funder",
     "lead.project_name",
+    "lead.deadline",
     "lead.amount",
     "lead.amount_value",
     "lead.currency",
@@ -5954,14 +5979,16 @@
    "actor": "ai",
    "trigger": "每天零点后第一个周期(后台,与 A19 同一轮)",
    "reads": [
-    "lead"
+    "lead",
+    "milestone"
    ],
    "writes": [
+    "lead.deadline",
     "lead.archived",
     "lead.archive_reason",
     "lead.archived_at"
    ],
-   "note": "没标归档、也没归档时间的线索里:最近截止 < 今天的记「截止已过」;发布日期(没有按发现时间)早于一年前且所属商机为空的记「超过一年」。只标记,不删、不改处理状态(R13)。人勾掉「已归档」后归档时间还在,机器不再打回。R2 的例外(机器维护的运行状态),同 A19。",
+   "note": "先给「截止日期」空着的线索从它的采购截止类时间节点补上最早一个(只填空)。没标归档、也没归档时间的线索里:截止日期(或采购截止类节点)全都 < 今天的记「截止已过」;发布日期(没有按发现时间)早于一年前且所属商机为空的记「超过一年」。只标记,不删、不改处理状态(R13)。人勾掉「已归档」后归档时间还在,机器不再打回。R2 的例外(机器维护的运行状态),同 A19。",
    "rules": [
     "R2",
     "R13"

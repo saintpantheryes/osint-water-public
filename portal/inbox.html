@@ -149,8 +149,10 @@
     el._do = { ign: () => P.patch("lead", l.id, { status: "已忽略" }), sug: sug ? () => P.leadToOpp(l.id, sug.id) : null };
     const same = opps.filter((o) => P.linkId(g(o, "country")) === cid && (g(o, "stage") || "建议") !== "不跟进"), others = opps.filter((o) => P.linkId(g(o, "country")) !== cid);
     const opts = (arr) => arr.map((o) => '<option value="' + o.id + '">' + P.esc((g(o, "code") || "") + " " + (g(o, "name_zh") || "")) + "</option>").join("");
-    el.innerHTML = '<div class="it-main"><div class="it-title">' + (q("url") ? '<a href="' + P.esc(q("url")) + '" target="_blank" rel="noopener">' + P.esc(q("title") || "(无标题)") + "</a>" : P.esc(q("title") || "(无标题)")) +
-      ' <span class="muted">' + P.esc(q("key") || "") + " · " + P.esc(cname[cid] || "") + " · " + P.esc(q("category") || "") + (q("maybe_new") ? ' · <span class="tag t-warn">像是新项目</span>' : "") + "</span></div>" +
+    const zh = P.zhName(l, 80).name, orig = String(q("title") || "").split("\n")[0], shown = zh || orig || "(无标题)", dl = P.deadlineCell(l);  // 标题与各清单一致:中文在前,原题小字
+    el.innerHTML = '<div class="it-main"><div class="it-title">' + (q("url") ? '<a href="' + P.esc(q("url")) + '" target="_blank" rel="noopener">' + P.esc(shown) + "</a>" : P.esc(shown)) +
+      ' <span class="muted">' + P.esc(q("key") || "") + " · " + P.esc(cname[cid] || "") + " · " + P.esc(q("category") || "") + (dl ? " · 截止 " + (dl.__html || P.esc(dl)) : "") + (q("maybe_new") ? ' · <span class="tag t-warn">像是新项目</span>' : "") + "</span>" +
+      (zh && orig && orig !== zh ? '<div class="muted small">' + P.esc(orig) + "</div>" : "") + "</div>" +
       '<div class="muted">' + P.esc(trunc(q("summary_zh"), 160)) + "</div>" +
       (sug ? '<div>机器建议归入:<b>' + P.esc(g(sug, "code") + " " + (g(sug, "name_zh") || "")) + "</b>" + (q("suggest_reliable") ? "" : ' <span class="muted">(没把握)</span>') + ' <a href="' + P.oppUrl(sug.id) + '" target="_blank">看商机</a></div>' : "") +
       "</div><div class=\"it-act\">" + (sug ? '<button class="primary" data-a="sug">归入 ' + P.esc(g(sug, "code")) + "</button>" : "") +
@@ -194,7 +196,7 @@
     cs.forEach((c) => { cname[c.id] = P.get("country", c, "name_zh") || P.get("country", c, "key"); ciso[c.id] = P.get("country", c, "key"); });
     const bl = await P.ignored(); igIds = new Set(cs.filter((c) => bl.has(P.get("country", c, "key"))).map((c) => c.id));
     const [leads, pending] = await Promise.all([
-      P.records("lead", { viewId: P.view("lead", "待确认归属"), take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: ["key", "title", "url", "country", "category", "summary_zh", "suggested_opp", "suggest_reliable", "maybe_new", "project_name", "status", "found_at"].concat(P.has("lead", "archived") ? ["archived"] : []) }),
+      P.records("lead", { viewId: P.view("lead", "待确认归属"), take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }], props: P.leadTitleProps().concat(["country", "category", "suggested_opp", "suggest_reliable", "maybe_new", "status", "found_at"], P.deadlineProps(), P.has("lead", "archived") ? ["archived"] : []) }),
       P.count("lead", P.and(P.cond("lead", "relevant", "is", true), P.cond("lead", "status", "is", "待处理"), ...(P.arcCond() ? [P.arcCond()] : []))),
     ]);
     $("assign").innerHTML = ""; leads.forEach((l) => $("assign").appendChild(leadItem(l)));

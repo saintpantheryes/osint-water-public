@@ -267,7 +267,7 @@
     const listsP = Promise.all([  // 这几张清单只要城市编号:与读整条城市记录同时发出,不排队
       P.has("opportunity", "city") ? P.records("opportunity", { filter: P.and(P.cond("opportunity", "city", "is", id)), props: ["code", "name_zh", "stage", "public_stage", "next_milestone", "owner", "financing", "size_value", "currency", "size_cny"].concat(P.OPP_ARC) }) : Promise.resolve([]),
       P.has("lead", "city") ? P.records("lead", { filter: P.and(P.cond("lead", "city", "is", id)), take: 200, orderBy: [{ fieldId: P.f("lead", "found_at"), order: "desc" }],
-        props: ["key", "title", "url", "category", "published", "found_at", "nearest_deadline", "summary_zh", "project_name", "opportunity", "status"] }) : Promise.resolve([]),
+        props: P.leadTitleProps().concat(["category", "published", "found_at", "opportunity", "status"], P.deadlineProps()) }) : Promise.resolve([]),
       plantsOf("supply_plant"), plantsOf("sewage_plant"),
       fetch("media/blocks/index.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),  // 街区数据目录(私有配置仓 media/blocks/,没有就没有「街区」页签)
       fetch("media/ghsl/index.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),  // 建筑与人口数据目录(私有配置仓 media/ghsl/,没有就没有这一页签)
@@ -318,8 +318,8 @@
       P.tableHtml(["编号", "名称", "我方阶段", "投资规模", "负责人", "公开进度", "下一节点", ""], opps.map((o) => { const q = (p) => P.get("opportunity", o, p);
         return [P.raw('<a href="' + P.oppUrl(o.id) + '">' + P.esc(q("code") || "") + "</a>"), q("name_zh"), q("stage") || "建议", P.sizeText("opportunity", o), P.text(q("owner")), q("public_stage"), q("next_milestone"), P.raw(P.open("opportunity", o.id))]; })));
     $("leads").innerHTML = !leads.length ? '<p class="empty">还没有线索关联到这座城市。</p>' :
-      P.tableHtml(["标题", "类别", "发布", "最近截止", "所属商机", "处理状态", ""], leads.slice(0, 100).map((l) => { const q = (p) => P.get("lead", l, p);
-        return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), q("nearest_deadline"), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
+      P.tableHtml(["标题", "类别", "发布", "截止", "所属商机", "处理状态", ""], leads.slice(0, 100).map((l) => { const q = (p) => P.get("lead", l, p);
+        return [P.titleCell(l), q("category"), P.day(q("published")) || P.day(q("found_at")), P.deadlineCell(l), P.text(q("opportunity")), q("status"), P.raw(P.open("lead", l.id))]; }));
     /* 页签分三组,和国别概况一样(使用方 2026-10-26):基本信息(概况、水厂、历史影像、街区、建筑与人口)→ 历史信息(大事记、已中标项目)→ 动态信息(商机、线索) */
     const GROUPS = [["基本信息", [["info", "概况"], ["plants", "水厂 <b>" + nPlants + "</b>"], ["imagery", "历史影像"]].concat(blk ? [["blocks", "街区"]] : [], gh ? [["ghsl", "建筑与人口"]] : [])],
       ["历史信息", [["chron", "大事记"], ["awards", "已中标项目"]]],

@@ -709,6 +709,7 @@
     /* 标签(界面规范:全站一种胶囊,颜色只按含义分):tone = ""(灰,一般属性) | "info"(进行中) | "ok"(正面、已核实) | "warn"(提醒、要核实) | "bad"(负面、出错) */
     tagHtml(text, tone, title) { return '<span class="tag' + (tone ? " t-" + tone : "") + '"' + (title ? ' title="' + this.esc(title) + '"' : "") + ">" + this.esc(text) + "</span>"; },
     /* 我方阶段的标签:颜色按本体 taxonomies.stage 的编码定(不在这里写阶段名):建议(suggested)提醒色、中标(won)正面色、其余在跟踪的进行中色、已结束和不跟进灰色 */
+    stageOf(code) { return (this.taxonomy("stage").groups.flatMap((g) => g.values).find((v) => v.code === code) || {}).v || ""; },  // 阶段名按本体编码取(页面脚本里不写阶段名)
     stageTag(s) {
       s = s || this.STAGES[0];
       const code = (this.taxonomy("stage").groups.flatMap((g) => g.values).find((v) => v.v === s) || {}).code;
@@ -1462,9 +1463,13 @@
       const out = []; hits.sort((x, y) => x[0] - y[0]).forEach(([, zh]) => { if (!out.includes(zh)) out.push(zh); });
       return out.slice(0, this._zh.max).join("、");
     },
+    /* 清单取名(使用方 2026-10-28「标题逻辑很混乱」):先用「中文标题」(原题的中文直译,A03 写、老线索后台补译),没有时才退到项目名 / 摘要 / 要点 */
+    LEAD_TITLE_PROPS: ["key", "title", "url", "project_name", "summary_zh"],
+    leadTitleProps() { return this.LEAD_TITLE_PROPS.concat(this.has("lead", "title_zh") ? ["title_zh"] : []); },
     zhName(l, n) {
       n = n || 60;
       const first = (v) => String(v || "").trim().split(/\r?\n/)[0].slice(0, n);
+      if (this.has("lead", "title_zh") && first(this.get("lead", l, "title_zh"))) return { name: first(this.get("lead", l, "title_zh")), how: "译名" };
       if (first(this.get("lead", l, "project_name"))) return { name: first(this.get("lead", l, "project_name")), how: "项目名" };
       if (first(this.get("lead", l, "summary_zh"))) return { name: first(this.get("lead", l, "summary_zh")), how: "摘要" };
       const kp = this.keyPoints(this.get("lead", l, "title"));
@@ -1475,7 +1480,67 @@
       const z = this.zhName(l), url = this.get("lead", l, "url"), title = String(this.get("lead", l, "title") || "").split("\n")[0].slice(0, 90);
       const main = z.name ? this.esc(z.name) + (z.how === "要点" ? ' <span class="tag" title="没有中文摘要,这是从原题挑出认得的词;配好模型键后会有真正的中文摘要">要点</span>' : "") : this.esc(title);
       const link = (h) => url ? '<a href="' + this.esc(url) + '" target="_blank" rel="noopener">' + h + "</a>" : "<span>" + h + "</span>";
-      return this.raw(this.star("lead", l) + link(main) + '<br><span class="muted small">' + (z.name && title ? this.esc(title) + " · " : "") + this.esc(this.get("lead", l, "key") || "") + (extra ? " · " + this.esc(extra) : "") + "</span>");
+      return this.raw(this.star("lead", l) + link(main) + '<br><span class="muted small">' + (z.name && title && title !== z.name ? this.esc(title) + " · " : "") + this.esc(this.get("lead", l, "key") || "") + (extra ? " · " + this.esc(extra) : "") + "</span>");
+    },
+    /* 清单里的「截止」格(本体 lead.deadline):招标等要动作的线索才有;过了标红「已过」;表里还没这一列时退到「最近截止」(含 TODAY 的汇总,过了就空) */
+    deadlineProps() { return this.has("lead", "deadline") ? ["deadline"] : this.has("lead", "nearest_deadline") ? ["nearest_deadline"] : []; },
+    deadlineCell(l) {
+      const d = this.day(this.has("lead", "deadline") ? this.get("lead", l, "deadline") : this.get("lead", l, "nearest_deadline"));
+      if (!d) return "";
+      return d < this.today() ? this.raw('<span class="nw">' + this.tagHtml("已过 " + d, "bad", "截止日期已过") + "</span>") : this.raw('<b class="nw">' + this.esc(d) + "</b>");
+    },
+    /* 「转为商机」(线索总览、线索分析共用;线索处理另有自己的卡片):没归入的线索、能写的帐号出按钮,展开后可新建商机并归入,或归入已有商机;已归入的显示商机名,点开商机页。
+       ctx = { opps, countries, canWrite };bindConvert(container, rows, ctx, col) 给容器里的按钮挂事件,col 是「所属商机」这一列的序号 */
+    oppName(o) { return (this.get("opportunity", o, "code") || "") + " " + (this.get("opportunity", o, "name_zh") || ""); },
+    convertCell(l, ctx) {
+      const oid = this.linkId(this.get("lead", l, "opportunity"));
+      if (oid) { const o = (ctx.opps || []).find((x) => x.id === oid); return this.raw('<a href="' + this.oppUrl(oid) + '">' + this.esc(o ? this.oppName(o) : this.text(this.get("lead", l, "opportunity"))) + "</a>"); }
+      return this.raw(ctx.canWrite ? '<button type="button" class="conv" data-l="' + this.esc(l.id) + '">转为商机</button>' : "");
+    },
+    bindConvert(box, rows, ctx, col) {
+      const byId = {}; rows.forEach((l) => { byId[l.id] = l; });
+      box.querySelectorAll("button.conv").forEach((b) => { b.onclick = () => this.convertRow(b, byId[b.dataset.l], ctx, col); });
+    },
+    convertRow(btn, l, ctx, col) {
+      const P = this, tr = btn.closest("tr"), open = tr.nextElementSibling;
+      if (open && open.classList.contains("convrow")) { open.remove(); return; }
+      const cid = P.linkId(P.get("lead", l, "country")), c = (ctx.countries || []).find((x) => x.id === cid), iso = c && P.get("country", c, "key");
+      const live = (ctx.opps || []).filter((o) => (P.get("opportunity", o, "stage") || P.stageOf("suggested")) !== P.stageOf("dropped"));
+      const same = live.filter((o) => P.linkId(P.get("opportunity", o, "country")) === cid), others = live.filter((o) => P.linkId(P.get("opportunity", o, "country")) !== cid);
+      const opts = (arr) => arr.map((o) => '<option value="' + o.id + '">' + P.esc(P.oppName(o)) + "</option>").join("");
+      const row = document.createElement("tr"); row.className = "convrow";
+      row.innerHTML = '<td colspan="' + tr.children.length + '"><div class="convbox"><button type="button" class="primary" data-a="new">新建商机并归入</button>' +
+        '<select data-a="pick"><option value="">归入已有商机…</option>' + (same.length ? '<optgroup label="' + P.esc(c ? P.get("country", c, "name_zh") || iso : "同国") + '">' + opts(same) + "</optgroup>" : "") + (others.length ? '<optgroup label="其他国家">' + opts(others) + "</optgroup>" : "") + "</select>" +
+        '<button type="button" data-a="x">取消</button></div></td>';
+      tr.after(row);
+      const done = (o, msg) => { tr.children[col].innerHTML = '<a href="' + P.oppUrl(o.id) + '">' + P.esc(P.oppName(o)) + "</a>"; row.remove(); P.toast(msg); };
+      const busy = (on) => row.querySelectorAll("button, select").forEach((e) => { e.disabled = on; });
+      row.querySelector('[data-a="x"]').onclick = () => row.remove();
+      row.querySelector('[data-a="pick"]').onchange = async (e) => {
+        const o = ctx.opps.find((x) => x.id === e.target.value); if (!o) return;
+        busy(true);
+        try { await P.leadToOpp(l.id, o.id); done(o, "已归入 " + (P.get("opportunity", o, "code") || "")); } catch (err) { P.toast(err.message, true); busy(false); }
+      };
+      row.querySelector('[data-a="new"]').onclick = async () => {
+        if (!iso) { P.toast("这条线索没有国别,先在表格里填国别", true); return; }
+        const name = prompt("新商机的名称(可改):", String(P.get("lead", l, "project_name") || P.zhName(l).name || P.get("lead", l, "title") || "").split("\n")[0]);
+        if (name === null || !name.trim()) return;
+        busy(true);
+        try { const rec = await P.newOppFromLead(l.id, { name: name.trim(), cid, iso, opps: ctx.opps }); ctx.opps.push(rec); done(rec, "已新建商机 " + (P.get("opportunity", rec, "code") || "") + " 并归入,阶段跟踪中、负责人是你"); }
+        catch (err) { P.toast(err.message, true); busy(false); }
+      };
+    },
+    /* 清单全屏(使用方 2026-10-28):面板右上角「全屏」,点了面板铺满窗口、再点或按 Esc 退出;标题跟着进去 */
+    fullscreenable(panel, titleEl) {
+      if (!panel || panel.querySelector(".fs-bar")) return;
+      const bar = document.createElement("div"); bar.className = "fs-bar";
+      bar.innerHTML = '<span class="fs-title"></span><button type="button" class="btn quiet fs-btn" title="铺满整个窗口">全屏</button>';
+      panel.prepend(bar);
+      const btn = bar.querySelector(".fs-btn"), ttl = bar.querySelector(".fs-title");
+      const set = (on) => { panel.classList.toggle("fs", on); document.body.classList.toggle("has-fs", on); btn.textContent = on ? "退出全屏" : "全屏"; ttl.textContent = on && titleEl ? titleEl.textContent : ""; };
+      btn.onclick = () => set(!panel.classList.contains("fs"));
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && panel.classList.contains("fs")) set(false); });
+      panel._fsRefresh = () => { if (panel.classList.contains("fs") && titleEl) ttl.textContent = titleEl.textContent; };
     },
     /* 中文按拼音排(国别下拉等);拼音首字母用于下拉里的 A、B、C 分组 */
     zhCmp(a, b) {
