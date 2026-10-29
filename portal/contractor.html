@@ -75,14 +75,21 @@
     P.backLink($("back"), "contractor.html", "全部供应商");
     $("openRow").innerHTML = P.open("contractor", id, "在表格里打开这家供应商 ↗");
     const site = g(r, "website");
+    const cc = P.has("contractor", "country") ? g(r, "country") : null, ccId = P.linkId(cc);  /* 所在国别(v2.42):点进国别概况 */
+    const ccIso = ccId ? await P.countries().then((cs) => { const c = cs.find((x) => x.id === ccId); return c ? P.get("country", c, "key") : ""; }).catch(() => "") : "";
+    const isPartner = P.has("contractor", "partner") && !!g(r, "partner");
+    if (isPartner) $("fname2").innerHTML = (g(r, "name_zh") && g(r, "name") ? P.esc(g(r, "name")) + " " : "") + '<span class="tag t-ok">潜在合作伙伴' + (Number(g(r, "partner_rank")) > 0 ? " · 推荐第 " + Number(g(r, "partner_rank")) : "") + "</span>";
     const facts = [["注册国", g(r, "nationality")], ["性质", g(r, "kind")], ["母公司或所属集团", g(r, "parent")], ["主营领域", (g(r, "sectors") || []).join("、")],
       ["外部编号", ((ids) => ids.slice(0, 3).join("、") + (ids.length > 3 ? " 等 " + ids.length + " 个" : ""))(String(g(r, "ext_ids") || "").split(",").map((x) => x.trim()).filter(Boolean))]]
       .filter(([, v]) => v);
     const empty = (v) => v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length);
     const missing = [["中文名", "name_zh"], ["性质", "kind"], ["母公司或所属集团", "parent"], ["官网", "website"], ["主营领域", "sectors"], ["简介", "profile"]]
       .filter(([, p]) => P.has("contractor", p) && empty(g(r, p))).map(([l]) => l);
-    $("info").innerHTML = P.factsHtml(facts.map(([l, v]) => [l, String(v)]).concat(site ? [["官网", '<a href="' + P.esc(site) + '" target="_blank" rel="noopener">' + P.esc(site) + " ↗</a>", { html: true }]] : [])) +
+    const ext = (u, label) => '<a href="' + P.esc(u) + '" target="_blank" rel="noopener">' + P.esc(label) + " ↗</a>";
+    $("info").innerHTML = P.factsHtml((cc ? [["所在国别", ccIso ? '<a href="country.html?iso=' + encodeURIComponent(ccIso) + '&t=partners">' + P.esc(P.text(cc)) + "</a>" : P.esc(P.text(cc)), { html: true }]] : [])
+      .concat(facts.map(([l, v]) => [l, String(v)]), site ? [["官网", ext(site, site), { html: true }]] : [], isPartner && g(r, "source_url") ? [["来源链接", ext(g(r, "source_url"), g(r, "source_url")), { html: true }]] : [])) +
       (g(r, "profile") ? "<p>" + P.esc(g(r, "profile")).replace(/\n/g, "<br>") + "</p>" : "") +
+      (isPartner && g(r, "partner_reason") ? '<p><b>推荐理由</b> ' + P.esc(g(r, "partner_reason")) + '</p><p class="muted small">公开资料,待核实;合作前做尽职调查。</p>' : "") +
       (g(r, "note") ? '<p class="muted">备注:' + P.esc(g(r, "note")) + "</p>" : "") +
       (missing.length && !P.isGuest ? '<p class="muted small">还没填:' + missing.join("、") + "。在表格里补上,这里就显示。</p>" : "");
   }

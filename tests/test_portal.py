@@ -3091,7 +3091,7 @@ def test_water_area_page_sums_its_cities():
             page.goto(base + "/country.html?iso=AZE&t=areas")
             page.wait_for_selector("#areas table", timeout=15000)
             tabs = page.locator("#tabs .tgrp").first.locator("button").all_inner_texts()
-            assert [t.split(" ")[0] for t in tabs] == ["概况", "机构与法规", "营商环境", "规模以上城市", "水务片区"] and tabs[-1] == "水务片区 1"  # 基本信息组的最后一个
+            assert [t.split(" ")[0] for t in tabs] == ["概况", "机构与法规", "营商环境", "规模以上城市", "水务片区", "合作伙伴"] and tabs[-2] == "水务片区 1"  # 基本信息组里,合作伙伴(v2.42)排在它后面
             assert page.locator(".tab.on").get_attribute("data-t") == "areas"
             row = page.inner_text("#areas tbody tr")
             assert "大巴库" in row and "巴库" in row and "苏姆盖特" in row and "277.8 万" in row and "\t1\t" in row  # 挂上的商机 1 个
@@ -3577,6 +3577,67 @@ def test_lead_lists_show_chinese_title_deadline_convert_and_fullscreen():
                 page.wait_for_selector("#leads table", timeout=15000)
                 txt = page.inner_text("#leads")
                 assert "明盖恰乌尔供水管网招标" in txt and (today + timedelta(days=20)).isoformat() in txt and "dddddddd" not in txt  # 国别页只列判为相关的
+                assert not errors, errors
+                page.close()
+            browser.close()
+    finally:
+        srv.shutdown()
+
+
+def test_country_partners_tab_lists_partner_contractors_and_contractor_page_links_back():
+    """潜在合作伙伴(使用方 2026-10-29 要的,v2.42):国别概况「基本信息」组多一个「合作伙伴」页签,列这国供应商表里勾了「潜在合作伙伴」的,
+    按推荐排序,每家一张卡(中文名、原文名、性质与领域标签、中标数、概况、推荐理由、官网与来源链接);顶上写明公开资料待核实;没勾的国家写明怎么加。
+    供应商页多「所在国别」(点进国别概况的合作伙伴页签)与「潜在合作伙伴」标签、推荐理由、来源链接。只读。"""
+    from playwright.sync_api import Error as PWError, sync_playwright
+    fake, admin = _fake_with_schema()
+    c, o, ld = _seed(admin, fake)
+    b = tstore.Base(admin)
+    geo2 = b.create("country", [{"key": "GEO", "name_zh": "格鲁吉亚"}])[0]
+    tts, ev, other = b.create("contractor", [
+        {"key": "TTS INSAAT", "name": "TTŞ İnşaat LLC", "name_zh": "TTŞ 建筑公司", "nationality": "阿塞拜疆", "nationality_code": "AZE", "country": c["id"], "kind": "民营企业", "sectors": ["供水", "污水"],
+         "profile": "1997 年起家;Azersu 的供水与污水项目最多。", "partner": True, "partner_rank": 2, "partner_reason": "熟悉 Azersu 与亚行程序,联合体首选。", "source_url": "https://ttshinshaat.az/en/", "website": "https://ttshinshaat.az"},
+        {"key": "EVRASCON", "name": "Evrascon OJSC", "name_zh": "欧亚建设公司", "nationality": "阿塞拜疆", "nationality_code": "AZE", "country": c["id"], "kind": "民营企业", "sectors": ["水利"],
+         "partner": True, "partner_rank": 1, "partner_reason": "大型水工业绩。", "source_url": "https://evrascon.com/en/"},
+        {"key": "OTHER CO", "name": "Other Co", "nationality": "阿塞拜疆", "nationality_code": "AZE", "country": c["id"]},  # 没勾:不列
+    ])
+    b.create("award", [{"key": "WB-1", "name": "Ganja water supply", "sector": "供水", "contract_type": "工程", "price": 25_000_000, "currency": "USD", "price_cny": 17750,
+                        "awarded": "2024-05-10", "winner": "TTŞ İnşaat LLC", "winner_country": "阿塞拜疆", "country": c["id"], "winners": [tts["id"]]}])
+    cfg = schema.read_config(admin, NEW, ONTO)
+    srv = _serve(fake, cfg)
+    base = f"http://127.0.0.1:{srv.server_port}"
+    shots = Path(os.environ.get("PORTAL_SHOTS", "")) if os.environ.get("PORTAL_SHOTS") else None
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except PWError:
+                browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            for w, h, tag in ((1366, 900, "电脑"), (390, 800, "手机")):
+                page = browser.new_page(viewport={"width": w, "height": h})
+                errors: list[str] = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                page.goto(base + "/country.html?iso=AZE&t=partners")
+                page.wait_for_selector("#partners .pt-card", timeout=15000)
+                assert page.locator("#tabs button[data-t='partners']").inner_text().startswith("合作伙伴") and "2" in page.locator("#tabs button[data-t='partners']").inner_text()
+                assert page.locator("#tabs .tgrp").first.locator("button[data-t='partners']").count() == 1  # 在「基本信息」一组里
+                cards = page.locator("#partners .pt-card").all_inner_texts()
+                assert len(cards) == 2 and cards[0].startswith("1") and "欧亚建设公司" in cards[0] and "Evrascon OJSC" in cards[0]  # 按推荐排序
+                assert "TTŞ 建筑公司" in cards[1] and "库里中标 1 份" in cards[1] and "推荐理由" in cards[1] and "民营企业" in cards[1] and "污水" in cards[1]
+                assert "Other Co" not in page.inner_text("#partners") and "待核实" in page.inner_text("#partners")
+                assert page.locator("#partners a[href='https://ttshinshaat.az/en/']").count() == 1 and page.locator("#partners a[href='https://ttshinshaat.az']").count() == 1
+                if shots:
+                    page.screenshot(path=str(shots / f"合作伙伴页签_{tag}.png"), full_page=True)
+                page.click(f"#partners a[href='contractor.html?id={tts['id']}']")
+                page.wait_for_selector("#awBox table", timeout=15000)
+                info = page.inner_text("#info")
+                assert "潜在合作伙伴" in page.inner_text("#fname2") and "推荐第 2" in page.inner_text("#fname2")
+                assert "阿塞拜疆" in info and "推荐理由" in info and "联合体首选" in info and "待核实" in info
+                assert page.locator("#info a[href='country.html?iso=AZE&t=partners']").count() == 1  # 所在国别点回国别概况
+                if shots and w > 400:
+                    page.screenshot(path=str(shots / "供应商页_合作伙伴.png"), full_page=True)
+                page.goto(base + "/country.html?iso=GEO&t=partners")
+                page.wait_for_selector("#partners .empty", timeout=15000)
+                assert "还没有标出潜在合作伙伴" in page.inner_text("#partners") and "勾「潜在合作伙伴」" in page.inner_text("#partners")
                 assert not errors, errors
                 page.close()
             browser.close()
