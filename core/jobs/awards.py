@@ -437,17 +437,21 @@ def _contractors(b: tstore.Base, rows: list[dict], countries: dict, dry_run: boo
             v["nationality_code"] = v["nationality_code"] or str(w.get("iso3") or "").strip() or None
             if w.get("ext") and w["ext"] not in v["ext"]:
                 v["ext"].append(str(w["ext"]))
-    props = [p for p in ("key", "name", "nationality", "nationality_code", "ext_ids") if b.has(C, p)]
+    props = [p for p in ("key", "name", "nationality", "nationality_code", "ext_ids", "country") if b.has(C, p)]
     have = {str(b.get(C, r, "key")): r for r in b.rows(C, props=props) if b.get(C, r, "key")}
     new, ups = [], []
     for k, v in want.items():
-        vals = {"name": v["name"], "nationality": v["nationality"], "nationality_code": v["nationality_code"], "ext_ids": ",".join(v["ext"][:20]) or None}
+        vals = {"name": v["name"], "nationality": v["nationality"], "nationality_code": v["nationality_code"], "ext_ids": ",".join(v["ext"][:20]) or None,
+                "country": countries.get(v["nationality_code"] or "")}  # 所在国别(v2.42):注册国在国别表里时对上,只填空
         vals = {p: x for p, x in vals.items() if x and b.has(C, p)}
         rec = have.get(k)
         if rec is None:
             new.append({"key": k, **vals})
             continue
-        changes, _ = tstore.fill_empty({p: b.get(C, rec, p) for p in vals}, vals)
+        cur = {p: b.get(C, rec, p) for p in vals}
+        if "country" in cur:
+            cur["country"] = tstore.link_id(cur["country"])
+        changes, _ = tstore.fill_empty(cur, vals)
         if changes:
             ups.append((rec["id"], changes))
     ids: dict[str, str | None] = {k: r["id"] for k, r in have.items()}

@@ -725,3 +725,11 @@ li.rv-off > .rv-item { text-decoration: line-through; color: var(--muted); }
 .lgd.gh-lgd { margin-left: 0; gap: 8px; }
 .lgd .gh-bar { width: 160px; height: 12px; border-radius: 3px; background: var(--gh-ramp, var(--line)); }
 #ghLpd { width: 80px; font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; }
+/* 潜在合作伙伴卡片(国别概况「合作伙伴」页签,v2.42):序号圆标、名称、右侧中标数;标签一行;概况与理由各一段;手机上头部换行 */
+.pt-list { display: grid; gap: 10px; } .pt-card { margin: 0; }
+.pt-head { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.pt-no { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+.pt-name { flex: 1 1 200px; min-width: 0; font-size: 16px; line-height: 1.35; } .pt-name a { color: inherit; }
+.pt-tags { margin: 6px 0 2px; display: flex; flex-wrap: wrap; gap: 4px; } .pt-tags .tag { margin: 0; }
+.pt-p { margin: 6px 0; } .pt-links { margin: 6px 0 0; }
+@media (max-width: 760px) { .pt-head .push { margin-left: 36px; } }

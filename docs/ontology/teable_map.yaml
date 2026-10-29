@@ -192,6 +192,7 @@ links:
   award.country: {one_way: true}   # 国别表不要几千条的反向字段
   award.city: {reverse: 已中标项目}
   award.winners: {reverse: 中标项目}
+  contractor.country: {one_way: true}   # 国别表不要供应商的反向字段;国别页按供应商.所在国别筛
   study.country: {one_way: true}
   water_event.country: {one_way: true}
   water_event.city: {reverse: 水务事件}

@@ -1189,6 +1189,37 @@
       render();
       return rows.length;
     },
+    /* 潜在合作伙伴(本体 v2.42,使用方 2026-10-29):国别概况「基本信息」组的「合作伙伴」页签。供应商.所在国别 = 这国、勾了「潜在合作伙伴」的,按推荐排序;
+       每家一张卡:中文名在前、原文名在后,性质与主营领域是胶囊标签,中标数、简介、推荐理由,官网与来源链接可点,进供应商页看它的全部中标。
+       顶上一行写明「公开资料,待核实」;一家没有时写明在供应商表里勾上就会出现。→ 家数 */
+    async partners(el, rid, cname) {
+      const head = '<h2 id="partners">潜在合作伙伴</h2>';
+      if (!(this.cfg.tables && this.cfg.tables.contractor)) { el.innerHTML = head + '<p class="empty">「供应商」表还没建(跑一次建表命令后这里就有)。</p>'; return 0; }
+      if (!this.has("contractor", "partner") || !this.has("contractor", "country")) { el.innerHTML = head + '<p class="empty">供应商表还没有「潜在合作伙伴」「所在国别」字段(跑一次建表命令后这里就有)。</p>'; return 0; }
+      el.innerHTML = head + '<div class="panel">读取中…</div>';
+      const props = ["name", "name_zh", "kind", "sectors", "profile", "partner_rank", "partner_reason", "source_url", "website", "award_count", "note"].filter((p) => this.has("contractor", p));
+      const rows = await this.records("contractor", { filter: this.and(this.cond("contractor", "country", "is", rid), this.cond("contractor", "partner", "is", true)), props });
+      const g = (r, p) => this.get("contractor", r, p);
+      const rank = (r) => (Number(g(r, "partner_rank")) > 0 ? Number(g(r, "partner_rank")) : 99);
+      rows.sort((a, b) => rank(a) - rank(b) || (Number(g(b, "award_count")) || 0) - (Number(g(a, "award_count")) || 0));
+      const note = '<div class="note n-info">' + this.esc(cname || "这个国家") + " 的本地承包商里适合做联合体或分包的前几家,按推荐排序。<b>全部是公开资料,待核实</b>,合作前要做尽职调查。" +
+        (this.isGuest ? "" : '在表格「供应商」里勾上或去掉「潜在合作伙伴」,这里跟着增减。') + "</div>";
+      if (!rows.length) { el.innerHTML = head + note + '<p class="empty">这个国家还没有标出潜在合作伙伴' + (this.isGuest ? "。" : ':在供应商表里找到这家公司,填「所在国别」、勾「潜在合作伙伴」就会出现在这里。') + "</p>"; return 0; }
+      const link = (u, label) => (u ? '<a href="' + this.esc(u) + '" target="_blank" rel="noopener">' + this.esc(label) + " ↗</a>" : "");
+      const tags = (r) => [g(r, "kind") ? '<span class="tag t-info">' + this.esc(g(r, "kind")) + "</span>" : ""].concat((g(r, "sectors") || []).map((s) => '<span class="tag">' + this.esc(s) + "</span>")).join("");
+      const n = (r) => Number(g(r, "award_count")) || 0;
+      el.innerHTML = head + note + '<div class="pt-list">' + rows.map((r, i) => {
+        const zh = g(r, "name_zh"), en = g(r, "name") || "";
+        return '<div class="panel pt-card"><div class="pt-head"><span class="pt-no">' + (rank(r) < 99 ? rank(r) : i + 1) + '</span><div class="pt-name"><a href="contractor.html?id=' + encodeURIComponent(r.id) + '"><b>' + this.esc(zh || en) + "</b></a>" +
+          (zh && en && zh !== en ? '<br><span class="muted small">' + this.esc(en) + "</span>" : "") + '</div><span class="push nw muted small">' + (n(r) ? "库里中标 <b>" + n(r) + "</b> 份" : "库里没有中标记录") + "</span></div>" +
+          '<div class="pt-tags">' + tags(r) + "</div>" +
+          (g(r, "profile") ? '<p class="pt-p"><b>概况</b> ' + this.esc(g(r, "profile")) + "</p>" : "") +
+          (g(r, "partner_reason") ? '<p class="pt-p"><b>推荐理由</b> ' + this.esc(g(r, "partner_reason")) + "</p>" : "") +
+          '<p class="pt-links small">' + [link(g(r, "website"), "官网"), link(g(r, "source_url"), "来源"), this.open("contractor", r.id, "在表格里打开")].filter(Boolean).join(" · ") +
+          (g(r, "note") ? ' <span class="muted">(' + this.esc(g(r, "note")) + ")</span>" : "") + "</p></div>";
+      }).join("") + "</div>";
+      return rows.length;
+    },
     /* 法规(本体 v2.24):国别概况「机构与法规」页签下半部、助手的法规答案、法规全文页共用。
        排放限值按「法规 + 口径 + 排到哪里 + 适用范围」分块,口径不同的数不放在一起比;出处是带序号的小角标(.lref),
        点开看法规、条号、页码、条文中文与原文,以及到法规全文页那一条的链接。待核实(机器摘的、人还没对过原文)的标出。 */

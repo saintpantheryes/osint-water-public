@@ -44,6 +44,7 @@
     <p class="muted small">共用一家水司、一批水源与干管的连片城市(大城市圈),例如大巴库。小国的水务市场按片区看:城市太碎,国别太粗。片区由人在表格「水务片区」里划定,商机可以挂到片区上;点片区名看片区里的人口、商机、线索、大事记、中标与水厂。</p>
     <div class="panel" id="areas"></div>
   </div>
+  <div class="tab" data-t="partners"><section id="partners"></section></div>
   <div class="tab" data-t="docs"><section id="chron"></section><section id="studies"></section></div>
   <div class="tab" data-t="awards"><section id="awBox"></section></div>
 </main>
@@ -52,8 +53,8 @@
   const $ = (id) => document.getElementById(id);
   let countries = [], mc = null, mapOption = null;
   /* 页签分三组(使用方 2026-10-13 要的):基本信息(概况、机构与法规、城市、水务片区)→ 历史信息(水务历史资料、已中标项目)→ 动态信息(商机、线索、时间节点);
-     选中的记在网址 t= 里,数字是这个国家的条数。水务片区(使用方 2026-10-14 从市场背景菜单挪来)只在这个国家划了片区时出现 */
-  const GROUPS = [["基本信息", [["info", "概况"], ["inst", "机构与法规"], ["biz", "营商环境"], ["cities", "规模以上城市"], ["areas", "水务片区"]]],
+     合作伙伴(使用方 2026-10-29 要的:每国前三家本地承包商,放在基本信息下)= 供应商.所在国别是它、勾了潜在合作伙伴的。选中的记在网址 t= 里,数字是这个国家的条数。水务片区(使用方 2026-10-14 从市场背景菜单挪来)只在这个国家划了片区时出现 */
+  const GROUPS = [["基本信息", [["info", "概况"], ["inst", "机构与法规"], ["biz", "营商环境"], ["cities", "规模以上城市"], ["areas", "水务片区"], ["partners", "合作伙伴"]]],
     ["历史信息", [["docs", "水务历史资料"], ["awards", "已中标项目"]]],
     ["动态信息", [["opps", "商机"], ["leads", "最近 90 天线索"], ["ms", "未来 30 天节点"]]]];
   const TABS = GROUPS.flatMap(([, ts]) => ts);
@@ -128,6 +129,7 @@
     const awP = P.awards($("awBox"), "country", c.id).catch((e) => { P.fail($("awBox"), e); return 0; });
     const lawP = P.lawSection($("lawBox"), c.id, g("name_zh") || iso).catch((e) => { P.fail($("lawBox"), e); return 0; });  /* 法规原文、排放标准、本国定义(v2.24) */  /* 已中标项目(历史信息里的一个页签):自己读自己画,不等别的 */
     /* 水务历史资料:大事记在上、研究资料在下,各自读各自画;页签上的数是研究资料份数 */
+    const partnersP = P.partners($("partners"), c.id, g("name_zh") || iso).catch((e) => { P.fail($("partners"), e); return 0; });  /* 潜在合作伙伴(v2.42):自己读自己画 */
     const docsP = Promise.all([P.chronicle($("chron"), "country", c.id).catch((e) => { P.fail($("chron"), e); return 0; }),
       P.studies($("studies"), c.id).catch((e) => { P.fail($("studies"), e); return 0; })]);
     const full = await P.api("/table/" + P.t("country").id + "/record/" + c.id, { fieldKeyType: "id" });
@@ -216,8 +218,8 @@
       P.tableHtml(["片区", "包含城市", "合计人口", "服务水司", "挂上的商机", ""], areas.map((a) => { const q = (p) => P.get("water_area", a, p), tot = P.linkIds(q("cities")).reduce((s, id) => s + (popOf[id] || 0), 0);
         return [P.raw('<a href="area.html?id=' + encodeURIComponent(a.id) + '"><b>' + P.esc(q("name") || "") + "</b></a>" + (q("name_en") ? '<br><span class="muted small">' + P.esc(q("name_en")) + "</span>" : "")),
           P.text(q("cities")), P.raw(tot ? "<b>" + P.esc(wan(tot)) + "</b>" + (nat ? '<br><span class="muted small">占全国 ' + Math.round(tot * 100 / nat) + "%</span>" : "") : ""), q("utility") || "", String(nOpp[a.id] || 0), P.raw(P.open("water_area", a.id))]; }));
-    const [[, nDoc], nAw, nLaw] = await Promise.all([docsP, awP, lawP]);
-    drawTabs({ inst: nLaw || undefined, areas: areas.length, docs: nDoc || undefined, awards: nAw === undefined ? undefined : nAw, opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
+    const [[, nDoc], nAw, nLaw, nPt] = await Promise.all([docsP, awP, lawP, partnersP]);
+    drawTabs({ inst: nLaw || undefined, areas: areas.length, partners: nPt || undefined, docs: nDoc || undefined, awards: nAw === undefined ? undefined : nAw, opps: opps.length, leads: leads.length + (leads.length >= 200 ? "+" : ""), ms: mine.length, cities: hasCity ? cities.length : "未建表" });
   }
 
   try {
